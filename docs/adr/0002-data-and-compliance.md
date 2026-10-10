@@ -1,6 +1,6 @@
 # ADR-0002: Data and compliance
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-10
 - **Authors**: Maintainers
 
@@ -16,8 +16,8 @@ That puts it under three sets of rules:
   with an AI system.
 
 This record fixes the engineering rules that follow. It is not legal advice. The
-public texts (privacy notice, server rules, AI disclosure) are a separate unit
-under `docs/`.
+public texts (privacy notice, server rules, AI disclosure) are separate
+documents under [`docs/compliance`](../compliance/README.md).
 
 ## Decision
 
@@ -39,9 +39,9 @@ request.
 - A stored record holds the identifiers, timestamps and state a feature needs,
   and no message text unless the feature cannot work without it.
 - Logs never contain message content or the bot token.
-- A data inventory under `docs/` lists every stored field with its purpose and
-  retention period. A change that stores a new field adds its inventory entry in
-  the same pull request.
+- The [data inventory](../compliance/data-inventory.md) lists every stored
+  field with its purpose and retention period. A change that stores a new field
+  adds its inventory entry in the same pull request.
 - The first version requests no privileged gateway intent
   ([ADR-0001](0001-architecture-and-boundaries.md)) and subscribes to no message
   events. It sees only what a member passes to a command.
@@ -70,7 +70,13 @@ Every message that contains model-generated text says so in the message body.
   whatever that is.
 - It says the answer can be wrong, and the answer shows its sources (ADR-0003)
   and a way to reach a person.
+- The description of the command says it before first use, and the last line
+  of every reply says it again and names where a person helps. The name of that
+  place comes from configuration.
 - The bot's profile also states that it is automated.
+
+The wording of each notice and whether it is in the code yet are in the [AI
+disclosure](../compliance/ai-disclosure.md).
 
 This implements Article 50(1) and 50(5) of Regulation (EU) 2024/1689: a person
 who interacts with an AI system is informed of that, clearly and at the latest
@@ -88,9 +94,9 @@ records:
   it is met if so;
 - the current state of amendments and Commission guidance, re-read from EUR-Lex.
 
-The assessment is [ADR-0006](0006-ai-act-role.md). Until it is accepted,
-model-written answers stay off in the live server. Excerpt replies, which no
-model writes, may go live after the live test.
+The assessment is [ADR-0006](0006-ai-act-role.md). It is accepted with gates:
+model-written answers stay off in the live server until every gate it lists is
+passed. Excerpt replies, which no model writes, may go live after the live test.
 
 ## Consequences
 
@@ -102,6 +108,32 @@ model writes, may go live after the live test.
   work depends on the documentation and a hand-written evaluation set. Each new
   stored field costs an inventory entry. Launch of auto-answers waits for the
   role assessment.
+
+## Decided in this record
+
+The operator decided that text from Discord is never training data, that the
+bot says it is automated at first contact and on every reply, that a written
+role assessment comes before model-written answers go live, and that excerpt
+replies may go live before its gates are passed.
+
+The choices below have no decision of their own outside this file. They were
+made here and are accepted with this record:
+
+- Text from Discord is never collected into an evaluation set.
+- Member text has one destination, the configured model endpoint, which must
+  not keep or train on it.
+- Message content stays in memory for one request. A stored record holds
+  identifiers, timestamps and state, and no message text unless the feature
+  cannot work without it.
+- Logs never contain message content or the bot token.
+- Every stored field has an entry in the data inventory, added in the same pull
+  request.
+- Every class of stored record has a retention period that is configuration,
+  and a scheduled job deletes records past it.
+- A member can ask for a copy of their data and for its deletion, identified by
+  the user id of the interaction.
+- Stored data is deleted when the bot is retired or removed from the server.
+- The label is plain text and says that the answer can be wrong.
 
 ## References
 

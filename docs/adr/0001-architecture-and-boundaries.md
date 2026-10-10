@@ -1,6 +1,6 @@
 # ADR-0001: Architecture and boundaries
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-10
 - **Authors**: Maintainers
 
@@ -14,8 +14,8 @@ Four things shape the architecture:
 
 - **One server.** The bot is not a product for many servers. It serves a single
   hub guild.
-- **A public repository.** The repository becomes public later, so the tree must
-  never hold a credential, the real guild id or the name of any private system.
+- **A public repository.** The repository is public, so the tree must never
+  hold a credential, the real guild id or the name of any private system.
 - **A bot is already running.** The bot that serves the hub today stays
   connected until this one replaces it. This repository does not change it.
 - **The repository's rules.** Every I/O call needs a deadline and every loop a
@@ -27,10 +27,9 @@ Four things shape the architecture:
 ### Language and library
 
 The bot is written in Go and talks to Discord through
-[disgo](https://github.com/disgoorg/disgo) (Apache-2.0). The version is pinned
-in `go.mod` and `go.sum` when the first feature adds the dependency. On the date
-of this record the latest release was v0.19.6 of 2026-06-07 (`gh api
-repos/disgoorg/disgo/releases/latest`).
+[disgo](https://github.com/disgoorg/disgo) (Apache-2.0). `go.mod` and `go.sum`
+pin v0.19.6 of 2026-06-07, the latest release on the date of this record (`gh
+api repos/disgoorg/disgo/releases/latest`).
 
 ### One hub guild, given as configuration
 
@@ -74,14 +73,19 @@ into Discord responses.
   connection.
 - A library change touches the adapter package only.
 
-The planned layout follows. Package names settle with the first feature.
+The layout (`go list ./...`):
 
 | Package | Role |
 | :--- | :--- |
 | `cmd/diallak` | Wiring, signal handling, exit codes |
 | `internal/config` | Configuration, validated at start |
 | `internal/discord` | The disgo adapter; the only importer of disgo |
+| `internal/app` | Builds the pipeline from the configuration |
+| `internal/corpus` | Reads the documentation directory and its manifest |
+| `internal/retrieval` | The index over the documentation |
+| `internal/model` | Client of the model endpoint |
 | `internal/answer` | The answer pipeline ([ADR-0003](0003-answer-pipeline.md)) |
+| `internal/eval` | The evaluation set and its bar |
 
 ### One process, bounded work
 
@@ -105,6 +109,10 @@ decision for now; a move to an application of its own would be a new record.
 - The token stays in the deployment's secret store. This bot reads it from a
   file, as above.
 - The bot requests no privileged intent, whatever the application has enabled.
+- The bot asks the platform for its application id at start-up and never takes
+  it from the token: for an older application the two differ. A failed lookup
+  stops the start (`lookupApplicationID` in
+  [`internal/discord`](../../internal/discord/disgo.go)).
 - Commands the current bot registered belong to the same application. The
   cutover lists them and removes the ones this bot does not serve.
 - Until the cutover every feature is tested against a fake Discord. A live test
@@ -147,6 +155,28 @@ documentation.
   chose to keep the one application the hub already has installed.
 - **Global commands.** They would appear in every guild that installs the
   application. The bot serves one guild.
+
+## Decided in this record
+
+The operator decided the language and the library, the single hub guild, the
+reuse of the existing application and that the bot carries nothing of any
+private infrastructure. Reading the application id from the platform, the image
+with its environment contract and the two working assumptions under "Open
+decisions" follow from recorded decisions.
+
+The choices below have no decision of their own outside this file. They were
+made here and are accepted with this record:
+
+- A gateway connection instead of an HTTP interactions endpoint.
+- No privileged gateway intent in the first version; a feature that needs one
+  adds its own record.
+- Credentials are read from files, never from environment values, and a read
+  that fails stops the start.
+- Commands are registered for the hub guild only, never globally.
+- One package imports disgo. Features depend on their own interfaces and are
+  tested against a fake Discord.
+- One process and one gateway session, a deadline on every outbound call, a
+  fixed bound on concurrent work and a shutdown within a deadline.
 
 ## Open decisions
 
