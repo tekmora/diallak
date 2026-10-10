@@ -185,9 +185,9 @@ A release is cut in three steps:
    section as its notes. There is no `latest` tag.
 
 The image is built in a reusable workflow of its own
-([`release-image.yml`](.github/workflows/release-image.yml)) that also signs it
-with cosign, attests its build provenance and writes an SBOM, which is attached
-to the release.
+([`release-image.yml`](.github/workflows/release-image.yml)) for `linux/amd64`
+and `linux/arm64`. The workflow also signs it with cosign, attests its build
+provenance and writes one SBOM per platform; both are attached to the release.
 
 No release exists yet, and merging to `main` releases nothing. How to check a
 signature is described here once it has been tried against the first release.
