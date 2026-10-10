@@ -1,7 +1,17 @@
 # Build stage
-FROM golang:1.27-trixie@sha256:3b77fc618ec235a1ab412de7737f120dd507c57e8d87de4cbb7994fb94275ed5 AS builder
+FROM golang:1.27.2-trixie@sha256:e58d6f83b3416618d8bcac2b3dde1b7f7e3c4a77d25e88637f8bbae81536c48d AS builder
 WORKDIR /src
 COPY go.mod go.sum* ./
+# The builder runs the toolchain go.mod names, or the build stops. The image sets
+# GOTOOLCHAIN=local, so a builder with another Go version would otherwise build the release
+# with it and say nothing.
+RUN set -eu; \
+    want="$(sed -n 's/^toolchain //p' go.mod)"; \
+    have="$(go env GOVERSION)"; \
+    if [ -z "$want" ] || [ "$want" != "$have" ]; then \
+      echo "builder runs ${have}, go.mod names toolchain ${want:-none}" >&2; \
+      exit 1; \
+    fi
 RUN go mod download
 COPY . .
 # The main package the image runs. Left empty, the build takes the module's only main
