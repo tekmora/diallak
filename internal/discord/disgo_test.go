@@ -28,7 +28,7 @@ import (
 )
 
 func TestBuildCommandCreate_Positive_Properties(t *testing.T) {
-	cmd := buildCommandCreate()
+	cmd := buildCommandCreate(0)
 
 	if cmd.CommandName() != CommandName {
 		t.Errorf("command name = %q, want %q", cmd.CommandName(), CommandName)
@@ -67,6 +67,24 @@ func TestBuildCommandCreate_Positive_Properties(t *testing.T) {
 	}
 	if opt.Description == "" {
 		t.Errorf("option description is empty")
+	}
+}
+
+func TestBuildCommandCreate_Positive_CustomMaxQuestionLength(t *testing.T) {
+	cmd := buildCommandCreate(10)
+	slashCmd, ok := cmd.(discord.SlashCommandCreate)
+	if !ok {
+		t.Fatalf("command type is not SlashCommandCreate: %T", cmd)
+	}
+	if len(slashCmd.Options) != 1 {
+		t.Fatalf("options len = %d, want 1", len(slashCmd.Options))
+	}
+	opt, ok := slashCmd.Options[0].(discord.ApplicationCommandOptionString)
+	if !ok {
+		t.Fatalf("option 0 is not ApplicationCommandOptionString: %T", slashCmd.Options[0])
+	}
+	if opt.MaxLength == nil || *opt.MaxLength != 10 {
+		t.Errorf("option max length = %v, want 10", opt.MaxLength)
 	}
 }
 
@@ -834,7 +852,7 @@ func TestBuildCommandCreate_Boundary_DescriptionLengthWithinLimit(t *testing.T) 
 	// Source: Discord Developer Documentation - Application Command Object Structure:
 	// https://discord.com/developers/docs/interactions/application-commands#application-command-object-application-command-structure
 	// (Table field: "description: Description for CHAT_INPUT commands; 1-100 characters")
-	cmd := buildCommandCreate()
+	cmd := buildCommandCreate(0)
 	slashCmd, ok := cmd.(discord.SlashCommandCreate)
 	if !ok {
 		t.Fatalf("command is not SlashCommandCreate: %T", cmd)

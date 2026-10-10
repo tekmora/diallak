@@ -601,3 +601,52 @@ func TestComplete_Negative_DefaultClientRefusesRedirects(t *testing.T) {
 		t.Fatalf("error = %v, want it to name status 307", err)
 	}
 }
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+func TestComplete_Positive_ConfiguredTimeoutSeenByServer(t *testing.T) {
+	var observedDeadline time.Time
+	var hasDeadline bool
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observedDeadline, hasDeadline = r.Context().Deadline()
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"hello"}}]}`)); err != nil {
+			t.Errorf("write response: %v", err)
+		}
+	})
+
+	testClient := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			return rec.Result(), nil
+		}),
+	}
+
+	configuredTimeout := 5 * time.Second
+	client, err := New(Config{
+		BaseURL: "http://diallak.test",
+		Alias:   "router/test",
+		Timeout: configuredTimeout,
+	}, testClient)
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	start := time.Now()
+	_, err = client.Complete(context.Background(), "sys", "usr")
+	if err != nil {
+		t.Fatalf("Complete() failed: %v", err)
+	}
+	if !hasDeadline {
+		t.Fatalf("request context seen by handler had no deadline")
+	}
+	duration := observedDeadline.Sub(start)
+	if duration < 4*time.Second || duration > 6*time.Second {
+		t.Errorf("observed deadline duration = %v, want approx %v", duration, configuredTimeout)
+	}
+}

@@ -90,6 +90,22 @@ that no model wrote them. In the live server that is the only mode for now: no
 deployment sets the two variables until the gates of
 [ADR-0006](docs/adr/0006-ai-act-role.md) are passed.
 
+### Optional settings
+
+<!-- markdownlint-disable MD013 -->
+| Name | Default | Range |
+| :--- | :--- | :--- |
+| `DIALLAK_TOP_PASSAGES` | `3` | `1..10` |
+| `DIALLAK_MIN_SCORE` | `0.20` | greater than 0, at most 1 |
+| `DIALLAK_QUESTION_MAX_CHARS` | `500` | `1..500` |
+| `DIALLAK_EXCERPT_CHARS` | `400` | `50..1000` |
+| `DIALLAK_REPLY_MAX_CHARS` | `1900` | `500..2000` |
+| `DIALLAK_MAX_CONCURRENT_ASKS` | `4` | `1..64` |
+| `DIALLAK_ASK_TIMEOUT` | `60s` | `1s..10m` |
+| `DIALLAK_MODEL_TIMEOUT` | `45s` | `1s..2m` and strictly below ask timeout |
+| `DIALLAK_SOURCE_LINK_TEMPLATE` | `https://github.com/{repository}/blob/{revision}/{path}` | `https://` URI with `{repository}`, `{revision}`, `{path}`, at most 200 chars |
+<!-- markdownlint-enable MD013 -->
+
 ### The documentation directory
 
 The deployment fills the directory; the bot fetches nothing. It holds one

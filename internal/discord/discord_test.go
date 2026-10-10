@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/tekmora/diallak/internal/answer"
+	"github.com/tekmora/diallak/internal/config"
 )
 
 type fakeInteraction struct {
@@ -147,7 +148,7 @@ func TestHandler_HandleAsk_Positive_BranchesAndReplies(t *testing.T) {
 				question: "   ",
 			},
 			asker:     &fakeAsker{},
-			wantReply: answer.AppendFooter(TextBadQuestion, ""),
+			wantReply: answer.AppendFooter(TextBadQuestion(0), ""),
 			wantAsks:  0,
 		},
 		{
@@ -157,7 +158,7 @@ func TestHandler_HandleAsk_Positive_BranchesAndReplies(t *testing.T) {
 				question: strings.Repeat("a", answer.MaxQuestionRunes+1),
 			},
 			asker:     &fakeAsker{},
-			wantReply: answer.AppendFooter(TextBadQuestion, ""),
+			wantReply: answer.AppendFooter(TextBadQuestion(0), ""),
 			wantAsks:  0,
 		},
 		{
@@ -167,7 +168,7 @@ func TestHandler_HandleAsk_Positive_BranchesAndReplies(t *testing.T) {
 				question: string([]byte{0xff, 0xfe, 0xfd}),
 			},
 			asker:     &fakeAsker{},
-			wantReply: answer.AppendFooter(TextBadQuestion, ""),
+			wantReply: answer.AppendFooter(TextBadQuestion(0), ""),
 			wantAsks:  0,
 		},
 		{
@@ -629,4 +630,156 @@ func TestHandler_Positive_FooterIsLastLineForAdapterTexts(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfigRanges_Positive_LieInsideDiscordCaps(t *testing.T) {
+	if config.MinConcurrentAsks < 1 {
+		t.Errorf("config.MinConcurrentAsks %d < 1", config.MinConcurrentAsks)
+	}
+	if config.MaxConcurrentAsksLimit > MaxAllowedConcurrent {
+		t.Errorf("config.MaxConcurrentAsksLimit %d > MaxAllowedConcurrent %d", config.MaxConcurrentAsksLimit, MaxAllowedConcurrent)
+	}
+	if config.MinAskTimeout < 1*time.Second {
+		t.Errorf("config.MinAskTimeout %v < 1s", config.MinAskTimeout)
+	}
+	if config.MaxAskTimeout > MaxAllowedAskTimeout {
+		t.Errorf("config.MaxAskTimeout %v > MaxAllowedAskTimeout %v", config.MaxAskTimeout, MaxAllowedAskTimeout)
+	}
+	if config.DefaultAskTimeout != DefaultAskTimeout {
+		t.Errorf("config.DefaultAskTimeout %v != DefaultAskTimeout %v", config.DefaultAskTimeout, DefaultAskTimeout)
+	}
+}
+
+func TestHandler_Positive_QuestionMaxChars(t *testing.T) {
+	const hubGuildID = 42
+	h, err := NewHandler(HandlerConfig{
+		Asker:            &fakeAsker{},
+		GuildID:          hubGuildID,
+		QuestionMaxChars: 10,
+	})
+	if err != nil {
+		t.Fatalf("NewHandler = %v", err)
+	}
+
+	in := &fakeInteraction{
+		guildID:  hubGuildID,
+		question: "12345678901", // 11 runes
+	}
+	h.HandleAsk(context.Background(), in)
+
+	replies := in.Replies()
+	if len(replies) != 1 {
+		t.Fatalf("got %d replies, want 1", len(replies))
+	}
+	wantText := TextBadQuestion(10)
+	if !strings.Contains(replies[0], wantText) {
+		t.Errorf("reply %q does not contain %q", replies[0], wantText)
+	}
+	if !strings.Contains(wantText, "between 1 and 10 characters") {
+		t.Errorf("TextBadQuestion(10) = %q, want between 1 and 10 characters", wantText)
+	}
+}
+
+func TestHandler_Positive_ConcurrencyLimit(t *testing.T) {
+	const hubGuildID = 42
+	block := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-block:
+		default:
+			close(block)
+		}
+	})
+
+	asker := &fakeAsker{
+		askFunc: func(ctx context.Context, _ string) (answer.Answer, error) {
+			select {
+			case <-block:
+				return answer.Answer{Kind: answer.KindRefusal}, nil
+			case <-ctx.Done():
+				return answer.Answer{}, ctx.Err()
+			}
+		},
+	}
+
+	h, err := NewHandler(HandlerConfig{
+		Asker:         asker,
+		GuildID:       hubGuildID,
+		MaxConcurrent: 1,
+	})
+	if err != nil {
+		t.Fatalf("NewHandler = %v", err)
+	}
+
+	firstIn := &fakeInteraction{
+		guildID:  hubGuildID,
+		question: "first ask",
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		h.HandleAsk(context.Background(), firstIn)
+	}()
+	defer func() {
+		select {
+		case <-block:
+		default:
+			close(block)
+		}
+		wg.Wait()
+	}()
+
+	for i := 0; i < 50; i++ {
+		if h.InFlight() == 1 {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	secondIn := &fakeInteraction{
+		guildID:  hubGuildID,
+		question: "second ask",
+	}
+	h.HandleAsk(context.Background(), secondIn)
+
+	replies2 := secondIn.Replies()
+	if len(replies2) != 1 {
+		t.Fatalf("secondIn got %d replies, want 1", len(replies2))
+	}
+	if !strings.Contains(replies2[0], TextBusy) {
+		t.Errorf("secondIn reply %q does not contain TextBusy", replies2[0])
+	}
+}
+
+func TestHandler_Positive_AskTimeout(t *testing.T) {
+	const hubGuildID = 42
+	asker := &fakeAsker{
+		askFunc: func(ctx context.Context, _ string) (answer.Answer, error) {
+			deadline, ok := ctx.Deadline()
+			if !ok {
+				t.Errorf("expected deadline on context")
+			}
+			remaining := time.Until(deadline)
+			if remaining <= 0 || remaining > 1100*time.Millisecond {
+				t.Errorf("unexpected remaining timeout: %v", remaining)
+			}
+			return answer.Answer{Kind: answer.KindRefusal}, nil
+		},
+	}
+
+	h, err := NewHandler(HandlerConfig{
+		Asker:      asker,
+		GuildID:    hubGuildID,
+		AskTimeout: 1 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewHandler = %v", err)
+	}
+
+	in := &fakeInteraction{
+		guildID:  hubGuildID,
+		question: "will timeout",
+	}
+	h.HandleAsk(context.Background(), in)
 }

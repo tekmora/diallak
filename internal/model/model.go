@@ -16,11 +16,15 @@ import (
 )
 
 const (
+	// MinTimeout is the minimum allowed duration to wait for a completion response.
+	MinTimeout = 1 * time.Second
 	// DefaultTimeout is the default duration to wait for a completion response.
+	// Source: chosen, not measured.
 	DefaultTimeout = 45 * time.Second
 	// MaxTimeout is the maximum allowed completion timeout.
 	MaxTimeout = 5 * time.Minute
 	// DefaultMaxOutputTokens is the default token limit for completion generations.
+	// Source: chosen, not measured.
 	DefaultMaxOutputTokens = 512
 	// MaxResponseBytes is the maximum allowed HTTP response size in bytes (1 MiB).
 	MaxResponseBytes = 1 << 20

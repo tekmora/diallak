@@ -26,18 +26,33 @@ const (
 	TextBusy = "The bot is busy answering other questions right now. Please try again in a moment."
 	// TextWrongGuild is returned when an interaction originates outside the configured guild.
 	TextWrongGuild = "This command is only available in the configured community server."
-	// TextBadQuestion is returned when the inquiry is empty, too long, or invalid UTF-8.
-	TextBadQuestion = "Questions must be valid text between 1 and 500 characters."
 	// TextFailure is returned when an error occurs during answer processing.
 	TextFailure = "An error occurred while answering your question. Please try again later."
 
-	defaultMaxConcurrent   = 4
-	maxAllowedConcurrent   = 64
-	defaultAskTimeout      = 60 * time.Second
-	maxAllowedAskTimeout   = 10 * time.Minute
+	// DefaultMaxConcurrent is the default maximum concurrent asking inquiries.
+	// Source: chosen, not measured.
+	DefaultMaxConcurrent = 4
+	// MaxAllowedConcurrent is the upper bound on concurrent asking inquiries.
+	MaxAllowedConcurrent = 64
+	// DefaultAskTimeout is the default processing timeout for inquiries.
+	// Source: chosen, not measured.
+	DefaultAskTimeout = 60 * time.Second
+	// MaxAllowedAskTimeout is the maximum allowed ask timeout.
+	MaxAllowedAskTimeout = 10 * time.Minute
+	// defaultReplyTimeout is the timeout for interaction defer and reply calls.
+	// Source: chosen, not measured.
 	defaultReplyTimeout    = 10 * time.Second
 	maxAllowedReplyTimeout = 1 * time.Minute
 )
+
+// TextBadQuestion returns the notice returned when the inquiry is empty, too long, or invalid UTF-8.
+// If maxChars <= 0, answer.MaxQuestionRunes is used.
+func TextBadQuestion(maxChars int) string {
+	if maxChars <= 0 {
+		maxChars = answer.MaxQuestionRunes
+	}
+	return fmt.Sprintf("Questions must be valid text between 1 and %d characters.", maxChars)
+}
 
 // Asker executes an inquiry against the documentation answer pipeline.
 type Asker interface {
@@ -61,18 +76,22 @@ type HandlerConfig struct {
 	ReplyTimeout  time.Duration
 	Logger        *slog.Logger
 	// SupportChannel names where a person helps. If empty, the default place is used.
-	SupportChannel string
+	SupportChannel   string
+	QuestionMaxChars int
+	RenderOptions    answer.RenderOptions
 }
 
 // Handler coordinates slash command interactions, concurrency limits, and replies.
 type Handler struct {
-	asker          Asker
-	guildID        uint64
-	maxConcurrent  int
-	askTimeout     time.Duration
-	replyTimeout   time.Duration
-	logger         *slog.Logger
-	supportChannel string
+	asker            Asker
+	guildID          uint64
+	maxConcurrent    int
+	askTimeout       time.Duration
+	replyTimeout     time.Duration
+	logger           *slog.Logger
+	supportChannel   string
+	questionMaxChars int
+	renderOptions    answer.RenderOptions
 
 	mu          sync.Mutex
 	inFlight    int
@@ -105,33 +124,44 @@ func NewHandler(cfg HandlerConfig) (*Handler, error) {
 		logger = slog.New(slog.DiscardHandler)
 	}
 
+	questionMaxChars := cfg.QuestionMaxChars
+	if questionMaxChars == 0 {
+		questionMaxChars = answer.MaxQuestionRunes
+	}
+	renderOpts := cfg.RenderOptions
+	if renderOpts.Place == "" {
+		renderOpts.Place = cfg.SupportChannel
+	}
+
 	return &Handler{
-		asker:          cfg.Asker,
-		guildID:        cfg.GuildID,
-		maxConcurrent:  maxConcurrent,
-		askTimeout:     askTimeout,
-		replyTimeout:   replyTimeout,
-		logger:         logger,
-		supportChannel: cfg.SupportChannel,
+		asker:            cfg.Asker,
+		guildID:          cfg.GuildID,
+		maxConcurrent:    maxConcurrent,
+		askTimeout:       askTimeout,
+		replyTimeout:     replyTimeout,
+		logger:           logger,
+		supportChannel:   cfg.SupportChannel,
+		questionMaxChars: questionMaxChars,
+		renderOptions:    renderOpts,
 	}, nil
 }
 
 func validateMaxConcurrent(v int) (int, error) {
-	if v < 0 || v > maxAllowedConcurrent {
-		return 0, fmt.Errorf("max concurrent %d out of range [0, %d]", v, maxAllowedConcurrent)
+	if v < 0 || v > MaxAllowedConcurrent {
+		return 0, fmt.Errorf("max concurrent %d out of range [0, %d]", v, MaxAllowedConcurrent)
 	}
 	if v == 0 {
-		return defaultMaxConcurrent, nil
+		return DefaultMaxConcurrent, nil
 	}
 	return v, nil
 }
 
 func validateAskTimeout(d time.Duration) (time.Duration, error) {
-	if d < 0 || d > maxAllowedAskTimeout {
-		return 0, fmt.Errorf("ask timeout %v out of range [0, %v]", d, maxAllowedAskTimeout)
+	if d < 0 || d > MaxAllowedAskTimeout {
+		return 0, fmt.Errorf("ask timeout %v out of range [0, %v]", d, MaxAllowedAskTimeout)
 	}
 	if d == 0 {
-		return defaultAskTimeout, nil
+		return DefaultAskTimeout, nil
 	}
 	return d, nil
 }
@@ -231,22 +261,22 @@ func (h *Handler) HandleAsk(ctx context.Context, in Interaction) {
 	}
 
 	q := strings.TrimSpace(in.Question())
-	if !validateQuestion(in.Question(), q) {
-		h.sendFixedReply(ctx, in, TextBadQuestion)
+	if !h.validateQuestion(in.Question(), q) {
+		h.sendFixedReply(ctx, in, TextBadQuestion(h.questionMaxChars))
 		return
 	}
 
 	h.executeAskAndReply(ctx, in, q)
 }
 
-func validateQuestion(raw, trimmed string) bool {
+func (h *Handler) validateQuestion(raw, trimmed string) bool {
 	if !utf8.ValidString(raw) {
 		return false
 	}
 	if trimmed == "" {
 		return false
 	}
-	return utf8.RuneCountInString(trimmed) <= answer.MaxQuestionRunes
+	return utf8.RuneCountInString(trimmed) <= h.questionMaxChars
 }
 
 func (h *Handler) handleDirectReply(ctx context.Context, in Interaction, text string) {
@@ -292,7 +322,7 @@ func (h *Handler) executeAskAndReply(ctx context.Context, in Interaction, q stri
 		slog.String("reason", string(ans.Reason)),
 		slog.Duration("duration", time.Since(start)),
 	)
-	h.sendReply(ctx, in, answer.Render(ans, answer.RenderOptions{Place: h.supportChannel}))
+	h.sendReply(ctx, in, answer.Render(ans, h.renderOptions))
 }
 
 func (h *Handler) sendReply(ctx context.Context, in Interaction, text string) {

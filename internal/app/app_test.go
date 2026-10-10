@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/tekmora/diallak/internal/answer"
 	"github.com/tekmora/diallak/internal/config"
@@ -322,5 +323,63 @@ func TestBuild_Boundary_DoubleCloseDoesNotPanic(t *testing.T) {
 	}
 	if closeErr := cleanup(); closeErr != nil {
 		t.Fatalf("second cleanup = %v, want nil", closeErr)
+	}
+}
+
+func TestBuild_Positive_ConfiguredLimitsThreaded(t *testing.T) {
+	corpusDir := setupTestCorpus(t)
+	cfg := config.Config{
+		CorpusDir:          corpusDir,
+		TopPassages:        1,
+		MinScore:           0.20,
+		QuestionMaxChars:   200,
+		ExcerptChars:       50,
+		ReplyMaxChars:      600,
+		SupportChannel:     "#help-test",
+		SourceLinkTemplate: "https://git.example.com/{repository}/src/{revision}/{path}",
+	}
+
+	assembly, cleanup, err := Build(context.Background(), cfg, nil)
+	if err != nil {
+		t.Fatalf("Build = %v, want nil", err)
+	}
+	defer func() {
+		if closeErr := cleanup(); closeErr != nil {
+			t.Errorf("cleanup = %v", closeErr)
+		}
+	}()
+
+	if assembly.RenderOptions.Place != "#help-test" {
+		t.Errorf("assembly.RenderOptions.Place = %q, want #help-test", assembly.RenderOptions.Place)
+	}
+	if assembly.RenderOptions.MaxRunes != 600 {
+		t.Errorf("assembly.RenderOptions.MaxRunes = %d, want 600", assembly.RenderOptions.MaxRunes)
+	}
+
+	ans, err := assembly.Pipeline.Ask(context.Background(), "where are tokens stored in secret files?")
+	if err != nil {
+		t.Fatalf("Ask = %v", err)
+	}
+
+	if len(ans.Sources) != 1 {
+		t.Fatalf("len(ans.Sources) = %d, want 1", len(ans.Sources))
+	}
+
+	rawExcerpt := strings.TrimSuffix(ans.Sources[0].Excerpt, "...")
+	if utf8.RuneCountInString(rawExcerpt) > 50 {
+		t.Errorf("excerpt rune count = %d, want <= 50", utf8.RuneCountInString(rawExcerpt))
+	}
+
+	wantURLPrefix := "https://git.example.com/tekmora/alpha/src/"
+	if !strings.HasPrefix(ans.Sources[0].URL, wantURLPrefix) {
+		t.Errorf("source URL = %q, want prefix %q", ans.Sources[0].URL, wantURLPrefix)
+	}
+
+	rendered := answer.Render(ans, assembly.RenderOptions)
+	if utf8.RuneCountInString(rendered) > 600 {
+		t.Errorf("rendered rune count = %d, want <= 600", utf8.RuneCountInString(rendered))
+	}
+	if !strings.Contains(rendered, "#help-test") {
+		t.Errorf("rendered reply missing support place: %q", rendered)
 	}
 }
