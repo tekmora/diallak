@@ -129,7 +129,7 @@ func (s *loadState) handleEntry(p string, d fs.DirEntry, err error) error {
 	return nil
 }
 
-func validateSourceAndLimits(src Source, lim Limits) error {
+func validateSource(src Source) error {
 	if !repoRegexp.MatchString(src.Repository) {
 		return fmt.Errorf("invalid repository format %q", src.Repository)
 	}
@@ -144,6 +144,10 @@ func validateSourceAndLimits(src Source, lim Limits) error {
 			return fmt.Errorf("invalid pattern %q: %w", p, err)
 		}
 	}
+	return nil
+}
+
+func validateLimits(lim Limits) error {
 	if lim.MaxFiles <= 0 || lim.MaxFileBytes <= 0 || lim.MaxChunks <= 0 || lim.MaxChunkBytes <= 0 {
 		return errors.New("all limits must be positive")
 	}
@@ -151,6 +155,13 @@ func validateSourceAndLimits(src Source, lim Limits) error {
 		return fmt.Errorf("MaxChunkBytes %d cannot hold one rune (%d bytes)", lim.MaxChunkBytes, utf8.UTFMax)
 	}
 	return nil
+}
+
+func validateSourceAndLimits(src Source, lim Limits) error {
+	if err := validateSource(src); err != nil {
+		return err
+	}
+	return validateLimits(lim)
 }
 
 func matchAnyPattern(patterns []string, p string) (bool, error) {
