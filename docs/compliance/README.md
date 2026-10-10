@@ -9,15 +9,16 @@ legal advice. The operator reviews each one before it is used.
 | [Role under the EU AI Act](../adr/0006-ai-act-role.md) | Which role the project has and which duties follow | Accepted record, with gates for model-written answers |
 | [AI disclosure](ai-disclosure.md) | What the bot tells members about itself, and where | Draft |
 | [Data inventory](data-inventory.md) | What the bot receives, keeps, logs and passes on | Draft, checked against the code |
-| [Privacy notice](privacy-notice.md) | What members are told about their data, point by point of GDPR Article 13 | Draft with nine open points for the operator |
-| [Server rules](server-rules.md) | The short list of rules a member reads when joining | Draft with six open points for the operator |
+| [Privacy notice](privacy-notice.md) | What members are told about their data, point by point of GDPR Article 13 | Draft with seven open points for the operator and a legal review before the public launch |
+| [Server rules](server-rules.md) | The short add-on to the code of conduct that a member reads when joining | Draft with five open points for the operator |
 <!-- markdownlint-enable MD013 -->
 
 The rules these documents implement are in
-[ADR-0002](../adr/0002-data-and-compliance.md). Still to come: the code of
-conduct and the moderator guide that
-[ADR-0005](../adr/0005-moderation-and-escalation.md) requires before moderation
-starts.
+[ADR-0002](../adr/0002-data-and-compliance.md). Still to come before moderation
+starts ([ADR-0005](../adr/0005-moderation-and-escalation.md)): the moderator
+guide, and the code of conduct, which the operator has decided to keep once per
+organisation. English is the source and the binding version of every text here;
+translations are linked and marked as translations.
 
 ## Gates for model-written answers
 

@@ -7,6 +7,9 @@ legal advice. A point the operator still has to decide or fill in is marked
 This notice covers the bot Diallak in the community server. What Discord does
 with your data is covered by Discord's own privacy policy, not by this notice.
 
+English is the source and the binding version of this notice. A translation is
+linked when someone provides it and is marked as a translation.
+
 The notice follows the list of Article 13 of Regulation (EU) 2016/679 (GDPR).
 Each section names the point of that article it answers. What the bot does with
 data is taken from the [data inventory](data-inventory.md), which is checked
@@ -26,8 +29,12 @@ against the code.
 
 *Article 13(1)(a) and (b).*
 
-**OPEN**: name and contact details of the controller, which is the person or
-body that runs the bot in the server.
+The bot is run by Lusoris, the maintainer of the project. Contact:
+<lusoris@pm.me>.
+
+Whether a handle and an e-mail address are enough to name the responsible party
+is a legal question. It is examined in the legal review that comes before the
+public launch; until then this section is not final.
 
 **OPEN**: contact of a data protection officer, or the statement that none is
 appointed.
@@ -39,14 +46,14 @@ appointed.
 <!-- markdownlint-disable MD013 -->
 | Data | Purpose | Legal basis |
 | :--- | :--- | :--- |
-| The question you pass to `/ask` | Finding documentation passages and writing the reply | Proposed: legitimate interests, Article 6(1)(f) |
-| The id of the server the command came from | Refusing every server but the configured one | Proposed: legitimate interests, Article 6(1)(f) |
+| The question you pass to `/ask` | Finding documentation passages and writing the reply | Legitimate interests, Article 6(1)(f) |
+| The id of the server the command came from | Refusing every server but the configured one | Legitimate interests, Article 6(1)(f) |
 | Other fields Discord sends with a command, such as your member id, name, roles and locale | None: the bot reads none of them and keeps none | Not used |
 <!-- markdownlint-enable MD013 -->
 
 The legitimate interest is to answer the question a member puts to the bot, in
-the server the bot is meant for. **OPEN**: the operator confirms this basis or
-names another.
+the server the bot is meant for. The bot asks for no consent. This basis is the
+operator's choice and is examined in the legal review before the public launch.
 
 The bot's logs hold no question, no answer and no member id. They record the
 outcome of a request, such as `answer` or `refusal`, and how long it took
@@ -139,16 +146,20 @@ matching entries before such a feature goes live.
 
 ## Open points for the operator
 
-1. Name and contact details of the controller.
-2. Data protection officer: contact, or none appointed.
-3. Legal basis: confirm legitimate interests or name another.
-4. Hosting provider of the bot and of the model endpoint, if any.
-5. Where the bot and the model endpoint run, and the safeguard for a transfer
+1. Data protection officer: contact, or none appointed.
+2. Hosting provider of the bot and of the model endpoint, if any.
+3. Where the bot and the model endpoint run, and the safeguard for a transfer
    outside the European Economic Area, if there is one.
-6. The period the hosting keeps the bot's logs.
-7. The competent supervisory authority.
-8. How a member sends a request.
-9. Where the published notice lives and from where it is linked.
+4. The period the hosting keeps the bot's logs.
+5. The competent supervisory authority.
+6. How a member sends a request.
+7. Where the published notice lives and from where it is linked.
+
+## Before the public launch
+
+A legal review examines two points the operator has decided for the draft:
+whether naming a handle and an e-mail address satisfies the duty to name the
+responsible party, and whether legitimate interests is the right legal basis.
 
 ## Sources
 
