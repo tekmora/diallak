@@ -1,6 +1,6 @@
 # ADR-0007: Health listener for probes
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-10
 - **Authors**: Maintainers
 

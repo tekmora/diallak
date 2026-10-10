@@ -1,8 +1,8 @@
 # Server rules
 
-Draft for operator review. It is not published to members yet. The rules of the
-server are the operator's to set; this page proposes a short list and names what
-is still open.
+Draft. It is not published to members yet. The operator has accepted the eight
+rules as draft wording; they become final once the organisation's code of
+conduct exists.
 
 The operator decided the shape: one code of conduct holds the rules of conduct
 for all spaces of the organisation, and the server rules are a short add-on for
@@ -14,7 +14,7 @@ linked when someone provides it and is marked as a translation.
 ## The rules
 
 1. **The code of conduct applies here.** It says how people treat each other in
-   every space of the organisation. **OPEN**: the link, once the code of conduct
+   every space of the organisation. The link follows once the code of conduct
    exists.
 2. **Technical channels and support are in English.** Each language has a social
    room you can opt into.
@@ -28,9 +28,12 @@ linked when someone provides it and is marked as a translation.
 6. **Report security problems privately**, as [SECURITY.md](../../SECURITY.md)
    describes, not in a public channel.
 7. **Moderators may remove content and time members out.** People decide every
-   unclear case, never the bot alone.
+   unclear case, never the bot alone. To appeal, open a private thread in the
+   support forum and address it to the operator. If you can no longer reach the
+   server, write an e-mail to <lusoris@pm.me>.
 8. **Discord's own rules apply.** You must follow Discord's Terms of Service
    and Community Guidelines and meet Discord's minimum age for your country.
+   The server has no mature content and no age-restricted channel.
 
 ## What the code of conduct covers
 
@@ -58,18 +61,17 @@ role and punishes nobody on its own judgement.
 Rule 5 rests on the [AI disclosure](ai-disclosure.md) and on
 [ADR-0002](../adr/0002-data-and-compliance.md).
 
-## Open points for the operator
+## Where these rules live
 
-1. The final wording and the number of rules.
-2. The link to the code of conduct, once it exists.
-3. Whether any age-restricted channel exists. The draft assumes none.
-4. Rule 7: how a member appeals a moderator's action.
-5. Where the published rules live and from where they are linked.
+The source is this file in the project's repository. Once published, the rules
+are shown in the server's rules screen and linked from the rules channel. They
+move when the organisation has one place for its legal texts, and a link stays
+behind.
 
-## A record that has to follow
+Where the code of conduct lives is recorded in
+[ADR-0008](../adr/0008-code-of-conduct-place.md): once per organisation, not in
+this repository.
 
-[ADR-0005](../adr/0005-moderation-and-escalation.md) says that the code of
-conduct lives under `docs/` of this repository. The operator has since decided
-that it is kept once per organisation. An accepted record is not edited, so a
-new record has to state where the code of conduct lives before moderation
-starts.
+## Open point
+
+The link to the code of conduct in rule 1, once the code of conduct exists.

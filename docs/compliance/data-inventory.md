@@ -90,7 +90,10 @@ reply, under its own terms. The bot has no control over that and no copy of it.
 
 These will add entries here when they are built:
 
-- Support tickets, which need stored state and a retention period.
+- Support tickets, which need stored state. Their retention is decided: 30 days
+  after a ticket is closed, as a default that configuration can change.
 - The moderation trail ([ADR-0005](../adr/0005-moderation-and-escalation.md)).
+  Its retention is decided: 90 days, as a default that configuration can
+  change.
 - Reading GitHub Discussions ([ADR-0004](../adr/0004-community-questions.md)).
 - Supporter roles.

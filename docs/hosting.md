@@ -55,7 +55,8 @@ is missing or out of range stops the start with a message that names it.
   sources, <n> chunks, model <state>`, on standard output and then connects to
   Discord. Logs are JSON lines on standard error and hold no question, no answer
   and no member id ([data inventory](compliance/data-inventory.md), "What the
-  bot logs").
+  bot logs"). The deployment keeps them for 30 days, the period the
+  [privacy notice](compliance/privacy-notice.md) names.
 - **Exit codes.** 0 after a clean stop, 1 with the reason on standard error
   ([`cmd/diallak`](../cmd/diallak/main.go), `report`).
 - **Stop.** On `SIGTERM` the bot takes no new question, waits up to 15 seconds
