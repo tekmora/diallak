@@ -82,7 +82,11 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           # Semver tags only. There is no floating `latest`, so every
-          # deployment pins what it runs.
+          # deployment pins what it runs. The action adds `latest` to a
+          # version tag unless the flavor forbids it: the first release got
+          # one that way.
+          flavor: |
+            latest=false
           tags: |
             type=semver,pattern={{version}},value=${{ inputs.tag }}
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag }}
