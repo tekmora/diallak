@@ -12,4 +12,6 @@ record that supersedes it.
 | [0001](0001-architecture-and-boundaries.md) | 2026-10-10 | Architecture and boundaries | Proposed |
 | [0002](0002-data-and-compliance.md) | 2026-10-10 | Data and compliance | Proposed |
 | [0003](0003-answer-pipeline.md) | 2026-10-10 | Answer pipeline | Proposed |
+| [0004](0004-community-questions.md) | 2026-10-10 | Community questions: Discussions and the hub | Proposed |
+| [0005](0005-moderation-and-escalation.md) | 2026-10-10 | Moderation and escalation | Proposed |
 <!-- markdownlint-enable MD013 -->

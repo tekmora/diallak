@@ -93,15 +93,22 @@ no sharding.
 - On a termination signal the bot stops taking new work and closes the gateway
   within a deadline.
 
-### A new Discord application
+### The existing Discord application
 
-The bot runs under a new Discord application, not the one the current bot uses.
+The bot runs under the Discord application the current bot uses, with the same
+token. The application is renamed through the API. This is the operator's
+decision for now; a move to an application of its own would be a new record.
 
-- Both bots can run side by side until the cutover, each with its own token.
-  Rolling back means switching back to the other application.
-- The new application starts with no privileged intent enabled.
-- The operator creates the application. Its name and avatar follow the product
-  name.
+- One token serves one bot. The two bots do not run side by side: the cutover
+  stops the current bot and starts this one, and rolling back starts the current
+  bot again.
+- The token stays in the deployment's secret store. This bot reads it from a
+  file, as above.
+- The bot requests no privileged intent, whatever the application has enabled.
+- Commands the current bot registered belong to the same application. The
+  cutover lists them and removes the ones this bot does not serve.
+- Until the cutover every feature is tested against a fake Discord. A live test
+  replaces the current bot for its duration and is the operator's act.
 
 ### An image and an environment contract
 
@@ -135,6 +142,9 @@ documentation.
 - **An HTTP interactions endpoint.** It needs a public inbound endpoint and
   receives interactions only. Gateway events such as poll votes would not reach
   the bot.
+- **A new Discord application.** It would let both bots run side by side until
+  the cutover and would start with no privileged intent enabled. The operator
+  chose to keep the one application the hub already has installed.
 - **Global commands.** They would appear in every guild that installs the
   application. The bot serves one guild.
 

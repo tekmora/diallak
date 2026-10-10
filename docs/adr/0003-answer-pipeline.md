@@ -35,8 +35,9 @@ import the Discord library ([ADR-0001](0001-architecture-and-boundaries.md)).
 
 - The corpus is built from sources listed in configuration. Each entry names a
   repository, a path pattern and a revision.
-- Sources are public documentation only: a project's README and the Markdown
-  files under its `docs/` directory. Issues, discussions and private
+- Sources are public documentation: a project's README and the Markdown files
+  under its `docs/` directory. Answered public discussions are a second kind of
+  source under [ADR-0004](0004-community-questions.md). Issues and private
   repositories are never sources.
 - Every chunk keeps its source link, its heading and the revision it was read
   from.
@@ -105,6 +106,10 @@ from ([`internal/answer`](../../internal/answer/answer.go)).
 The bot acknowledges the command at once with a deferred response and edits the
 answer in when the pipeline finishes. The pipeline's total deadline stays below
 the lifetime of the interaction token.
+
+In the first version the reply is visible only to the member who asked, so a
+wrong answer is not broadcast. A way to share a reply with the channel comes
+later.
 
 ### Evaluation
 
