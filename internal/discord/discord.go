@@ -204,7 +204,8 @@ func (h *Handler) releaseSlot() {
 func (h *Handler) HandleAsk(ctx context.Context, in Interaction) {
 	defer func() {
 		if r := recover(); r != nil {
-			h.logger.Error("recovered from panic in HandleAsk", slog.Any("panic", r))
+			// The panic value can quote what was being processed, so only its type is logged.
+			h.logger.Error("recovered from panic in HandleAsk", slog.String("panic_type", fmt.Sprintf("%T", r)))
 		}
 	}()
 
@@ -276,6 +277,11 @@ func (h *Handler) executeAskAndReply(ctx context.Context, in Interaction, q stri
 		return
 	}
 
+	h.logger.Info("ask answered",
+		slog.String("outcome", string(ans.Kind)),
+		slog.String("reason", string(ans.Reason)),
+		slog.Duration("duration", time.Since(start)),
+	)
 	h.sendReply(ctx, in, answer.Render(ans))
 }
 

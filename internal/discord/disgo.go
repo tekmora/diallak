@@ -65,7 +65,7 @@ func RegisterCommands(ctx context.Context, token string, guildID uint64) error {
 
 // Run starts the Discord gateway connection and dispatches interactions to the handler.
 func Run(ctx context.Context, cfg BotConfig) error {
-	shutdownTimeout, err := validateBotConfig(cfg)
+	cfg, err := normalizeBotConfig(cfg)
 	if err != nil {
 		return err
 	}
@@ -88,36 +88,83 @@ func Run(ctx context.Context, cfg BotConfig) error {
 	<-ctx.Done()
 	dispatching.Store(false)
 
-	return shutdownClient(cfg, client, shutdownTimeout)
+	return shutdownClient(cfg, client, cfg.ShutdownTimeout)
 }
 
-func validateBotConfig(cfg BotConfig) (time.Duration, error) {
+// normalizeBotConfig validates cfg and fills its defaults, so every later use finds a logger and
+// a shutdown timeout.
+func normalizeBotConfig(cfg BotConfig) (BotConfig, error) {
 	if cfg.Token == "" {
-		return 0, errors.New("bot token is required")
+		return BotConfig{}, errors.New("bot token is required")
 	}
 	if cfg.GuildID == 0 {
-		return 0, errors.New("guild ID must not be zero")
+		return BotConfig{}, errors.New("guild ID must not be zero")
 	}
 	if cfg.Handler == nil {
-		return 0, errors.New("handler is required")
+		return BotConfig{}, errors.New("handler is required")
 	}
-	timeout := cfg.ShutdownTimeout
-	if timeout <= 0 {
-		timeout = defaultShutdownTimeout
+	if cfg.ShutdownTimeout <= 0 {
+		cfg.ShutdownTimeout = defaultShutdownTimeout
 	}
-	return timeout, nil
+	if cfg.Logger == nil {
+		cfg.Logger = slog.New(slog.DiscardHandler)
+	}
+	return cfg, nil
+}
+
+// gatewayIntents is the intent set of the gateway session: none. Application command interactions
+// arrive without any intent, and the bot requests no privileged one (ADR-0001).
+func gatewayIntents() gateway.Intents {
+	return gateway.IntentsNone
+}
+
+// libraryLogFloor is the lowest level at which the Discord library may write to the log. Below it
+// the library logs request and response bodies and raw gateway payloads, which carry questions and
+// answers; those never reach a log, whatever level the process runs at.
+const libraryLogFloor = slog.LevelWarn
+
+// libraryLogger returns the logger handed to the Discord library: base, cut off below
+// libraryLogFloor.
+func libraryLogger(base *slog.Logger) *slog.Logger {
+	return slog.New(floorHandler{inner: base.Handler()})
+}
+
+// floorHandler drops every record below libraryLogFloor and passes the rest to inner.
+type floorHandler struct {
+	inner slog.Handler
+}
+
+// Enabled reports whether inner takes a record of level and level reaches the floor.
+func (h floorHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return level >= libraryLogFloor && h.inner.Enabled(ctx, level)
+}
+
+// Handle passes a record at or above the floor to inner.
+func (h floorHandler) Handle(ctx context.Context, record slog.Record) error {
+	if record.Level < libraryLogFloor {
+		return nil
+	}
+	if err := h.inner.Handle(ctx, record); err != nil {
+		return fmt.Errorf("handle library log record: %w", err)
+	}
+	return nil
+}
+
+// WithAttrs keeps the floor on the derived handler.
+func (h floorHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return floorHandler{inner: h.inner.WithAttrs(attrs)}
+}
+
+// WithGroup keeps the floor on the derived handler.
+func (h floorHandler) WithGroup(name string) slog.Handler {
+	return floorHandler{inner: h.inner.WithGroup(name)}
 }
 
 func buildClient(ctx context.Context, cfg BotConfig, workerSem chan struct{}, dispatching *atomic.Bool) (*bot.Client, error) {
-	logger := cfg.Logger
-	if logger == nil {
-		logger = slog.New(slog.DiscardHandler)
-	}
-
 	return disgo.New(cfg.Token,
-		bot.WithLogger(logger),
+		bot.WithLogger(libraryLogger(cfg.Logger)),
 		bot.WithGatewayConfigOpts(
-			gateway.WithIntents(gateway.IntentsNone),
+			gateway.WithIntents(gatewayIntents()),
 			gateway.WithAutoReconnect(true),
 		),
 		bot.WithRestConfigOpts(
@@ -147,7 +194,11 @@ func handleIncomingInteraction(
 		return
 	}
 
-	data := appCmd.SlashCommandInteractionData()
+	data, ok := slashCommandData(appCmd)
+	if !ok {
+		cfg.Logger.Debug("ignoring application command that is no slash command")
+		return
+	}
 	if data.CommandName() != CommandName {
 		cfg.Logger.Debug("ignoring unknown command", slog.String("command", data.CommandName()))
 		return
@@ -204,7 +255,11 @@ func (a *interactionAdapter) GuildID() uint64 {
 }
 
 func (a *interactionAdapter) Question() string {
-	return extractQuestion(a.interaction.SlashCommandInteractionData())
+	data, ok := slashCommandData(a.interaction)
+	if !ok {
+		return ""
+	}
+	return extractQuestion(data)
 }
 
 func (a *interactionAdapter) Defer(ctx context.Context) error {
@@ -266,6 +321,13 @@ func extractGuildID(id *snowflake.ID) uint64 {
 		return 0
 	}
 	return uint64(*id)
+}
+
+// slashCommandData returns the data of a slash command. The application is shared with another
+// bot, so user and message commands can arrive too; the library's own accessor panics on those.
+func slashCommandData(i discord.ApplicationCommandInteraction) (discord.SlashCommandInteractionData, bool) {
+	data, ok := i.Data.(discord.SlashCommandInteractionData)
+	return data, ok
 }
 
 func extractQuestion(data discord.SlashCommandInteractionData) string {
