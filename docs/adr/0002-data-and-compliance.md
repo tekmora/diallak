@@ -88,8 +88,9 @@ records:
   it is met if so;
 - the current state of amendments and Commission guidance, re-read from EUR-Lex.
 
-The assessment is added as its own ADR. Until it is accepted, auto-answers stay
-off in the live server.
+The assessment is [ADR-0006](0006-ai-act-role.md). Until it is accepted,
+model-written answers stay off in the live server. Excerpt replies, which no
+model writes, may go live after the live test.
 
 ## Consequences
 

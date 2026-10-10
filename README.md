@@ -76,7 +76,8 @@ The bot reads its settings from the environment and fails closed when one is mis
 | `DISCORD_BOT_MODEL_KEY_FILE` | no | Path of the file that holds the endpoint's credential |
 
 Without the two model variables the bot replies with cited excerpts and says that no model wrote
-them.
+them. In the live server that is the only mode for now: no deployment sets the two variables until
+[ADR-0006](docs/adr/0006-ai-act-role.md) is accepted.
 
 ### The documentation directory
 
