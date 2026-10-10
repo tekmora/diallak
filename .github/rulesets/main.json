@@ -41,6 +41,9 @@
           },
           {
             "context": "governance (praetor)"
+          },
+          {
+            "context": "vulncheck"
           }
         ],
         "strict_required_status_checks_policy": true
