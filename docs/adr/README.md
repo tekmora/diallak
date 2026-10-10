@@ -14,4 +14,5 @@ record that supersedes it.
 | [0003](0003-answer-pipeline.md) | 2026-10-10 | Answer pipeline | Proposed |
 | [0004](0004-community-questions.md) | 2026-10-10 | Community questions: Discussions and the hub | Proposed |
 | [0005](0005-moderation-and-escalation.md) | 2026-10-10 | Moderation and escalation | Proposed |
+| [0006](0006-ai-act-role.md) | 2026-10-10 | Role and duties under the EU AI Act | Proposed |
 <!-- markdownlint-enable MD013 -->
