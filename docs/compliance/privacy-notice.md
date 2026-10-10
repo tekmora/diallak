@@ -1,8 +1,8 @@
 # Privacy notice
 
-Draft for operator review. It is not published to members yet, and it is not
-legal advice. A point the operator still has to decide or fill in is marked
-**OPEN**; the list at the end collects them.
+Draft. It is not published to members yet, and it is not legal advice. The
+operator has decided its content; a legal review comes before the public launch
+and is listed at the end.
 
 This notice covers the bot Diallak in the community server. What Discord does
 with your data is covered by Discord's own privacy policy, not by this notice.
@@ -36,8 +36,7 @@ Whether a handle and an e-mail address are enough to name the responsible party
 is a legal question. It is examined in the legal review that comes before the
 public launch; until then this section is not final.
 
-**OPEN**: contact of a data protection officer, or the statement that none is
-appointed.
+No data protection officer is appointed.
 
 ## What is processed, for what purpose and on what basis
 
@@ -75,15 +74,19 @@ Model mode is switched off in the live server until the gates of
 leaves the bot only as far as the reply needs it: the reply holds documentation
 text, not your question.
 
-**OPEN**: the hosting provider of the bot and of the model endpoint, if a third
-party hosts either of them.
+## Where the bot runs
 
-## Transfers outside the European Union
+*Article 13(1)(e) and (f).*
 
-*Article 13(1)(f).*
+<!-- hosting statement: this block is replaced as a whole when the bot moves -->
+The bot and the model endpoint run on machines the operator owns, in Germany.
+No hosting provider is involved, and the bot sends your data to no place
+outside the European Economic Area. The reply itself reaches you through
+Discord, like every message on the server; Discord's own policy covers that.
+<!-- hosting statement: end -->
 
-**OPEN**: where the bot and the model endpoint run. If either runs outside the
-European Economic Area, this section names the country and the safeguard.
+A move to a rented server is planned. Before it happens this block names the
+provider, the country of its data centre and the agreement that binds it.
 
 ## How long data is kept
 
@@ -93,8 +96,8 @@ European Economic Area, this section names the country and the safeguard.
 | Data | Kept |
 | :--- | :--- |
 | Your question, in the bot | In memory until the reply is sent |
-| Your question, at the model endpoint (model mode only) | Not kept: the endpoint must not keep or train on what it receives (ADR-0002). What the endpoint records about a request, and for how long, is stated here before model mode goes live |
-| Log lines of the bot, which hold no personal data | **OPEN**: the period the hosting keeps logs |
+| Your question, at the model endpoint (model mode only) | Not kept: the endpoint must not keep or train on what it receives (ADR-0002). The endpoint keeps its records about a request for 30 days; what such a record holds is stated here before model mode goes live |
+| Log lines of the bot, which hold no personal data | 30 days |
 <!-- markdownlint-enable MD013 -->
 
 ## Your rights
@@ -113,10 +116,10 @@ delay and at the latest within one month (Article 12(3)).
 The processing does not rest on consent, so there is no consent to withdraw.
 
 You have the right to lodge a complaint with a supervisory authority, in
-particular in the Member State where you live or work (Article 77). **OPEN**:
-the authority competent for the controller.
+particular in the Member State where you live or work (Article 77).
 
-**OPEN**: how a member sends a request, for example an address or a channel.
+To send a request, write an e-mail to <lusoris@pm.me>. A private thread in the
+support forum, addressed to the operator, is accepted too.
 
 ## Whether you have to provide data
 
@@ -144,22 +147,29 @@ moderation trail, GitHub Discussions and supporter roles
 ([data inventory](data-inventory.md), "Not yet built"). This notice gains the
 matching entries before such a feature goes live.
 
-## Open points for the operator
+## Where this notice lives
 
-1. Data protection officer: contact, or none appointed.
-2. Hosting provider of the bot and of the model endpoint, if any.
-3. Where the bot and the model endpoint run, and the safeguard for a transfer
-   outside the European Economic Area, if there is one.
-4. The period the hosting keeps the bot's logs.
-5. The competent supervisory authority.
-6. How a member sends a request.
-7. Where the published notice lives and from where it is linked.
+The source is this file in the project's repository. Once published, it is
+linked from the bot's profile, the rules channel and the application's entry in
+Discord's developer portal. It moves when the organisation has one place for
+its legal texts, and a link stays behind.
+
+## Open point for the operator
+
+Which parts move to the rented server, the bot alone or the model endpoint too.
+The block under "Where the bot runs" changes with the answer.
 
 ## Before the public launch
 
-A legal review examines two points the operator has decided for the draft:
-whether naming a handle and an e-mail address satisfies the duty to name the
-responsible party, and whether legitimate interests is the right legal basis.
+A legal review examines what the operator has decided for this draft:
+
+- whether naming a handle and an e-mail address satisfies the duty to name the
+  responsible party;
+- whether legitimate interests is the right legal basis;
+- that no data protection officer has to be appointed;
+- that the notice may state the right to complain without naming an authority;
+- what the notice has to say about the place the bot runs in, now and after the
+  move.
 
 ## Sources
 
