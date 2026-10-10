@@ -34,19 +34,24 @@ on grounds relating to your particular situation. After an objection your data
 is no longer processed, unless compelling legitimate grounds override your
 interests.
 
-To object, write an e-mail to <lusoris@pm.me> or open a private thread in the
-support forum, addressed to the operator.
+To object, write to the e-mail address under "Who is responsible" or open a
+private thread in the support forum, addressed to the operator.
 
 ## Who is responsible
 
 *Article 13(1)(a) and (b).*
 
-The bot is run by Lusoris, the maintainer of the project. Contact:
-<lusoris@pm.me>.
+The bot is run by the provider named here and in the [imprint](imprint.md):
 
-Whether a handle and an e-mail address are enough to name the responsible party
-is a legal question. It is examined in the legal review that comes before the
-public launch; until then this section is not final.
+<!-- identity block: start -->
+- **Name:** *filled before launch*
+- **Address:** *filled before launch*
+- **E-mail:** *filled before launch*
+<!-- identity block: end -->
+
+The block is filled before the public launch with the provider's full name, the
+address of a service that is authorised to receive legal mail for the provider,
+and an e-mail address.
 
 No data protection officer is appointed.
 
@@ -132,8 +137,9 @@ The processing does not rest on consent, so there is no consent to withdraw.
 You have the right to lodge a complaint with a supervisory authority, in
 particular in the Member State where you live or work (Article 77).
 
-To send a request, write an e-mail to <lusoris@pm.me>. A private thread in the
-support forum, addressed to the operator, is accepted too.
+To send a request, write to the e-mail address under "Who is responsible". A
+private thread in the support forum, addressed to the operator, is accepted
+too.
 
 ## Whether you have to provide data
 
@@ -184,8 +190,7 @@ The block under "Where the bot runs" changes with the answer.
 
 A legal review examines what the operator has decided for this draft:
 
-- whether naming a handle and an e-mail address satisfies the duty to name the
-  responsible party;
+- what the identity block and the imprint have to hold;
 - whether legitimate interests is the right legal basis;
 - that no data protection officer has to be appointed;
 - that the notice may state the right to complain without naming an authority;

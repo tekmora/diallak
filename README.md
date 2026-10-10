@@ -37,7 +37,8 @@ Community bot for the Lusoris Discord hub.
   back to the thread.
 - **Votes and wishes:** community polls whose results feed the projects'
   planning.
-- **Supporter perks:** roles for sponsors on the supported funding platforms.
+- **Thanks to supporters:** a cosmetic role and a public credit in plain text.
+  Nothing is sold: there is no supporter-only channel and no priority support.
 - **Answers from the docs:** a locally run model answers from the projects'
   documentation. Every answer cites its sources and is labelled as AI-generated.
 
@@ -228,6 +229,14 @@ Git hooks run the Praetor engine this repository pins (`PRAETOR_REF` in
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)) through
 [`.config/lefthook/engine.sh`](.config/lefthook/engine.sh). Agent instructions
 live in [`AGENTS.md`](AGENTS.md); the other agent files are compiled from it.
+
+## Legal
+
+The [imprint](docs/compliance/imprint.md) and the
+[privacy notice](docs/compliance/privacy-notice.md) are drafts. They are filled
+and published before the public launch; the
+[compliance documents](docs/compliance/README.md) list what has to happen
+first.
 
 ## Licence
 

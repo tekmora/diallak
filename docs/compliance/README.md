@@ -9,6 +9,7 @@ legal advice. The operator reviews each one before it is used.
 | [Role under the EU AI Act](../adr/0006-ai-act-role.md) | Which role the project has and which duties follow | Accepted record, with gates for model-written answers |
 | [AI disclosure](ai-disclosure.md) | What the bot tells members about itself, and where | Draft |
 | [Data inventory](data-inventory.md) | What the bot receives, keeps, logs and passes on | Draft, checked against the code |
+| [Imprint](imprint.md) | Who provides the bot and the server | Draft; the identity block is filled before the public launch |
 | [Privacy notice](privacy-notice.md) | What members are told about their data, point by point of GDPR Article 13 | Draft; content decided by the operator, legal review before the public launch |
 | [Record of processing](record-of-processing.md) | The record of processing activities that GDPR Article 30 asks for | Draft, built from the data inventory |
 | [Server rules](server-rules.md) | The short add-on to the code of conduct that a member reads when joining | Draft wording accepted; final once the code of conduct exists |
@@ -34,4 +35,17 @@ Model-written answers stay off in the live server until the four gates of
 | 2. The codes of practice under Article 50(7) are read for the marking of text | Open |
 | 3. The privacy notice is published | Open: the [privacy notice](privacy-notice.md) is a draft and waits for the operator's open points |
 | 4. The gaps of the operator's model endpoint are closed | Open; they are closed in the operator's deployment, not in this repository |
+<!-- markdownlint-enable MD013 -->
+
+## Gates for the public launch
+
+Nothing here is published to members before these are passed.
+
+<!-- markdownlint-disable MD013 -->
+| Gate | State |
+| :--- | :--- |
+| The legal research on the points the privacy notice and the imprint list is judged | Open |
+| The address service is contracted | Open; the operator contracts it |
+| The identity block is filled: name, address, e-mail | Open; it waits for the address |
+| The imprint and the privacy notice are published and linked from the bot's profile, the server rules, the README and Discord's developer portal | Open |
 <!-- markdownlint-enable MD013 -->
