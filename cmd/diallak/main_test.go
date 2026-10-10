@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +17,7 @@ import (
 	"github.com/tekmora/diallak/internal/config"
 	"github.com/tekmora/diallak/internal/corpus"
 	"github.com/tekmora/diallak/internal/discord"
+	"github.com/tekmora/diallak/internal/health"
 )
 
 type failingWriter struct{}
@@ -502,5 +507,280 @@ func TestRun_Positive_OptionalConfigurationThreaded(t *testing.T) {
 	}
 	if calledWithMaxQuestion != 250 {
 		t.Errorf("calledWithMaxQuestion = %d, want 250", calledWithMaxQuestion)
+	}
+}
+
+func TestRun_Positive_HealthEndpointServesAndReportsReady(t *testing.T) {
+	ctx := context.Background()
+	// Allocate free ephemeral port
+	var lc net.ListenConfig
+	probeLn, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := probeLn.Addr().String()
+	if closeErr := probeLn.Close(); closeErr != nil {
+		t.Fatalf("close probe listener: %v", closeErr)
+	}
+
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:  tokenPath,
+		config.EnvGuildID:    "42",
+		config.EnvCorpusDir:  corpusPath,
+		config.EnvHealthAddr: addr,
+	}
+
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	var readyChecked bool
+
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error {
+			return errors.New("registerCommands should not be called")
+		},
+		runDiscord: func(discordCtx context.Context, cfg discord.BotConfig) error {
+			if cfg.ReportReady == nil {
+				return errors.New("cfg.ReportReady is nil")
+			}
+			// Probe /healthz while fake Discord run blocks
+			healthReq, reqErr := http.NewRequestWithContext(discordCtx, http.MethodGet, "http://"+addr+"/healthz", nil)
+			if reqErr != nil {
+				return fmt.Errorf("new health request: %w", reqErr)
+			}
+			resp, getErr := httpClient.Do(healthReq)
+			if getErr != nil {
+				return fmt.Errorf("probe /healthz: %w", getErr)
+			}
+			body, readErr := io.ReadAll(resp.Body)
+			if readErr != nil {
+				return fmt.Errorf("read health body: %w", readErr)
+			}
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				return fmt.Errorf("close health body: %w", closeErr)
+			}
+			if resp.StatusCode != http.StatusOK || string(body) != "ok\n" {
+				return fmt.Errorf("/healthz = %d %q, want 200 ok\\n", resp.StatusCode, string(body))
+			}
+
+			// Probe /readyz before ReportReady(true) -> 503
+			readyReq1, reqErr := http.NewRequestWithContext(discordCtx, http.MethodGet, "http://"+addr+"/readyz", nil)
+			if reqErr != nil {
+				return fmt.Errorf("new ready request: %w", reqErr)
+			}
+			readyResp, readyErr := httpClient.Do(readyReq1)
+			if readyErr != nil {
+				return fmt.Errorf("probe /readyz before ready: %w", readyErr)
+			}
+			if closeErr := readyResp.Body.Close(); closeErr != nil {
+				return fmt.Errorf("close ready body: %w", closeErr)
+			}
+			if readyResp.StatusCode != http.StatusServiceUnavailable {
+				return fmt.Errorf("/readyz before ready = %d, want 503", readyResp.StatusCode)
+			}
+
+			// Call ReportReady(true)
+			cfg.ReportReady(true)
+
+			// Probe /readyz after ReportReady(true) -> 200
+			readyReq2, reqErr := http.NewRequestWithContext(discordCtx, http.MethodGet, "http://"+addr+"/readyz", nil)
+			if reqErr != nil {
+				return fmt.Errorf("new ready request 2: %w", reqErr)
+			}
+			readyResp2, readyErr2 := httpClient.Do(readyReq2)
+			if readyErr2 != nil {
+				return fmt.Errorf("probe /readyz after ready: %w", readyErr2)
+			}
+			body2, readErr2 := io.ReadAll(readyResp2.Body)
+			if readErr2 != nil {
+				return fmt.Errorf("read ready body 2: %w", readErr2)
+			}
+			if closeErr := readyResp2.Body.Close(); closeErr != nil {
+				return fmt.Errorf("close ready body 2: %w", closeErr)
+			}
+			if readyResp2.StatusCode != http.StatusOK || string(body2) != "ready\n" {
+				return fmt.Errorf("/readyz after ready = %d %q, want 200 ready\\n", readyResp2.StatusCode, string(body2))
+			}
+
+			readyChecked = true
+			return nil
+		},
+	}
+
+	var out bytes.Buffer
+	err = run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps)
+	if err != nil {
+		t.Fatalf("run = %v, want nil", err)
+	}
+	if !readyChecked {
+		t.Fatal("health checks were not verified")
+	}
+
+	// Listener should be closed after run completes
+	probeReq, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+addr+"/healthz", nil)
+	if reqErr != nil {
+		t.Fatalf("new probe request: %v", reqErr)
+	}
+	probeResp, probeAfterErr := httpClient.Do(probeReq)
+	if probeAfterErr == nil {
+		if closeErr := probeResp.Body.Close(); closeErr != nil {
+			t.Errorf("close probe response: %v", closeErr)
+		}
+		t.Fatal("health server still responding after run completed")
+	}
+}
+
+func TestRun_Negative_HealthAddrAlreadyInUse(t *testing.T) {
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer func() {
+		if closeErr := ln.Close(); closeErr != nil {
+			t.Errorf("close listener: %v", closeErr)
+		}
+	}()
+
+	addr := ln.Addr().String()
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:  tokenPath,
+		config.EnvGuildID:    "42",
+		config.EnvCorpusDir:  corpusPath,
+		config.EnvHealthAddr: addr,
+	}
+
+	var discordCalled bool
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
+		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+			discordCalled = true
+			return nil
+		},
+	}
+
+	var out bytes.Buffer
+	err = run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps)
+	if err == nil {
+		t.Fatal("run succeeded on address in use, want error")
+	}
+	if !strings.Contains(err.Error(), config.EnvHealthAddr) {
+		t.Errorf("error %q does not name %s", err.Error(), config.EnvHealthAddr)
+	}
+	if discordCalled {
+		t.Errorf("runDiscord was called although health address bind failed")
+	}
+}
+
+func TestRun_Negative_HealthAddrUnsetNoListener(t *testing.T) {
+	var discordCalled bool
+	var capturedCfg discord.BotConfig
+
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
+		runDiscord: func(_ context.Context, cfg discord.BotConfig) error {
+			discordCalled = true
+			capturedCfg = cfg
+			return nil
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), nil, validEnv(t), &out, deps)
+	if err != nil {
+		t.Fatalf("run = %v, want nil", err)
+	}
+	if !discordCalled {
+		t.Fatal("runDiscord was not called")
+	}
+	if capturedCfg.ReportReady != nil {
+		t.Error("capturedCfg.ReportReady is non-nil, want nil when health addr is unset")
+	}
+}
+
+func TestRun_Positive_RegisterCommandsNeverStartsHealthListener(t *testing.T) {
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer func() {
+		if closeErr := ln.Close(); closeErr != nil {
+			t.Errorf("close listener: %v", closeErr)
+		}
+	}()
+
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:  tokenPath,
+		config.EnvGuildID:    "42",
+		config.EnvCorpusDir:  corpusPath,
+		config.EnvHealthAddr: ln.Addr().String(),
+	}
+
+	var registerCalled bool
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error {
+			registerCalled = true
+			return nil
+		},
+		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+			return errors.New("runDiscord should not be called")
+		},
+	}
+
+	var out bytes.Buffer
+	err = run(context.Background(), []string{"-register-commands"}, func(k string) string { return envMap[k] }, &out, deps)
+	if err != nil {
+		t.Fatalf("run -register-commands failed: %v", err)
+	}
+	if !registerCalled {
+		t.Fatal("registerCommands was not called")
+	}
+}
+
+// brokenListener is a listener whose Accept fails for good once fail is closed.
+type brokenListener struct {
+	fail chan struct{}
+	addr net.Addr
+}
+
+func (b *brokenListener) Accept() (net.Conn, error) {
+	<-b.fail
+	return nil, errors.New("accept refused by the test")
+}
+
+func (*brokenListener) Close() error     { return nil }
+func (b *brokenListener) Addr() net.Addr { return b.addr }
+
+func TestRunDiscordWithHealth_Negative_FailingListenerStopsTheBotAndIsReported(t *testing.T) {
+	ln := &brokenListener{fail: make(chan struct{}), addr: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1}}
+	state := &health.State{}
+	hh := &healthHarness{state: state, server: health.NewServer(state, nil)}
+
+	botStopped := make(chan struct{})
+	runDiscord := func(ctx context.Context, _ discord.BotConfig) error {
+		// The bot is running; now the health listener breaks. The bot must be told to stop.
+		close(ln.fail)
+		select {
+		case <-ctx.Done():
+			close(botStopped)
+			return nil
+		case <-time.After(5 * time.Second):
+			return errors.New("the bot was not stopped")
+		}
+	}
+
+	err := runDiscordWithHealth(context.Background(), hh, ln, discord.BotConfig{}, runDiscord)
+	select {
+	case <-botStopped:
+	default:
+		t.Fatalf("the bot kept running after the health listener failed (err = %v)", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "health server") || !strings.Contains(err.Error(), "accept refused by the test") {
+		t.Fatalf("err = %v, want the health server's accept error", err)
 	}
 }

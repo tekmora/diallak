@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -55,6 +56,8 @@ const (
 	EnvModelTimeout = "DIALLAK_MODEL_TIMEOUT"
 	// EnvSourceLinkTemplate names the optional variable setting the citation URL template.
 	EnvSourceLinkTemplate = "DIALLAK_SOURCE_LINK_TEMPLATE"
+	// EnvHealthAddr names the optional variable setting the health probe listen address.
+	EnvHealthAddr = "DIALLAK_HEALTH_ADDR"
 
 	// MaxTokenBytes bounds secret files (both bot token and model key).
 	MaxTokenBytes = 4096
@@ -119,6 +122,9 @@ type Config struct {
 	// SourceLinkTemplate is the URL template for document links in citations.
 	// It is empty when the variable is not set; corpus then uses its built-in default.
 	SourceLinkTemplate string
+	// HealthAddr is the optional TCP address ("host:port") for the health and readiness HTTP listener.
+	// It is empty when the variable is not set; no listener is then started.
+	HealthAddr string
 }
 
 // HasModel reports whether a model endpoint is configured.
@@ -128,10 +134,10 @@ func (c Config) HasModel() bool {
 
 // String returns a redacted representation of Config. Token and ModelKey are never printed.
 func (c Config) String() string {
-	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q}",
+	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q}",
 		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, redactSecret(c.ModelKey), c.CorpusDir, c.SupportChannel,
 		c.TopPassages, c.MinScore, c.QuestionMaxChars, c.ExcerptChars, c.ReplyMaxChars, c.MaxConcurrentAsks,
-		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate)
+		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate, c.HealthAddr)
 }
 
 // GoString returns a redacted representation of Config for Go syntax formatting.
@@ -158,6 +164,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Duration("AskTimeout", c.AskTimeout),
 		slog.Duration("ModelTimeout", c.ModelTimeout),
 		slog.String("SourceLinkTemplate", c.SourceLinkTemplate),
+		slog.String("HealthAddr", c.HealthAddr),
 	)
 }
 
@@ -200,6 +207,10 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	healthAddr, err := parseHealthAddr(getenv(EnvHealthAddr))
+	if err != nil {
+		return Config{}, err
+	}
 	return Config{
 		Token:              token,
 		GuildID:            guild,
@@ -217,7 +228,37 @@ func Load(getenv func(string) string) (Config, error) {
 		AskTimeout:         askTimeout,
 		ModelTimeout:       modelTimeout,
 		SourceLinkTemplate: linkTmpl,
+		HealthAddr:         healthAddr,
 	}, nil
+}
+
+// parseHealthAddr validates the optional listen address of the health listener. The host is
+// empty or an IP literal, never a name, so that starting the listener needs no name lookup. The
+// port is written in one way only: decimal, 1 to 65535, without sign or leading zero.
+func parseHealthAddr(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+	host, port, err := net.SplitHostPort(raw)
+	if err != nil {
+		return "", fmt.Errorf("%s must be in 'host:port' format: %w", EnvHealthAddr, err)
+	}
+	portNum, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || portNum == 0 || strconv.FormatUint(portNum, 10) != port {
+		return "", fmt.Errorf("%s port must be a number from 1 to 65535 without leading zero: %q", EnvHealthAddr, port)
+	}
+	if host == "" {
+		return raw, nil
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return "", fmt.Errorf("%s host is not an IP literal: %q", EnvHealthAddr, host)
+	}
+	// SplitHostPort takes brackets around any host. They belong to IPv6 only.
+	if ip.To4() != nil && strings.HasPrefix(raw, "[") {
+		return "", fmt.Errorf("%s IPv4 host must not be enclosed in brackets", EnvHealthAddr)
+	}
+	return raw, nil
 }
 
 func parseCorpusDir(raw string) (string, error) {

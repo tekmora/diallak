@@ -72,6 +72,8 @@ from Greek *tekmerion*, "decisive proof". The repository was first named
 
 The bot reads its settings from the environment and fails closed when one is
 missing or malformed ([`internal/config`](internal/config/config.go)).
+What a deployment needs beyond these settings (image, network, resources, the
+documentation directory) is in [docs/hosting.md](docs/hosting.md).
 
 <!-- markdownlint-disable MD013 -->
 | Variable | Required | Meaning |
@@ -83,6 +85,7 @@ missing or malformed ([`internal/config`](internal/config/config.go)).
 | `DIALLAK_MODEL_ALIAS` | with the base URL | Name the endpoint routes on, never a model name |
 | `DIALLAK_MODEL_KEY_FILE` | no | Path of the file that holds the endpoint's credential |
 | `DIALLAK_SUPPORT_CHANNEL` | no | Wording for where a person helps, put into every reply; default "the support channel" |
+| `DIALLAK_HEALTH_ADDR` | no | Listen address "host:port" for health probes; off by default |
 <!-- markdownlint-enable MD013 -->
 
 Without the two model variables the bot replies with cited excerpts and says
@@ -148,6 +151,21 @@ diallak
 It loads the documentation, connects to Discord and answers `/ask` until it
 receives a termination signal. A reply is visible only to the member who asked
 and can never mention anyone.
+
+### Health checks
+
+When `DIALLAK_HEALTH_ADDR` is configured, the bot starts an HTTP listener for
+deployment health and readiness probes ([`internal/health`](internal/health),
+[ADR-0007](docs/adr/0007-health-listener.md)). The listener is off by default.
+
+- `GET /healthz` reports process liveness and answers `200 ok` while the server
+  runs.
+- `GET /readyz` reports readiness. It answers `503 not ready` until the Discord
+  gateway connection opens, then `200 ready`, and `503 not ready` again once
+  shutdown begins.
+
+Readiness means the gateway opened and the bot is not shutting down; it does
+not follow later reconnects.
 
 ### Commands are registered by hand
 

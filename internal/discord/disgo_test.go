@@ -864,3 +864,145 @@ func TestBuildCommandCreate_Boundary_DescriptionLengthWithinLimit(t *testing.T) 
 		t.Errorf("command description = %q, want CommandDescription %q", slashCmd.Description, CommandDescription)
 	}
 }
+
+func TestRun_Positive_ReportReadyCallback(t *testing.T) {
+	const appID uint64 = 777777777777777777
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/applications/@me":
+			writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"diallak-app"}`, appID))
+		case r.Method == http.MethodGet && (r.URL.Path == "/gateway" || r.URL.Path == "/gateway/bot"):
+			writeTestResponse(w, http.StatusOK, `{"url":"ws://127.0.0.1:0","shards":1}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	handler, err := NewHandler(HandlerConfig{Asker: &fakeAsker{}, GuildID: 42})
+	if err != nil {
+		t.Fatalf("NewHandler: %v", err)
+	}
+
+	var mu sync.Mutex
+	var calls []bool
+	readyReported := make(chan struct{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg := BotConfig{
+		Token:   makeFakeToken(appID),
+		GuildID: 42,
+		Handler: handler,
+		Logger:  slog.New(slog.DiscardHandler),
+		ReportReady: func(ready bool) {
+			mu.Lock()
+			calls = append(calls, ready)
+			mu.Unlock()
+			if ready {
+				close(readyReported)
+			}
+		},
+	}
+
+	opts := clientOptions{
+		restURL: srv.URL,
+		openGateway: func(_ context.Context, _ *bot.Client, _ string) error {
+			return nil
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runWithOptions(ctx, cfg, opts)
+	}()
+
+	select {
+	case <-readyReported:
+	case err := <-errCh:
+		t.Fatalf("runWithOptions failed early: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for ReportReady(true)")
+	}
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("runWithOptions error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for runWithOptions to exit")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(calls) != 2 || !calls[0] || calls[1] {
+		t.Errorf("calls = %v, want [true, false]", calls)
+	}
+}
+
+func TestRun_Positive_ReportReadyNilCallback(t *testing.T) {
+	const appID uint64 = 777777777777777777
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/applications/@me":
+			writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"diallak-app"}`, appID))
+		case r.Method == http.MethodGet && (r.URL.Path == "/gateway" || r.URL.Path == "/gateway/bot"):
+			writeTestResponse(w, http.StatusOK, `{"url":"ws://127.0.0.1:0","shards":1}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	handler, err := NewHandler(HandlerConfig{Asker: &fakeAsker{}, GuildID: 42})
+	if err != nil {
+		t.Fatalf("NewHandler: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	cfg := BotConfig{
+		Token:       makeFakeToken(appID),
+		GuildID:     42,
+		Handler:     handler,
+		Logger:      slog.New(slog.DiscardHandler),
+		ReportReady: nil,
+	}
+
+	gatewayOpened := make(chan struct{})
+	opts := clientOptions{
+		restURL: srv.URL,
+		openGateway: func(_ context.Context, _ *bot.Client, _ string) error {
+			close(gatewayOpened)
+			return nil
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runWithOptions(ctx, cfg, opts)
+	}()
+
+	select {
+	case <-gatewayOpened:
+	case err := <-errCh:
+		t.Fatalf("runWithOptions failed early: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for gateway open")
+	}
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("runWithOptions error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for runWithOptions to exit")
+	}
+}
