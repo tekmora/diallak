@@ -25,9 +25,9 @@ func TestDockerfile_Negative_BuilderTagIsTheToolchainOfGoMod(t *testing.T) {
 	if toolchain == nil {
 		t.Fatalf("go.mod names no toolchain with a patch version")
 	}
-	builder := regexp.MustCompile(`(?m)^FROM golang:(\d+\.\d+\.\d+)-[a-z0-9]+@sha256:[0-9a-f]{64} AS builder$`).FindSubmatch(dockerfile)
+	builder := regexp.MustCompile(`(?m)^FROM --platform=\$BUILDPLATFORM golang:(\d+\.\d+\.\d+)-[a-z0-9]+@sha256:[0-9a-f]{64} AS builder$`).FindSubmatch(dockerfile)
 	if builder == nil {
-		t.Fatalf("the Dockerfile's builder is not golang:<major.minor.patch>-<variant>@sha256:<digest>")
+		t.Fatalf("the Dockerfile's builder is not golang:<major.minor.patch>-<variant>@sha256:<digest> on the build platform")
 	}
 	if string(builder[1]) != string(toolchain[1]) {
 		t.Fatalf("builder image is Go %s, go.mod names toolchain %s", builder[1], toolchain[1])
