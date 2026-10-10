@@ -93,10 +93,11 @@ jobs:
       # yamllint disable-line rule:line-length
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
-          name: ${{ needs.image.outputs.sbom }}
+          pattern: ${{ needs.image.outputs.sbom-pattern }}
+          merge-multiple: true
           path: sbom
-      # A rebuild of an existing tag keeps its release and replaces the SBOM.
-      - name: Publish the release with its notes and the SBOM
+      # A rebuild of an existing tag keeps its release and replaces the SBOMs.
+      - name: Publish the release with its notes and the SBOMs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
