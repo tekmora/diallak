@@ -11,6 +11,7 @@ import (
 
 	"github.com/tekmora/discord-bot/internal/config"
 	"github.com/tekmora/discord-bot/internal/corpus"
+	"github.com/tekmora/discord-bot/internal/discord"
 )
 
 type failingWriter struct{}
@@ -69,14 +70,21 @@ func validEnv(t *testing.T) func(string) string {
 	return func(key string) string { return values[key] }
 }
 
+func noopDeps() dependencies {
+	return dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64) error { return nil },
+		runDiscord:       func(_ context.Context, _ discord.BotConfig) error { return nil },
+	}
+}
+
 func TestRun_Positive_ReadyWithoutModel(t *testing.T) {
 	var out bytes.Buffer
-	err := run(context.Background(), validEnv(t), &out)
+	err := run(context.Background(), nil, validEnv(t), &out, noopDeps())
 	if err != nil {
 		t.Fatalf("run = %v, want nil", err)
 	}
 	got := out.String()
-	want := "ready: 1 sources, 1 chunks, model not configured; this build opens no gateway connection\n"
+	want := "ready: 1 sources, 1 chunks, model not configured\n"
 	if got != want {
 		t.Errorf("output = %q, want %q", got, want)
 	}
@@ -100,12 +108,12 @@ func TestRun_Positive_ReadyWithModel(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	err := run(context.Background(), func(k string) string { return envMap[k] }, &out)
+	err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, noopDeps())
 	if err != nil {
 		t.Fatalf("run = %v, want nil", err)
 	}
 	got := out.String()
-	want := "ready: 1 sources, 1 chunks, model configured; this build opens no gateway connection\n"
+	want := "ready: 1 sources, 1 chunks, model configured\n"
 	if got != want {
 		t.Errorf("output = %q, want %q", got, want)
 	}
@@ -114,6 +122,88 @@ func TestRun_Positive_ReadyWithModel(t *testing.T) {
 	}
 	if strings.Contains(got, "distinctive-key-abc") {
 		t.Errorf("output leaks the model key: %q", got)
+	}
+}
+
+func TestRun_Positive_RegisterCommands(t *testing.T) {
+	var out bytes.Buffer
+	var calledWithToken string
+	var calledWithGuild uint64
+
+	deps := dependencies{
+		registerCommands: func(_ context.Context, token string, guildID uint64) error {
+			calledWithToken = token
+			calledWithGuild = guildID
+			return nil
+		},
+		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+			return errors.New("runDiscord should not be called")
+		},
+	}
+
+	args := []string{"-register-commands"}
+	err := run(context.Background(), args, validEnv(t), &out, deps)
+	if err != nil {
+		t.Fatalf("run = %v, want nil", err)
+	}
+
+	got := out.String()
+	want := "commands registered for guild 42\n"
+	if got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+	if calledWithGuild != 42 {
+		t.Errorf("calledWithGuild = %d, want 42", calledWithGuild)
+	}
+	if calledWithToken != "distinctive-token-xyz" {
+		t.Errorf("calledWithToken = %q, want distinctive-token-xyz", calledWithToken)
+	}
+	if strings.Contains(got, "distinctive-token-xyz") {
+		t.Errorf("output leaks token: %q", got)
+	}
+}
+
+func TestRun_Negative_ControlPathIsolation(t *testing.T) {
+	var registerCalls int
+	var runCalls int
+
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64) error {
+			registerCalls++
+			return nil
+		},
+		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+			runCalls++
+			return nil
+		},
+	}
+
+	// Case 1: with -register-commands, register is called and run is NEVER called.
+	var regOut bytes.Buffer
+	if err := run(context.Background(), []string{"-register-commands"}, validEnv(t), &regOut, deps); err != nil {
+		t.Fatalf("run with -register-commands failed: %v", err)
+	}
+	if registerCalls != 1 {
+		t.Errorf("registerCalls with flag = %d, want 1", registerCalls)
+	}
+	if runCalls != 0 {
+		t.Errorf("runCalls with register flag = %d, want 0", runCalls)
+	}
+
+	// Reset counters
+	registerCalls = 0
+	runCalls = 0
+
+	// Case 2: without -register-commands, run is called and register is NEVER called.
+	var runOut bytes.Buffer
+	if err := run(context.Background(), []string{}, validEnv(t), &runOut, deps); err != nil {
+		t.Fatalf("run without flag failed: %v", err)
+	}
+	if registerCalls != 0 {
+		t.Errorf("registerCalls without flag = %d, want 0", registerCalls)
+	}
+	if runCalls != 1 {
+		t.Errorf("runCalls without flag = %d, want 1", runCalls)
 	}
 }
 
@@ -188,7 +278,7 @@ func TestRun_Negative_ConfigurationErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer
-			err := run(context.Background(), func(k string) string { return tc.env[k] }, &out)
+			err := run(context.Background(), nil, func(k string) string { return tc.env[k] }, &out, noopDeps())
 			if err == nil {
 				t.Fatalf("run succeeded, want error naming %q", tc.wantVar)
 			}
@@ -218,7 +308,7 @@ func TestRun_Negative_BuildFailure(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	err := run(context.Background(), func(k string) string { return envMap[k] }, &out)
+	err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, noopDeps())
 	if err == nil || !strings.Contains(err.Error(), "build application") {
 		t.Fatalf("run = %v, want build application error", err)
 	}
@@ -227,10 +317,57 @@ func TestRun_Negative_BuildFailure(t *testing.T) {
 	}
 }
 
+func TestRun_Negative_RegisterCommandsError(t *testing.T) {
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64) error {
+			return errors.New("network failure during registration")
+		},
+		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+			return nil
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-register-commands"}, validEnv(t), &out, deps)
+	if err == nil || !strings.Contains(err.Error(), "register commands: network failure during registration") {
+		t.Fatalf("run = %v, want register commands error", err)
+	}
+}
+
+func TestRun_Negative_RunDiscordError(t *testing.T) {
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64) error {
+			return nil
+		},
+		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+			return errors.New("gateway connection closed")
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), nil, validEnv(t), &out, deps)
+	if err == nil || !strings.Contains(err.Error(), "run discord bot: gateway connection closed") {
+		t.Fatalf("run = %v, want run discord bot error", err)
+	}
+}
+
+func TestRun_Negative_InvalidFlag(t *testing.T) {
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-nonexistent-flag"}, validEnv(t), &out, noopDeps())
+	if err == nil || !strings.Contains(err.Error(), "parse flags") {
+		t.Fatalf("run = %v, want parse flags error", err)
+	}
+}
+
 func TestRun_Boundary_UnwritableOutputFails(t *testing.T) {
-	err := run(context.Background(), validEnv(t), failingWriter{})
+	err := run(context.Background(), nil, validEnv(t), failingWriter{}, noopDeps())
 	if err == nil || !strings.Contains(err.Error(), "write status") {
 		t.Fatalf("run = %v, want a write error", err)
+	}
+
+	errReg := run(context.Background(), []string{"-register-commands"}, validEnv(t), failingWriter{}, noopDeps())
+	if errReg == nil || !strings.Contains(errReg.Error(), "write status") {
+		t.Fatalf("run with -register-commands = %v, want a write error", errReg)
 	}
 }
 

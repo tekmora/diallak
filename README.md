@@ -24,7 +24,9 @@ generated agent context against `AGENTS.md`.
 
 Community bot for the Lusoris Discord hub.
 
-> **Status: skeleton.** The repository holds its governance baseline and this plan. No bot code yet.
+> **Status: first slice built, not live.** The bot answers `/ask` from project documentation with
+> cited sources. It has been tested against a fake Discord only; the live test and the switch from
+> the bot that runs today are still to come.
 
 ## What it will do
 
@@ -58,6 +60,68 @@ Community bot for the Lusoris Discord hub.
 The product is called **Diallak** (dee-AHL-lak), from Greek *diallaktes*, the impartial mediator.
 The repository keeps the name `discord-bot` until the organisation moves. Tekmora (tek-MOH-ra), the
 family the name belongs to, comes from Greek *tekmerion*, "decisive proof".
+
+## Run
+
+The bot reads its settings from the environment and fails closed when one is missing or malformed
+([`internal/config`](internal/config/config.go)).
+
+| Variable | Required | Meaning |
+| :--- | :--- | :--- |
+| `DISCORD_BOT_TOKEN_FILE` | yes | Path of the file that holds the bot token |
+| `DISCORD_BOT_GUILD_ID` | yes | Id of the one server the bot serves |
+| `DISCORD_BOT_CORPUS_DIR` | yes | Absolute path of the documentation directory |
+| `DISCORD_BOT_MODEL_BASE_URL` | with the alias | Base URL of an OpenAI-compatible endpoint |
+| `DISCORD_BOT_MODEL_ALIAS` | with the base URL | Name the endpoint routes on, never a model name |
+| `DISCORD_BOT_MODEL_KEY_FILE` | no | Path of the file that holds the endpoint's credential |
+
+Without the two model variables the bot replies with cited excerpts and says that no model wrote
+them.
+
+### The documentation directory
+
+The deployment fills the directory; the bot fetches nothing. It holds one checkout per source and a
+`manifest.json` that names each source and the revision it was taken from
+([`internal/corpus`](internal/corpus/manifest.go)):
+
+```json
+{
+  "version": 1,
+  "sources": [
+    {
+      "directory": "snatcharr",
+      "repository": "lusoris/SnatchArr",
+      "revision": "9e70c2e03d22d535a9f89c628807aab5813829a6",
+      "paths": ["README.md", "docs/**/*.md"]
+    }
+  ]
+}
+```
+
+The revision appears in every citation. The bot refuses a path or a symbolic link that leaves the
+directory.
+
+### Starting the bot
+
+```bash
+discord-bot
+```
+
+It loads the documentation, connects to Discord and answers `/ask` until it receives a termination
+signal. A reply is visible only to the member who asked and can never mention anyone.
+
+### Commands are registered by hand
+
+```bash
+discord-bot -register-commands
+```
+
+This sets the server's command list for the application to `/ask` and exits. It needs the same
+environment as a normal start. Starting the bot never registers or changes a command.
+
+The application is shared with the bot that runs today
+([ADR-0001](docs/adr/0001-architecture-and-boundaries.md)), so this step replaces that bot's
+commands in the server. It belongs to the cutover and is the operator's act.
 
 ## Develop
 

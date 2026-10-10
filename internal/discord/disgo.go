@@ -1,0 +1,346 @@
+package discord
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	"github.com/disgoorg/disgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/disgo/gateway"
+	"github.com/disgoorg/disgo/rest"
+	"github.com/disgoorg/snowflake/v2"
+
+	"github.com/tekmora/discord-bot/internal/answer"
+)
+
+const (
+	defaultShutdownTimeout = 15 * time.Second
+	gatewayOpenTimeout     = 15 * time.Second
+
+	// maxBusyGoroutines is the fixed upper bound on concurrent goroutines executing immediate
+	// busy replies while all asking slots are saturated.
+	maxBusyGoroutines = 8
+)
+
+// BotConfig configures the live Discord gateway client and runtime adapter.
+type BotConfig struct {
+	Token           string
+	GuildID         uint64
+	Handler         *Handler
+	Logger          *slog.Logger
+	ShutdownTimeout time.Duration
+}
+
+// RegisterCommands registers the single guild-scoped /ask command with Discord via REST.
+func RegisterCommands(ctx context.Context, token string, guildID uint64) error {
+	if token == "" {
+		return errors.New("bot token is required")
+	}
+	if guildID == 0 {
+		return errors.New("guild ID must not be zero")
+	}
+
+	client, err := disgo.New(token)
+	if err != nil {
+		return fmt.Errorf("create discord client: %w", sanitizeToken(err, token))
+	}
+	defer client.Close(ctx)
+
+	cmd := buildCommandCreate()
+	commands := []discord.ApplicationCommandCreate{cmd}
+
+	_, err = client.Rest.SetGuildCommands(client.ApplicationID, snowflake.ID(guildID), commands, rest.WithCtx(ctx))
+	if err != nil {
+		return fmt.Errorf("set guild commands: %w", sanitizeToken(err, token))
+	}
+	return nil
+}
+
+// Run starts the Discord gateway connection and dispatches interactions to the handler.
+func Run(ctx context.Context, cfg BotConfig) error {
+	cfg, err := normalizeBotConfig(cfg)
+	if err != nil {
+		return err
+	}
+
+	// The worker pool bound is MaxConcurrent + 8 immediate busy replies, ensuring goroutines
+	// executing HandleAsk are strictly bounded under HISS-06 even during interaction surges.
+	workerSem := make(chan struct{}, cfg.Handler.maxConcurrent+maxBusyGoroutines)
+	var dispatching atomic.Bool
+	dispatching.Store(true)
+
+	client, err := buildClient(ctx, cfg, workerSem, &dispatching)
+	if err != nil {
+		return fmt.Errorf("build discord client: %w", sanitizeToken(err, cfg.Token))
+	}
+
+	if err := openGatewayWithTimeout(ctx, client, cfg.Token); err != nil {
+		return err
+	}
+
+	<-ctx.Done()
+	dispatching.Store(false)
+
+	return shutdownClient(cfg, client, cfg.ShutdownTimeout)
+}
+
+// normalizeBotConfig validates cfg and fills its defaults, so every later use finds a logger and
+// a shutdown timeout.
+func normalizeBotConfig(cfg BotConfig) (BotConfig, error) {
+	if cfg.Token == "" {
+		return BotConfig{}, errors.New("bot token is required")
+	}
+	if cfg.GuildID == 0 {
+		return BotConfig{}, errors.New("guild ID must not be zero")
+	}
+	if cfg.Handler == nil {
+		return BotConfig{}, errors.New("handler is required")
+	}
+	if cfg.ShutdownTimeout <= 0 {
+		cfg.ShutdownTimeout = defaultShutdownTimeout
+	}
+	if cfg.Logger == nil {
+		cfg.Logger = slog.New(slog.DiscardHandler)
+	}
+	return cfg, nil
+}
+
+// gatewayIntents is the intent set of the gateway session: none. Application command interactions
+// arrive without any intent, and the bot requests no privileged one (ADR-0001).
+func gatewayIntents() gateway.Intents {
+	return gateway.IntentsNone
+}
+
+// libraryLogFloor is the lowest level at which the Discord library may write to the log. Below it
+// the library logs request and response bodies and raw gateway payloads, which carry questions and
+// answers; those never reach a log, whatever level the process runs at.
+const libraryLogFloor = slog.LevelWarn
+
+// libraryLogger returns the logger handed to the Discord library: base, cut off below
+// libraryLogFloor.
+func libraryLogger(base *slog.Logger) *slog.Logger {
+	return slog.New(floorHandler{inner: base.Handler()})
+}
+
+// floorHandler drops every record below libraryLogFloor and passes the rest to inner.
+type floorHandler struct {
+	inner slog.Handler
+}
+
+// Enabled reports whether inner takes a record of level and level reaches the floor.
+func (h floorHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return level >= libraryLogFloor && h.inner.Enabled(ctx, level)
+}
+
+// Handle passes a record at or above the floor to inner.
+func (h floorHandler) Handle(ctx context.Context, record slog.Record) error {
+	if record.Level < libraryLogFloor {
+		return nil
+	}
+	if err := h.inner.Handle(ctx, record); err != nil {
+		return fmt.Errorf("handle library log record: %w", err)
+	}
+	return nil
+}
+
+// WithAttrs keeps the floor on the derived handler.
+func (h floorHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return floorHandler{inner: h.inner.WithAttrs(attrs)}
+}
+
+// WithGroup keeps the floor on the derived handler.
+func (h floorHandler) WithGroup(name string) slog.Handler {
+	return floorHandler{inner: h.inner.WithGroup(name)}
+}
+
+func buildClient(ctx context.Context, cfg BotConfig, workerSem chan struct{}, dispatching *atomic.Bool) (*bot.Client, error) {
+	return disgo.New(cfg.Token,
+		bot.WithLogger(libraryLogger(cfg.Logger)),
+		bot.WithGatewayConfigOpts(
+			gateway.WithIntents(gatewayIntents()),
+			gateway.WithAutoReconnect(true),
+		),
+		bot.WithRestConfigOpts(
+			rest.WithDefaultAllowedMentions(defaultAllowedMentions()),
+		),
+		bot.WithEventListenerFunc(func(e *events.InteractionCreate) {
+			handleIncomingInteraction(ctx, cfg, e, workerSem, dispatching)
+		}),
+	)
+}
+
+func handleIncomingInteraction(
+	ctx context.Context,
+	cfg BotConfig,
+	e *events.InteractionCreate,
+	workerSem chan struct{},
+	dispatching *atomic.Bool,
+) {
+	if !dispatching.Load() {
+		cfg.Logger.Debug("ignoring interaction during shutdown")
+		return
+	}
+
+	appCmd, ok := e.Interaction.(discord.ApplicationCommandInteraction)
+	if !ok {
+		cfg.Logger.Debug("ignoring non-application-command interaction", slog.Int("type", int(e.Type())))
+		return
+	}
+
+	data, ok := slashCommandData(appCmd)
+	if !ok {
+		cfg.Logger.Debug("ignoring application command that is no slash command")
+		return
+	}
+	if data.CommandName() != CommandName {
+		cfg.Logger.Debug("ignoring unknown command", slog.String("command", data.CommandName()))
+		return
+	}
+
+	adapter := &interactionAdapter{
+		client:      e.Client(),
+		interaction: appCmd,
+		respond:     e.Respond,
+	}
+
+	select {
+	case workerSem <- struct{}{}:
+		go func() {
+			defer func() { <-workerSem }()
+			cfg.Handler.HandleAsk(ctx, adapter)
+		}()
+	default:
+		cfg.Logger.Warn("worker pool saturated, dropping interaction")
+	}
+}
+
+func openGatewayWithTimeout(ctx context.Context, client *bot.Client, token string) error {
+	openCtx, cancel := context.WithTimeout(ctx, gatewayOpenTimeout)
+	defer cancel()
+
+	if err := client.OpenGateway(openCtx); err != nil {
+		return fmt.Errorf("open gateway: %w", sanitizeToken(err, token))
+	}
+	return nil
+}
+
+func shutdownClient(cfg BotConfig, client *bot.Client, timeout time.Duration) error {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	waitErr := cfg.Handler.Wait(shutdownCtx)
+	client.Close(shutdownCtx)
+
+	if waitErr != nil {
+		return fmt.Errorf("wait for in-flight asks: %w", waitErr)
+	}
+	return nil
+}
+
+type interactionAdapter struct {
+	client      *bot.Client
+	interaction discord.ApplicationCommandInteraction
+	respond     events.InteractionResponderFunc
+}
+
+func (a *interactionAdapter) GuildID() uint64 {
+	return extractGuildID(a.interaction.GuildID())
+}
+
+func (a *interactionAdapter) Question() string {
+	data, ok := slashCommandData(a.interaction)
+	if !ok {
+		return ""
+	}
+	return extractQuestion(data)
+}
+
+func (a *interactionAdapter) Defer(ctx context.Context) error {
+	return a.respond(discord.InteractionResponseTypeDeferredCreateMessage, buildDeferPayload(), rest.WithCtx(ctx))
+}
+
+func (a *interactionAdapter) Reply(ctx context.Context, text string) error {
+	_, err := a.client.Rest.UpdateInteractionResponse(
+		a.interaction.ApplicationID(),
+		a.interaction.Token(),
+		buildReplyPayload(text),
+		rest.WithCtx(ctx),
+	)
+	return err
+}
+
+func buildCommandCreate() discord.ApplicationCommandCreate {
+	maxLen := answer.MaxQuestionRunes
+	return discord.SlashCommandCreate{
+		Name:        CommandName,
+		Description: "Ask a question about the project documentation",
+		Options: []discord.ApplicationCommandOption{
+			discord.ApplicationCommandOptionString{
+				Name:        OptionQuestion,
+				Description: "The question to ask",
+				Required:    true,
+				MaxLength:   &maxLen,
+			},
+		},
+	}
+}
+
+func defaultAllowedMentions() discord.AllowedMentions {
+	return discord.AllowedMentions{
+		Parse: []discord.AllowedMentionType{},
+		Roles: []snowflake.ID{},
+		Users: []snowflake.ID{},
+	}
+}
+
+func buildDeferPayload() discord.MessageCreate {
+	mentions := defaultAllowedMentions()
+	return discord.MessageCreate{
+		Flags:           discord.MessageFlagEphemeral,
+		AllowedMentions: &mentions,
+	}
+}
+
+func buildReplyPayload(text string) discord.MessageUpdate {
+	mentions := defaultAllowedMentions()
+	return discord.MessageUpdate{
+		Content:         &text,
+		AllowedMentions: &mentions,
+	}
+}
+
+func extractGuildID(id *snowflake.ID) uint64 {
+	if id == nil {
+		return 0
+	}
+	return uint64(*id)
+}
+
+// slashCommandData returns the data of a slash command. The application is shared with another
+// bot, so user and message commands can arrive too; the library's own accessor panics on those.
+func slashCommandData(i discord.ApplicationCommandInteraction) (discord.SlashCommandInteractionData, bool) {
+	data, ok := i.Data.(discord.SlashCommandInteractionData)
+	return data, ok
+}
+
+func extractQuestion(data discord.SlashCommandInteractionData) string {
+	return data.String(OptionQuestion)
+}
+
+func sanitizeToken(err error, token string) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	if token != "" && strings.Contains(msg, token) {
+		return errors.New(strings.ReplaceAll(msg, token, "[redacted]"))
+	}
+	return err
+}
