@@ -25,6 +25,18 @@ against the code.
 - Your question is never used to train or evaluate a model
   ([ADR-0002](../adr/0002-data-and-compliance.md)).
 
+## Your right to object
+
+*Article 21(1) and (4).*
+
+You can object at any time to the processing of your personal data by the bot,
+on grounds relating to your particular situation. After an objection your data
+is no longer processed, unless compelling legitimate grounds override your
+interests.
+
+To object, write an e-mail to <lusoris@pm.me> or open a private thread in the
+support forum, addressed to the operator.
+
 ## Who is responsible
 
 *Article 13(1)(a) and (b).*
@@ -40,7 +52,7 @@ No data protection officer is appointed.
 
 ## What is processed, for what purpose and on what basis
 
-*Article 13(1)(c) and (d).*
+*Article 13(1)(c) and (d), Article 14(2)(f).*
 
 <!-- markdownlint-disable MD013 -->
 | Data | Purpose | Legal basis |
@@ -49,6 +61,9 @@ No data protection officer is appointed.
 | The id of the server the command came from | Refusing every server but the configured one | Legitimate interests, Article 6(1)(f) |
 | Other fields Discord sends with a command, such as your member id, name, roles and locale | None: the bot reads none of them and keeps none | Not used |
 <!-- markdownlint-enable MD013 -->
+
+The question comes from you. The other fields come from Discord, which attaches
+them to every command.
 
 The legitimate interest is to answer the question a member puts to the bot, in
 the server the bot is meant for. The bot asks for no consent. This basis is the
@@ -106,8 +121,7 @@ provider, the country of its data centre and the agreement that binds it.
 
 You can ask the controller for access to your personal data, for its
 rectification or erasure, for restriction of its processing, and for data
-portability. You can object to the processing (Article 21), because it rests on
-legitimate interests.
+portability. Your right to object has its own section above.
 
 The bot stores nothing about you, so there is normally nothing to hand over,
 correct or delete. You can still ask, and you get an answer without undue
@@ -145,7 +159,9 @@ question. The bot does not need them to answer.
 Features that are planned will process more data: support tickets, the
 moderation trail, GitHub Discussions and supporter roles
 ([data inventory](data-inventory.md), "Not yet built"). This notice gains the
-matching entries before such a feature goes live.
+matching entries before such a feature goes live. Two periods are decided
+already: a support ticket is kept 30 days after it is closed, and the
+moderation trail 90 days.
 
 ## Where this notice lives
 
@@ -153,6 +169,11 @@ The source is this file in the project's repository. Once published, it is
 linked from the bot's profile, the rules channel and the application's entry in
 Discord's developer portal. It moves when the organisation has one place for
 its legal texts, and a link stays behind.
+
+Discord's Developer Terms of Service ask for both links: a privacy policy that
+is linked in the developer portal and easy to reach from the application
+(Section 5(a)), and an easy way for a user to ask that their data is changed or
+deleted (Section 5(b)). The request path under "Your rights" is that way.
 
 ## Open point for the operator
 
@@ -169,10 +190,16 @@ A legal review examines what the operator has decided for this draft:
 - that no data protection officer has to be appointed;
 - that the notice may state the right to complain without naming an authority;
 - what the notice has to say about the place the bot runs in, now and after the
-  move.
+  move;
+- whether the bot itself has to point a member to the right to object at first
+  contact (Article 21(4) says "at the latest at the time of the first
+  communication").
 
 ## Sources
 
-- Regulation (EU) 2016/679, Articles 6(1)(f), 12(3), 13, 21 and 77, as
+- Regulation (EU) 2016/679, Articles 6(1)(f), 12(3), 13, 14(2)(f), 21 and 77, as
   published, read on 2026-10-10 from the EU Publications Office:
   <http://publications.europa.eu/resource/celex/32016R0679>
+- Discord Developer Terms of Service, Section 5, effective 2024-07-08, read on
+  2026-10-10:
+  <https://support-dev.discord.com/hc/en-us/articles/8562894815383-Discord-Developer-Terms-of-Service>

@@ -10,6 +10,7 @@ legal advice. The operator reviews each one before it is used.
 | [AI disclosure](ai-disclosure.md) | What the bot tells members about itself, and where | Draft |
 | [Data inventory](data-inventory.md) | What the bot receives, keeps, logs and passes on | Draft, checked against the code |
 | [Privacy notice](privacy-notice.md) | What members are told about their data, point by point of GDPR Article 13 | Draft; content decided by the operator, legal review before the public launch |
+| [Record of processing](record-of-processing.md) | The record of processing activities that GDPR Article 30 asks for | Draft, built from the data inventory |
 | [Server rules](server-rules.md) | The short add-on to the code of conduct that a member reads when joining | Draft wording accepted; final once the code of conduct exists |
 <!-- markdownlint-enable MD013 -->
 
