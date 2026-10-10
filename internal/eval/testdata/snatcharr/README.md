@@ -9,7 +9,10 @@ This directory is test data for the answer pipeline
   Markdown file under `docs/`. Upstream's `REUSE.toml` declares every Markdown
   file [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/),
   copyright 2026 lusoris; most files also say so in their own header. That
-  licence, not this repository's, applies to `corpus/`.
+  licence, not this repository's, applies to `corpus/`. Its text is in
+  [`LICENSES/CC-BY-SA-4.0.txt`](../../../../LICENSES/CC-BY-SA-4.0.txt), and
+  [`REUSE.toml`](../../../../REUSE.toml) records it for every file here in
+  machine-readable form.
 - `cases.json` holds the questions. They were written by hand from that
   documentation, in the words a community member would use.
 

@@ -1,0 +1,17 @@
+version = 1
+
+# The repository's own files. A file's own SPDX header, where it has one, takes
+# precedence.
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "2026 lusoris <lusoris@pm.me>"
+SPDX-License-Identifier = "EUPL-1.2"
+
+# Test data copied verbatim from https://github.com/lusoris/SnatchArr at commit
+# 9e70c2e03d22d535a9f89c628807aab5813829a6: its README.md and docs/**/*.md.
+# Upstream declares every Markdown file CC BY-SA 4.0. This table comes after
+# the whole-tree one, so it decides for these paths.
+[[annotations]]
+path = "internal/eval/testdata/snatcharr/corpus/**"
+SPDX-FileCopyrightText = "2026 lusoris <lusoris@pm.me>"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
