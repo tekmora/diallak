@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -25,8 +27,12 @@ const (
 	EnvModelKeyFile = "DIALLAK_MODEL_KEY_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
 	// EnvCorpusDir names the variable holding the absolute path of the documentation corpus directory.
 	EnvCorpusDir = "DIALLAK_CORPUS_DIR"
+	// EnvSupportChannel names the optional variable naming where a person helps.
+	EnvSupportChannel = "DIALLAK_SUPPORT_CHANNEL"
 	// MaxTokenBytes bounds secret files (both bot token and model key).
 	MaxTokenBytes = 4096
+	// MaxSupportChannelRunes is the maximum allowed length of the support channel name in runes.
+	MaxSupportChannelRunes = 64
 )
 
 // Config is the validated configuration of one bot process.
@@ -45,6 +51,9 @@ type Config struct {
 	ModelKey string `json:"-"`
 	// CorpusDir is the absolute path to the local directory holding the corpus manifest and sources.
 	CorpusDir string
+	// SupportChannel names where a person helps, as replies word it. It is empty when the
+	// variable is not set; replies then use their built-in wording.
+	SupportChannel string
 }
 
 // HasModel reports whether a model endpoint is configured.
@@ -54,8 +63,8 @@ func (c Config) HasModel() bool {
 
 // String returns a redacted representation of Config. Token and ModelKey are never printed.
 func (c Config) String() string {
-	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelKey:%q, CorpusDir:%q}",
-		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, redactSecret(c.ModelKey), c.CorpusDir)
+	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q}",
+		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, redactSecret(c.ModelKey), c.CorpusDir, c.SupportChannel)
 }
 
 // GoString returns a redacted representation of Config for Go syntax formatting.
@@ -72,6 +81,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("ModelAlias", c.ModelAlias),
 		slog.String("ModelKey", redactSecret(c.ModelKey)),
 		slog.String("CorpusDir", c.CorpusDir),
+		slog.String("SupportChannel", c.SupportChannel),
 	)
 }
 
@@ -102,13 +112,18 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	supportChannel, err := parseSupportChannel(getenv(EnvSupportChannel))
+	if err != nil {
+		return Config{}, err
+	}
 	return Config{
-		Token:        token,
-		GuildID:      guild,
-		ModelBaseURL: baseURL,
-		ModelAlias:   alias,
-		ModelKey:     key,
-		CorpusDir:    corpusDir,
+		Token:          token,
+		GuildID:        guild,
+		ModelBaseURL:   baseURL,
+		ModelAlias:     alias,
+		ModelKey:       key,
+		CorpusDir:      corpusDir,
+		SupportChannel: supportChannel,
 	}, nil
 }
 
@@ -189,4 +204,30 @@ func readSecretFile(path, envVar, description string) (secret string, err error)
 		return "", fmt.Errorf("%s file is empty", description)
 	}
 	return secret, nil
+}
+
+// parseSupportChannel validates the optional text that names where a person helps. The text is
+// put into every reply, so it may hold printable characters only: a line break or an invisible
+// character would move or hide the notice it is part of. An "@" is refused so that the text can
+// never read as a mention. Errors name the variable and never the value.
+func parseSupportChannel(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", fmt.Errorf("%s is whitespace-only", EnvSupportChannel)
+	}
+	for _, r := range raw {
+		if !unicode.IsPrint(r) {
+			return "", fmt.Errorf("%s holds a character that is not printable", EnvSupportChannel)
+		}
+	}
+	if strings.Contains(raw, "@") {
+		return "", fmt.Errorf("%s contains '@'", EnvSupportChannel)
+	}
+	if utf8.RuneCountInString(trimmed) > MaxSupportChannelRunes {
+		return "", fmt.Errorf("%s exceeds %d runes", EnvSupportChannel, MaxSupportChannelRunes)
+	}
+	return trimmed, nil
 }

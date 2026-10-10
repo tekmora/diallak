@@ -127,7 +127,7 @@ func TestHandler_HandleAsk_Positive_BranchesAndReplies(t *testing.T) {
 				question: "What is this?",
 			},
 			asker:     &fakeAsker{},
-			wantReply: TextWrongGuild,
+			wantReply: answer.AppendFooter(TextWrongGuild, ""),
 			wantAsks:  0,
 		},
 		{
@@ -137,7 +137,7 @@ func TestHandler_HandleAsk_Positive_BranchesAndReplies(t *testing.T) {
 				question: "What is this?",
 			},
 			asker:     &fakeAsker{},
-			wantReply: TextWrongGuild,
+			wantReply: answer.AppendFooter(TextWrongGuild, ""),
 			wantAsks:  0,
 		},
 		{
@@ -147,7 +147,7 @@ func TestHandler_HandleAsk_Positive_BranchesAndReplies(t *testing.T) {
 				question: "   ",
 			},
 			asker:     &fakeAsker{},
-			wantReply: TextBadQuestion,
+			wantReply: answer.AppendFooter(TextBadQuestion, ""),
 			wantAsks:  0,
 		},
 		{
@@ -157,7 +157,7 @@ func TestHandler_HandleAsk_Positive_BranchesAndReplies(t *testing.T) {
 				question: strings.Repeat("a", answer.MaxQuestionRunes+1),
 			},
 			asker:     &fakeAsker{},
-			wantReply: TextBadQuestion,
+			wantReply: answer.AppendFooter(TextBadQuestion, ""),
 			wantAsks:  0,
 		},
 		{
@@ -167,7 +167,7 @@ func TestHandler_HandleAsk_Positive_BranchesAndReplies(t *testing.T) {
 				question: string([]byte{0xff, 0xfe, 0xfd}),
 			},
 			asker:     &fakeAsker{},
-			wantReply: TextBadQuestion,
+			wantReply: answer.AppendFooter(TextBadQuestion, ""),
 			wantAsks:  0,
 		},
 		{
@@ -181,7 +181,7 @@ func TestHandler_HandleAsk_Positive_BranchesAndReplies(t *testing.T) {
 					return answer.Answer{}, errors.New("backend error")
 				},
 			},
-			wantReply: TextFailure,
+			wantReply: answer.AppendFooter(TextFailure, ""),
 			wantAsks:  1,
 		},
 		{
@@ -201,7 +201,7 @@ func TestHandler_HandleAsk_Positive_BranchesAndReplies(t *testing.T) {
 			wantReply: answer.Render(answer.Answer{
 				Kind: answer.KindAnswer,
 				Text: "Verified instructions.",
-			}),
+			}, answer.RenderOptions{}),
 			wantAsks: 1,
 		},
 	}
@@ -313,8 +313,9 @@ func TestHandleAsk_Negative_BusyPathRefusesWhenSlotsFull(t *testing.T) {
 	if secondIn.ReplyCount() != 1 {
 		t.Errorf("second reply count = %d, want 1", secondIn.ReplyCount())
 	}
-	if replies := secondIn.Replies(); len(replies) > 0 && replies[0] != TextBusy {
-		t.Errorf("second reply = %q, want %q", replies[0], TextBusy)
+	wantBusy := answer.AppendFooter(TextBusy, "")
+	if replies := secondIn.Replies(); len(replies) > 0 && replies[0] != wantBusy {
+		t.Errorf("second reply = %q, want %q", replies[0], wantBusy)
 	}
 
 	closeBlock()
@@ -389,8 +390,9 @@ func TestHandleAsk_Boundary_ReplySentAfterAskDeadlineExpires(t *testing.T) {
 	if in.ReplyCount() != 1 {
 		t.Fatalf("reply count = %d, want 1", in.ReplyCount())
 	}
-	if replies := in.Replies(); len(replies) > 0 && replies[0] != TextFailure {
-		t.Errorf("reply = %q, want %q", replies[0], TextFailure)
+	wantFailure := answer.AppendFooter(TextFailure, "")
+	if replies := in.Replies(); len(replies) > 0 && replies[0] != wantFailure {
+		t.Errorf("reply = %q, want %q", replies[0], wantFailure)
 	}
 	if h.InFlight() != 0 {
 		t.Errorf("inFlight = %d, want 0", h.InFlight())
@@ -510,5 +512,121 @@ func TestHandler_Positive_ConcurrentInteractionsRaceClean(t *testing.T) {
 	}
 	if h.InFlight() != 0 {
 		t.Errorf("inFlight = %d, want 0", h.InFlight())
+	}
+}
+
+func TestCommandDescription_Positive_ExactStringPin(t *testing.T) {
+	const wantDesc = "Ask the automated assistant a question about the project documentation"
+	if CommandDescription != wantDesc {
+		t.Errorf("CommandDescription = %q, want %q", CommandDescription, wantDesc)
+	}
+}
+
+func TestHandler_Positive_FooterIsLastLineForAdapterTexts(t *testing.T) {
+	const hubGuildID = 100
+
+	places := []struct {
+		desc       string
+		channel    string
+		wantFooter string
+	}{
+		{
+			desc:       "default place",
+			channel:    "",
+			wantFooter: "Automated reply. A person can help in the support channel.",
+		},
+		{
+			desc:       "configured place #help-desk",
+			channel:    "#help-desk",
+			wantFooter: "Automated reply. A person can help in #help-desk.",
+		},
+	}
+
+	for _, p := range places {
+		t.Run(p.desc, func(t *testing.T) {
+			adapterTexts := []struct {
+				name    string
+				trigger func(h *Handler) string
+			}{
+				{
+					name: "TextWrongGuild",
+					trigger: func(h *Handler) string {
+						in := &fakeInteraction{guildID: 999, question: "valid question"}
+						h.HandleAsk(context.Background(), in)
+						return in.Replies()[0]
+					},
+				},
+				{
+					name: "TextBadQuestion",
+					trigger: func(h *Handler) string {
+						in := &fakeInteraction{guildID: hubGuildID, question: "   "}
+						h.HandleAsk(context.Background(), in)
+						return in.Replies()[0]
+					},
+				},
+				{
+					name: "TextFailure",
+					trigger: func(h *Handler) string {
+						in := &fakeInteraction{guildID: hubGuildID, question: "valid question"}
+						h.HandleAsk(context.Background(), in)
+						return in.Replies()[0]
+					},
+				},
+				{
+					name: "TextBusy",
+					trigger: func(h *Handler) string {
+						block := make(chan struct{})
+						firstIn := &fakeInteraction{
+							guildID:    hubGuildID,
+							question:   "Holding slot",
+							replyBlock: block,
+						}
+						go h.HandleAsk(context.Background(), firstIn)
+						for i := 0; i < 50; i++ {
+							if h.InFlight() == 1 {
+								break
+							}
+							time.Sleep(2 * time.Millisecond)
+						}
+						secondIn := &fakeInteraction{guildID: hubGuildID, question: "Second question"}
+						h.HandleAsk(context.Background(), secondIn)
+						close(block)
+						return secondIn.Replies()[0]
+					},
+				},
+			}
+
+			for _, at := range adapterTexts {
+				t.Run(at.name, func(t *testing.T) {
+					asker := &fakeAsker{
+						askFunc: func(_ context.Context, _ string) (answer.Answer, error) {
+							return answer.Answer{}, errors.New("simulated error")
+						},
+					}
+					h, err := NewHandler(HandlerConfig{
+						Asker:          asker,
+						GuildID:        hubGuildID,
+						MaxConcurrent:  1,
+						SupportChannel: p.channel,
+					})
+					if err != nil {
+						t.Fatalf("NewHandler() = %v", err)
+					}
+
+					reply := at.trigger(h)
+					if !strings.HasSuffix(reply, "\n\n"+p.wantFooter) {
+						t.Fatalf("reply does not end with blank line and footer %q:\n%s", p.wantFooter, reply)
+					}
+					lines := strings.Split(reply, "\n")
+					lastLine := lines[len(lines)-1]
+					if lastLine != p.wantFooter {
+						t.Errorf("last line = %q, want %q", lastLine, p.wantFooter)
+					}
+					if len(lines) < 3 || lines[len(lines)-2] != "" {
+						t.Errorf("expected blank line before footer, got line: %q", lines[len(lines)-2])
+					}
+				})
+			}
+		})
 	}
 }

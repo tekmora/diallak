@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/tekmora/diallak/internal/corpus"
 	"github.com/tekmora/diallak/internal/retrieval"
@@ -577,12 +578,13 @@ func TestAsk_NegativeControl_UncitedModelTextNeverAppearsInReply(t *testing.T) {
 		t.Fatalf("ans.Text leaked uncited model text: %q", ans.Text)
 	}
 
-	rendered := Render(ans)
+	rendered := Render(ans, RenderOptions{})
 	if strings.Contains(rendered, secretUncitedAnswer) {
 		t.Fatalf("rendered output leaked uncited model text: %q", rendered)
 	}
-	if rendered != LabelRefusal {
-		t.Errorf("rendered = %q, want LabelRefusal", rendered)
+	wantRendered := Refusal("") + "\n\n" + Footer("")
+	if rendered != wantRendered {
+		t.Errorf("rendered = %q, want %q", rendered, wantRendered)
 	}
 }
 
@@ -701,7 +703,7 @@ func TestRender_Positive_AllKinds(t *testing.T) {
 		Text:    "This is the model generated text.",
 		Sources: []Source{src1, src2},
 	}
-	rendAns := Render(ans)
+	rendAns := Render(ans, RenderOptions{})
 	if !strings.HasPrefix(rendAns, LabelAnswer) {
 		t.Errorf("Render(KindAnswer) want prefix LabelAnswer, got: %s", rendAns)
 	}
@@ -715,7 +717,7 @@ func TestRender_Positive_AllKinds(t *testing.T) {
 		Reason:  ReasonNoModel,
 		Sources: []Source{src1},
 	}
-	rendExc := Render(exc)
+	rendExc := Render(exc, RenderOptions{})
 	if !strings.HasPrefix(rendExc, LabelExcerpts) {
 		t.Errorf("Render(KindExcerpts) want prefix LabelExcerpts, got: %s", rendExc)
 	}
@@ -729,7 +731,7 @@ func TestRender_Positive_AllKinds(t *testing.T) {
 		Reason:  ReasonModelUnavailable,
 		Sources: []Source{src1},
 	}
-	rendUnavail := Render(excUnavail)
+	rendUnavail := Render(excUnavail, RenderOptions{})
 	if !strings.Contains(rendUnavail, LabelModelUnavailable) {
 		t.Errorf("Render(KindExcerpts) missing LabelModelUnavailable: %s", rendUnavail)
 	}
@@ -739,8 +741,9 @@ func TestRender_Positive_AllKinds(t *testing.T) {
 		Kind:   KindRefusal,
 		Reason: ReasonNoSource,
 	}
-	if Render(ref) != LabelRefusal {
-		t.Errorf("Render(KindRefusal) = %q, want LabelRefusal", Render(ref))
+	wantRefusal := Refusal("") + "\n\n" + Footer("")
+	if Render(ref, RenderOptions{}) != wantRefusal {
+		t.Errorf("Render(KindRefusal) = %q, want %q", Render(ref, RenderOptions{}), wantRefusal)
 	}
 }
 
@@ -765,7 +768,7 @@ func TestRender_Boundary_TrimmingOverMaxRenderRunes(t *testing.T) {
 		Text:    strings.Repeat("t", 1000),
 		Sources: sources,
 	}
-	renderedAns := Render(ans)
+	renderedAns := Render(ans, RenderOptions{})
 	if len([]rune(renderedAns)) > MaxRenderRunes {
 		t.Errorf("renderedAns rune count %d > %d", len([]rune(renderedAns)), MaxRenderRunes)
 	}
@@ -779,7 +782,7 @@ func TestRender_Boundary_TrimmingOverMaxRenderRunes(t *testing.T) {
 		Reason:  ReasonNoModel,
 		Sources: sources,
 	}
-	renderedExc := Render(exc)
+	renderedExc := Render(exc, RenderOptions{})
 	if len([]rune(renderedExc)) > MaxRenderRunes {
 		t.Errorf("renderedExc rune count %d > %d", len([]rune(renderedExc)), MaxRenderRunes)
 	}
@@ -801,9 +804,199 @@ func TestRender_Boundary_EmptyHeadingAndRevision(t *testing.T) {
 		Kind:    KindAnswer,
 		Sources: []Source{src},
 	}
-	rend := Render(ans)
+	rend := Render(ans, RenderOptions{})
 	// Empty heading -> omit " - <Heading>"
 	if !strings.Contains(rend, "[1] TopLevel <https://github.com/repo/blob/rev/README.md> (revision shortrev)") {
 		t.Errorf("unexpected rendered output for empty heading and short revision: %s", rend)
 	}
+}
+
+func TestTexts_Positive_ExactStringPins(t *testing.T) {
+	const (
+		wantLabelAnswer    = "AI-generated answer. It can be wrong: check the sources below."
+		wantDefaultFooter  = "Automated reply. A person can help in the support channel."
+		wantDefaultRefusal = "I found no documented answer to that. Please ask in the support channel so a person can help."
+	)
+
+	if LabelAnswer != wantLabelAnswer {
+		t.Errorf("LabelAnswer = %q, want %q", LabelAnswer, wantLabelAnswer)
+	}
+	if got := Footer("#help-desk"); got != "Automated reply. A person can help in #help-desk." {
+		t.Errorf("Footer(#help-desk) = %q", got)
+	}
+	if got := Refusal("#help-desk"); got != "I found no documented answer to that. Please ask in #help-desk so a person can help." {
+		t.Errorf("Refusal(#help-desk) = %q", got)
+	}
+	if got := Footer(""); got != wantDefaultFooter {
+		t.Errorf("Footer(\"\") = %q, want %q", got, wantDefaultFooter)
+	}
+	if got := Refusal(""); got != wantDefaultRefusal {
+		t.Errorf("Refusal(\"\") = %q, want %q", got, wantDefaultRefusal)
+	}
+	if got := Footer(DefaultPlace); got != wantDefaultFooter {
+		t.Errorf("Footer(DefaultPlace) = %q, want %q", got, wantDefaultFooter)
+	}
+	if got := Refusal(DefaultPlace); got != wantDefaultRefusal {
+		t.Errorf("Refusal(DefaultPlace) = %q, want %q", got, wantDefaultRefusal)
+	}
+}
+
+func TestRender_Positive_ModelWrittenAnswerFirstLineIsMarker(t *testing.T) {
+	ans := Answer{
+		Kind:    KindAnswer,
+		Text:    "Model generated text citing [1].",
+		Sources: []Source{{N: 1, Title: "Doc", Path: "doc.md", Revision: "rev1"}},
+	}
+	rendered := Render(ans, RenderOptions{})
+	lines := strings.Split(rendered, "\n")
+	if len(lines) == 0 || lines[0] != LabelAnswer {
+		t.Fatalf("first line = %q, want exact marker LabelAnswer %q", lines[0], LabelAnswer)
+	}
+}
+
+func TestRender_Positive_FooterIsLastLineForAllFiveCases(t *testing.T) {
+	src := Source{N: 1, Title: "Doc", Heading: "H", URL: "https://example.com", Revision: "rev1", Excerpt: "text"}
+	cases := []struct {
+		name string
+		ans  Answer
+	}{
+		{
+			name: "case 1: answer",
+			ans:  Answer{Kind: KindAnswer, Text: "Answer text citing [1].", Sources: []Source{src}},
+		},
+		{
+			name: "case 2: excerpts normal",
+			ans:  Answer{Kind: KindExcerpts, Reason: ReasonNoModel, Sources: []Source{src}},
+		},
+		{
+			name: "case 3: excerpts with model unavailable",
+			ans:  Answer{Kind: KindExcerpts, Reason: ReasonModelUnavailable, Sources: []Source{src}},
+		},
+		{
+			name: "case 4: refusal",
+			ans:  Answer{Kind: KindRefusal, Reason: ReasonNoSource},
+		},
+		{
+			name: "case 5: unknown kind",
+			ans:  Answer{Kind: Kind("unknown_kind")},
+		},
+	}
+
+	places := []struct {
+		desc       string
+		opt        RenderOptions
+		wantFooter string
+	}{
+		{
+			desc:       "default place",
+			opt:        RenderOptions{},
+			wantFooter: "Automated reply. A person can help in the support channel.",
+		},
+		{
+			desc:       "custom place #help-desk",
+			opt:        RenderOptions{Place: "#help-desk"},
+			wantFooter: "Automated reply. A person can help in #help-desk.",
+		},
+	}
+
+	for _, c := range cases {
+		for _, p := range places {
+			t.Run(c.name+"_"+p.desc, func(t *testing.T) {
+				rendered := Render(c.ans, p.opt)
+				if !strings.HasSuffix(rendered, "\n\n"+p.wantFooter) {
+					t.Fatalf("Render() output does not end with blank line and footer %q:\n%s", p.wantFooter, rendered)
+				}
+				lines := strings.Split(rendered, "\n")
+				lastLine := lines[len(lines)-1]
+				if lastLine != p.wantFooter {
+					t.Errorf("last line = %q, want %q", lastLine, p.wantFooter)
+				}
+				if len(lines) < 3 || lines[len(lines)-2] != "" {
+					t.Errorf("expected blank line before footer, got line: %q", lines[len(lines)-2])
+				}
+			})
+		}
+	}
+}
+
+func TestAppendFooter_Positive(t *testing.T) {
+	if got := AppendFooter("Base message", ""); got != "Base message\n\n"+Footer("") {
+		t.Errorf("AppendFooter default = %q, want Base message\\n\\n%s", got, Footer(""))
+	}
+	if got := AppendFooter("Base message", "#help-desk"); got != "Base message\n\nAutomated reply. A person can help in #help-desk." {
+		t.Errorf("AppendFooter custom = %q", got)
+	}
+	if got := AppendFooter("", ""); got != Footer("") {
+		t.Errorf("AppendFooter empty text = %q, want %q", got, Footer(""))
+	}
+}
+
+func TestRender_Boundary_LimitWith64RuneMultiBytePlace(t *testing.T) {
+	// 64 runes using multi-byte character (each rune is 3 bytes)
+	place64 := strings.Repeat("界", 64)
+	if utf8.RuneCountInString(place64) != 64 {
+		t.Fatalf("place64 runes = %d, want 64", utf8.RuneCountInString(place64))
+	}
+	wantFooter := Footer(place64)
+
+	t.Run("long answer with max sources", func(t *testing.T) {
+		sources := make([]Source, retrieval.MaxLimit)
+		for i := range sources {
+			sources[i] = Source{
+				N:        i + 1,
+				Title:    fmt.Sprintf("Title %d with long description", i+1),
+				Heading:  "Deep Subheading in Documentation",
+				URL:      fmt.Sprintf("https://github.com/tekmora/diallak/blob/rev/docs/section%d.md", i+1),
+				Revision: "abcdef1234567890",
+			}
+		}
+		longText := strings.Repeat("Long detailed answer text citing [1][2][3][4][5][6][7][8][9][10]. ", 50)
+		ans := Answer{
+			Kind:    KindAnswer,
+			Text:    longText,
+			Sources: sources,
+		}
+
+		result := Render(ans, RenderOptions{Place: place64})
+		runeCount := utf8.RuneCountInString(result)
+		if runeCount > MaxRenderRunes {
+			t.Fatalf("RuneCountInString = %d, exceeds MaxRenderRunes %d", runeCount, MaxRenderRunes)
+		}
+		if !strings.HasSuffix(result, "\n\n"+wantFooter) {
+			t.Fatalf("result does not end with full footer %q; tail is: %q", wantFooter, result[len(result)-len(wantFooter)-10:])
+		}
+		if !strings.HasPrefix(result, LabelAnswer) {
+			t.Fatalf("result does not start with LabelAnswer")
+		}
+	})
+
+	t.Run("long excerpts with max sources", func(t *testing.T) {
+		sources := make([]Source, retrieval.MaxLimit)
+		for i := range sources {
+			sources[i] = Source{
+				N:        i + 1,
+				Title:    fmt.Sprintf("Title %d with long description", i+1),
+				Heading:  "Deep Subheading in Documentation",
+				URL:      fmt.Sprintf("https://github.com/tekmora/diallak/blob/rev/docs/section%d.md", i+1),
+				Revision: "abcdef1234567890",
+				Excerpt:  strings.Repeat("Long excerpt line from section. ", 20),
+			}
+		}
+		exc := Answer{
+			Kind:    KindExcerpts,
+			Sources: sources,
+		}
+
+		result := Render(exc, RenderOptions{Place: place64})
+		runeCount := utf8.RuneCountInString(result)
+		if runeCount > MaxRenderRunes {
+			t.Fatalf("RuneCountInString = %d, exceeds MaxRenderRunes %d", runeCount, MaxRenderRunes)
+		}
+		if !strings.HasSuffix(result, "\n\n"+wantFooter) {
+			t.Fatalf("result does not end with full footer %q", wantFooter)
+		}
+		if !strings.HasPrefix(result, LabelExcerpts) {
+			t.Fatalf("result does not start with LabelExcerpts")
+		}
+	})
 }

@@ -17,6 +17,8 @@ import (
 const (
 	// CommandName is the slash command name for inquiries.
 	CommandName = "ask"
+	// CommandDescription is the approved slash command description explaining that the assistant is automated.
+	CommandDescription = "Ask the automated assistant a question about the project documentation"
 	// OptionQuestion is the required string option containing the inquiry.
 	OptionQuestion = "question"
 
@@ -58,16 +60,19 @@ type HandlerConfig struct {
 	AskTimeout    time.Duration
 	ReplyTimeout  time.Duration
 	Logger        *slog.Logger
+	// SupportChannel names where a person helps. If empty, the default place is used.
+	SupportChannel string
 }
 
 // Handler coordinates slash command interactions, concurrency limits, and replies.
 type Handler struct {
-	asker         Asker
-	guildID       uint64
-	maxConcurrent int
-	askTimeout    time.Duration
-	replyTimeout  time.Duration
-	logger        *slog.Logger
+	asker          Asker
+	guildID        uint64
+	maxConcurrent  int
+	askTimeout     time.Duration
+	replyTimeout   time.Duration
+	logger         *slog.Logger
+	supportChannel string
 
 	mu          sync.Mutex
 	inFlight    int
@@ -101,12 +106,13 @@ func NewHandler(cfg HandlerConfig) (*Handler, error) {
 	}
 
 	return &Handler{
-		asker:         cfg.Asker,
-		guildID:       cfg.GuildID,
-		maxConcurrent: maxConcurrent,
-		askTimeout:    askTimeout,
-		replyTimeout:  replyTimeout,
-		logger:        logger,
+		asker:          cfg.Asker,
+		guildID:        cfg.GuildID,
+		maxConcurrent:  maxConcurrent,
+		askTimeout:     askTimeout,
+		replyTimeout:   replyTimeout,
+		logger:         logger,
+		supportChannel: cfg.SupportChannel,
 	}, nil
 }
 
@@ -226,7 +232,7 @@ func (h *Handler) HandleAsk(ctx context.Context, in Interaction) {
 
 	q := strings.TrimSpace(in.Question())
 	if !validateQuestion(in.Question(), q) {
-		h.sendReply(ctx, in, TextBadQuestion)
+		h.sendFixedReply(ctx, in, TextBadQuestion)
 		return
 	}
 
@@ -247,7 +253,11 @@ func (h *Handler) handleDirectReply(ctx context.Context, in Interaction, text st
 	if !h.performDefer(ctx, in) {
 		return
 	}
-	h.sendReply(ctx, in, text)
+	h.sendFixedReply(ctx, in, text)
+}
+
+func (h *Handler) sendFixedReply(ctx context.Context, in Interaction, text string) {
+	h.sendReply(ctx, in, answer.AppendFooter(text, h.supportChannel))
 }
 
 func (h *Handler) performDefer(ctx context.Context, in Interaction) bool {
@@ -273,7 +283,7 @@ func (h *Handler) executeAskAndReply(ctx context.Context, in Interaction, q stri
 			slog.String("error_class", classifyError(err)),
 			slog.Duration("duration", time.Since(start)),
 		)
-		h.sendReply(ctx, in, TextFailure)
+		h.sendFixedReply(ctx, in, TextFailure)
 		return
 	}
 
@@ -282,7 +292,7 @@ func (h *Handler) executeAskAndReply(ctx context.Context, in Interaction, q stri
 		slog.String("reason", string(ans.Reason)),
 		slog.Duration("duration", time.Since(start)),
 	)
-	h.sendReply(ctx, in, answer.Render(ans))
+	h.sendReply(ctx, in, answer.Render(ans, answer.RenderOptions{Place: h.supportChannel}))
 }
 
 func (h *Handler) sendReply(ctx context.Context, in Interaction, text string) {

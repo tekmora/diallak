@@ -100,7 +100,7 @@ func verifyAnswerableCases(t *testing.T, p *Pipeline, ix *retrieval.Index, cases
 		if len(ans.Sources) != 1 || ans.Sources[0].N != 1 {
 			t.Errorf("case %s Sources = %+v, want exactly source 1", c.ID, ans.Sources)
 		}
-		rendered := Render(ans)
+		rendered := Render(ans, RenderOptions{})
 		if !strings.HasPrefix(rendered, LabelAnswer) {
 			t.Errorf("case %s rendered prefix want LabelAnswer, got: %s", c.ID, rendered)
 		}

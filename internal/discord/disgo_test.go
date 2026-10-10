@@ -16,6 +16,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/disgoorg/disgo"
 	"github.com/disgoorg/disgo/bot"
@@ -42,6 +43,10 @@ func TestBuildCommandCreate_Positive_Properties(t *testing.T) {
 	}
 	if slashCmd.Description == "" {
 		t.Errorf("command description is empty")
+	}
+	wantDesc := "Ask the automated assistant a question about the project documentation"
+	if slashCmd.Description != wantDesc {
+		t.Errorf("command description = %q, want %q", slashCmd.Description, wantDesc)
 	}
 	if len(slashCmd.Options) != 1 {
 		t.Fatalf("options len = %d, want 1", len(slashCmd.Options))
@@ -764,5 +769,81 @@ func TestPreGatewayStep_Positive_MatchesTokenIDTrue(t *testing.T) {
 	logText := logBuf.String()
 	if !strings.Contains(logText, `"matches_token_id":true`) {
 		t.Errorf("log output missing matches_token_id true: %s", logText)
+	}
+}
+
+func TestRegisterCommands_Positive_RegistrationPayloadDescription(t *testing.T) {
+	const (
+		appID   uint64 = 555555555555555555
+		guildID uint64 = 666666666666666666
+	)
+	fakeToken := makeFakeToken(appID)
+
+	var mu sync.Mutex
+	var recordedBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/applications/@me":
+			writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"diallak-app"}`, appID))
+		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, fmt.Sprintf("/applications/%d/guilds/%d/commands", appID, guildID)):
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				http.Error(w, "read error", http.StatusInternalServerError)
+				return
+			}
+			mu.Lock()
+			recordedBody = body
+			mu.Unlock()
+			writeTestResponse(w, http.StatusOK, "[]")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	opts := clientOptions{restURL: srv.URL}
+	if err := registerCommandsWithOptions(context.Background(), fakeToken, guildID, opts); err != nil {
+		t.Fatalf("registerCommandsWithOptions failed: %v", err)
+	}
+
+	mu.Lock()
+	body := append([]byte(nil), recordedBody...)
+	mu.Unlock()
+
+	if len(body) == 0 {
+		t.Fatalf("no registration PUT request recorded")
+	}
+
+	var payload []struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal registered commands: %v", err)
+	}
+	if len(payload) != 1 {
+		t.Fatalf("registered %d commands, want 1", len(payload))
+	}
+	if payload[0].Description != CommandDescription {
+		t.Errorf("registered command description = %q, want %q", payload[0].Description, CommandDescription)
+	}
+}
+
+func TestBuildCommandCreate_Boundary_DescriptionLengthWithinLimit(t *testing.T) {
+	// Discord limits application command descriptions to 1-100 characters.
+	// Source: Discord Developer Documentation - Application Command Object Structure:
+	// https://discord.com/developers/docs/interactions/application-commands#application-command-object-application-command-structure
+	// (Table field: "description: Description for CHAT_INPUT commands; 1-100 characters")
+	cmd := buildCommandCreate()
+	slashCmd, ok := cmd.(discord.SlashCommandCreate)
+	if !ok {
+		t.Fatalf("command is not SlashCommandCreate: %T", cmd)
+	}
+	descLen := utf8.RuneCountInString(slashCmd.Description)
+	if descLen < 1 || descLen > 100 {
+		t.Errorf("command description rune count = %d, want in [1, 100]", descLen)
+	}
+	if slashCmd.Description != CommandDescription {
+		t.Errorf("command description = %q, want CommandDescription %q", slashCmd.Description, CommandDescription)
 	}
 }

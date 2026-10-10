@@ -82,6 +82,7 @@ missing or malformed ([`internal/config`](internal/config/config.go)).
 | `DIALLAK_MODEL_BASE_URL` | with the alias | Base URL of an OpenAI-compatible endpoint |
 | `DIALLAK_MODEL_ALIAS` | with the base URL | Name the endpoint routes on, never a model name |
 | `DIALLAK_MODEL_KEY_FILE` | no | Path of the file that holds the endpoint's credential |
+| `DIALLAK_SUPPORT_CHANNEL` | no | Wording for where a person helps, put into every reply; default "the support channel" |
 <!-- markdownlint-enable MD013 -->
 
 Without the two model variables the bot replies with cited excerpts and says

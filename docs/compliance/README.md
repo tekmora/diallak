@@ -13,3 +13,17 @@ legal advice. The operator reviews each one before it is used.
 
 Still to come: the privacy notice and the server rules. The rules these
 documents implement are in [ADR-0002](../adr/0002-data-and-compliance.md).
+
+## Gates for model-written answers
+
+Model-written answers stay off in the live server until the four gates of
+[ADR-0006](../adr/0006-ai-act-role.md) are passed.
+
+<!-- markdownlint-disable MD013 -->
+| Gate | State |
+| :--- | :--- |
+| 1. The notices of the AI disclosure are in the code | Passed: [AI disclosure](ai-disclosure.md), "Notices in the code", names the texts and the tests that pin them |
+| 2. The codes of practice under Article 50(7) are read for the marking of text | Open |
+| 3. The privacy notice is published | Open |
+| 4. The gaps of the operator's model endpoint are closed | Open; they are closed in the operator's deployment, not in this repository |
+<!-- markdownlint-enable MD013 -->

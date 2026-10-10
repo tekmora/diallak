@@ -378,7 +378,7 @@ func buildCommandCreate() discord.ApplicationCommandCreate {
 	maxLen := answer.MaxQuestionRunes
 	return discord.SlashCommandCreate{
 		Name:        CommandName,
-		Description: "Ask a question about the project documentation",
+		Description: CommandDescription,
 		Options: []discord.ApplicationCommandOption{
 			discord.ApplicationCommandOptionString{
 				Name:        OptionQuestion,

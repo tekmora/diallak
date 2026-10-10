@@ -125,6 +125,63 @@ func TestRun_Positive_ReadyWithModel(t *testing.T) {
 	}
 }
 
+// wrongServerInteraction is a command from a server the bot does not serve. It records the
+// replies it is given.
+type wrongServerInteraction struct {
+	replies []string
+}
+
+func (*wrongServerInteraction) GuildID() uint64             { return 7 }
+func (*wrongServerInteraction) Question() string            { return "unused" }
+func (*wrongServerInteraction) Defer(context.Context) error { return nil }
+
+func (w *wrongServerInteraction) Reply(_ context.Context, text string) error {
+	w.replies = append(w.replies, text)
+	return nil
+}
+
+func TestRun_Positive_SupportChannelReachesTheReplies(t *testing.T) {
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:      tokenPath,
+		config.EnvGuildID:        "42",
+		config.EnvCorpusDir:      corpusPath,
+		config.EnvSupportChannel: "#help-desk",
+	}
+
+	var capturedCfg discord.BotConfig
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64) error { return nil },
+		runDiscord: func(_ context.Context, cfg discord.BotConfig) error {
+			capturedCfg = cfg
+			return nil
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps)
+	if err != nil {
+		t.Fatalf("run = %v, want nil", err)
+	}
+	if capturedCfg.Handler == nil {
+		t.Fatalf("the Discord wiring got no handler")
+	}
+
+	// The handler is the one the process would serve with: a reply it sends must name the
+	// configured place in its last line.
+	in := &wrongServerInteraction{}
+	capturedCfg.Handler.HandleAsk(context.Background(), in)
+	if len(in.replies) != 1 {
+		t.Fatalf("replies = %q, want exactly one", in.replies)
+	}
+	const wantLastLine = "Automated reply. A person can help in #help-desk."
+	lines := strings.Split(in.replies[0], "\n")
+	if lines[len(lines)-1] != wantLastLine {
+		t.Errorf("last line = %q, want %q", lines[len(lines)-1], wantLastLine)
+	}
+}
+
 func TestRun_Positive_RegisterCommands(t *testing.T) {
 	var out bytes.Buffer
 	var calledWithToken string

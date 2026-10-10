@@ -129,9 +129,10 @@ func executeBotRun(
 	}
 
 	handler, err := discord.NewHandler(discord.HandlerConfig{
-		Asker:   assembly.Pipeline,
-		GuildID: cfg.GuildID,
-		Logger:  slog.Default(),
+		Asker:          assembly.Pipeline,
+		GuildID:        cfg.GuildID,
+		Logger:         slog.Default(),
+		SupportChannel: cfg.SupportChannel,
 	})
 	if err != nil {
 		return fmt.Errorf("create discord handler: %w", err)
