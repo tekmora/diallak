@@ -11,7 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/tekmora/discord-bot/internal/answer"
+	"github.com/tekmora/diallak/internal/answer"
 )
 
 const (

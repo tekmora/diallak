@@ -1,4 +1,4 @@
-module github.com/tekmora/discord-bot
+module github.com/tekmora/diallak
 
 go 1.27
 

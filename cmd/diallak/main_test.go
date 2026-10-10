@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tekmora/discord-bot/internal/config"
-	"github.com/tekmora/discord-bot/internal/corpus"
-	"github.com/tekmora/discord-bot/internal/discord"
+	"github.com/tekmora/diallak/internal/config"
+	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/discord"
 )
 
 type failingWriter struct{}
@@ -383,7 +383,7 @@ func TestReport_Negative_ErrorIsPrintedAndExitsOne(t *testing.T) {
 	if code := report(errors.New("boom"), &errOut); code != 1 {
 		t.Fatalf("report(error) = %d, want 1", code)
 	}
-	if got := errOut.String(); got != "discord-bot: boom\n" {
+	if got := errOut.String(); got != "diallak: boom\n" {
 		t.Errorf("report wrote %q, want the prefixed error", got)
 	}
 }

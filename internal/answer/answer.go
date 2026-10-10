@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"unicode/utf8"
 
-	"github.com/tekmora/discord-bot/internal/retrieval"
+	"github.com/tekmora/diallak/internal/retrieval"
 )
 
 // Kind classifies the outcome type of the answer pipeline.

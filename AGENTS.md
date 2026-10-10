@@ -1,5 +1,5 @@
 <!-- markdownlint-disable MD013 -->
-# tekmora/discord-bot Agent Operating Harness
+# tekmora/diallak Agent Operating Harness
 
 <!-- praetor:head -->
 

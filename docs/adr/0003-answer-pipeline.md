@@ -67,8 +67,8 @@ evaluation set below shows the need.
 The model runs behind an HTTP endpoint that speaks the OpenAI-compatible chat
 API.
 
-- Configuration gives a **base URL** (`DISCORD_BOT_MODEL_BASE_URL`) and a
-  **model alias** (`DISCORD_BOT_MODEL_ALIAS`). The alias is whatever name the
+- Configuration gives a **base URL** (`DIALLAK_MODEL_BASE_URL`) and a
+  **model alias** (`DIALLAK_MODEL_ALIAS`). The alias is whatever name the
   endpoint routes on. Code never contains a model name.
 - When the two are not set, the bot answers without a model: the reply shows the
   best excerpts with their sources and says that no model wrote it. The refusal

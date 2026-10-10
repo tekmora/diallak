@@ -10,7 +10,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/tekmora/discord-bot/internal/retrieval"
+	"github.com/tekmora/diallak/internal/retrieval"
 )
 
 // recordingRetriever keeps the options of the last search.

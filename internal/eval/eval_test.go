@@ -5,8 +5,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/tekmora/discord-bot/internal/corpus"
-	"github.com/tekmora/discord-bot/internal/retrieval"
+	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/retrieval"
 )
 
 type stubRetriever struct {

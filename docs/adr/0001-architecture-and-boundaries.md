@@ -34,7 +34,7 @@ repos/disgoorg/disgo/releases/latest`).
 
 ### One hub guild, given as configuration
 
-The guild is configuration, not code. `DISCORD_BOT_GUILD_ID` names it, and
+The guild is configuration, not code. `DIALLAK_GUILD_ID` names it, and
 [`internal/config`](../../internal/config/config.go) refuses a missing, zero or
 non-decimal value.
 
@@ -44,7 +44,7 @@ non-decimal value.
 
 ### The token comes from a file
 
-`DISCORD_BOT_TOKEN_FILE` names a file that holds the bot token. The token is
+`DIALLAK_TOKEN_FILE` names a file that holds the bot token. The token is
 never passed as an environment value and never logged. `internal/config` bounds
 the read and fails closed on an empty or oversized file;
 `internal/config/config_test.go` covers both.
@@ -78,7 +78,7 @@ The planned layout follows. Package names settle with the first feature.
 
 | Package | Role |
 | :--- | :--- |
-| `cmd/discord-bot` | Wiring, signal handling, exit codes |
+| `cmd/diallak` | Wiring, signal handling, exit codes |
 | `internal/config` | Configuration, validated at start |
 | `internal/discord` | The disgo adapter; the only importer of disgo |
 | `internal/answer` | The answer pipeline ([ADR-0003](0003-answer-pipeline.md)) |

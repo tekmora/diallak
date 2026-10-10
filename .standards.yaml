@@ -2,11 +2,16 @@
 version: 1
 repository:
   owner: tekmora
-  name: discord-bot
+  name: diallak
   visibility: public
-  description: "Community bot for the Lusoris Discord hub: support, bug reports, votes and cited answers from project docs"
+  description: "Diallak, the community bot for the Lusoris Discord hub: support, bug reports, votes and cited answers from project docs"
   homepage: ""
-  topics: []
+  topics:
+    - discord-bot
+    - community
+    - documentation
+    - retrieval
+    - go
 profiles:
   - app-service
 facets:

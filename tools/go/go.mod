@@ -5,7 +5,7 @@
 // the export data the Go 1.27.2 compiler writes (version 5), and gosec then
 // fails on every package without reporting a finding. gosec v2.29.0 alone
 // requires v0.49.0; govulncheck v1.8.0 raises the selected version.
-module github.com/tekmora/discord-bot/tools/go
+module github.com/tekmora/diallak/tools/go
 
 go 1.27
 
