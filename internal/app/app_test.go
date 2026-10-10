@@ -105,7 +105,7 @@ func TestBuild_Positive_NoModelAnswersWithExcerptsAndRevision(t *testing.T) {
 		t.Errorf("source revision = %q, want abcdef1234567890", src.Revision)
 	}
 
-	rendered := answer.Render(ans)
+	rendered := answer.Render(ans, answer.RenderOptions{})
 	// Render truncates revisions to first 12 runes: "abcdef123456"
 	if !strings.Contains(rendered, "abcdef123456") {
 		t.Errorf("rendered excerpts %q does not contain truncated revision abcdef123456", rendered)

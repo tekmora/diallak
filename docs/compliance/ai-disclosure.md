@@ -58,6 +58,10 @@ The approved texts are fixed by constants and formatting functions:
 - Replies rendered through `Render` in
   [`internal/answer`](../../internal/answer/answer.go) append the footer as the
   final line across all answer kinds.
+- The optional setting `DIALLAK_SUPPORT_CHANNEL` replaces the words "the support
+  channel" in the footer and in the refusal. It accepts printable text of at
+  most 64 characters without "@"
+  ([`internal/config`](../../internal/config/config.go)).
 
 Every text is pinned by tests to prevent accidental edits:
 
@@ -73,6 +77,9 @@ Every text is pinned by tests to prevent accidental edits:
   `TestHandler_Positive_FooterIsLastLineForAdapterTexts` in
   [`internal/discord`](../../internal/discord/discord_test.go) verify that the
   footer is the last line of every reply.
+- `TestHandleAsk_Positive_AnswerRepliesNameTheConfiguredPlace` in
+  [`internal/discord`](../../internal/discord/review_test.go) verifies that a
+  configured place reaches answers, excerpts and refusals.
 
 ## Not covered here
 

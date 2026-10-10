@@ -137,7 +137,7 @@ func TestHandleAsk_Positive_SuccessLogsOutcomeWithoutContent(t *testing.T) {
 	if !strings.Contains(out, "outcome=refusal") || !strings.Contains(out, "reason=no_source") || !strings.Contains(out, "duration=") {
 		t.Fatalf("success line misses outcome, reason or duration: %s", out)
 	}
-	if strings.Contains(out, "13579") || strings.Contains(out, answer.LabelRefusal) {
+	if strings.Contains(out, "13579") || strings.Contains(out, answer.Refusal("")) {
 		t.Fatalf("success line carries question or reply text: %s", out)
 	}
 }
@@ -337,5 +337,42 @@ func TestRegisterCommands_Negative_SlowLookupHitsItsOwnDeadline(t *testing.T) {
 	defer mu.Unlock()
 	if commandRequests != 0 {
 		t.Fatalf("%d command list requests were made after a failed lookup", commandRequests)
+	}
+}
+
+func TestHandleAsk_Positive_AnswerRepliesNameTheConfiguredPlace(t *testing.T) {
+	const wantLastLine = "Automated reply. A person can help in #help-desk."
+	kinds := []answer.Answer{
+		{Kind: answer.KindAnswer, Text: "Use the flag [1].", Sources: []answer.Source{{N: 1, Title: "Guide", URL: "https://example.org/guide", Revision: "abc"}}},
+		{Kind: answer.KindExcerpts, Sources: []answer.Source{{N: 1, Title: "Guide", URL: "https://example.org/guide", Revision: "abc", Excerpt: "Use the flag."}}},
+		{Kind: answer.KindRefusal},
+	}
+	for _, ans := range kinds {
+		t.Run(string(ans.Kind), func(t *testing.T) {
+			h, err := NewHandler(HandlerConfig{
+				Asker: &fakeAsker{askFunc: func(context.Context, string) (answer.Answer, error) {
+					return ans, nil
+				}},
+				GuildID:        42,
+				SupportChannel: "#help-desk",
+			})
+			if err != nil {
+				t.Fatalf("NewHandler = %v", err)
+			}
+			in := &ctxInteraction{guildID: 42, question: "how do I use the flag"}
+			h.HandleAsk(context.Background(), in)
+
+			got := in.delivered()
+			if len(got) != 1 {
+				t.Fatalf("delivered replies = %q, want exactly one", got)
+			}
+			lines := strings.Split(got[0], "\n")
+			if lines[len(lines)-1] != wantLastLine {
+				t.Fatalf("last line = %q, want %q", lines[len(lines)-1], wantLastLine)
+			}
+			if ans.Kind == answer.KindRefusal && !strings.Contains(got[0], "Please ask in #help-desk so") {
+				t.Fatalf("refusal does not name the configured place: %q", got[0])
+			}
+		})
 	}
 }

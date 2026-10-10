@@ -56,8 +56,6 @@ type BotConfig struct {
 	Handler         *Handler
 	Logger          *slog.Logger
 	ShutdownTimeout time.Duration
-	// SupportChannel names where a person helps.
-	SupportChannel string
 }
 
 // RegisterCommands registers the single guild-scoped /ask command with Discord via REST.

@@ -232,25 +232,25 @@ func TestConfig_Negative_RedactionHidesSecrets(t *testing.T) {
 }
 
 func TestLoad_Positive_SupportChannel(t *testing.T) {
-	t.Run("unset defaults to the support channel", func(t *testing.T) {
+	t.Run("unset stays empty", func(t *testing.T) {
 		cfg, err := Load(env(validBaseEnv(t)))
 		if err != nil {
 			t.Fatalf("Load = %v, want nil", err)
 		}
-		if cfg.SupportChannel != DefaultSupportChannel {
-			t.Errorf("SupportChannel = %q, want %q", cfg.SupportChannel, DefaultSupportChannel)
+		if cfg.SupportChannel != "" {
+			t.Errorf("SupportChannel = %q, want it empty", cfg.SupportChannel)
 		}
 	})
 
-	t.Run("empty string defaults to the support channel", func(t *testing.T) {
+	t.Run("empty string stays empty", func(t *testing.T) {
 		base := validBaseEnv(t)
 		base[EnvSupportChannel] = ""
 		cfg, err := Load(env(base))
 		if err != nil {
 			t.Fatalf("Load = %v, want nil", err)
 		}
-		if cfg.SupportChannel != DefaultSupportChannel {
-			t.Errorf("SupportChannel = %q, want %q", cfg.SupportChannel, DefaultSupportChannel)
+		if cfg.SupportChannel != "" {
+			t.Errorf("SupportChannel = %q, want it empty", cfg.SupportChannel)
 		}
 	})
 
@@ -286,6 +286,11 @@ func TestLoad_Negative_SupportChannelRefused(t *testing.T) {
 		{name: "tab", val: "#help\tdesk"},
 		{name: "carriage return", val: "#help\rdesk"},
 		{name: "bell control char", val: "#help\x07desk"},
+		{name: "line separator", val: "#help\u2028desk"},
+		{name: "paragraph separator", val: "#help\u2029desk"},
+		{name: "right-to-left override", val: "#help\u202edesk"},
+		{name: "zero width space", val: "#help\u200bdesk"},
+		{name: "no-break space", val: "#help\u00a0desk"},
 		{name: "contains at sign", val: "@here"},
 		{name: "contains at sign inside", val: "#help@desk"},
 		{name: "whitespace only spaces", val: "   "},

@@ -578,11 +578,11 @@ func TestAsk_NegativeControl_UncitedModelTextNeverAppearsInReply(t *testing.T) {
 		t.Fatalf("ans.Text leaked uncited model text: %q", ans.Text)
 	}
 
-	rendered := Render(ans)
+	rendered := Render(ans, RenderOptions{})
 	if strings.Contains(rendered, secretUncitedAnswer) {
 		t.Fatalf("rendered output leaked uncited model text: %q", rendered)
 	}
-	wantRendered := LabelRefusal + "\n\n" + LabelFooter
+	wantRendered := Refusal("") + "\n\n" + Footer("")
 	if rendered != wantRendered {
 		t.Errorf("rendered = %q, want %q", rendered, wantRendered)
 	}
@@ -703,7 +703,7 @@ func TestRender_Positive_AllKinds(t *testing.T) {
 		Text:    "This is the model generated text.",
 		Sources: []Source{src1, src2},
 	}
-	rendAns := Render(ans)
+	rendAns := Render(ans, RenderOptions{})
 	if !strings.HasPrefix(rendAns, LabelAnswer) {
 		t.Errorf("Render(KindAnswer) want prefix LabelAnswer, got: %s", rendAns)
 	}
@@ -717,7 +717,7 @@ func TestRender_Positive_AllKinds(t *testing.T) {
 		Reason:  ReasonNoModel,
 		Sources: []Source{src1},
 	}
-	rendExc := Render(exc)
+	rendExc := Render(exc, RenderOptions{})
 	if !strings.HasPrefix(rendExc, LabelExcerpts) {
 		t.Errorf("Render(KindExcerpts) want prefix LabelExcerpts, got: %s", rendExc)
 	}
@@ -731,7 +731,7 @@ func TestRender_Positive_AllKinds(t *testing.T) {
 		Reason:  ReasonModelUnavailable,
 		Sources: []Source{src1},
 	}
-	rendUnavail := Render(excUnavail)
+	rendUnavail := Render(excUnavail, RenderOptions{})
 	if !strings.Contains(rendUnavail, LabelModelUnavailable) {
 		t.Errorf("Render(KindExcerpts) missing LabelModelUnavailable: %s", rendUnavail)
 	}
@@ -741,9 +741,9 @@ func TestRender_Positive_AllKinds(t *testing.T) {
 		Kind:   KindRefusal,
 		Reason: ReasonNoSource,
 	}
-	wantRefusal := LabelRefusal + "\n\n" + LabelFooter
-	if Render(ref) != wantRefusal {
-		t.Errorf("Render(KindRefusal) = %q, want %q", Render(ref), wantRefusal)
+	wantRefusal := Refusal("") + "\n\n" + Footer("")
+	if Render(ref, RenderOptions{}) != wantRefusal {
+		t.Errorf("Render(KindRefusal) = %q, want %q", Render(ref, RenderOptions{}), wantRefusal)
 	}
 }
 
@@ -768,7 +768,7 @@ func TestRender_Boundary_TrimmingOverMaxRenderRunes(t *testing.T) {
 		Text:    strings.Repeat("t", 1000),
 		Sources: sources,
 	}
-	renderedAns := Render(ans)
+	renderedAns := Render(ans, RenderOptions{})
 	if len([]rune(renderedAns)) > MaxRenderRunes {
 		t.Errorf("renderedAns rune count %d > %d", len([]rune(renderedAns)), MaxRenderRunes)
 	}
@@ -782,7 +782,7 @@ func TestRender_Boundary_TrimmingOverMaxRenderRunes(t *testing.T) {
 		Reason:  ReasonNoModel,
 		Sources: sources,
 	}
-	renderedExc := Render(exc)
+	renderedExc := Render(exc, RenderOptions{})
 	if len([]rune(renderedExc)) > MaxRenderRunes {
 		t.Errorf("renderedExc rune count %d > %d", len([]rune(renderedExc)), MaxRenderRunes)
 	}
@@ -804,7 +804,7 @@ func TestRender_Boundary_EmptyHeadingAndRevision(t *testing.T) {
 		Kind:    KindAnswer,
 		Sources: []Source{src},
 	}
-	rend := Render(ans)
+	rend := Render(ans, RenderOptions{})
 	// Empty heading -> omit " - <Heading>"
 	if !strings.Contains(rend, "[1] TopLevel <https://github.com/repo/blob/rev/README.md> (revision shortrev)") {
 		t.Errorf("unexpected rendered output for empty heading and short revision: %s", rend)
@@ -821,17 +821,11 @@ func TestTexts_Positive_ExactStringPins(t *testing.T) {
 	if LabelAnswer != wantLabelAnswer {
 		t.Errorf("LabelAnswer = %q, want %q", LabelAnswer, wantLabelAnswer)
 	}
-	if DefaultFooter != wantDefaultFooter {
-		t.Errorf("DefaultFooter = %q, want %q", DefaultFooter, wantDefaultFooter)
+	if got := Footer("#help-desk"); got != "Automated reply. A person can help in #help-desk." {
+		t.Errorf("Footer(#help-desk) = %q", got)
 	}
-	if LabelFooter != wantDefaultFooter {
-		t.Errorf("LabelFooter = %q, want %q", LabelFooter, wantDefaultFooter)
-	}
-	if DefaultRefusal != wantDefaultRefusal {
-		t.Errorf("DefaultRefusal = %q, want %q", DefaultRefusal, wantDefaultRefusal)
-	}
-	if LabelRefusal != wantDefaultRefusal {
-		t.Errorf("LabelRefusal = %q, want %q", LabelRefusal, wantDefaultRefusal)
+	if got := Refusal("#help-desk"); got != "I found no documented answer to that. Please ask in #help-desk so a person can help." {
+		t.Errorf("Refusal(#help-desk) = %q", got)
 	}
 	if got := Footer(""); got != wantDefaultFooter {
 		t.Errorf("Footer(\"\") = %q, want %q", got, wantDefaultFooter)
@@ -853,7 +847,7 @@ func TestRender_Positive_ModelWrittenAnswerFirstLineIsMarker(t *testing.T) {
 		Text:    "Model generated text citing [1].",
 		Sources: []Source{{N: 1, Title: "Doc", Path: "doc.md", Revision: "rev1"}},
 	}
-	rendered := Render(ans)
+	rendered := Render(ans, RenderOptions{})
 	lines := strings.Split(rendered, "\n")
 	if len(lines) == 0 || lines[0] != LabelAnswer {
 		t.Fatalf("first line = %q, want exact marker LabelAnswer %q", lines[0], LabelAnswer)
@@ -926,14 +920,14 @@ func TestRender_Positive_FooterIsLastLineForAllFiveCases(t *testing.T) {
 }
 
 func TestAppendFooter_Positive(t *testing.T) {
-	if got := AppendFooter("Base message", ""); got != "Base message\n\n"+DefaultFooter {
-		t.Errorf("AppendFooter default = %q, want Base message\\n\\n%s", got, DefaultFooter)
+	if got := AppendFooter("Base message", ""); got != "Base message\n\n"+Footer("") {
+		t.Errorf("AppendFooter default = %q, want Base message\\n\\n%s", got, Footer(""))
 	}
 	if got := AppendFooter("Base message", "#help-desk"); got != "Base message\n\nAutomated reply. A person can help in #help-desk." {
 		t.Errorf("AppendFooter custom = %q", got)
 	}
-	if got := AppendFooter("", ""); got != DefaultFooter {
-		t.Errorf("AppendFooter empty text = %q, want %q", got, DefaultFooter)
+	if got := AppendFooter("", ""); got != Footer("") {
+		t.Errorf("AppendFooter empty text = %q, want %q", got, Footer(""))
 	}
 }
 

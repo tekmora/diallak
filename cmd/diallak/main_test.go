@@ -125,7 +125,22 @@ func TestRun_Positive_ReadyWithModel(t *testing.T) {
 	}
 }
 
-func TestRun_Positive_SupportChannelPassedToDiscord(t *testing.T) {
+// wrongServerInteraction is a command from a server the bot does not serve. It records the
+// replies it is given.
+type wrongServerInteraction struct {
+	replies []string
+}
+
+func (*wrongServerInteraction) GuildID() uint64             { return 7 }
+func (*wrongServerInteraction) Question() string            { return "unused" }
+func (*wrongServerInteraction) Defer(context.Context) error { return nil }
+
+func (w *wrongServerInteraction) Reply(_ context.Context, text string) error {
+	w.replies = append(w.replies, text)
+	return nil
+}
+
+func TestRun_Positive_SupportChannelReachesTheReplies(t *testing.T) {
 	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
 	corpusPath := setupTestCorpus(t)
 	envMap := map[string]string{
@@ -149,8 +164,21 @@ func TestRun_Positive_SupportChannelPassedToDiscord(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run = %v, want nil", err)
 	}
-	if capturedCfg.SupportChannel != "#help-desk" {
-		t.Errorf("SupportChannel = %q, want #help-desk", capturedCfg.SupportChannel)
+	if capturedCfg.Handler == nil {
+		t.Fatalf("the Discord wiring got no handler")
+	}
+
+	// The handler is the one the process would serve with: a reply it sends must name the
+	// configured place in its last line.
+	in := &wrongServerInteraction{}
+	capturedCfg.Handler.HandleAsk(context.Background(), in)
+	if len(in.replies) != 1 {
+		t.Fatalf("replies = %q, want exactly one", in.replies)
+	}
+	const wantLastLine = "Automated reply. A person can help in #help-desk."
+	lines := strings.Split(in.replies[0], "\n")
+	if lines[len(lines)-1] != wantLastLine {
+		t.Errorf("last line = %q, want %q", lines[len(lines)-1], wantLastLine)
 	}
 }
 

@@ -29,8 +29,6 @@ const (
 	EnvCorpusDir = "DIALLAK_CORPUS_DIR"
 	// EnvSupportChannel names the optional variable naming where a person helps.
 	EnvSupportChannel = "DIALLAK_SUPPORT_CHANNEL"
-	// DefaultSupportChannel is the fallback text naming where a person helps.
-	DefaultSupportChannel = "the support channel"
 	// MaxTokenBytes bounds secret files (both bot token and model key).
 	MaxTokenBytes = 4096
 	// MaxSupportChannelRunes is the maximum allowed length of the support channel name in runes.
@@ -53,7 +51,8 @@ type Config struct {
 	ModelKey string `json:"-"`
 	// CorpusDir is the absolute path to the local directory holding the corpus manifest and sources.
 	CorpusDir string
-	// SupportChannel names where a person helps.
+	// SupportChannel names where a person helps, as replies word it. It is empty when the
+	// variable is not set; replies then use their built-in wording.
 	SupportChannel string
 }
 
@@ -207,17 +206,21 @@ func readSecretFile(path, envVar, description string) (secret string, err error)
 	return secret, nil
 }
 
+// parseSupportChannel validates the optional text that names where a person helps. The text is
+// put into every reply, so it may hold printable characters only: a line break or an invisible
+// character would move or hide the notice it is part of. An "@" is refused so that the text can
+// never read as a mention. Errors name the variable and never the value.
 func parseSupportChannel(raw string) (string, error) {
 	if raw == "" {
-		return DefaultSupportChannel, nil
+		return "", nil
 	}
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return "", fmt.Errorf("%s is whitespace-only", EnvSupportChannel)
 	}
 	for _, r := range raw {
-		if unicode.IsControl(r) {
-			return "", fmt.Errorf("%s contains control characters", EnvSupportChannel)
+		if !unicode.IsPrint(r) {
+			return "", fmt.Errorf("%s holds a character that is not printable", EnvSupportChannel)
 		}
 	}
 	if strings.Contains(raw, "@") {

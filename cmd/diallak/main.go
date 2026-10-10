@@ -139,11 +139,10 @@ func executeBotRun(
 	}
 
 	botCfg := discord.BotConfig{
-		Token:          cfg.Token,
-		GuildID:        cfg.GuildID,
-		Handler:        handler,
-		Logger:         slog.Default(),
-		SupportChannel: cfg.SupportChannel,
+		Token:   cfg.Token,
+		GuildID: cfg.GuildID,
+		Handler: handler,
+		Logger:  slog.Default(),
 	}
 
 	if err := runDiscord(ctx, botCfg); err != nil {

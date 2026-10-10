@@ -16,20 +16,14 @@ documents implement are in [ADR-0002](../adr/0002-data-and-compliance.md).
 
 ## Gates for model-written answers
 
-Model mode stays disabled until the four gates in
-[ADR-0006](../adr/0006-ai-act-role.md) are satisfied.
+Model-written answers stay off in the live server until the four gates of
+[ADR-0006](../adr/0006-ai-act-role.md) are passed.
 
 <!-- markdownlint-disable MD013 -->
-| Gate | Description | State |
-| :--- | :--- | :--- |
-| 1 | Notices in the code | Done: command description and reply footer added in `feat/notices-in-code` |
-| 2 | Codes of practice read | Open |
-| 3 | Privacy notice published | Open |
-| 4 | Endpoint gaps closed | Open (operator's deployment) |
+| Gate | State |
+| :--- | :--- |
+| 1. The notices of the AI disclosure are in the code | Passed: [AI disclosure](ai-disclosure.md), "Notices in the code", names the texts and the tests that pin them |
+| 2. The codes of practice under Article 50(7) are read for the marking of text | Open |
+| 3. The privacy notice is published | Open |
+| 4. The gaps of the operator's model endpoint are closed | Open; they are closed in the operator's deployment, not in this repository |
 <!-- markdownlint-enable MD013 -->
-
-Gate 1 is verified in the test suite by the exact string pins in
-[`internal/answer`](../../internal/answer/answer_test.go) and
-[`internal/discord`](../../internal/discord/discord_test.go).
-The remaining three gates belong to documentation review and the operator's
-deployment environment.

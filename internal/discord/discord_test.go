@@ -201,7 +201,7 @@ func TestHandler_HandleAsk_Positive_BranchesAndReplies(t *testing.T) {
 			wantReply: answer.Render(answer.Answer{
 				Kind: answer.KindAnswer,
 				Text: "Verified instructions.",
-			}),
+			}, answer.RenderOptions{}),
 			wantAsks: 1,
 		},
 	}
