@@ -779,3 +779,112 @@ func TestLoad_Boundary_AskTimeoutLeavesRoomForTheModelTimeoutInEffect(t *testing
 		t.Errorf("ask timeout 30s without a model was refused: %v", err)
 	}
 }
+
+func TestLoad_Positive_HealthAddr(t *testing.T) {
+	t.Run("unset is empty", func(t *testing.T) {
+		cfg, err := Load(env(validBaseEnv(t)))
+		if err != nil {
+			t.Fatalf("Load = %v, want nil", err)
+		}
+		if cfg.HealthAddr != "" {
+			t.Errorf("HealthAddr = %q, want empty", cfg.HealthAddr)
+		}
+	})
+
+	t.Run("valid IPv4 with port", func(t *testing.T) {
+		base := validBaseEnv(t)
+		base[EnvHealthAddr] = "127.0.0.1:8080"
+		cfg, err := Load(env(base))
+		if err != nil {
+			t.Fatalf("Load = %v, want nil", err)
+		}
+		if cfg.HealthAddr != "127.0.0.1:8080" {
+			t.Errorf("HealthAddr = %q, want 127.0.0.1:8080", cfg.HealthAddr)
+		}
+	})
+
+	t.Run("empty host with port", func(t *testing.T) {
+		base := validBaseEnv(t)
+		base[EnvHealthAddr] = ":8080"
+		cfg, err := Load(env(base))
+		if err != nil {
+			t.Fatalf("Load = %v, want nil", err)
+		}
+		if cfg.HealthAddr != ":8080" {
+			t.Errorf("HealthAddr = %q, want :8080", cfg.HealthAddr)
+		}
+	})
+
+	t.Run("IPv6 in brackets with port", func(t *testing.T) {
+		base := validBaseEnv(t)
+		base[EnvHealthAddr] = "[::1]:8081"
+		cfg, err := Load(env(base))
+		if err != nil {
+			t.Fatalf("Load = %v, want nil", err)
+		}
+		if cfg.HealthAddr != "[::1]:8081" {
+			t.Errorf("HealthAddr = %q, want [::1]:8081", cfg.HealthAddr)
+		}
+	})
+}
+
+func TestLoad_Negative_HealthAddrRefusesInvalidValues(t *testing.T) {
+	cases := []struct {
+		name string
+		val  string
+	}{
+		{"no port", "127.0.0.1"},
+		{"port 0", "127.0.0.1:0"},
+		{"port out of range", "127.0.0.1:65536"},
+		{"port negative", "127.0.0.1:-1"},
+		{"port not a number", "127.0.0.1:abc"},
+		{"host not IP literal", "localhost:8080"},
+		{"host domain", "example.com:8080"},
+		{"leading space", " 127.0.0.1:8080"},
+		{"trailing space", "127.0.0.1:8080 "},
+		{"extra text path", "127.0.0.1:8080/healthz"},
+		{"extra text trailing", "127.0.0.1:8080 extra"},
+		{"ipv6 without brackets", "::1:8080"},
+		{"ipv4 in brackets", "[127.0.0.1]:8080"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			base := validBaseEnv(t)
+			base[EnvHealthAddr] = tc.val
+			cfg, err := Load(env(base))
+			if err == nil {
+				t.Fatalf("Load(%s=%q) succeeded, want error", EnvHealthAddr, tc.val)
+			}
+			if !strings.Contains(err.Error(), EnvHealthAddr) {
+				t.Errorf("error %q does not name %s", err.Error(), EnvHealthAddr)
+			}
+			if cfg.HealthAddr != "" {
+				t.Errorf("cfg.HealthAddr = %q, want empty on error", cfg.HealthAddr)
+			}
+		})
+	}
+}
+
+func TestLoad_Boundary_HealthAddrPorts(t *testing.T) {
+	base := validBaseEnv(t)
+	base[EnvHealthAddr] = "127.0.0.1:1"
+	if cfg, err := Load(env(base)); err != nil || cfg.HealthAddr != "127.0.0.1:1" {
+		t.Errorf("port 1 = %v (cfg.HealthAddr=%q), want success", err, cfg.HealthAddr)
+	}
+
+	base[EnvHealthAddr] = "127.0.0.1:65535"
+	if cfg, err := Load(env(base)); err != nil || cfg.HealthAddr != "127.0.0.1:65535" {
+		t.Errorf("port 65535 = %v (cfg.HealthAddr=%q), want success", err, cfg.HealthAddr)
+	}
+
+	base[EnvHealthAddr] = "127.0.0.1:0"
+	if _, err := Load(env(base)); err == nil || !strings.Contains(err.Error(), EnvHealthAddr) {
+		t.Errorf("port 0 err = %v, want error naming %s", err, EnvHealthAddr)
+	}
+
+	base[EnvHealthAddr] = "127.0.0.1:65536"
+	if _, err := Load(env(base)); err == nil || !strings.Contains(err.Error(), EnvHealthAddr) {
+		t.Errorf("port 65536 err = %v, want error naming %s", err, EnvHealthAddr)
+	}
+}

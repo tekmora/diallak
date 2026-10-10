@@ -27,6 +27,9 @@ Discord issues for replying to that one command
 ([`internal/discord/disgo.go`](../../internal/discord/disgo.go),
 `interactionAdapter`). The gateway session requests no intent, so no message,
 member or presence event reaches the bot (`gatewayIntents` in the same file).
+When configured, the health listener answers probes, reads no request body,
+logs nothing and holds no member data
+([`internal/health`](../../internal/health)).
 
 ## What the bot stores
 

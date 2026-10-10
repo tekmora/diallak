@@ -57,6 +57,10 @@ type BotConfig struct {
 	Handler         *Handler
 	Logger          *slog.Logger
 	ShutdownTimeout time.Duration
+	// ReportReady reports whether the bot is ready to serve. It is called with true
+	// once the gateway is open and with false when shutdown begins. A nil callback
+	// is ignored.
+	ReportReady func(bool)
 }
 
 // RegisterCommands registers the single guild-scoped /ask command with Discord via REST.
@@ -153,7 +157,14 @@ func runWithOptions(ctx context.Context, cfg BotConfig, opts clientOptions) erro
 		return err
 	}
 
+	if cfg.ReportReady != nil {
+		cfg.ReportReady(true)
+	}
+
 	<-ctx.Done()
+	if cfg.ReportReady != nil {
+		cfg.ReportReady(false)
+	}
 	dispatching.Store(false)
 
 	return shutdownClient(cfg, client, cfg.ShutdownTimeout)

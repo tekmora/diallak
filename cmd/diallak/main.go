@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,6 +20,7 @@ import (
 	"github.com/tekmora/diallak/internal/app"
 	"github.com/tekmora/diallak/internal/config"
 	"github.com/tekmora/diallak/internal/discord"
+	"github.com/tekmora/diallak/internal/health"
 )
 
 const (
@@ -105,6 +107,20 @@ func executeBotRun(
 	out io.Writer,
 	runDiscord func(ctx context.Context, cfg discord.BotConfig) error,
 ) (err error) {
+	hh, err := initHealth(ctx, cfg.HealthAddr)
+	if err != nil {
+		return err
+	}
+	if hh != nil {
+		defer func() {
+			if hh.ln != nil {
+				if closeErr := hh.ln.Close(); closeErr != nil {
+					err = errors.Join(err, fmt.Errorf("close health listener: %w", closeErr))
+				}
+			}
+		}()
+	}
+
 	buildCtx, cancel := context.WithTimeout(ctx, startTimeout)
 	defer cancel()
 
@@ -118,16 +134,25 @@ func executeBotRun(
 		}
 	}()
 
-	modelStatus := "not configured"
-	if assembly.HasModel {
-		modelStatus = "configured"
+	if err := reportAssemblyStatus(out, assembly); err != nil {
+		return err
 	}
 
-	if _, writeErr := fmt.Fprintf(out, "ready: %d sources, %d chunks, model %s\n",
-		len(assembly.Sources), assembly.Chunks, modelStatus); writeErr != nil {
-		return fmt.Errorf("write status: %w", writeErr)
+	botCfg, err := buildDiscordConfig(cfg, assembly)
+	if err != nil {
+		return err
 	}
 
+	var ln net.Listener
+	if hh != nil {
+		ln = hh.ln
+		hh.ln = nil
+	}
+
+	return runDiscordWithHealth(ctx, hh, ln, botCfg, runDiscord)
+}
+
+func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotConfig, error) {
 	handler, err := discord.NewHandler(discord.HandlerConfig{
 		Asker:            assembly.Pipeline,
 		GuildID:          cfg.GuildID,
@@ -137,20 +162,93 @@ func executeBotRun(
 		AskTimeout:       cfg.AskTimeout,
 		RenderOptions:    assembly.RenderOptions,
 	})
-
 	if err != nil {
-		return fmt.Errorf("create discord handler: %w", err)
+		return discord.BotConfig{}, fmt.Errorf("create discord handler: %w", err)
 	}
-
-	botCfg := discord.BotConfig{
+	return discord.BotConfig{
 		Token:   cfg.Token,
 		GuildID: cfg.GuildID,
 		Handler: handler,
 		Logger:  slog.Default(),
+	}, nil
+}
+
+type healthHarness struct {
+	state  *health.State
+	server *health.Server
+	ln     net.Listener
+}
+
+func initHealth(ctx context.Context, addr string) (*healthHarness, error) {
+	if addr == "" {
+		return nil, nil
+	}
+	var lc net.ListenConfig
+	ln, err := lc.Listen(ctx, "tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("listen %s (%s): %w", config.EnvHealthAddr, addr, err)
+	}
+	state := &health.State{}
+	return &healthHarness{
+		state:  state,
+		server: health.NewServer(state),
+		ln:     ln,
+	}, nil
+}
+
+func reportAssemblyStatus(out io.Writer, assembly *app.Assembly) error {
+	modelStatus := "not configured"
+	if assembly.HasModel {
+		modelStatus = "configured"
+	}
+	if _, writeErr := fmt.Fprintf(out, "ready: %d sources, %d chunks, model %s\n",
+		len(assembly.Sources), assembly.Chunks, modelStatus); writeErr != nil {
+		return fmt.Errorf("write status: %w", writeErr)
+	}
+	return nil
+}
+
+func runDiscordWithHealth(
+	ctx context.Context,
+	hh *healthHarness,
+	ln net.Listener,
+	botCfg discord.BotConfig,
+	runDiscord func(ctx context.Context, cfg discord.BotConfig) error,
+) error {
+	if hh == nil {
+		if err := runDiscord(ctx, botCfg); err != nil {
+			return fmt.Errorf("run discord bot: %w", err)
+		}
+		return nil
 	}
 
-	if err := runDiscord(ctx, botCfg); err != nil {
-		return fmt.Errorf("run discord bot: %w", err)
+	botCtx, botCancel := context.WithCancel(ctx)
+	defer botCancel()
+
+	botCfg.ReportReady = hh.state.SetReady
+	healthErrCh := make(chan error, 1)
+
+	// Exactly one goroutine serves the health endpoint (bounded, HISS-06).
+	go func() {
+		serveErr := hh.server.Serve(botCtx, ln)
+		if serveErr != nil {
+			botCancel()
+		}
+		healthErrCh <- serveErr
+	}()
+
+	botErr := runDiscord(botCtx, botCfg)
+	botCancel()
+	healthErr := <-healthErrCh
+
+	if healthErr != nil {
+		if botErr != nil {
+			return errors.Join(fmt.Errorf("health server: %w", healthErr), fmt.Errorf("run discord bot: %w", botErr))
+		}
+		return fmt.Errorf("health server: %w", healthErr)
+	}
+	if botErr != nil {
+		return fmt.Errorf("run discord bot: %w", botErr)
 	}
 	return nil
 }
