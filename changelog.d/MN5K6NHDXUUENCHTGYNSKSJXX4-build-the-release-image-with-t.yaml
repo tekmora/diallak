@@ -1,0 +1,2 @@
+type: fixed
+title: Build the release image with the Go toolchain that go.mod names
