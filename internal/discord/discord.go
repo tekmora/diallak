@@ -45,6 +45,37 @@ const (
 	maxAllowedReplyTimeout = 1 * time.Minute
 )
 
+// Limits are the limits a Handler works under, after its defaults are applied.
+type Limits struct {
+	// MaxConcurrent is the number of questions answered at the same time.
+	MaxConcurrent int
+	// AskTimeout is the time one question may take in total.
+	AskTimeout time.Duration
+	// QuestionMaxChars is the longest question accepted, in runes.
+	QuestionMaxChars int
+}
+
+// Limits reports the limits in effect.
+func (h *Handler) Limits() Limits {
+	return Limits{
+		MaxConcurrent:    h.maxConcurrent,
+		AskTimeout:       h.askTimeout,
+		QuestionMaxChars: h.questionMaxChars,
+	}
+}
+
+// validateQuestionMaxChars returns the question limit in effect: zero means
+// answer.MaxQuestionRunes, and a value outside 0 to answer.MaxQuestionRunes is an error.
+func validateQuestionMaxChars(n int) (int, error) {
+	if n < 0 || n > answer.MaxQuestionRunes {
+		return 0, fmt.Errorf("question limit %d out of range [0, %d]", n, answer.MaxQuestionRunes)
+	}
+	if n == 0 {
+		return answer.MaxQuestionRunes, nil
+	}
+	return n, nil
+}
+
 // TextBadQuestion returns the notice returned when the inquiry is empty, too long, or invalid UTF-8.
 // If maxChars <= 0, answer.MaxQuestionRunes is used.
 func TextBadQuestion(maxChars int) string {
@@ -75,10 +106,12 @@ type HandlerConfig struct {
 	AskTimeout    time.Duration
 	ReplyTimeout  time.Duration
 	Logger        *slog.Logger
-	// SupportChannel names where a person helps. If empty, the default place is used.
-	SupportChannel   string
+	// QuestionMaxChars is the longest question the handler accepts, in runes. Zero means
+	// answer.MaxQuestionRunes.
 	QuestionMaxChars int
-	RenderOptions    answer.RenderOptions
+	// RenderOptions holds the support place and the reply length limit. They apply to every
+	// reply the handler sends. The zero value means the defaults of the answer package.
+	RenderOptions answer.RenderOptions
 }
 
 // Handler coordinates slash command interactions, concurrency limits, and replies.
@@ -89,7 +122,6 @@ type Handler struct {
 	askTimeout       time.Duration
 	replyTimeout     time.Duration
 	logger           *slog.Logger
-	supportChannel   string
 	questionMaxChars int
 	renderOptions    answer.RenderOptions
 
@@ -124,13 +156,9 @@ func NewHandler(cfg HandlerConfig) (*Handler, error) {
 		logger = slog.New(slog.DiscardHandler)
 	}
 
-	questionMaxChars := cfg.QuestionMaxChars
-	if questionMaxChars == 0 {
-		questionMaxChars = answer.MaxQuestionRunes
-	}
-	renderOpts := cfg.RenderOptions
-	if renderOpts.Place == "" {
-		renderOpts.Place = cfg.SupportChannel
+	questionMaxChars, err := validateQuestionMaxChars(cfg.QuestionMaxChars)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Handler{
@@ -140,9 +168,8 @@ func NewHandler(cfg HandlerConfig) (*Handler, error) {
 		askTimeout:       askTimeout,
 		replyTimeout:     replyTimeout,
 		logger:           logger,
-		supportChannel:   cfg.SupportChannel,
 		questionMaxChars: questionMaxChars,
-		renderOptions:    renderOpts,
+		renderOptions:    cfg.RenderOptions,
 	}, nil
 }
 
@@ -287,7 +314,7 @@ func (h *Handler) handleDirectReply(ctx context.Context, in Interaction, text st
 }
 
 func (h *Handler) sendFixedReply(ctx context.Context, in Interaction, text string) {
-	h.sendReply(ctx, in, answer.AppendFooter(text, h.supportChannel))
+	h.sendReply(ctx, in, answer.AppendFooter(text, h.renderOptions.Place))
 }
 
 func (h *Handler) performDefer(ctx context.Context, in Interaction) bool {

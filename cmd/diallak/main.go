@@ -27,7 +27,7 @@ const (
 )
 
 type dependencies struct {
-	registerCommands func(ctx context.Context, token string, guildID uint64, maxQuestionChars ...int) error
+	registerCommands func(ctx context.Context, token string, guildID uint64, maxQuestionChars int) error
 	runDiscord       func(ctx context.Context, cfg discord.BotConfig) error
 }
 
@@ -84,7 +84,7 @@ func executeRegisterCommands(
 	ctx context.Context,
 	cfg config.Config,
 	out io.Writer,
-	register func(ctx context.Context, token string, guildID uint64, maxQuestionChars ...int) error,
+	register func(ctx context.Context, token string, guildID uint64, maxQuestionChars int) error,
 ) error {
 	regCtx, cancel := context.WithTimeout(ctx, registerTimeout)
 	defer cancel()
@@ -132,7 +132,6 @@ func executeBotRun(
 		Asker:            assembly.Pipeline,
 		GuildID:          cfg.GuildID,
 		Logger:           slog.Default(),
-		SupportChannel:   cfg.SupportChannel,
 		QuestionMaxChars: cfg.QuestionMaxChars,
 		MaxConcurrent:    cfg.MaxConcurrentAsks,
 		AskTimeout:       cfg.AskTimeout,

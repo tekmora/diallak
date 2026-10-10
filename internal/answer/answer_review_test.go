@@ -144,8 +144,8 @@ func TestRender_Boundary_NeverExceedsMaxRenderRunes(t *testing.T) {
 
 	// A long answer is cut; every cited source stays, because the text refers to it.
 	long := Render(Answer{Kind: KindAnswer, Text: strings.Repeat("word ", 1000) + "[1][2][3]", Sources: sources}, RenderOptions{})
-	if n := utf8.RuneCountInString(long); n > MaxRenderRunes {
-		t.Fatalf("answer render has %d runes, limit %d", n, MaxRenderRunes)
+	if n := utf8.RuneCountInString(long); n > DefaultMaxRenderRunes {
+		t.Fatalf("answer render has %d runes, limit %d", n, DefaultMaxRenderRunes)
 	}
 	if !strings.HasPrefix(long, LabelAnswer) {
 		t.Fatalf("answer render lost its label: %.80s", long)
@@ -165,8 +165,8 @@ func TestRender_Boundary_NeverExceedsMaxRenderRunes(t *testing.T) {
 		{Kind: KindAnswer, Text: "Answer [1].", Sources: []Source{huge}},
 		{Kind: KindExcerpts, Reason: ReasonNoModel, Sources: []Source{huge}},
 	} {
-		if n := utf8.RuneCountInString(Render(a, RenderOptions{})); n > MaxRenderRunes {
-			t.Fatalf("%s render has %d runes, limit %d", a.Kind, n, MaxRenderRunes)
+		if n := utf8.RuneCountInString(Render(a, RenderOptions{})); n > DefaultMaxRenderRunes {
+			t.Fatalf("%s render has %d runes, limit %d", a.Kind, n, DefaultMaxRenderRunes)
 		}
 	}
 }

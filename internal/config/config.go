@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -127,7 +128,7 @@ func (c Config) HasModel() bool {
 
 // String returns a redacted representation of Config. Token and ModelKey are never printed.
 func (c Config) String() string {
-	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%.2f, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q}",
+	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q}",
 		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, redactSecret(c.ModelKey), c.CorpusDir, c.SupportChannel,
 		c.TopPassages, c.MinScore, c.QuestionMaxChars, c.ExcerptChars, c.ReplyMaxChars, c.MaxConcurrentAsks,
 		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate)
@@ -195,7 +196,7 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	concurrent, askTimeout, modelTimeout, linkTmpl, err := parseOptionalTimeoutsAndTemplate(getenv)
+	concurrent, askTimeout, modelTimeout, linkTmpl, err := parseOptionalTimeoutsAndTemplate(getenv, baseURL != "")
 	if err != nil {
 		return Config{}, err
 	}
@@ -348,7 +349,7 @@ func parseOptionalLimits(getenv func(string) string) (int, float64, int, int, in
 	return passages, minScore, qMax, excerpt, reply, nil
 }
 
-func parseOptionalTimeoutsAndTemplate(getenv func(string) string) (int, time.Duration, time.Duration, string, error) {
+func parseOptionalTimeoutsAndTemplate(getenv func(string) string, hasModel bool) (int, time.Duration, time.Duration, string, error) {
 	concurrent, err := parseOptionalInt(getenv(EnvMaxConcurrentAsks), EnvMaxConcurrentAsks, MinConcurrentAsks, MaxConcurrentAsksLimit)
 	if err != nil {
 		return 0, 0, 0, "", err
@@ -361,7 +362,7 @@ func parseOptionalTimeoutsAndTemplate(getenv func(string) string) (int, time.Dur
 	if err != nil {
 		return 0, 0, 0, "", err
 	}
-	if err := validateTimeoutCrossConstraint(modelTimeout, askTimeout); err != nil {
+	if err := validateTimeoutCrossConstraint(modelTimeout, askTimeout, hasModel); err != nil {
 		return 0, 0, 0, "", err
 	}
 	linkTmpl, err := parseSourceLinkTemplate(getenv(EnvSourceLinkTemplate))
@@ -391,10 +392,10 @@ func parseOptionalFloat(raw, envVar string, minValExclusive, maxValInclusive flo
 	}
 	f, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
-		return 0, fmt.Errorf("%s must be a decimal number in range (0, 1]: %q", envVar, raw)
+		return 0, fmt.Errorf("%s must be a decimal number above %g and at most %g: %q", envVar, minValExclusive, maxValInclusive, raw)
 	}
 	if math.IsNaN(f) || math.IsInf(f, 0) || f <= minValExclusive || f > maxValInclusive {
-		return 0, fmt.Errorf("%s (%s) outside accepted range (0, 1]", envVar, raw)
+		return 0, fmt.Errorf("%s (%s) outside accepted range: above %g and at most %g", envVar, raw, minValExclusive, maxValInclusive)
 	}
 	return f, nil
 }
@@ -424,29 +425,48 @@ func parseSourceLinkTemplate(raw string) (string, error) {
 		return "", fmt.Errorf("%s must start with 'https://'", EnvSourceLinkTemplate)
 	}
 	for _, r := range raw {
-		if unicode.IsSpace(r) || unicode.IsControl(r) {
-			return "", fmt.Errorf("%s contains whitespace or control character", EnvSourceLinkTemplate)
+		// A reply puts the link between angle brackets, so neither may be part of it.
+		if r == ' ' || r == '<' || r == '>' || !unicode.IsPrint(r) {
+			return "", fmt.Errorf("%s holds a space, an angle bracket or a character that is not printable", EnvSourceLinkTemplate)
 		}
 	}
 	placeholders := [3]string{"{repository}", "{revision}", "{path}"}
+	filled := raw
 	for _, p := range placeholders {
 		if count := strings.Count(raw, p); count != 1 {
 			return "", fmt.Errorf("%s must contain placeholder %q exactly once, found %d", EnvSourceLinkTemplate, p, count)
 		}
+		filled = strings.Replace(filled, p, "x", 1)
+	}
+	// With its placeholders filled the template must be a web address with a host and without
+	// a user name: a link in a reply never carries a credential.
+	parsed, err := url.Parse(filled)
+	if err != nil || parsed.Host == "" || parsed.User != nil {
+		return "", fmt.Errorf("%s is not an https address with a host and without a user name", EnvSourceLinkTemplate)
 	}
 	return raw, nil
 }
 
-func validateTimeoutCrossConstraint(modelTimeout, askTimeout time.Duration) error {
-	if modelTimeout == 0 {
+// validateTimeoutCrossConstraint refuses a model timeout that the ask timeout would cut short.
+// A request to the model that runs into its own timeout yields excerpts; one that runs into the
+// ask timeout yields the failure reply, so the model timeout in effect has to end first. The
+// check applies when a model is configured or the model timeout is set, and it counts a value
+// that is not set as its built-in default.
+func validateTimeoutCrossConstraint(modelTimeout, askTimeout time.Duration, hasModel bool) error {
+	if modelTimeout == 0 && !hasModel {
 		return nil
+	}
+	effectiveModel := modelTimeout
+	if effectiveModel == 0 {
+		effectiveModel = model.DefaultTimeout
 	}
 	effectiveAsk := askTimeout
 	if effectiveAsk == 0 {
 		effectiveAsk = DefaultAskTimeout
 	}
-	if modelTimeout >= effectiveAsk {
-		return fmt.Errorf("%s (%v) must be strictly below %s (%v)", EnvModelTimeout, modelTimeout, EnvAskTimeout, effectiveAsk)
+	if effectiveModel >= effectiveAsk {
+		return fmt.Errorf("%s (%v in effect) must be strictly below %s (%v in effect)",
+			EnvModelTimeout, effectiveModel, EnvAskTimeout, effectiveAsk)
 	}
 	return nil
 }

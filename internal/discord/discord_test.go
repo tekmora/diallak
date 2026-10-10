@@ -605,10 +605,10 @@ func TestHandler_Positive_FooterIsLastLineForAdapterTexts(t *testing.T) {
 						},
 					}
 					h, err := NewHandler(HandlerConfig{
-						Asker:          asker,
-						GuildID:        hubGuildID,
-						MaxConcurrent:  1,
-						SupportChannel: p.channel,
+						Asker:         asker,
+						GuildID:       hubGuildID,
+						MaxConcurrent: 1,
+						RenderOptions: answer.RenderOptions{Place: p.channel},
 					})
 					if err != nil {
 						t.Fatalf("NewHandler() = %v", err)

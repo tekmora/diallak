@@ -543,6 +543,12 @@ func TestLoad_Negative_SourceLinkTemplate(t *testing.T) {
 		{"contains space", "https://github.com/ {repository}/blob/{revision}/{path}"},
 		{"contains newline", "https://github.com/{repository}\n/blob/{revision}/{path}"},
 		{"contains tab", "https://github.com/{repository}\t/blob/{revision}/{path}"},
+		{"closing angle bracket", "https://github.com/{repository}>/blob/{revision}/{path}"},
+		{"opening angle bracket", "https://github.com/<{repository}/blob/{revision}/{path}"},
+		{"zero width space", "https://github.com/{repository}\u200b/blob/{revision}/{path}"},
+		{"user name in the address", "https://user@github.com/{repository}/blob/{revision}/{path}"},
+		{"no host", "https:///{repository}/blob/{revision}/{path}"},
+		{"placeholder as host only", "https://{repository}{revision}{path}@"},
 		{"exceeds 200 runes", "https://github.com/{repository}/blob/{revision}/{path}" + strings.Repeat("x", 151)},
 	}
 
@@ -717,7 +723,7 @@ func TestConfig_Positive_StringAndLogValueContainAllFields(t *testing.T) {
 
 	str := cfg.String()
 	for _, field := range []string{
-		"TopPassages:3", "MinScore:0.20", "QuestionMaxChars:500",
+		"TopPassages:3", "MinScore:0.2", "QuestionMaxChars:500",
 		"ExcerptChars:400", "ReplyMaxChars:1900", "MaxConcurrentAsks:4",
 		"AskTimeout:1m0s", "ModelTimeout:45s",
 	} {
@@ -737,5 +743,39 @@ func TestConfig_Positive_StringAndLogValueContainAllFields(t *testing.T) {
 		if !strings.Contains(logText, field) {
 			t.Errorf("LogValue() JSON missing %s: %s", field, logText)
 		}
+	}
+}
+
+func TestLoad_Boundary_AskTimeoutLeavesRoomForTheModelTimeoutInEffect(t *testing.T) {
+	withModel := func(extra map[string]string) map[string]string {
+		base := validBaseEnv(t)
+		base[EnvModelBaseURL] = "https://model.example.com"
+		base[EnvModelAlias] = "router/test"
+		for k, v := range extra {
+			base[k] = v
+		}
+		return base
+	}
+
+	// A model is configured and its timeout is not set: the built-in 45 seconds are in effect.
+	if _, err := Load(env(withModel(map[string]string{EnvAskTimeout: "46s"}))); err != nil {
+		t.Errorf("ask timeout 46s with the built-in model timeout was refused: %v", err)
+	}
+	for _, ask := range []string{"45s", "30s"} {
+		_, err := Load(env(withModel(map[string]string{EnvAskTimeout: ask})))
+		if err == nil {
+			t.Errorf("ask timeout %s with the built-in model timeout was accepted", ask)
+			continue
+		}
+		if !strings.Contains(err.Error(), EnvModelTimeout) || !strings.Contains(err.Error(), EnvAskTimeout) {
+			t.Errorf("error %q does not name both variables", err.Error())
+		}
+	}
+
+	// Without a model the model timeout plays no part, so a short ask timeout is fine.
+	base := validBaseEnv(t)
+	base[EnvAskTimeout] = "30s"
+	if _, err := Load(env(base)); err != nil {
+		t.Errorf("ask timeout 30s without a model was refused: %v", err)
 	}
 }

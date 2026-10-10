@@ -307,10 +307,10 @@ func TestNewHandler_Negative_ValidationErrors(t *testing.T) {
 }
 
 func TestRegisterCommands_Negative_ValidationErrors(t *testing.T) {
-	if err := RegisterCommands(context.Background(), "", 42); err == nil {
+	if err := RegisterCommands(context.Background(), "", 42, 0); err == nil {
 		t.Errorf("RegisterCommands with empty token succeeded, want error")
 	}
-	if err := RegisterCommands(context.Background(), "token", 0); err == nil {
+	if err := RegisterCommands(context.Background(), "token", 0, 0); err == nil {
 		t.Errorf("RegisterCommands with zero guild ID succeeded, want error")
 	}
 }
@@ -848,10 +848,9 @@ func TestRegisterCommands_Positive_RegistrationPayloadDescription(t *testing.T) 
 }
 
 func TestBuildCommandCreate_Boundary_DescriptionLengthWithinLimit(t *testing.T) {
-	// Discord limits application command descriptions to 1-100 characters.
-	// Source: Discord Developer Documentation - Application Command Object Structure:
-	// https://discord.com/developers/docs/interactions/application-commands#application-command-object-application-command-structure
-	// (Table field: "description: Description for CHAT_INPUT commands; 1-100 characters")
+	// The platform limits the description of a command to 100 characters.
+	// Source: Discord API documentation, interactions/application-commands: "1-100 character
+	// description" (github.com/discord/discord-api-docs at 37148620d232, read 2026-10-10).
 	cmd := buildCommandCreate(0)
 	slashCmd, ok := cmd.(discord.SlashCommandCreate)
 	if !ok {

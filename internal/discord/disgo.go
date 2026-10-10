@@ -60,14 +60,10 @@ type BotConfig struct {
 }
 
 // RegisterCommands registers the single guild-scoped /ask command with Discord via REST.
-// If maxQuestionChars is provided, it configures the question option's maximum allowed length;
-// 0 or omitting it applies answer.MaxQuestionRunes.
-func RegisterCommands(ctx context.Context, token string, guildID uint64, maxQuestionChars ...int) error {
-	limit := 0
-	if len(maxQuestionChars) > 0 {
-		limit = maxQuestionChars[0]
-	}
-	return registerCommandsWithOptions(ctx, token, guildID, clientOptions{maxQuestionChars: limit})
+// maxQuestionChars is the longest question the command accepts, in runes; zero means
+// answer.MaxQuestionRunes.
+func RegisterCommands(ctx context.Context, token string, guildID uint64, maxQuestionChars int) error {
+	return registerCommandsWithOptions(ctx, token, guildID, clientOptions{maxQuestionChars: maxQuestionChars})
 }
 
 func registerCommandsWithOptions(ctx context.Context, token string, guildID uint64, opts clientOptions) error {
@@ -76,6 +72,10 @@ func registerCommandsWithOptions(ctx context.Context, token string, guildID uint
 	}
 	if guildID == 0 {
 		return errors.New("guild ID must not be zero")
+	}
+	maxQuestionChars, err := validateQuestionMaxChars(opts.maxQuestionChars)
+	if err != nil {
+		return err
 	}
 
 	var botOpts []bot.ConfigOpt
@@ -94,7 +94,7 @@ func registerCommandsWithOptions(ctx context.Context, token string, guildID uint
 		return err
 	}
 
-	cmd := buildCommandCreate(opts.maxQuestionChars)
+	cmd := buildCommandCreate(maxQuestionChars)
 	commands := []discord.ApplicationCommandCreate{cmd}
 
 	_, err = client.Rest.SetGuildCommands(appID, snowflake.ID(guildID), commands, rest.WithCtx(ctx))

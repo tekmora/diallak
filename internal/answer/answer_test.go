@@ -769,8 +769,8 @@ func TestRender_Boundary_TrimmingOverMaxRenderRunes(t *testing.T) {
 		Sources: sources,
 	}
 	renderedAns := Render(ans, RenderOptions{})
-	if len([]rune(renderedAns)) > MaxRenderRunes {
-		t.Errorf("renderedAns rune count %d > %d", len([]rune(renderedAns)), MaxRenderRunes)
+	if len([]rune(renderedAns)) > DefaultMaxRenderRunes {
+		t.Errorf("renderedAns rune count %d > %d", len([]rune(renderedAns)), DefaultMaxRenderRunes)
 	}
 	if !strings.Contains(renderedAns, "[1] Title 1 - Heading 1") {
 		t.Errorf("renderedAns dropped first source line: %s", renderedAns)
@@ -783,8 +783,8 @@ func TestRender_Boundary_TrimmingOverMaxRenderRunes(t *testing.T) {
 		Sources: sources,
 	}
 	renderedExc := Render(exc, RenderOptions{})
-	if len([]rune(renderedExc)) > MaxRenderRunes {
-		t.Errorf("renderedExc rune count %d > %d", len([]rune(renderedExc)), MaxRenderRunes)
+	if len([]rune(renderedExc)) > DefaultMaxRenderRunes {
+		t.Errorf("renderedExc rune count %d > %d", len([]rune(renderedExc)), DefaultMaxRenderRunes)
 	}
 	if !strings.Contains(renderedExc, "[1] Title 1 - Heading 1") {
 		t.Errorf("renderedExc dropped first source line: %s", renderedExc)
@@ -959,8 +959,8 @@ func TestRender_Boundary_LimitWith64RuneMultiBytePlace(t *testing.T) {
 
 		result := Render(ans, RenderOptions{Place: place64})
 		runeCount := utf8.RuneCountInString(result)
-		if runeCount > MaxRenderRunes {
-			t.Fatalf("RuneCountInString = %d, exceeds MaxRenderRunes %d", runeCount, MaxRenderRunes)
+		if runeCount > DefaultMaxRenderRunes {
+			t.Fatalf("RuneCountInString = %d, exceeds DefaultMaxRenderRunes %d", runeCount, DefaultMaxRenderRunes)
 		}
 		if !strings.HasSuffix(result, "\n\n"+wantFooter) {
 			t.Fatalf("result does not end with full footer %q; tail is: %q", wantFooter, result[len(result)-len(wantFooter)-10:])
@@ -989,8 +989,8 @@ func TestRender_Boundary_LimitWith64RuneMultiBytePlace(t *testing.T) {
 
 		result := Render(exc, RenderOptions{Place: place64})
 		runeCount := utf8.RuneCountInString(result)
-		if runeCount > MaxRenderRunes {
-			t.Fatalf("RuneCountInString = %d, exceeds MaxRenderRunes %d", runeCount, MaxRenderRunes)
+		if runeCount > DefaultMaxRenderRunes {
+			t.Fatalf("RuneCountInString = %d, exceeds DefaultMaxRenderRunes %d", runeCount, DefaultMaxRenderRunes)
 		}
 		if !strings.HasSuffix(result, "\n\n"+wantFooter) {
 			t.Fatalf("result does not end with full footer %q", wantFooter)

@@ -114,15 +114,14 @@ const (
 	DefaultMaxAnswerRunes = 1200
 	// MinRenderRunes is the minimum allowed rendered chat message output in runes.
 	MinRenderRunes = 500
-	// MaxAllowedRenderRunes is the Discord platform limit for message content in characters.
-	// Source: Discord Developer Documentation - Create Message (https://discord.com/developers/docs/resources/message#create-message):
-	// "content: the message contents (up to 2000 characters)".
+	// MaxAllowedRenderRunes is the platform's limit for the text of one message.
+	// Source: Discord API documentation, resources/message, "Create Message" and "Edit Message":
+	// "Message contents (up to 2000 characters)" (github.com/discord/discord-api-docs at
+	// 37148620d232, read 2026-10-10). The platform counts the characters; this package counts runes.
 	MaxAllowedRenderRunes = 2000
-	// DefaultMaxRenderRunes is the default upper limit for rendered chat message output in runes.
-	// Source: chosen, not measured (provides 100 runes of safety margin below MaxAllowedRenderRunes).
+	// DefaultMaxRenderRunes is the default limit for a rendered reply in runes.
+	// Source: chosen, not measured; it keeps 100 runes below MaxAllowedRenderRunes.
 	DefaultMaxRenderRunes = 1900
-	// MaxRenderRunes is retained for backwards compatibility.
-	MaxRenderRunes = DefaultMaxRenderRunes
 	// UserPromptMaxChunkRunes bounds chunk text embedded in the model prompt.
 	UserPromptMaxChunkRunes = 1500
 	// LabelAnswer is the mandatory disclosure label for AI-generated answers.
@@ -162,8 +161,8 @@ type Pipeline struct {
 
 // New constructs and validates a new Pipeline instance.
 //
-// Options with Limit 0 are replaced by retrieval.DefaultLimit. A zero MinScore is replaced by
-// retrieval.DefaultMinScore. A nil Generator means no model: every reply is then an excerpt reply.
+// Options with Limit 0 are replaced by retrieval.DefaultOptions(), since no search can run with
+// that limit. A nil Generator means no model: every reply is then an excerpt reply.
 func New(cfg Config) (*Pipeline, error) {
 	if cfg.Retriever == nil {
 		return nil, errors.New("retriever is required")
@@ -442,7 +441,7 @@ func AppendFooter(text, place string) string {
 
 // Render formats an Answer into plain text for a chat message, appending the disclosure footer.
 //
-// The result never exceeds MaxRenderRunes (or opts.MaxRunes) including the footer. The footer is never cut and
+// The result never exceeds opts.MaxRunes (DefaultMaxRenderRunes when zero) including the footer. The footer is never cut and
 // never dropped. An answer text that is too long is cut and marked with "..."; its source
 // lines stay, because the text refers to them. Source lines are dropped from the end only
 // when they would leave less than minAnswerRunes for the text. Excerpt replies drop trailing

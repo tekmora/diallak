@@ -92,19 +92,29 @@ deployment sets the two variables until the gates of
 
 ### Optional settings
 
+Each of these has a built-in default. A value outside its range stops the start
+with a message that names the variable
+([`internal/config`](internal/config/config.go)).
+
 <!-- markdownlint-disable MD013 -->
-| Name | Default | Range |
-| :--- | :--- | :--- |
-| `DIALLAK_TOP_PASSAGES` | `3` | `1..10` |
-| `DIALLAK_MIN_SCORE` | `0.20` | greater than 0, at most 1 |
-| `DIALLAK_QUESTION_MAX_CHARS` | `500` | `1..500` |
-| `DIALLAK_EXCERPT_CHARS` | `400` | `50..1000` |
-| `DIALLAK_REPLY_MAX_CHARS` | `1900` | `500..2000` |
-| `DIALLAK_MAX_CONCURRENT_ASKS` | `4` | `1..64` |
-| `DIALLAK_ASK_TIMEOUT` | `60s` | `1s..10m` |
-| `DIALLAK_MODEL_TIMEOUT` | `45s` | `1s..2m` and strictly below ask timeout |
-| `DIALLAK_SOURCE_LINK_TEMPLATE` | `https://github.com/{repository}/blob/{revision}/{path}` | `https://` URI with `{repository}`, `{revision}`, `{path}`, at most 200 chars |
+| Variable | What it sets | Default | Range |
+| :--- | :--- | :--- | :--- |
+| `DIALLAK_TOP_PASSAGES` | How many documentation passages a reply rests on at most | `3` | `1` to `10` |
+| `DIALLAK_MIN_SCORE` | How well a passage must match the question to count as a source | `0.20` | above `0`, at most `1` |
+| `DIALLAK_QUESTION_MAX_CHARS` | Longest question the bot accepts, in characters | `500` | `1` to `500` |
+| `DIALLAK_EXCERPT_CHARS` | Longest excerpt shown per source, in characters | `400` | `50` to `1000` |
+| `DIALLAK_REPLY_MAX_CHARS` | Longest reply, in characters; Discord allows 2000 | `1900` | `500` to `2000` |
+| `DIALLAK_MAX_CONCURRENT_ASKS` | How many questions are answered at the same time; one more gets the busy reply | `4` | `1` to `64` |
+| `DIALLAK_ASK_TIMEOUT` | Time one question may take in total | `60s` | `1s` to `10m` |
+| `DIALLAK_MODEL_TIMEOUT` | Time one request to the model endpoint may take | `45s` | `1s` to `5m`, and below the ask timeout |
+| `DIALLAK_SOURCE_LINK_TEMPLATE` | Shape of the link to a source | `https://github.com/{repository}/blob/{revision}/{path}` | an `https://` address that holds each of the three placeholders once, at most 200 characters |
 <!-- markdownlint-enable MD013 -->
+
+The question limit also sets the length the `/ask` command accepts, so a change
+needs the registration step below to reach the server. Where each default comes
+from is stated at its constant: most are chosen, not measured; the score comes
+from the evaluation in
+[`internal/eval`](internal/eval/testdata/snatcharr/README.md).
 
 ### The documentation directory
 
