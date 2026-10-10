@@ -13,9 +13,10 @@ facets:
   - security:high
   - agent:sandboxed
 # Overrides only raise strictness, except the explicit review mode below, which permits
-# single-maintainer operation as in cordanaLLM/praetor and lusoris/SnatchArr. Restore independent
-# review when a second maintainer or a review bot can approve; the required count stays so that
-# restoration keeps the minimum.
+# single-maintainer operation as in cordanaLLM/praetor and lusoris/SnatchArr. Owner-approved by the
+# standing policy for solo repositories of 2026-10-09, applied here on 2026-10-10. Restore
+# independent review when a second maintainer or a review bot can approve; the required count stays
+# so that restoration keeps the minimum.
 overrides:
   branch_protection:
     enforce_linear_history: true
