@@ -123,6 +123,25 @@ The application is shared with the bot that runs today
 ([ADR-0001](docs/adr/0001-architecture-and-boundaries.md)), so this step replaces that bot's
 commands in the server. It belongs to the cutover and is the operator's act.
 
+## Release
+
+Publishing a GitHub release with a tag `vX.Y.Z` builds the container image
+`ghcr.io/tekmora/discord-bot:X.Y.Z` ([`release.yml`](.github/workflows/release.yml)). There is no
+`latest` tag. Merging to `main` releases nothing.
+
+The image is built in a reusable workflow of its own
+([`release-image.yml`](.github/workflows/release-image.yml)) that also signs it with cosign, attests
+its build provenance and writes an SBOM, which is attached to the release. To check a signature:
+
+```bash
+cosign verify ghcr.io/tekmora/discord-bot:X.Y.Z \
+  --certificate-identity-regexp 'https://github.com/tekmora/discord-bot/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+No release exists yet. On the current plan GitHub offers build attestations for public repositories
+only, so the first release waits until this repository is public.
+
 ## Develop
 
 ```bash
