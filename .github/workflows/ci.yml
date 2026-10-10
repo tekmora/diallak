@@ -1,10 +1,16 @@
+---
 name: CI
 
-on:
+# The triggers and the first step of each job follow the engine's hosted gate
+# shape: a push runs on main only, and a draft pull request fails each check in
+# its first step instead of running the job. Marking the draft ready starts the
+# run that replaces the failure.
+'on':
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+  merge_group:
 
 permissions:
   contents: read
@@ -16,49 +22,92 @@ concurrency:
 jobs:
   go:
     name: build and test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Stop on a draft pull request
+        if: github.event.pull_request.draft == true
+        shell: bash
+        env:
+          TITLE: Gate not run on a draft
+          MESSAGE: >-
+            The gate did not run because the pull request is a draft.
+            It runs when the pull request is marked ready for review.
+        run: |
+          echo "::error title=$TITLE::$MESSAGE"
+          echo "$MESSAGE" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+      # yamllint disable-line rule:line-length
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        if: github.event.pull_request.draft != true
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      # yamllint disable-line rule:line-length
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        if: github.event.pull_request.draft != true
         with:
           go-version-file: go.mod
           cache: false
       - name: Build
+        if: github.event.pull_request.draft != true
         run: go build ./...
       - name: Vet
+        if: github.event.pull_request.draft != true
         run: go vet ./...
       - name: Test
+        if: github.event.pull_request.draft != true
         run: go test -race ./...
       # The release workflow refuses a tag without a changelog section through
       # this script, so its refusals are tested on every change.
       - name: Release notes script
+        if: github.event.pull_request.draft != true
         run: sh .github/scripts/release-notes_test.sh
 
   governance:
     name: governance (praetor)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Stop on a draft pull request
+        if: github.event.pull_request.draft == true
+        shell: bash
+        env:
+          TITLE: Gate not run on a draft
+          MESSAGE: >-
+            The gate did not run because the pull request is a draft.
+            It runs when the pull request is marked ready for review.
+        run: |
+          echo "::error title=$TITLE::$MESSAGE"
+          echo "$MESSAGE" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+      # yamllint disable-line rule:line-length
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        if: github.event.pull_request.draft != true
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      # yamllint disable-line rule:line-length
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        if: github.event.pull_request.draft != true
         with:
           go-version-file: go.mod
           cache: false
-      # PRAETOR_REF is the repository's engine pin: the git hooks and make read it from here
-      # (.config/lefthook/engine.sh) and run the same engine CI installs. One value only.
+      # PRAETOR_REF is the repository's engine pin: the git hooks and make read
+      # it from here (.config/lefthook/engine.sh) and run the same engine CI
+      # installs. One value only. The install lines run past 80 columns, so
+      # yamllint's line-length rule is off for this step alone.
+      # yamllint disable rule:line-length
       - name: Install praetorctl
+        if: github.event.pull_request.draft != true
         env:
           PRAETOR_REF: 9615f1b907cc7e677a3ae71f6e864deb4450b9de
         run: |
           go install "github.com/cordanaLLM/praetor/cmd/standardsctl@${PRAETOR_REF}"
           ln -s "$(go env GOPATH)/bin/standardsctl" "$(go env GOPATH)/bin/praetorctl"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      # yamllint enable rule:line-length
       - name: Context integrity
+        if: github.event.pull_request.draft != true
         run: praetorctl compile-context --verify
       - name: HISS audit
+        if: github.event.pull_request.draft != true
         run: praetorctl audit
