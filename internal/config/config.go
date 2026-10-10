@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -15,32 +17,137 @@ const (
 	EnvTokenFile = "DISCORD_BOT_TOKEN_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
 	// EnvGuildID names the variable holding the snowflake of the hub guild.
 	EnvGuildID = "DISCORD_BOT_GUILD_ID"
-	// MaxTokenBytes bounds the token file. A Discord bot token is far shorter.
+	// EnvModelBaseURL names the variable holding the base URL of the model endpoint.
+	EnvModelBaseURL = "DISCORD_BOT_MODEL_BASE_URL"
+	// EnvModelAlias names the variable holding the model routing alias.
+	EnvModelAlias = "DISCORD_BOT_MODEL_ALIAS"
+	// EnvModelKeyFile names the variable holding the path of the optional model API key file.
+	EnvModelKeyFile = "DISCORD_BOT_MODEL_KEY_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
+	// EnvCorpusDir names the variable holding the absolute path of the documentation corpus directory.
+	EnvCorpusDir = "DISCORD_BOT_CORPUS_DIR"
+	// MaxTokenBytes bounds secret files (both bot token and model key).
 	MaxTokenBytes = 4096
 )
 
 // Config is the validated configuration of one bot process.
 type Config struct {
 	// Token is the Discord bot token. It comes from a file, never from the environment itself,
-	// and must never be logged.
-	Token string
+	// and must never be logged. It is left out of JSON encodings.
+	Token string `json:"-"`
 	// GuildID is the snowflake of the hub guild the bot serves.
 	GuildID uint64
+	// ModelBaseURL is the base URL of the OpenAI-compatible model endpoint.
+	ModelBaseURL string
+	// ModelAlias is the routing name passed in model completion requests.
+	ModelAlias string
+	// ModelKey is the optional API key for the model endpoint. It is never logged and is left out
+	// of JSON encodings.
+	ModelKey string `json:"-"`
+	// CorpusDir is the absolute path to the local directory holding the corpus manifest and sources.
+	CorpusDir string
+}
+
+// HasModel reports whether a model endpoint is configured.
+func (c Config) HasModel() bool {
+	return c.ModelBaseURL != "" && c.ModelAlias != ""
+}
+
+// String returns a redacted representation of Config. Token and ModelKey are never printed.
+func (c Config) String() string {
+	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelKey:%q, CorpusDir:%q}",
+		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, redactSecret(c.ModelKey), c.CorpusDir)
+}
+
+// GoString returns a redacted representation of Config for Go syntax formatting.
+func (c Config) GoString() string {
+	return c.String()
+}
+
+// LogValue implements slog.LogValuer to ensure secrets are redacted in structured logs.
+func (c Config) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("Token", redactSecret(c.Token)),
+		slog.Uint64("GuildID", c.GuildID),
+		slog.String("ModelBaseURL", c.ModelBaseURL),
+		slog.String("ModelAlias", c.ModelAlias),
+		slog.String("ModelKey", redactSecret(c.ModelKey)),
+		slog.String("CorpusDir", c.CorpusDir),
+	)
+}
+
+func redactSecret(s string) string {
+	if s == "" {
+		return ""
+	}
+	return "[redacted]"
 }
 
 // Load reads the configuration through getenv. It fails closed: a missing variable, an
-// unreadable, empty or oversized token file, or a guild id that is not a non-zero decimal
-// snowflake is an error.
+// unreadable, empty or oversized secret file, an invalid corpus directory, or invalid
+// model configuration is an error.
 func Load(getenv func(string) string) (Config, error) {
 	guild, err := parseGuildID(getenv(EnvGuildID))
 	if err != nil {
 		return Config{}, err
 	}
-	token, err := readToken(getenv(EnvTokenFile))
+	token, err := readSecretFile(getenv(EnvTokenFile), EnvTokenFile, "token")
 	if err != nil {
 		return Config{}, err
 	}
-	return Config{Token: token, GuildID: guild}, nil
+	corpusDir, err := parseCorpusDir(getenv(EnvCorpusDir))
+	if err != nil {
+		return Config{}, err
+	}
+	baseURL, alias, key, err := parseModelConfig(getenv)
+	if err != nil {
+		return Config{}, err
+	}
+	return Config{
+		Token:        token,
+		GuildID:      guild,
+		ModelBaseURL: baseURL,
+		ModelAlias:   alias,
+		ModelKey:     key,
+		CorpusDir:    corpusDir,
+	}, nil
+}
+
+func parseCorpusDir(raw string) (string, error) {
+	if raw == "" {
+		return "", fmt.Errorf("%s is not set", EnvCorpusDir)
+	}
+	if !filepath.IsAbs(raw) {
+		return "", fmt.Errorf("%s must be an absolute path: %q", EnvCorpusDir, raw)
+	}
+	return raw, nil
+}
+
+func parseModelConfig(getenv func(string) string) (string, string, string, error) {
+	baseURL := getenv(EnvModelBaseURL)
+	alias := getenv(EnvModelAlias)
+	keyFile := getenv(EnvModelKeyFile)
+
+	hasBase := baseURL != ""
+	hasAlias := alias != ""
+	if hasBase != hasAlias {
+		return "", "", "", fmt.Errorf("%s and %s must both be set or both be unset", EnvModelBaseURL, EnvModelAlias)
+	}
+	if !hasBase {
+		if keyFile != "" {
+			return "", "", "", fmt.Errorf("%s is set but no model is configured", EnvModelKeyFile)
+		}
+		return "", "", "", nil
+	}
+
+	var key string
+	if keyFile != "" {
+		readKey, err := readSecretFile(keyFile, EnvModelKeyFile, "model key")
+		if err != nil {
+			return "", "", "", err
+		}
+		key = readKey
+	}
+	return baseURL, alias, key, nil
 }
 
 func parseGuildID(raw string) (uint64, error) {
@@ -57,29 +164,29 @@ func parseGuildID(raw string) (uint64, error) {
 	return id, nil
 }
 
-func readToken(path string) (token string, err error) {
+func readSecretFile(path, envVar, description string) (secret string, err error) {
 	if path == "" {
-		return "", fmt.Errorf("%s is not set", EnvTokenFile)
+		return "", fmt.Errorf("%s is not set", envVar)
 	}
-	file, err := os.Open(path) // #nosec G304 -- the operator names the token file.
+	file, err := os.Open(path) // #nosec G304 -- the operator names the secret file.
 	if err != nil {
-		return "", fmt.Errorf("open token file: %w", err)
+		return "", fmt.Errorf("open %s file: %w", description, err)
 	}
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("close token file: %w", closeErr))
+			err = errors.Join(err, fmt.Errorf("close %s file: %w", description, closeErr))
 		}
 	}()
 	data, err := io.ReadAll(io.LimitReader(file, MaxTokenBytes+1))
 	if err != nil {
-		return "", fmt.Errorf("read token file: %w", err)
+		return "", fmt.Errorf("read %s file: %w", description, err)
 	}
 	if len(data) > MaxTokenBytes {
-		return "", fmt.Errorf("token file is larger than %d bytes", MaxTokenBytes)
+		return "", fmt.Errorf("%s file is larger than %d bytes", description, MaxTokenBytes)
 	}
-	token = strings.TrimSpace(string(data))
-	if token == "" {
-		return "", errors.New("token file is empty")
+	secret = strings.TrimSpace(string(data))
+	if secret == "" {
+		return "", fmt.Errorf("%s file is empty", description)
 	}
-	return token, nil
+	return secret, nil
 }
