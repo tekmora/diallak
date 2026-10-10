@@ -53,7 +53,8 @@ type Client struct {
 // Alias must match ^[A-Za-z0-9._:/-]{1,128}$.
 // Timeout must be positive and at most MaxTimeout (0 uses DefaultTimeout).
 // MaxOutputTokens must be between 1 and 4096 (0 uses DefaultMaxOutputTokens).
-// If hc is nil, an isolated http.Client without global state is created.
+// If hc is nil, New creates its own http.Client. That client follows no redirect: a redirecting
+// endpoint is an error. A caller that passes hc decides its redirect policy itself.
 // Error text never contains cfg.APIKey.
 func New(cfg Config, hc *http.Client) (*Client, error) {
 	if err := validateBaseURL(cfg.BaseURL); err != nil {
@@ -75,7 +76,7 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 
 	client := hc
 	if client == nil {
-		client = &http.Client{}
+		client = &http.Client{CheckRedirect: refuseRedirect}
 	}
 
 	return &Client{
@@ -86,6 +87,12 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 		maxTokens:  maxTokens,
 		httpClient: client,
 	}, nil
+}
+
+// refuseRedirect keeps the prompt and the credential at the configured endpoint: the response
+// that redirects is returned as it is, and Complete reports its status as an error.
+func refuseRedirect(*http.Request, []*http.Request) error {
+	return http.ErrUseLastResponse
 }
 
 func validateBaseURL(rawURL string) error {

@@ -569,3 +569,35 @@ func TestComplete_Negative_NeverLeaksAPIKey(t *testing.T) {
 		t.Fatalf("Complete() error leaked APIKey: %s", completeErr.Error())
 	}
 }
+
+func TestComplete_Negative_DefaultClientRefusesRedirects(t *testing.T) {
+	var followed bool
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		followed = true
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"redirected"}}]}`)); err != nil {
+			t.Errorf("write response: %v", err)
+		}
+	}))
+	t.Cleanup(target.Close)
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/chat/completions", http.StatusTemporaryRedirect)
+	}))
+	t.Cleanup(redirector.Close)
+
+	// The prompt and the credential go to the configured endpoint only. A redirect is an error.
+	client, err := New(Config{BaseURL: redirector.URL, Alias: "router/test", APIKey: "key-for-redirect-test"}, nil)
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+	out, err := client.Complete(context.Background(), "system", "user")
+	if err == nil {
+		t.Fatalf("Complete() = %q, want an error for a redirecting endpoint", out)
+	}
+	if followed {
+		t.Fatalf("the client followed the redirect and sent the request to another URL")
+	}
+	if !strings.Contains(err.Error(), "307") {
+		t.Fatalf("error = %v, want it to name status 307", err)
+	}
+}
