@@ -1,13 +1,26 @@
 package discord
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/disgoorg/disgo"
+	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/rest"
 	"github.com/disgoorg/snowflake/v2"
 
 	"github.com/tekmora/diallak/internal/answer"
@@ -322,5 +335,434 @@ func TestRun_Negative_ValidationErrors(t *testing.T) {
 				t.Errorf("Run() with %s succeeded, want error", tc.name)
 			}
 		})
+	}
+}
+
+// makeFakeToken creates a synthetic bot token whose first dot-separated segment encodes the ID.
+// NOTE: This is a synthetic test token for unit testing and is not a real credential.
+func makeFakeToken(id uint64) string {
+	seg := base64.RawStdEncoding.EncodeToString([]byte(strconv.FormatUint(id, 10)))
+	return seg + ".synthetic-test-token.not-a-real-credential"
+}
+
+type recordedRequest struct {
+	method string
+	path   string
+	body   []byte
+}
+
+func assertRecordedCommandPath(t *testing.T, recorded []recordedRequest, idA, idB, guildID uint64) {
+	t.Helper()
+	var cmdReq *recordedRequest
+	for i := range recorded {
+		if recorded[i].method == http.MethodPut && strings.Contains(recorded[i].path, "/commands") {
+			cmdReq = &recorded[i]
+			break
+		}
+	}
+	if cmdReq == nil {
+		t.Fatalf("no command list PUT request was recorded")
+	}
+
+	wantPath := fmt.Sprintf("/applications/%d/guilds/%d/commands", idB, guildID)
+	if cmdReq.path != wantPath {
+		t.Errorf("request path = %q, want %q", cmdReq.path, wantPath)
+	}
+	if strings.Contains(cmdReq.path, strconv.FormatUint(idA, 10)) {
+		t.Errorf("request path contains token-derived id %d: %q", idA, cmdReq.path)
+	}
+
+	assertAskCommandBody(t, cmdReq.body)
+}
+
+func assertAskCommandBody(t *testing.T, body []byte) {
+	t.Helper()
+	var cmds []struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Options     []struct {
+			Name string `json:"name"`
+		} `json:"options"`
+	}
+	if err := json.Unmarshal(body, &cmds); err != nil {
+		t.Fatalf("unmarshal command list body: %v", err)
+	}
+	if len(cmds) != 1 {
+		t.Fatalf("commands len = %d, want 1", len(cmds))
+	}
+	if cmds[0].Name != CommandName {
+		t.Errorf("command name = %q, want %q", cmds[0].Name, CommandName)
+	}
+	if len(cmds[0].Options) != 1 || cmds[0].Options[0].Name != OptionQuestion {
+		t.Errorf("command options = %+v, want option %q", cmds[0].Options, OptionQuestion)
+	}
+}
+
+func writeTestResponse(w http.ResponseWriter, status int, body string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if _, err := io.WriteString(w, body); err != nil {
+		http.Error(w, "write error", http.StatusInternalServerError)
+	}
+}
+
+func TestRegisterCommands_Positive_MismatchFixtureUsesPlatformID(t *testing.T) {
+	const (
+		idA     uint64 = 111111111111111111
+		idB     uint64 = 222222222222222222
+		guildID uint64 = 333333333333333333
+	)
+
+	// fakeToken encodes ID A in its first segment; the server reports application ID B.
+	// NOTE: This synthetic token is used only for testing and is not a real credential.
+	fakeToken := makeFakeToken(idA)
+
+	var mu sync.Mutex
+	var recorded []recordedRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "read error", http.StatusInternalServerError)
+			return
+		}
+		mu.Lock()
+		recorded = append(recorded, recordedRequest{method: r.Method, path: r.URL.Path, body: body})
+		mu.Unlock()
+
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/applications/@me":
+			writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"diallak-app"}`, idB))
+		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/applications/"):
+			writeTestResponse(w, http.StatusOK, "[]")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	opts := clientOptions{restURL: srv.URL}
+	if err := registerCommandsWithOptions(context.Background(), fakeToken, guildID, opts); err != nil {
+		t.Fatalf("registerCommandsWithOptions failed: %v", err)
+	}
+
+	mu.Lock()
+	copied := append([]recordedRequest(nil), recorded...)
+	mu.Unlock()
+	assertRecordedCommandPath(t, copied, idA, idB, guildID)
+}
+
+func TestRegisterCommands_NegativeControl_FailsIfTokenDerivedIDUsed(t *testing.T) {
+	const (
+		idA     uint64 = 444444444444444444
+		idB     uint64 = 555555555555555555
+		guildID uint64 = 666666666666666666
+	)
+	// fakeToken encodes ID A, server returns ID B.
+	// NOTE: This synthetic token is used only for testing and is not a real credential.
+	fakeToken := makeFakeToken(idA)
+
+	var mu sync.Mutex
+	var recorded []recordedRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "read error", http.StatusInternalServerError)
+			return
+		}
+		mu.Lock()
+		recorded = append(recorded, recordedRequest{method: r.Method, path: r.URL.Path, body: body})
+		mu.Unlock()
+
+		if r.Method == http.MethodGet && r.URL.Path == "/applications/@me" {
+			writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"diallak-app"}`, idB))
+			return
+		}
+		writeTestResponse(w, http.StatusOK, "[]")
+	}))
+	defer srv.Close()
+
+	if err := registerCommandsWithOptions(context.Background(), fakeToken, guildID, clientOptions{restURL: srv.URL}); err != nil {
+		t.Fatalf("registerCommandsWithOptions failed: %v", err)
+	}
+
+	mu.Lock()
+	copied := append([]recordedRequest(nil), recorded...)
+	mu.Unlock()
+	assertRecordedCommandPath(t, copied, idA, idB, guildID)
+}
+
+func TestRegisterCommands_Negative_LookupFailuresFailClosed(t *testing.T) {
+	cleanupCh := make(chan struct{})
+	t.Cleanup(func() { close(cleanupCh) })
+
+	const (
+		idA     uint64 = 111111111111111111
+		guildID uint64 = 333333333333333333
+	)
+	// NOTE: synthetic token for unit testing, not a real credential.
+	fakeToken := makeFakeToken(idA)
+
+	cases := []struct {
+		name    string
+		handler http.HandlerFunc
+		ctxFn   func() (context.Context, context.CancelFunc)
+	}{
+		{
+			name: "status 401",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				writeTestResponse(w, http.StatusUnauthorized, `{"message":"401: Unauthorized","code":0}`)
+			},
+		},
+		{
+			name: "status 500",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				writeTestResponse(w, http.StatusInternalServerError, `{"message":"Internal Server Error","code":0}`)
+			},
+		},
+		{
+			name: "malformed JSON",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				writeTestResponse(w, http.StatusOK, `{not valid json`)
+			},
+		},
+		{
+			name: "empty id",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				writeTestResponse(w, http.StatusOK, `{"name":"diallak-app","description":"no id field"}`)
+			},
+		},
+		{
+			name: "server slower than deadline",
+			handler: func(_ http.ResponseWriter, r *http.Request) {
+				select {
+				case <-cleanupCh:
+				case <-r.Context().Done():
+				}
+			},
+			ctxFn: func() (context.Context, context.CancelFunc) {
+				return context.WithTimeout(context.Background(), 20*time.Millisecond)
+			},
+		},
+		{
+			name: "cancelled ctx",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				writeTestResponse(w, http.StatusOK, `{"id":"222222222222222222"}`)
+			},
+			ctxFn: func() (context.Context, context.CancelFunc) {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx, cancel
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runLookupFailureCase(t, tc.handler, tc.ctxFn, fakeToken, guildID)
+		})
+	}
+}
+
+func runLookupFailureCase(
+	t *testing.T,
+	handler http.HandlerFunc,
+	ctxFn func() (context.Context, context.CancelFunc),
+	token string,
+	guildID uint64,
+) {
+	t.Helper()
+	var mu sync.Mutex
+	var commandRequests int
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		if strings.Contains(r.URL.Path, "/commands") {
+			commandRequests++
+		}
+		mu.Unlock()
+		handler(w, r)
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	if ctxFn != nil {
+		c, cancel := ctxFn()
+		defer cancel()
+		ctx = c
+	}
+
+	err := registerCommandsWithOptions(ctx, token, guildID, clientOptions{restURL: srv.URL})
+	if err == nil {
+		t.Fatalf("registerCommandsWithOptions succeeded, want error")
+	}
+	if strings.Contains(err.Error(), token) {
+		t.Errorf("error contains token: %v", err)
+	}
+
+	mu.Lock()
+	cmds := commandRequests
+	mu.Unlock()
+	if cmds != 0 {
+		t.Errorf("server recorded %d command requests, want 0", cmds)
+	}
+}
+
+func TestPreGatewayStep_Positive_LookupOkReturnsIDAndOpensGateway(t *testing.T) {
+	const (
+		idA     uint64 = 111111111111111111
+		idB     uint64 = 222222222222222222
+		guildID uint64 = 333333333333333333
+	)
+	// NOTE: synthetic token for unit testing, not a real credential.
+	fakeToken := makeFakeToken(idA)
+
+	var logBuf bytes.Buffer
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/applications/@me" {
+			writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"diallak-app"}`, idB))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	client, err := disgo.New(fakeToken, bot.WithRestClientConfigOpts(rest.WithURL(srv.URL)))
+	if err != nil {
+		t.Fatalf("disgo.New failed: %v", err)
+	}
+	defer client.Close(context.Background())
+
+	var gatewayOpened bool
+	opts := clientOptions{
+		restURL: srv.URL,
+		openGateway: func(_ context.Context, _ *bot.Client, _ string) error {
+			gatewayOpened = true
+			return nil
+		},
+	}
+
+	cfg := BotConfig{
+		Token:   fakeToken,
+		GuildID: guildID,
+		Logger:  slog.New(slog.NewJSONHandler(&logBuf, nil)),
+	}
+
+	gotID, err := preGatewayStep(context.Background(), cfg, client, opts)
+	if err != nil {
+		t.Fatalf("preGatewayStep failed: %v", err)
+	}
+	if gotID != snowflake.ID(idB) {
+		t.Errorf("preGatewayStep appID = %v, want %d", gotID, idB)
+	}
+	if !gatewayOpened {
+		t.Errorf("gatewayOpened = false, want true")
+	}
+
+	logText := logBuf.String()
+	if !strings.Contains(logText, `"application_id"`) || !strings.Contains(logText, fmt.Sprint(idB)) {
+		t.Errorf("log output missing application_id: %s", logText)
+	}
+	if !strings.Contains(logText, `"matches_token_id":false`) {
+		t.Errorf("log output missing matches_token_id false: %s", logText)
+	}
+	if strings.Contains(logText, fakeToken) {
+		t.Errorf("log output contains token: %s", logText)
+	}
+}
+
+func TestPreGatewayStep_Negative_LookupErrorGatewayNeverOpened(t *testing.T) {
+	const (
+		idA     uint64 = 111111111111111111
+		guildID uint64 = 333333333333333333
+	)
+	// NOTE: synthetic token for unit testing, not a real credential.
+	fakeToken := makeFakeToken(idA)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	client, err := disgo.New(fakeToken, bot.WithRestClientConfigOpts(rest.WithURL(srv.URL)))
+	if err != nil {
+		t.Fatalf("disgo.New failed: %v", err)
+	}
+	defer client.Close(context.Background())
+
+	var gatewayOpened bool
+	opts := clientOptions{
+		restURL: srv.URL,
+		openGateway: func(_ context.Context, _ *bot.Client, _ string) error {
+			gatewayOpened = true
+			return nil
+		},
+	}
+
+	cfg := BotConfig{
+		Token:   fakeToken,
+		GuildID: guildID,
+		Logger:  slog.New(slog.DiscardHandler),
+	}
+
+	_, err = preGatewayStep(context.Background(), cfg, client, opts)
+	if err == nil {
+		t.Fatalf("preGatewayStep succeeded, want error")
+	}
+	if gatewayOpened {
+		t.Errorf("gatewayOpened = true on lookup error, want false")
+	}
+	if strings.Contains(err.Error(), fakeToken) {
+		t.Errorf("error contains token: %v", err)
+	}
+}
+
+func TestPreGatewayStep_Positive_MatchesTokenIDTrue(t *testing.T) {
+	const (
+		idA     uint64 = 111111111111111111
+		guildID uint64 = 333333333333333333
+	)
+	// NOTE: synthetic token for unit testing, not a real credential.
+	fakeToken := makeFakeToken(idA)
+
+	var logBuf bytes.Buffer
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/applications/@me" {
+			writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"diallak-app"}`, idA))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	client, err := disgo.New(fakeToken, bot.WithRestClientConfigOpts(rest.WithURL(srv.URL)))
+	if err != nil {
+		t.Fatalf("disgo.New failed: %v", err)
+	}
+	defer client.Close(context.Background())
+
+	opts := clientOptions{
+		restURL: srv.URL,
+		openGateway: func(_ context.Context, _ *bot.Client, _ string) error {
+			return nil
+		},
+	}
+
+	cfg := BotConfig{
+		Token:   fakeToken,
+		GuildID: guildID,
+		Logger:  slog.New(slog.NewJSONHandler(&logBuf, nil)),
+	}
+
+	gotID, err := preGatewayStep(context.Background(), cfg, client, opts)
+	if err != nil {
+		t.Fatalf("preGatewayStep failed: %v", err)
+	}
+	if gotID != snowflake.ID(idA) {
+		t.Errorf("preGatewayStep appID = %v, want %d", gotID, idA)
+	}
+
+	logText := logBuf.String()
+	if !strings.Contains(logText, `"matches_token_id":true`) {
+		t.Errorf("log output missing matches_token_id true: %s", logText)
 	}
 }

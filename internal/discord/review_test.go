@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -13,6 +16,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/gateway"
+	"github.com/disgoorg/disgo/rest"
 
 	"github.com/tekmora/diallak/internal/answer"
 )
@@ -230,5 +234,107 @@ func TestRegisterCommands_Negative_RefusesBeforeAnyClientExists(t *testing.T) {
 	}
 	if err := RegisterCommands(context.Background(), "not-a-real-token", 0); err == nil || !strings.Contains(err.Error(), "guild ID must not be zero") {
 		t.Fatalf("RegisterCommands with guild 0 err = %v", err)
+	}
+}
+
+// stubRest is a REST client whose application lookup returns a fixed answer.
+type stubRest struct {
+	rest.Rest
+	app *discord.Application
+	err error
+}
+
+func (s stubRest) GetCurrentApplication(...rest.RequestOpt) (*discord.Application, error) {
+	return s.app, s.err
+}
+
+func TestLookupApplicationID_Negative_ErrorTextNeverHoldsTheToken(t *testing.T) {
+	token := makeFakeToken(111111111111111111)
+	// A transport error that prints its request headers would quote the token like this.
+	echo := stubRest{err: errors.New("request with Authorization: Bot " + token + " failed")}
+	_, err := lookupApplicationID(context.Background(), echo, token, time.Second)
+	if err == nil {
+		t.Fatalf("lookupApplicationID succeeded, want an error")
+	}
+	if strings.Contains(err.Error(), token) {
+		t.Fatalf("lookup error holds the token: %v", err)
+	}
+	if !strings.Contains(err.Error(), "[redacted]") {
+		t.Fatalf("lookup error does not show the redaction: %v", err)
+	}
+}
+
+func TestLookupApplicationID_Negative_AnswerWithoutApplicationIsAnError(t *testing.T) {
+	// A body of "null" with status 200 decodes to no application and no error.
+	id, err := lookupApplicationID(context.Background(), stubRest{}, "token", time.Second)
+	if !errors.Is(err, errEmptyApplicationID) {
+		t.Fatalf("error = %v, want %v", err, errEmptyApplicationID)
+	}
+	if id != 0 {
+		t.Fatalf("id = %d, want 0", id)
+	}
+}
+
+func TestLookupApplicationID_Negative_EndedCallerContextSendsNothing(t *testing.T) {
+	var requests int
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		requests++
+		mu.Unlock()
+		writeTestResponse(w, http.StatusOK, `{"id":"222222222222222222"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	token := makeFakeToken(111111111111111111)
+	restClient := rest.New(rest.NewClient(token, rest.WithURL(srv.URL)))
+	t.Cleanup(func() { restClient.Close(context.Background()) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := lookupApplicationID(ctx, restClient, token, time.Second); err == nil {
+		t.Fatalf("lookupApplicationID succeeded under an ended context")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if requests != 0 {
+		t.Fatalf("%d requests reached the platform under an ended context", requests)
+	}
+}
+
+func TestRegisterCommands_Negative_SlowLookupHitsItsOwnDeadline(t *testing.T) {
+	release := make(chan struct{})
+	var commandRequests int
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			mu.Lock()
+			commandRequests++
+			mu.Unlock()
+		}
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(func() {
+		close(release)
+		srv.Close()
+	})
+
+	// The caller sets no deadline, so only the lookup's own deadline can end the call.
+	opts := clientOptions{restURL: srv.URL, lookupTimeout: 50 * time.Millisecond}
+	start := time.Now()
+	err := registerCommandsWithOptions(context.Background(), makeFakeToken(111111111111111111), 7, opts)
+	if err == nil {
+		t.Fatalf("registration succeeded against a platform that never answers")
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("the lookup took %v; its deadline did not apply", elapsed)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if commandRequests != 0 {
+		t.Fatalf("%d command list requests were made after a failed lookup", commandRequests)
 	}
 }
