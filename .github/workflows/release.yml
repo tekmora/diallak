@@ -30,7 +30,7 @@ concurrency:
 jobs:
   meta:
     name: resolve tag and release notes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -80,7 +80,7 @@ jobs:
   publish:
     name: publish release
     needs: [meta, image]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: write

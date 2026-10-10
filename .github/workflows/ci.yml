@@ -22,7 +22,7 @@ concurrency:
 jobs:
   go:
     name: build and test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - name: Stop on a draft pull request
@@ -65,7 +65,7 @@ jobs:
 
   governance:
     name: governance (praetor)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - name: Stop on a draft pull request
