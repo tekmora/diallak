@@ -41,6 +41,51 @@ func TestStem_CommittedTable(t *testing.T) {
 	}
 }
 
+// TestStem_RuleCoverageTable holds one or two words for every rule of the stemmer. The words were
+// chosen by a mutation run: each rule was changed on its own and words whose stem then differed
+// from the official output were kept. Every pair is a line of the official vocabulary, so the table
+// is correct by that reference. Without it a broken rule passes CI, where
+// TestStem_OfficialVocabulary is skipped.
+func TestStem_RuleCoverageTable(t *testing.T) {
+	official := "abase>abas abated>abat abatement>abat abates>abat abbey>abbei abed>ab ability>abil " +
+		"able>abl abominable>abomin abortive>abort abortives>abort abrogate>abrog " +
+		"abundance>abund abundant>abund abus>abu abuser>abus aby>abi accidence>accid " +
+		"accident>accid aching>ach acting>act activity>activ adamant>adam added>ad adding>ad " +
+		"addition>addit adjacent>adjac admirable>admir admiral>admir adoption>adopt " +
+		"adoptious>adopti adoration>ador adorer>ador adornment>adorn adriatic>adriat " +
+		"adulation>adul affability>affabl affinity>affin agreed>agre allayment>allay allies>alli " +
+		"allowance>allow amazement>amaz amiss>amiss amorous>amor amorously>amor animal>anim " +
+		"apology>apolog appall>appal aptness>apt aries>ari ass>ass asses>ass awful>aw " +
+		"badness>bad baked>bake barbarism>barbar bared>bare barely>bare barful>bar basely>base " +
+		"bashfulness>bash bated>bate befall>befal canonize>canon capability>capabl " +
+		"catechism>catech choleric>choler coherence>coher comical>comic covetously>covet " +
+		"dedicate>dedic delicate>delic dumbly>dumbl egally>egal equality>equal equally>equal " +
+		"esses>ess exceed>exce famously>famous felicity>felic finical>finic focative>foc " +
+		"forgiveness>forgiv hideousness>hideous humbly>humbl inaudible>inaud infancy>infanc " +
+		"intenible>inten memorize>memor morality>moral moralize>moral nativity>nativ " +
+		"negative>neg orator>orat orators>orat potency>potenc potently>potent pudency>pudenc " +
+		"royalize>royal silently>silent simplicity>simplic tediousness>tedious temporizer>tempor " +
+		"traditional>tradit vacancy>vacanc wilfulness>wil"
+	// Three rules of step 2 are not exercised by any word of the official vocabulary. These stems
+	// follow from the algorithm definition: vietnamization -> vietnamize -> vietnam,
+	// relational -> relate -> relat, feudalism -> feudal.
+	derived := "vietnamization>vietnam relational>relat feudalism>feudal"
+
+	pairs := append(strings.Fields(official), strings.Fields(derived)...)
+	if len(pairs) != 110 {
+		t.Fatalf("expected 110 pairs, got %d", len(pairs))
+	}
+	for _, pair := range pairs {
+		word, want, ok := strings.Cut(pair, ">")
+		if !ok {
+			t.Fatalf("malformed pair: %q", pair)
+		}
+		if got := stem(word); got != want {
+			t.Errorf("stem(%q) = %q, want %q", word, got, want)
+		}
+	}
+}
+
 func TestStem_OfficialVocabulary(t *testing.T) {
 	vocDir := os.Getenv("PORTER_VOC_DIR")
 	if vocDir == "" {
