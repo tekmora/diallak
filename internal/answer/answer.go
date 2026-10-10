@@ -139,6 +139,9 @@ type Pipeline struct {
 }
 
 // New constructs and validates a new Pipeline instance.
+//
+// Options with Limit 0 are replaced by retrieval.DefaultOptions(), since no search can run with
+// that limit. A nil Generator means no model: every reply is then an excerpt reply.
 func New(cfg Config) (*Pipeline, error) {
 	if cfg.Retriever == nil {
 		return nil, errors.New("retriever is required")
@@ -162,11 +165,15 @@ func New(cfg Config) (*Pipeline, error) {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
+	options := cfg.Options
+	if options.Limit == 0 {
+		options = retrieval.DefaultOptions()
+	}
 
 	return &Pipeline{
 		retriever:       cfg.Retriever,
 		generator:       cfg.Generator,
-		options:         cfg.Options,
+		options:         options,
 		logger:          logger,
 		maxExcerptRunes: maxExcerpt,
 		maxAnswerRunes:  maxAnswer,
@@ -207,6 +214,11 @@ func (p *Pipeline) Ask(ctx context.Context, question string) (Answer, error) {
 		return Answer{Kind: KindRefusal, Reason: ReasonNoSource}, nil
 	}
 
+	// The prompt offers at most retrieval.MaxLimit sources. Sources and prompt are built from the
+	// same slice, so an id is valid exactly when it was offered.
+	if len(hits) > retrieval.MaxLimit {
+		hits = hits[:retrieval.MaxLimit]
+	}
 	sources := p.buildSources(hits)
 	if p.generator == nil {
 		p.asked.Add(1)
@@ -221,6 +233,11 @@ func (p *Pipeline) generateAndAssemble(ctx context.Context, q string, hits []ret
 	userPrompt := buildUserPrompt(q, hits)
 	output, err := p.generator.Complete(ctx, SystemPrompt, userPrompt)
 	if err != nil {
+		// A cancelled or expired caller context means nobody waits for the reply. That is the
+		// caller's doing, not a failing model, so it is no excerpt reply and no model failure.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return Answer{}, fmt.Errorf("ask abandoned by the caller: %w", ctxErr)
+		}
 		p.handleModelFailure(err)
 		p.asked.Add(1)
 		p.excerpts.Add(1)
@@ -268,6 +285,8 @@ func (p *Pipeline) buildSources(hits []retrieval.Hit) []Source {
 	return sources
 }
 
+// handleModelFailure counts the failure and writes one log line. The line carries the error class
+// only: an endpoint can echo the prompt in its error text, and logs never hold a question.
 func (p *Pipeline) handleModelFailure(err error) {
 	p.modelFailures.Add(1)
 	errClass := "error"
@@ -281,16 +300,11 @@ func (p *Pipeline) handleModelFailure(err error) {
 }
 
 func buildUserPrompt(question string, hits []retrieval.Hit) string {
-	limit := len(hits)
-	if limit > retrieval.MaxLimit {
-		limit = retrieval.MaxLimit
-	}
 	var sb strings.Builder
 	sb.WriteString("Question:\n")
 	sb.WriteString(question)
 	sb.WriteString("\n\nSources:\n")
-	for i := 0; i < limit; i++ {
-		h := hits[i]
+	for i, h := range hits {
 		if i > 0 {
 			sb.WriteString("\n\n")
 		}
@@ -353,13 +367,21 @@ func formatSourceLine(s Source) string {
 	return fmt.Sprintf("[%d] %s - %s <%s> (revision %s)", s.N, s.Title, s.Heading, s.URL, rev)
 }
 
-// Render formats an Answer into plain text for a chat message within MaxRenderRunes.
+// minAnswerRunes is the room Render keeps for the answer text before it drops a source line.
+const minAnswerRunes = 200
+
+// Render formats an Answer into plain text for a chat message.
+//
+// The result never exceeds MaxRenderRunes. An answer that is too long is cut and marked with
+// "..."; its source lines stay, because the text refers to them. Source lines are dropped from the
+// end only when they would leave less than minAnswerRunes for the text. Excerpt replies drop
+// trailing excerpts whole. A single source line longer than the limit is cut as a last resort.
 func Render(a Answer) string {
 	switch a.Kind {
 	case KindAnswer:
-		return renderAnswer(a)
+		return hardCut(renderAnswer(a))
 	case KindExcerpts:
-		return renderExcerpts(a)
+		return hardCut(renderExcerpts(a))
 	case KindRefusal:
 		return LabelRefusal
 	default:
@@ -368,26 +390,44 @@ func Render(a Answer) string {
 }
 
 func renderAnswer(a Answer) string {
-	sourceLines := make([]string, len(a.Sources))
+	lines := make([]string, len(a.Sources))
 	for i, s := range a.Sources {
-		sourceLines[i] = formatSourceLine(s)
+		lines[i] = formatSourceLine(s)
 	}
-
-	prefix := LabelAnswer + "\n\n" + a.Text
-	if len(sourceLines) == 0 {
-		return prefix
+	fixed := utf8.RuneCountInString(LabelAnswer) + 2
+	block := sourcesBlock(lines)
+	for len(lines) > 1 && fixed+utf8.RuneCountInString(block)+minAnswerRunes > MaxRenderRunes {
+		lines = lines[:len(lines)-1]
+		block = sourcesBlock(lines)
 	}
-	prefix += "\n\nSources:"
+	budget := MaxRenderRunes - fixed - utf8.RuneCountInString(block)
+	return LabelAnswer + "\n\n" + cutToRunes(a.Text, budget) + block
+}
 
-	for len(sourceLines) > 1 {
-		rendered := prefix + "\n" + strings.Join(sourceLines, "\n")
-		if utf8.RuneCountInString(rendered) <= MaxRenderRunes {
-			return rendered
-		}
-		sourceLines = sourceLines[:len(sourceLines)-1]
+func sourcesBlock(lines []string) string {
+	if len(lines) == 0 {
+		return ""
 	}
+	return "\n\nSources:\n" + strings.Join(lines, "\n")
+}
 
-	return prefix + "\n" + strings.Join(sourceLines, "\n")
+// cutToRunes returns s within maxRunes, the "..." marker included when it cuts.
+func cutToRunes(s string, maxRunes int) string {
+	if utf8.RuneCountInString(s) <= maxRunes {
+		return s
+	}
+	if maxRunes <= 3 {
+		return ""
+	}
+	return string([]rune(s)[:maxRunes-3]) + "..."
+}
+
+// hardCut is the last resort that keeps a rendered reply within MaxRenderRunes.
+func hardCut(s string) string {
+	if utf8.RuneCountInString(s) <= MaxRenderRunes {
+		return s
+	}
+	return string([]rune(s)[:MaxRenderRunes])
 }
 
 type excerptBlock struct {
