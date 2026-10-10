@@ -189,14 +189,19 @@ Every pull request adds one changelog fragment under
 [`changelog.d`](changelog.d):
 
 ```bash
-praetorctl changelog new --type=fixed --title="Refuse a question that is too long"
+sh .config/lefthook/engine.sh changelog new --type=fixed \
+  --title="Refuse a long question"
 ```
+
+The wrapper runs the engine this repository pins. A `praetorctl` on the path
+can be another version, so commands that write into the repository go through
+the wrapper.
 
 A release is cut in three steps:
 
-1. On a branch, `praetorctl release --version=vX.Y.Z --date=YYYY-MM-DD` renders
-   the fragments into `CHANGELOG.md`. The branch is merged like any other
-   change.
+1. On a branch, `sh .config/lefthook/engine.sh release --version=vX.Y.Z
+   --date=YYYY-MM-DD` renders the fragments into `CHANGELOG.md`. The branch is
+   merged like any other change.
 2. The merged commit on `main` is tagged `vX.Y.Z`, and the tag is pushed.
 3. The tag starts [`release.yml`](.github/workflows/release.yml). It refuses a
    version that has no section in `CHANGELOG.md`, builds the container image
@@ -208,8 +213,29 @@ The image is built in a reusable workflow of its own
 and `linux/arm64`. The workflow also signs it with cosign, attests its build
 provenance and writes one SBOM per platform; both are attached to the release.
 
-No release exists yet, and merging to `main` releases nothing. How to check a
-signature is described here once it has been tried against the first release.
+Merging to `main` releases nothing; only a pushed tag does.
+
+### Verifying a release
+
+The first image is 0.1.1. Version 0.1.0 has a tag and a changelog section, but
+no release page and no image: its package carried a `latest` tag by mistake and
+was removed before it was public.
+
+Each image is signed by the release workflow at its own tag and carries build
+provenance. Both commands were tried against 0.1.1. They fail when the identity
+names another tag or the main branch, and when another repository is named:
+
+```bash
+cosign verify ghcr.io/tekmora/diallak:0.1.1 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity https://github.com/tekmora/diallak/.github/workflows/release-image.yml@refs/tags/v0.1.1
+
+gh attestation verify oci://ghcr.io/tekmora/diallak:0.1.1 --repo tekmora/diallak
+```
+
+For another version, replace `0.1.1` in all three places. A deployment pins the
+image by digest; the digest of each release is in
+[docs/hosting.md](docs/hosting.md).
 
 ## Develop
 
