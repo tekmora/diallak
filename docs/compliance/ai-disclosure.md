@@ -1,7 +1,8 @@
 # AI disclosure
 
-Draft for operator review. It fixes what the bot says about itself and where, so
-that the wording in the code can follow it.
+This page fixes what the bot says about itself and where, so that the wording
+in the code can follow it. The text of the command description and the last
+line of a reply are approved; the profile text is still a proposal.
 
 ## The rule
 
@@ -18,11 +19,11 @@ The reading behind it is in [ADR-0006](../adr/0006-ai-act-role.md).
 <!-- markdownlint-disable MD013 -->
 | Place | Text | State |
 | :--- | :--- | :--- |
-| Description of the `/ask` command, shown before first use | "Ask the automated assistant a question about the project documentation" | Proposed. Today: "Ask a question about the project documentation" |
+| Description of the `/ask` command, shown before first use | "Ask the automated assistant a question about the project documentation" | Approved, not yet in the code. Today: "Ask a question about the project documentation" |
 | First line of a model-written reply | "AI-generated answer. It can be wrong: check the sources below." | In the code |
 | First line of an excerpt reply | "Automated excerpts from the documentation. No AI model wrote this reply." | In the code |
 | Second line when the model failed | "The AI model is unavailable right now, so these are excerpts only." | In the code |
-| Last line of every reply | "Automated reply. A person can help in the support channel." | Proposed |
+| Last line of every reply | "Automated reply. A person can help in the support channel." | Approved, not yet in the code |
 | The bot's profile text | "Automated assistant of this community. It answers from project documentation and can be wrong." | Proposed, set by the operator |
 <!-- markdownlint-enable MD013 -->
 
@@ -42,10 +43,11 @@ The texts in the code are the constants `LabelAnswer`, `LabelExcerpts` and
   which a program can detect generated text (ADR-0006, "Marking generated
   text"). Changing it changes that marker.
 
-## What changes in the code once this draft is approved
+## What changes in the code
 
-1. The command description takes the proposed text.
-2. Every reply gets the proposed last line.
+1. The command description takes the approved text.
+2. Every reply gets the approved last line. The name of the support channel in
+   it comes from configuration; without one the line says "support channel".
 3. A test pins each text, so a change to a notice is a deliberate change.
 
 Nothing else moves: the first lines stay where they are.

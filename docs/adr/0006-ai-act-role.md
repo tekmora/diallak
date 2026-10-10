@@ -1,6 +1,6 @@
 # ADR-0006: Role and duties under the EU AI Act
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-10
 - **Authors**: Maintainers
 
@@ -63,7 +63,7 @@ The licence does not remove the duties below.
 | Duty | Source | Measure | State |
 | :--- | :--- | :--- | :--- |
 | Tell people they deal with an AI system | Art. 50(1) | Notice in the text of every reply | In place |
-| Tell them clearly and accessibly, at the first interaction at the latest | Art. 50(5) | The notice is plain text and is on the first reply too; the command description will say it before first use | Reply: in place. Description: proposed |
+| Tell them clearly and accessibly, at the first interaction at the latest | Art. 50(5) | The notice is plain text and is on the first reply too; the command description will say it before first use | Reply: in place. Description: approved, not yet in the code |
 | Mark generated text as artificially generated, machine-readable and detectable | Art. 50(2) | Model mode only: a fixed marker string, see below | In place, sufficiency open |
 | Ensure AI literacy of the people who operate the system | Art. 4 | A moderator guide that explains what the bot does and where it fails | Planned |
 <!-- markdownlint-enable MD013 -->
@@ -108,23 +108,39 @@ gets no such period.
 ### What may go live, and when
 
 - **Excerpt mode** may go live after the live test. The operator decided this.
-- **Model mode** stays off until this record is accepted. Off means that no
+- **Model mode** stays off until four gates are passed. Off means that no
   deployment sets the model endpoint variables ([README](../../README.md),
-  "Run"). Before it is switched on:
-  1. this record is accepted;
-  2. the notices of the AI disclosure are in the code;
-  3. the codes of practice under Article 50(7) have been checked for the marking
-     of text;
-  4. the privacy notice is published.
+  "Run"). The operator accepted this record with these gates on 2026-10-10:
+  1. the notices of the AI disclosure are in the code;
+  2. the codes of practice under Article 50(7) have been read for the marking of
+     text;
+  3. the privacy notice is published;
+  4. the gaps of the operator's model endpoint are closed.
+
+Model mode can be switched off again at any time: a deployment without the
+model endpoint variables answers with excerpts.
+
+Gate 4 comes from a measurement of the operator's endpoint on 2026-10-10. The
+endpoint stores no request body and no prompt. Three gaps remained against the
+rule of [ADR-0002](0002-data-and-compliance.md) that the endpoint keeps nothing
+it receives. Each is closed in the operator's deployment, not in this
+repository:
+
+- access to the endpoint's request log is wider than the people who need it;
+- records are kept up to 37 days where 30 are stated;
+- the error text the endpoint stores can carry model output.
 
 A switch in code would add nothing to this: it could be flipped as easily as a
-variable. The gate is the status of this record.
+variable. The gates are the list above.
+
+The acceptance covers the reading of the role and the duties in this record. It
+is the project's reading, not legal advice.
 
 ## Consequences
 
 - **Positive**: The project knows its role and has a short list of duties, each
   tied to an article and to a place in the code or the documents. Excerpt mode
-  can serve members while model mode waits for review.
+  can serve members while model mode waits for its gates.
 - **Negative**: The project carries the provider's duties and cannot pass them
   to the model's publisher. The marking of generated text rests on a marker
   string until better means exist on the platform. The assessment must be read

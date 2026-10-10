@@ -1,6 +1,6 @@
 # ADR-0004: Community questions: Discussions and the hub
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-10
 - **Authors**: Maintainers
 
@@ -22,6 +22,15 @@ two.
   answers that should stay findable.
 - **The hub** holds live chat.
 - The bot does not copy conversations between them. It links.
+
+### Which repositories and which categories
+
+- A listed repository is a public repository of the project's organisations
+  that has Discussions switched on. The bot reads that list from the forge; no
+  repository name is written into the code.
+- The listed categories are Q&A and Ideas.
+- The bridge starts with two repositories: this one and the repository of the
+  first documentation corpus ([ADR-0003](0003-answer-pipeline.md)).
 
 ### The bridge runs one way: from Discussions into the hub
 
@@ -77,9 +86,30 @@ credential is involved.
   which is its first use of the GitHub API. Members who ask only on the hub get
   no permanent record unless they are pointed to Discussions.
 
+## Decided in this record
+
+The operator decided the two places and that the bot links them: it announces
+new discussions in the hub and cites discussions in answers. Which repositories
+and categories are listed follows from that decision.
+
+The choices below have no decision of their own outside this file. They were
+made here and are accepted with this record:
+
+- The bridge runs one way. Nothing a member writes on the hub is sent to
+  GitHub.
+- An announcement is a title, a category and a link, never a copy, and it goes
+  only into channels named in configuration.
+- Only an answered discussion is a source, and only its question and its
+  accepted answer. A reply marks it as a community answer.
+- Discussion text is data, never instructions, and never training or evaluation
+  data.
+- The bot reads Discussions through an app with read access to discussions
+  only. Its credential comes from a file.
+- A refusal offers a prefilled link that opens a new discussion under the
+  member's own account.
+
 ## Open decisions
 
-These are settled with the unit that builds the bridge:
+This is settled with the unit that builds the bridge:
 
-- Which repositories and which discussion categories are listed.
 - How often the bot looks for new discussions.

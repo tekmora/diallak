@@ -1,6 +1,6 @@
 # ADR-0003: Answer pipeline
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-10
 - **Authors**: Maintainers
 
@@ -33,8 +33,12 @@ import the Discord library ([ADR-0001](0001-architecture-and-boundaries.md)).
 
 ### Corpus: project documentation only
 
-- The corpus is built from sources listed in configuration. Each entry names a
-  repository, a path pattern and a revision.
+- The bot reads the corpus from a local directory, named by
+  `DIALLAK_CORPUS_DIR`. The manifest in that directory lists the sources: each
+  entry names a directory, a repository, a revision and path patterns
+  ([`internal/corpus`](../../internal/corpus/manifest.go)).
+- The bot holds no code and no credential that fetches documentation. Filling
+  the directory is the deployment's job.
 - Sources are public documentation: a project's README and the Markdown files
   under its `docs/` directory. Answered public discussions are a second kind of
   source under [ADR-0004](0004-community-questions.md). Issues and private
@@ -46,7 +50,7 @@ import the Discord library ([ADR-0001](0001-architecture-and-boundaries.md)).
 
 The corpus starts with one project. A second project is added once the
 evaluation set for the first exists. Which projects, and in which order, is the
-operator's choice and a change to the configuration list only.
+operator's choice and a change to the manifest only.
 
 ### Retrieval decides whether there is an answer
 
@@ -144,6 +148,35 @@ pipeline refuses when it should.
   substitutions.
 - **Answers without citations, with a disclaimer.** Rejected: a disclaimer does
   not let a member check the answer.
+
+## Decided in this record
+
+The operator decided that the bot answers from project documentation with a
+locally run model, that every answer cites its sources and carries the AI
+label, and that answered discussions are a second kind of source. These follow
+from recorded decisions: public documentation only, one project first, a
+lexical index, the corpus as a local directory with a manifest, a model alias
+instead of a model name, excerpts when no endpoint is set, and replies visible
+to the asker only.
+
+The choices below have no decision of their own outside this file. They were
+made here and are accepted with this record:
+
+- Four stages, each behind an interface with a fake for tests.
+- The pipeline refuses before it calls the model when no chunk passes. A chunk
+  is a source only when it shares at least two words with the question and
+  covers enough of it.
+- Embeddings are added only when the evaluation set shows the need.
+- A request to the model has a deadline, a bounded prompt and a bounded output,
+  is not retried and follows no redirect.
+- An answer with no valid citation is discarded, and the model's own statement
+  that the sources do not answer is a refusal.
+- A failing endpoint yields excerpts with the reason stated. The pipeline never
+  falls back to an uncited answer or to another model.
+- The bot acknowledges first and answers after, within the lifetime of the
+  interaction token.
+- The evaluation set is written from the documentation and runs in CI with a
+  fake model.
 
 ## References
 

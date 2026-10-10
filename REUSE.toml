@@ -7,6 +7,14 @@ path = "**"
 SPDX-FileCopyrightText = "2026 lusoris <lusoris@pm.me>"
 SPDX-License-Identifier = "EUPL-1.2"
 
+# Documentation text: the README and everything under docs/. Code stays under
+# the whole-tree licence above. This table comes after the whole-tree one, so
+# it decides for these paths.
+[[annotations]]
+path = ["README.md", "docs/**"]
+SPDX-FileCopyrightText = "2026 lusoris <lusoris@pm.me>"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
 # Test data copied verbatim from https://github.com/lusoris/SnatchArr at commit
 # 9e70c2e03d22d535a9f89c628807aab5813829a6: its README.md and docs/**/*.md.
 # Upstream declares every Markdown file CC BY-SA 4.0. This table comes after

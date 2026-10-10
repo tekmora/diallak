@@ -1,6 +1,6 @@
 # ADR-0005: Moderation and escalation
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-10
 - **Authors**: Maintainers
 
@@ -37,6 +37,15 @@ the case in front of the moderators and records what is done.
 - What the platform's rules can do is verified against Discord's current
   documentation before the build. The result is recorded here.
 
+### Where cases and the trail appear
+
+- A flagged case appears in the moderators' queue channel.
+- What moderators escalate goes to the operator in writing, as a request for a
+  decision.
+- The trail of moderator actions is written to the moderators' log channel.
+- Both channels are named in configuration. No channel name is written into the
+  code.
+
 ### Two role templates
 
 | Role | May | May not |
@@ -55,10 +64,10 @@ nothing about a person before the operator says they accepted.
 
 ### Moderator actions leave a trail the operator can read
 
-Every moderator action through the bot is recorded with its time, the role that
-acted, the action and the affected message or member id. The trail holds no
-message text beyond what the action needs, and its retention follows
-[ADR-0002](0002-data-and-compliance.md).
+Every moderator action through the bot is recorded in the log channel with its
+time, the role that acted, the action and the affected message or member id.
+The trail holds no message text beyond what the action needs, and its retention
+follows [ADR-0002](0002-data-and-compliance.md).
 
 ### Written rules come first
 
@@ -71,12 +80,27 @@ escalate. Both live under `docs/`.
 - **Positive**: A member is never sanctioned by a model's judgement alone.
   Moderators can do their job without rights that could damage the server. The
   operator can review every action.
-- **Negative**: Unclear cases wait for a person. The trail is one more store of
-  member data with its own retention period. Roles have to be kept in step with
-  this record by hand, since the bot does not manage them.
+- **Negative**: Unclear cases wait for a person. The trail is one more place
+  that holds member data, with its own retention period. Roles have to be kept
+  in step with this record by hand, since the bot does not manage them.
+
+## Decided in this record
+
+The operator decided the three instances and their order, that the platform's
+own rules do the filtering, the two role templates, that the bot assigns no
+role and that no person is named. The queue channel and the log channel follow
+from those decisions.
+
+The choices below have no decision of their own outside this file. They were
+made here and are accepted with this record:
+
+- The bot never punishes on its own judgement. An unclear case goes to the
+  moderators with a link to the message and the reason it was flagged.
+- A trail entry holds the time, the role that acted, the action and the
+  affected id, and no message text beyond what the action needs.
+- Moderation starts only when the code of conduct and the moderator guide
+  exist under `docs/`.
 
 ## Open decisions
 
-- Where escalations appear for moderators, and how the operator receives what
-  moderators escalate.
-- The retention period of the trail.
+- The retention period of the trail. It is the operator's decision.
