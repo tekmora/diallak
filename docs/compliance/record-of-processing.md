@@ -14,7 +14,7 @@ pass on more data changes this record in the same pull request, like the
 <!-- markdownlint-disable MD013 -->
 | Article 30(1) | Entry |
 | :--- | :--- |
-| (a) Controller and contact | Lusoris, the maintainer of the project; <lusoris@pm.me>. No data protection officer is appointed |
+| (a) Controller and contact | The provider named in the [imprint](imprint.md); the block there is filled before the public launch. No data protection officer is appointed |
 | (b) Purposes | Answering a member's question about project documentation; refusing a command that comes from another server |
 | (c) Data subjects and data | Members of the community server who use `/ask`: the question they type and the id of the server. Discord attaches further fields to a command (member id, name, roles, locale); the bot reads none of them and keeps none |
 | (d) Recipients | Discord, which delivers the reply. In model mode only: the model endpoint the operator runs, which receives the question and documentation passages, no member id and no name |

@@ -30,7 +30,7 @@ linked when someone provides it and is marked as a translation.
 7. **Moderators may remove content and time members out.** People decide every
    unclear case, never the bot alone. To appeal, open a private thread in the
    support forum and address it to the operator. If you can no longer reach the
-   server, write an e-mail to <lusoris@pm.me>.
+   server, write to the e-mail address in the [imprint](imprint.md).
 8. **Discord's own rules apply.** You must follow Discord's Terms of Service
    and Community Guidelines and meet Discord's minimum age for your country.
    The server has no mature content and no age-restricted channel.
@@ -65,6 +65,7 @@ Rule 5 rests on the [AI disclosure](ai-disclosure.md) and on
 
 The source is this file in the project's repository. Once published, the rules
 are shown in the server's rules screen and linked from the rules channel. They
+link the [imprint](imprint.md) and the [privacy notice](privacy-notice.md). They
 move when the organisation has one place for its legal texts, and a link stays
 behind.
 
