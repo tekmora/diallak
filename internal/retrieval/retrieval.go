@@ -34,10 +34,10 @@ const (
 	// One overlapping word is not a source.
 	MinMatchedTerms = 2
 	// DefaultMinScore is the default minimum score threshold for retrieval refusal.
-	// Chosen from the sweep over MinScore 0.00..0.90 at Limit 3, where 0.35 maximized
-	// answerable hits (26/32) subject to off-topic refusals >= 5 (5/6 refused,
-	// undocumented refused 3/6; at 0.40 answerable hits drops to 24/32).
-	DefaultMinScore = 0.35
+	// Chosen from the sweep over MinScore 0.00..0.90 at Limit 3, where 0.20 maximized
+	// answerable hits (29/32) subject to off-topic refusals >= 5 (6/6 refused,
+	// undocumented refused 5/6; at 0.25 answerable hits drops to 28/32).
+	DefaultMinScore = 0.20
 )
 
 // Hit pairs a retrieved documentation chunk with its coverage score in [0, 1].
