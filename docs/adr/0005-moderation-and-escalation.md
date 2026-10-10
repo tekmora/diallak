@@ -18,12 +18,24 @@ any file, issue or log of this repository; roles are named instead.
 
 ### Three instances, in this order
 
-1. **The bot** acts only on spam and obvious abuse.
+1. **Automatic filtering** acts only on spam and obvious abuse.
 2. **Moderators** decide every unclear case.
 3. **The operator** is the last instance and decides what moderators escalate.
 
 The bot escalates; it does not punish on its own judgement. An unclear case goes
 to the moderators with a link to the message and the reason it was flagged.
+
+### The platform filters; the bot handles what is flagged
+
+Spam and obvious abuse are filtered by the platform's own moderation rules. The
+bot does not read every message. It handles only what those rules flag: it puts
+the case in front of the moderators and records what is done.
+
+- The bot requests no privileged intent for moderation
+  ([ADR-0001](0001-architecture-and-boundaries.md)), and message content stays
+  out of its stores.
+- What the platform's rules can do is verified against Discord's current
+  documentation before the build. The result is recorded here.
 
 ### Two role templates
 
@@ -65,14 +77,6 @@ escalate. Both live under `docs/`.
 
 ## Open decisions
 
-- **How the bot sees spam.** Filtering needs to see messages, which the first
-  version does not ([ADR-0001](0001-architecture-and-boundaries.md): no
-  privileged intent, no message events). Two ways exist: the platform's own
-  moderation rules do the filtering and the bot only handles what they flag, or
-  the bot reads messages itself, which needs a privileged intent and its own
-  entry in the data inventory. The first keeps message content away from the bot
-  and is preferred; it is decided against Discord's current documentation before
-  the build.
 - Where escalations appear for moderators, and how the operator receives what
   moderators escalate.
 - The retention period of the trail.

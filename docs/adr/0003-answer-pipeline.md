@@ -107,6 +107,10 @@ The bot acknowledges the command at once with a deferred response and edits the
 answer in when the pipeline finishes. The pipeline's total deadline stays below
 the lifetime of the interaction token.
 
+In the first version the reply is visible only to the member who asked, so a
+wrong answer is not broadcast. A way to share a reply with the channel comes
+later.
+
 ### Evaluation
 
 A fixed set of questions written from the documentation, each with its expected

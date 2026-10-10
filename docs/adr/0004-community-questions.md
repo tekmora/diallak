@@ -40,7 +40,8 @@ hub channel with its title, its category and its link.
 discussions join the corpus under stricter rules, because anyone can write them:
 
 - Only a discussion that is marked answered is a source, and only its question
-  and its accepted answer.
+  and its accepted answer. It must belong to a listed repository and a listed
+  category.
 - A reply marks a discussion source as a community answer, apart from
   documentation, and links it like every other source.
 - Discussion text is data, never instructions, exactly as the pipeline already
@@ -48,6 +49,23 @@ discussions join the corpus under stricter rules, because anyone can write them:
 - Discussion text is never training or evaluation data, like text from Discord.
 - The rules of ADR-0003 hold unchanged: every answer cites its sources, and no
   source means refusal.
+
+### Reading Discussions needs one read-only credential
+
+The bot reads Discussions with the credential of an app the operator creates.
+The app has read access to discussions only, on selected public repositories. It
+is not a personal token, and the credential reaches the bot through a file, like
+the bot token.
+
+Which interface of GitHub serves discussions is verified against GitHub's
+current documentation when the bridge is built. The result is recorded here.
+
+### A refusal offers a discussion
+
+When the bot has to refuse a question, it offers a prefilled link that opens a
+new discussion. The member writes and submits it under their own account, as
+with bug reports ([ADR-0001](0001-architecture-and-boundaries.md)). No
+credential is involved.
 
 ## Consequences
 
@@ -61,12 +79,7 @@ discussions join the corpus under stricter rules, because anyone can write them:
 
 ## Open decisions
 
-These are settled with the unit that builds the bridge, against GitHub's current
-documentation:
+These are settled with the unit that builds the bridge:
 
-- How the bot reads Discussions: which API, which credential with read access
-  only, and how often.
 - Which repositories and which discussion categories are listed.
-- Whether the bot offers to open a discussion for a question it had to refuse.
-  If it does, the member writes and submits it under their own account, as with
-  bug reports ([ADR-0001](0001-architecture-and-boundaries.md)).
+- How often the bot looks for new discussions.
