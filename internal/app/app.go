@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 	"unicode/utf8"
 
-	"github.com/tekmora/discord-bot/internal/answer"
-	"github.com/tekmora/discord-bot/internal/config"
-	"github.com/tekmora/discord-bot/internal/corpus"
-	"github.com/tekmora/discord-bot/internal/model"
-	"github.com/tekmora/discord-bot/internal/retrieval"
+	"github.com/tekmora/diallak/internal/answer"
+	"github.com/tekmora/diallak/internal/config"
+	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/model"
+	"github.com/tekmora/diallak/internal/retrieval"
 )
 
 // Assembly holds the initialized components and metadata of the application.

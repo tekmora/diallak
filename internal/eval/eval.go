@@ -11,8 +11,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/tekmora/discord-bot/internal/corpus"
-	"github.com/tekmora/discord-bot/internal/retrieval"
+	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/retrieval"
 )
 
 // Kind classifies the expected retrieval behavior for an evaluation case.

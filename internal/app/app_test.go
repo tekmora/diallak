@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tekmora/discord-bot/internal/answer"
-	"github.com/tekmora/discord-bot/internal/config"
-	"github.com/tekmora/discord-bot/internal/corpus"
+	"github.com/tekmora/diallak/internal/answer"
+	"github.com/tekmora/diallak/internal/config"
+	"github.com/tekmora/diallak/internal/corpus"
 )
 
 func setupTestCorpus(t *testing.T) string {

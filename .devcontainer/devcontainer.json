@@ -1,5 +1,5 @@
 {
-  "name": "tekmora/discord-bot",
+  "name": "tekmora/diallak",
   "build": {
     "dockerfile": "Dockerfile.praetor",
     "context": "."

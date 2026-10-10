@@ -14,7 +14,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/gateway"
 
-	"github.com/tekmora/discord-bot/internal/answer"
+	"github.com/tekmora/diallak/internal/answer"
 )
 
 func debugLogger(buf *bytes.Buffer) *slog.Logger {

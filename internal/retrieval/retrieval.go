@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/tekmora/discord-bot/internal/corpus"
+	"github.com/tekmora/diallak/internal/corpus"
 )
 
 const (

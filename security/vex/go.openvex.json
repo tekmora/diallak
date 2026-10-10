@@ -1,7 +1,7 @@
 {
   "@context": "https://openvex.dev/ns/v0.2.0",
-  "@id": "https://github.com/tekmora/discord-bot/blob/main/security/vex/go.openvex.json",
-  "author": "tekmora/discord-bot maintainers",
+  "@id": "https://github.com/tekmora/diallak/blob/main/security/vex/go.openvex.json",
+  "author": "tekmora/diallak maintainers",
   "timestamp": "2026-10-10T16:47:53Z",
   "version": 1,
   "statements": [

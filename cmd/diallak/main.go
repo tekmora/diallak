@@ -1,4 +1,4 @@
-// Command discord-bot is the community bot for the hub server.
+// Command diallak is the community bot for the hub server.
 //
 // It serves guild command /ask answered by the documentation pipeline and can
 // register commands via -register-commands.
@@ -16,9 +16,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/tekmora/discord-bot/internal/app"
-	"github.com/tekmora/discord-bot/internal/config"
-	"github.com/tekmora/discord-bot/internal/discord"
+	"github.com/tekmora/diallak/internal/app"
+	"github.com/tekmora/diallak/internal/config"
+	"github.com/tekmora/diallak/internal/discord"
 )
 
 const (
@@ -54,7 +54,7 @@ func report(err error, errOut io.Writer) int {
 	if err == nil {
 		return 0
 	}
-	if _, writeErr := fmt.Fprintln(errOut, "discord-bot:", err); writeErr != nil {
+	if _, writeErr := fmt.Fprintln(errOut, "diallak:", err); writeErr != nil {
 		return 2
 	}
 	return 1
@@ -62,7 +62,7 @@ func report(err error, errOut io.Writer) int {
 
 // run parses arguments, loads configuration, and executes either command registration or the bot runtime.
 func run(ctx context.Context, args []string, getenv func(string) string, out io.Writer, deps dependencies) (err error) {
-	fs := flag.NewFlagSet("discord-bot", flag.ContinueOnError)
+	fs := flag.NewFlagSet("diallak", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	registerCmds := fs.Bool("register-commands", false, "register guild commands and exit")
 	if parseErr := fs.Parse(args); parseErr != nil {

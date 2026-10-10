@@ -1,5 +1,5 @@
 <!-- markdownlint-disable MD013 -->
-# tekmora/discord-bot Agent Operating Harness
+# tekmora/diallak Agent Operating Harness
 
 Run read-only: file edits, state mutations, commits prohibited. Mutating steps dropped; prohibitions kept.
 

@@ -58,7 +58,7 @@ jobs:
             v[0-9]*.[0-9]*.[0-9]*) ;;
             *) echo "::error::tag must look like vX.Y.Z"; exit 1 ;;
           esac
-          echo "sbom=discord-bot-${TAG#v}.spdx.json" >> "$GITHUB_OUTPUT"
+          echo "sbom=diallak-${TAG#v}.spdx.json" >> "$GITHUB_OUTPUT"
       # Base images on docker.io come through mirror.gcr.io: the anonymous pull
       # limit of Docker Hub is shared by every job on a hosted runner address.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -82,7 +82,7 @@ jobs:
             type=semver,pattern={{version}},value=${{ inputs.tag }}
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag }}
           labels: |
-            org.opencontainers.image.title=discord-bot
+            org.opencontainers.image.title=diallak
             org.opencontainers.image.licenses=EUPL-1.2
       - id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0

@@ -14,17 +14,17 @@ import (
 
 const (
 	// EnvTokenFile names the variable holding the path of the Discord bot token file.
-	EnvTokenFile = "DISCORD_BOT_TOKEN_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
+	EnvTokenFile = "DIALLAK_TOKEN_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
 	// EnvGuildID names the variable holding the snowflake of the hub guild.
-	EnvGuildID = "DISCORD_BOT_GUILD_ID"
+	EnvGuildID = "DIALLAK_GUILD_ID"
 	// EnvModelBaseURL names the variable holding the base URL of the model endpoint.
-	EnvModelBaseURL = "DISCORD_BOT_MODEL_BASE_URL"
+	EnvModelBaseURL = "DIALLAK_MODEL_BASE_URL"
 	// EnvModelAlias names the variable holding the model routing alias.
-	EnvModelAlias = "DISCORD_BOT_MODEL_ALIAS"
+	EnvModelAlias = "DIALLAK_MODEL_ALIAS"
 	// EnvModelKeyFile names the variable holding the path of the optional model API key file.
-	EnvModelKeyFile = "DISCORD_BOT_MODEL_KEY_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
+	EnvModelKeyFile = "DIALLAK_MODEL_KEY_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
 	// EnvCorpusDir names the variable holding the absolute path of the documentation corpus directory.
-	EnvCorpusDir = "DISCORD_BOT_CORPUS_DIR"
+	EnvCorpusDir = "DIALLAK_CORPUS_DIR"
 	// MaxTokenBytes bounds secret files (both bot token and model key).
 	MaxTokenBytes = 4096
 )

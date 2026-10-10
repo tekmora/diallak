@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tekmora/discord-bot/internal/answer"
+	"github.com/tekmora/diallak/internal/answer"
 )
 
 type fakeInteraction struct {

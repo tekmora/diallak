@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tekmora/discord-bot/internal/config"
+	"github.com/tekmora/diallak/internal/config"
 )
 
 func TestBuild_Positive_ReadyLogListsEverySourceOnce(t *testing.T) {

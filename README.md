@@ -1,4 +1,4 @@
-# discord-bot
+# Diallak
 
 <!-- praetor:readme-governance:start -->
 [![HISS Adopted][praetor-hiss-badge]][praetor-hiss-agents]
@@ -19,7 +19,7 @@ generated agent context against `AGENTS.md`.
 0 recorded infractions; audit forbids growth.
 
 [praetor-hiss-badge]: https://img.shields.io/badge/Standards-HISS%20Adopted-blue
-[praetor-hiss-agents]: https://github.com/tekmora/discord-bot/blob/HEAD/AGENTS.md
+[praetor-hiss-agents]: https://github.com/tekmora/diallak/blob/HEAD/AGENTS.md
 <!-- praetor:readme-governance:end -->
 
 Community bot for the Lusoris Discord hub.
@@ -57,9 +57,9 @@ Community bot for the Lusoris Discord hub.
 
 ## The name
 
-The product is called **Diallak** (dee-AHL-lak), from Greek *diallaktes*, the impartial mediator.
-The repository keeps the name `discord-bot` until the organisation moves. Tekmora (tek-MOH-ra), the
-family the name belongs to, comes from Greek *tekmerion*, "decisive proof".
+The bot is called **Diallak** (dee-AHL-lak), from Greek *diallaktes*, the impartial mediator.
+Tekmora (tek-MOH-ra), the family the name belongs to, comes from Greek *tekmerion*, "decisive
+proof". The repository was first named `discord-bot`; its old address redirects.
 
 ## Run
 
@@ -68,12 +68,12 @@ The bot reads its settings from the environment and fails closed when one is mis
 
 | Variable | Required | Meaning |
 | :--- | :--- | :--- |
-| `DISCORD_BOT_TOKEN_FILE` | yes | Path of the file that holds the bot token |
-| `DISCORD_BOT_GUILD_ID` | yes | Id of the one server the bot serves |
-| `DISCORD_BOT_CORPUS_DIR` | yes | Absolute path of the documentation directory |
-| `DISCORD_BOT_MODEL_BASE_URL` | with the alias | Base URL of an OpenAI-compatible endpoint |
-| `DISCORD_BOT_MODEL_ALIAS` | with the base URL | Name the endpoint routes on, never a model name |
-| `DISCORD_BOT_MODEL_KEY_FILE` | no | Path of the file that holds the endpoint's credential |
+| `DIALLAK_TOKEN_FILE` | yes | Path of the file that holds the bot token |
+| `DIALLAK_GUILD_ID` | yes | Id of the one server the bot serves |
+| `DIALLAK_CORPUS_DIR` | yes | Absolute path of the documentation directory |
+| `DIALLAK_MODEL_BASE_URL` | with the alias | Base URL of an OpenAI-compatible endpoint |
+| `DIALLAK_MODEL_ALIAS` | with the base URL | Name the endpoint routes on, never a model name |
+| `DIALLAK_MODEL_KEY_FILE` | no | Path of the file that holds the endpoint's credential |
 
 Without the two model variables the bot replies with cited excerpts and says that no model wrote
 them. In the live server that is the only mode for now: no deployment sets the two variables until
@@ -105,7 +105,7 @@ directory.
 ### Starting the bot
 
 ```bash
-discord-bot
+diallak
 ```
 
 It loads the documentation, connects to Discord and answers `/ask` until it receives a termination
@@ -114,7 +114,7 @@ signal. A reply is visible only to the member who asked and can never mention an
 ### Commands are registered by hand
 
 ```bash
-discord-bot -register-commands
+diallak -register-commands
 ```
 
 This sets the server's command list for the application to `/ask` and exits. It needs the same
@@ -138,7 +138,7 @@ A release is cut in three steps:
    `CHANGELOG.md`. The branch is merged like any other change.
 2. The merged commit on `main` is tagged `vX.Y.Z`, and the tag is pushed.
 3. The tag starts [`release.yml`](.github/workflows/release.yml). It refuses a version that has no
-   section in `CHANGELOG.md`, builds the container image `ghcr.io/tekmora/discord-bot:X.Y.Z`, and
+   section in `CHANGELOG.md`, builds the container image `ghcr.io/tekmora/diallak:X.Y.Z`, and
    publishes the release with the changelog section as its notes. There is no `latest` tag.
 
 The image is built in a reusable workflow of its own

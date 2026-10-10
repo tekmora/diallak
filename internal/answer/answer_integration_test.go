@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tekmora/discord-bot/internal/corpus"
-	"github.com/tekmora/discord-bot/internal/eval"
-	"github.com/tekmora/discord-bot/internal/retrieval"
+	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/eval"
+	"github.com/tekmora/diallak/internal/retrieval"
 )
 
 func loadSnatchArrFixture(t *testing.T) (eval.Set, *retrieval.Index) {

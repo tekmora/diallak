@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/tekmora/discord-bot/internal/corpus"
+	"github.com/tekmora/diallak/internal/corpus"
 )
 
 func sampleChunks() []corpus.Chunk {

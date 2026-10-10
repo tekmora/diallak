@@ -10,7 +10,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/snowflake/v2"
 
-	"github.com/tekmora/discord-bot/internal/answer"
+	"github.com/tekmora/diallak/internal/answer"
 )
 
 func TestBuildCommandCreate_Positive_Properties(t *testing.T) {

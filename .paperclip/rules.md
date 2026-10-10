@@ -1,4 +1,4 @@
-# Paperclip Operating Rules (tekmora/discord-bot)
+# Paperclip Operating Rules (tekmora/diallak)
 
 ## Operating Contract
 
