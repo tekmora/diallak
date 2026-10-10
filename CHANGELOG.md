@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+
+## [0.1.1] - 2026-10-10
+
+### Added
+
+- Add the record of processing and a separate notice of the right to object
+- Draft the imprint with one identity block shared with the privacy notice
+
+### Fixed
+
+- Stop the release from pushing a latest image tag
+
 ## [0.1.0] - 2026-10-10
 
 ### Added
