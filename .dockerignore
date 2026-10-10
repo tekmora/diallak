@@ -1,0 +1,6 @@
+# The image build needs the Go sources and module files only.
+.git
+.standards
+.workingdir
+.workingdir2
+.standards-receipt.json

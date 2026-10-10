@@ -1,0 +1,75 @@
+---
+# Runs when a GitHub release is published, or by hand for an existing tag.
+# Merging this file releases nothing. The image is built, signed and attested
+# by release-image.yml; this workflow only resolves the tag and attaches the
+# SBOM to the release. Every `uses:` is pinned to a commit.
+name: release
+
+'on':
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build again, vX.Y.Z
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    name: resolve tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - id: tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          TAG="${RELEASE_TAG:-$INPUT_TAG}"
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::tag must look like vX.Y.Z"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  image:
+    name: image
+    needs: meta
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/release-image.yml
+    with:
+      tag: ${{ needs.meta.outputs.tag }}
+
+  assets:
+    name: attach SBOM
+    needs: [meta, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      # yamllint disable-line rule:line-length
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.image.outputs.sbom }}
+          path: sbom
+      # A rebuild of an existing tag replaces its SBOM.
+      - name: Attach the SBOM to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.meta.outputs.tag }}
+        run: gh release upload "$TAG" sbom/*.spdx.json --clobber
