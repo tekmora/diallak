@@ -199,8 +199,9 @@ func TestHandleAsk_Boundary_ReplyIsSentAfterTheCallerContextEnded(t *testing.T) 
 	h.HandleAsk(ctx, in)
 
 	got := in.delivered()
-	if len(got) != 1 || got[0] != TextFailure {
-		t.Fatalf("delivered replies = %q, want exactly the failure text", got)
+	wantFailure := answer.AppendFooter(TextFailure, "")
+	if len(got) != 1 || got[0] != wantFailure {
+		t.Fatalf("delivered replies = %q, want exactly the failure text with footer %q", got, wantFailure)
 	}
 }
 

@@ -230,3 +230,114 @@ func TestConfig_Negative_RedactionHidesSecrets(t *testing.T) {
 		t.Fatalf("slog JSON %q does not contain [redacted]", logText)
 	}
 }
+
+func TestLoad_Positive_SupportChannel(t *testing.T) {
+	t.Run("unset defaults to the support channel", func(t *testing.T) {
+		cfg, err := Load(env(validBaseEnv(t)))
+		if err != nil {
+			t.Fatalf("Load = %v, want nil", err)
+		}
+		if cfg.SupportChannel != DefaultSupportChannel {
+			t.Errorf("SupportChannel = %q, want %q", cfg.SupportChannel, DefaultSupportChannel)
+		}
+	})
+
+	t.Run("empty string defaults to the support channel", func(t *testing.T) {
+		base := validBaseEnv(t)
+		base[EnvSupportChannel] = ""
+		cfg, err := Load(env(base))
+		if err != nil {
+			t.Fatalf("Load = %v, want nil", err)
+		}
+		if cfg.SupportChannel != DefaultSupportChannel {
+			t.Errorf("SupportChannel = %q, want %q", cfg.SupportChannel, DefaultSupportChannel)
+		}
+	})
+
+	t.Run("configured value is trimmed", func(t *testing.T) {
+		base := validBaseEnv(t)
+		base[EnvSupportChannel] = "  #help-desk  "
+		cfg, err := Load(env(base))
+		if err != nil {
+			t.Fatalf("Load = %v, want nil", err)
+		}
+		if cfg.SupportChannel != "#help-desk" {
+			t.Errorf("SupportChannel = %q, want #help-desk", cfg.SupportChannel)
+		}
+		if !strings.Contains(cfg.String(), `SupportChannel:"#help-desk"`) {
+			t.Errorf("String() = %q, missing SupportChannel", cfg.String())
+		}
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewJSONHandler(&buf, nil))
+		logger.Info("test", slog.Any("cfg", cfg))
+		if !strings.Contains(buf.String(), `"SupportChannel":"#help-desk"`) {
+			t.Errorf("LogValue() JSON = %q, missing SupportChannel", buf.String())
+		}
+	})
+}
+
+func TestLoad_Negative_SupportChannelRefused(t *testing.T) {
+	refused := []struct {
+		name string
+		val  string
+	}{
+		{name: "over 64 runes", val: strings.Repeat("a", 65)},
+		{name: "newline", val: "#help\ndesk"},
+		{name: "tab", val: "#help\tdesk"},
+		{name: "carriage return", val: "#help\rdesk"},
+		{name: "bell control char", val: "#help\x07desk"},
+		{name: "contains at sign", val: "@here"},
+		{name: "contains at sign inside", val: "#help@desk"},
+		{name: "whitespace only spaces", val: "   "},
+		{name: "whitespace only tabs and spaces", val: " \t "},
+	}
+
+	for _, tc := range refused {
+		t.Run(tc.name, func(t *testing.T) {
+			base := validBaseEnv(t)
+			base[EnvSupportChannel] = tc.val
+			_, err := Load(env(base))
+			if err == nil {
+				t.Fatalf("Load with %q succeeded, want error", tc.name)
+			}
+			msg := err.Error()
+			if !strings.Contains(msg, EnvSupportChannel) {
+				t.Errorf("error %q does not contain %s", msg, EnvSupportChannel)
+			}
+			if strings.TrimSpace(tc.val) != "" && strings.Contains(msg, tc.val) {
+				t.Errorf("error %q leaks the refused value %q", msg, tc.val)
+			}
+		})
+	}
+}
+
+func TestLoad_Boundary_SupportChannelLength(t *testing.T) {
+	t.Run("exactly 64 runes accepted", func(t *testing.T) {
+		val64 := strings.Repeat("c", 64)
+		base := validBaseEnv(t)
+		base[EnvSupportChannel] = val64
+		cfg, err := Load(env(base))
+		if err != nil {
+			t.Fatalf("Load with 64 runes = %v, want nil", err)
+		}
+		if cfg.SupportChannel != val64 {
+			t.Errorf("SupportChannel len = %d, want 64", len(cfg.SupportChannel))
+		}
+	})
+
+	t.Run("exactly 65 runes refused", func(t *testing.T) {
+		val65 := strings.Repeat("c", 65)
+		base := validBaseEnv(t)
+		base[EnvSupportChannel] = val65
+		_, err := Load(env(base))
+		if err == nil {
+			t.Fatalf("Load with 65 runes succeeded, want error")
+		}
+		if !strings.Contains(err.Error(), EnvSupportChannel) {
+			t.Errorf("error %q does not contain %s", err.Error(), EnvSupportChannel)
+		}
+		if strings.Contains(err.Error(), val65) {
+			t.Errorf("error %q leaks the refused value", err.Error())
+		}
+	})
+}

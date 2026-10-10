@@ -19,11 +19,11 @@ The reading behind it is in [ADR-0006](../adr/0006-ai-act-role.md).
 <!-- markdownlint-disable MD013 -->
 | Place | Text | State |
 | :--- | :--- | :--- |
-| Description of the `/ask` command, shown before first use | "Ask the automated assistant a question about the project documentation" | Approved, not yet in the code. Today: "Ask a question about the project documentation" |
+| Description of the `/ask` command, shown before first use | "Ask the automated assistant a question about the project documentation" | In the code |
 | First line of a model-written reply | "AI-generated answer. It can be wrong: check the sources below." | In the code |
 | First line of an excerpt reply | "Automated excerpts from the documentation. No AI model wrote this reply." | In the code |
 | Second line when the model failed | "The AI model is unavailable right now, so these are excerpts only." | In the code |
-| Last line of every reply | "Automated reply. A person can help in the support channel." | Approved, not yet in the code |
+| Last line of every reply | "Automated reply. A person can help in the support channel." | In the code |
 | The bot's profile text | "Automated assistant of this community. It answers from project documentation and can be wrong." | Proposed, set by the operator |
 <!-- markdownlint-enable MD013 -->
 
@@ -43,14 +43,36 @@ The texts in the code are the constants `LabelAnswer`, `LabelExcerpts` and
   which a program can detect generated text (ADR-0006, "Marking generated
   text"). Changing it changes that marker.
 
-## What changes in the code
+## Notices in the code
 
-1. The command description takes the approved text.
-2. Every reply gets the approved last line. The name of the support channel in
-   it comes from configuration; without one the line says "support channel".
-3. A test pins each text, so a change to a notice is a deliberate change.
+The approved texts are fixed by constants and formatting functions:
 
-Nothing else moves: the first lines stay where they are.
+- The command description is constant `CommandDescription` in
+  [`internal/discord`](../../internal/discord/discord.go).
+- The answer markers are constants `LabelAnswer`, `LabelExcerpts` and
+  `LabelModelUnavailable` in
+  [`internal/answer`](../../internal/answer/answer.go).
+- The reply footer and refusal text are produced by `Footer`, `Refusal` and
+  `AppendFooter` in [`internal/answer`](../../internal/answer/answer.go), using
+  `DefaultPlace` when no support channel is configured.
+- Replies rendered through `Render` in
+  [`internal/answer`](../../internal/answer/answer.go) append the footer as the
+  final line across all answer kinds.
+
+Every text is pinned by tests to prevent accidental edits:
+
+- `TestCommandDescription_Positive_ExactStringPin` in
+  [`internal/discord`](../../internal/discord/discord_test.go) pins the command
+  description.
+- `TestTexts_Positive_ExactStringPins` and
+  `TestRender_Positive_ModelWrittenAnswerFirstLineIsMarker` in
+  [`internal/answer`](../../internal/answer/answer_test.go) pin the answer
+  labels, the default footer, and the refusal text.
+- `TestRender_Positive_FooterIsLastLineForAllFiveCases` in
+  [`internal/answer`](../../internal/answer/answer_test.go) and
+  `TestHandler_Positive_FooterIsLastLineForAdapterTexts` in
+  [`internal/discord`](../../internal/discord/discord_test.go) verify that the
+  footer is the last line of every reply.
 
 ## Not covered here
 

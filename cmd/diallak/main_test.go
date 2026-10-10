@@ -125,6 +125,35 @@ func TestRun_Positive_ReadyWithModel(t *testing.T) {
 	}
 }
 
+func TestRun_Positive_SupportChannelPassedToDiscord(t *testing.T) {
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:      tokenPath,
+		config.EnvGuildID:        "42",
+		config.EnvCorpusDir:      corpusPath,
+		config.EnvSupportChannel: "#help-desk",
+	}
+
+	var capturedCfg discord.BotConfig
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64) error { return nil },
+		runDiscord: func(_ context.Context, cfg discord.BotConfig) error {
+			capturedCfg = cfg
+			return nil
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps)
+	if err != nil {
+		t.Fatalf("run = %v, want nil", err)
+	}
+	if capturedCfg.SupportChannel != "#help-desk" {
+		t.Errorf("SupportChannel = %q, want #help-desk", capturedCfg.SupportChannel)
+	}
+}
+
 func TestRun_Positive_RegisterCommands(t *testing.T) {
 	var out bytes.Buffer
 	var calledWithToken string

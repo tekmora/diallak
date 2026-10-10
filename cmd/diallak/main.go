@@ -129,19 +129,21 @@ func executeBotRun(
 	}
 
 	handler, err := discord.NewHandler(discord.HandlerConfig{
-		Asker:   assembly.Pipeline,
-		GuildID: cfg.GuildID,
-		Logger:  slog.Default(),
+		Asker:          assembly.Pipeline,
+		GuildID:        cfg.GuildID,
+		Logger:         slog.Default(),
+		SupportChannel: cfg.SupportChannel,
 	})
 	if err != nil {
 		return fmt.Errorf("create discord handler: %w", err)
 	}
 
 	botCfg := discord.BotConfig{
-		Token:   cfg.Token,
-		GuildID: cfg.GuildID,
-		Handler: handler,
-		Logger:  slog.Default(),
+		Token:          cfg.Token,
+		GuildID:        cfg.GuildID,
+		Handler:        handler,
+		Logger:         slog.Default(),
+		SupportChannel: cfg.SupportChannel,
 	}
 
 	if err := runDiscord(ctx, botCfg); err != nil {

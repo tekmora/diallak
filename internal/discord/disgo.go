@@ -56,6 +56,8 @@ type BotConfig struct {
 	Handler         *Handler
 	Logger          *slog.Logger
 	ShutdownTimeout time.Duration
+	// SupportChannel names where a person helps.
+	SupportChannel string
 }
 
 // RegisterCommands registers the single guild-scoped /ask command with Discord via REST.
@@ -378,7 +380,7 @@ func buildCommandCreate() discord.ApplicationCommandCreate {
 	maxLen := answer.MaxQuestionRunes
 	return discord.SlashCommandCreate{
 		Name:        CommandName,
-		Description: "Ask a question about the project documentation",
+		Description: CommandDescription,
 		Options: []discord.ApplicationCommandOption{
 			discord.ApplicationCommandOptionString{
 				Name:        OptionQuestion,
