@@ -2,6 +2,7 @@ package retrieval
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -182,5 +183,127 @@ func TestSearch_Boundary_LimitsAndEmptyQueries(t *testing.T) {
 	hitsMaxScore, err := ix.Search("completely unknown nonexistent token", Options{Limit: 3, MinScore: 1.0})
 	if err != nil || len(hitsMaxScore) != 0 {
 		t.Errorf("Search MinScore 1.0 for unknown = %d hits, want 0", len(hitsMaxScore))
+	}
+}
+
+func TestSearch_PartA_Ranking_StrongerChunkLargerIDComesFirst(t *testing.T) {
+	chunks := []corpus.Chunk{
+		{
+			ID:      "chunk-a-weaker",
+			Path:    "docs/a.md",
+			Title:   "A",
+			Heading: "Heading",
+			Text:    "media release automated",
+		},
+		{
+			ID:      "chunk-z-stronger",
+			Path:    "docs/z.md",
+			Title:   "Z",
+			Heading: "media release automated",
+			Text:    "media release automated",
+		},
+	}
+	ix, err := Build(chunks)
+	if err != nil {
+		t.Fatalf("Build error = %v", err)
+	}
+
+	hits, err := ix.Search("media release automated", Options{Limit: 2, MinScore: 0.0})
+	if err != nil {
+		t.Fatalf("Search error = %v", err)
+	}
+	if len(hits) != 2 {
+		t.Fatalf("Search returned %d hits, want 2", len(hits))
+	}
+	if hits[0].Chunk.ID != "chunk-z-stronger" {
+		t.Fatalf("top hit chunk ID = %q, want %q", hits[0].Chunk.ID, "chunk-z-stronger")
+	}
+}
+
+func TestSearch_PartA_OneWordOverlap_RequiresTwoMatchedTerms(t *testing.T) {
+	ix, err := Build(sampleChunks())
+	if err != nil {
+		t.Fatalf("Build error = %v", err)
+	}
+	// Query has two content tokens ("helm", "download").
+	// docs/deployment.md has "helm", docs/download-clients.md has "download".
+	// Neither chunk matches both tokens, so MinMatchedTerms=2 must reject both at MinScore 0.
+	hits, err := ix.Search("helm download", Options{Limit: 3, MinScore: 0.0})
+	if err != nil {
+		t.Fatalf("Search error = %v", err)
+	}
+	if len(hits) != 0 {
+		t.Fatalf("Search returned %d hits for one-word overlap, want 0 hits", len(hits))
+	}
+}
+
+func TestSearch_PartA_SingleTokenQuery_OneMatchIsEligible(t *testing.T) {
+	ix, err := Build(sampleChunks())
+	if err != nil {
+		t.Fatalf("Build error = %v", err)
+	}
+	// Single-token query matches transmission in docs/download-clients.md#1.
+	// Since query has only 1 unique token, min(MinMatchedTerms, 1) = 1 is required.
+	// Coverage score must be 1.0 (binary presence idf / weightQ) and eligible even at MinScore 1.0.
+	hits, err := ix.Search("transmission", Options{Limit: 3, MinScore: 1.0})
+	if err != nil {
+		t.Fatalf("Search error = %v", err)
+	}
+	if len(hits) != 1 {
+		t.Fatalf("Search returned %d hits for single token query, want 1", len(hits))
+	}
+	if math.Abs(hits[0].Score-1.0) > 1e-9 {
+		t.Fatalf("hit score = %f, want 1.0", hits[0].Score)
+	}
+}
+
+func TestSearch_PartA_CoverageValue_HandComputedThreeChunkCorpus(t *testing.T) {
+	// Corpus: N = 3 chunks
+	// c0: "apple banana"
+	// c1: "apple cherry"
+	// c2: "date elderberry"
+	//
+	// Query: "apple cherry fig" (3 unique tokens)
+	//
+	// Term frequencies and IDFs:
+	// - "apple": df = 2, idf = ln(1 + (3 - 2 + 0.5) / (2 + 0.5)) = ln(1 + 1.5/2.5) = ln(1.6)
+	// - "cherry": df = 1, idf = ln(1 + (3 - 1 + 0.5) / (1 + 0.5)) = ln(1 + 2.5/1.5) = ln(8/3)
+	// - "fig": df = 0 (absent), idfAbsent = ln(1 + (3 + 0.5) / 0.5) = ln(8)
+	//
+	// Query weight:
+	// weight(q) = ln(1.6) + ln(8/3) + ln(8)
+	//
+	// Chunk c1 contains "apple" and "cherry" (2 distinct terms matched >= min(2, 3)).
+	// Sum of IDF of matched query terms in c1 = ln(1.6) + ln(8/3)
+	// Expected coverage Score = (ln(1.6) + ln(8/3)) / (ln(1.6) + ln(8/3) + ln(8))
+	chunks := []corpus.Chunk{
+		{ID: "c0", Path: "docs/c0.md", Text: "apple banana"},
+		{ID: "c1", Path: "docs/c1.md", Text: "apple cherry"},
+		{ID: "c2", Path: "docs/c2.md", Text: "date elderberry"},
+	}
+	ix, err := Build(chunks)
+	if err != nil {
+		t.Fatalf("Build error = %v", err)
+	}
+
+	hits, err := ix.Search("apple cherry fig", Options{Limit: 3, MinScore: 0.0})
+	if err != nil {
+		t.Fatalf("Search error = %v", err)
+	}
+	if len(hits) != 1 {
+		t.Fatalf("Search returned %d hits, want 1 (c1)", len(hits))
+	}
+	if hits[0].Chunk.ID != "c1" {
+		t.Fatalf("top hit chunk ID = %q, want c1", hits[0].Chunk.ID)
+	}
+
+	idfApple := math.Log(1.6)
+	idfCherry := math.Log(8.0 / 3.0)
+	idfFigAbsent := math.Log(8.0)
+	weightQ := idfApple + idfCherry + idfFigAbsent
+	wantScore := (idfApple + idfCherry) / weightQ
+
+	if math.Abs(hits[0].Score-wantScore) > 1e-9 {
+		t.Fatalf("c1 score = %.12f, want %.12f (diff %e)", hits[0].Score, wantScore, math.Abs(hits[0].Score-wantScore))
 	}
 }

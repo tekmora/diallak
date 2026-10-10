@@ -30,6 +30,9 @@ const (
 	BM25K1 = 1.2
 	// BM25B is the BM25 document length normalization parameter.
 	BM25B = 0.75
+	// MinMatchedTerms is the minimum number of distinct query terms a chunk must match to be eligible for retrieval.
+	// One overlapping word is not a source.
+	MinMatchedTerms = 2
 	// DefaultMinScore is the default minimum score threshold for retrieval refusal.
 	// Chosen from the sweep over MinScore 0.00..0.90 at Limit 3, where 0.35 maximized
 	// answerable hits (26/32) subject to off-topic refusals >= 5 (5/6 refused,
@@ -37,13 +40,15 @@ const (
 	DefaultMinScore = 0.35
 )
 
-// Hit pairs a retrieved documentation chunk with its relevance score in [0, 1].
+// Hit pairs a retrieved documentation chunk with its coverage score in [0, 1].
+// Results are ranked by raw BM25 score descending, while Score reflects query term coverage.
 type Hit struct {
 	Chunk corpus.Chunk
 	Score float64
+	rank  float64
 }
 
-// Options configures retrieval query execution.
+// Options configures retrieval query execution parameters.
 type Options struct {
 	Limit    int
 	MinScore float64
@@ -136,7 +141,9 @@ func addTokens(bag map[string]int, tokens []string, weight int) {
 	}
 }
 
-// Search retrieves chunks matching query according to BM25 scoring and options.
+// Search retrieves chunks matching query according to BM25 ranking and coverage threshold.
+// Eligible chunks must match at least MinMatchedTerms distinct query terms (or all query terms if fewer).
+// Results are ranked by raw unclipped BM25 score descending, with ties broken by chunk ID ascending.
 func (ix *Index) Search(query string, opt Options) ([]Hit, error) {
 	if err := validateSearchOptions(query, opt); err != nil {
 		return nil, err
@@ -149,9 +156,11 @@ func (ix *Index) Search(query string, opt Options) ([]Hit, error) {
 
 	uniqueTokens := deduplicateTokens(tokens)
 	weightQ := ix.calculateWeightQ(uniqueTokens)
-	scores := ix.calculateScores(uniqueTokens)
+	if weightQ == 0 {
+		return []Hit{}, nil
+	}
 
-	hits := ix.collectHits(scores, weightQ, opt.MinScore)
+	hits := ix.collectHits(uniqueTokens, weightQ, opt)
 	sortHits(hits)
 	if len(hits) > opt.Limit {
 		hits = hits[:opt.Limit]
@@ -200,9 +209,20 @@ func (ix *Index) calculateWeightQ(tokens []string) float64 {
 	return weightQ
 }
 
-func (ix *Index) calculateScores(tokens []string) []float64 {
-	scores := make([]float64, ix.n)
-	for _, t := range tokens {
+type docAccum struct {
+	rawBM25      float64
+	coverageIDF  float64
+	matchedTerms int
+}
+
+func (ix *Index) collectHits(uniqueTokens []string, weightQ float64, opt Options) []Hit {
+	minMatched := MinMatchedTerms
+	if len(uniqueTokens) < minMatched {
+		minMatched = len(uniqueTokens)
+	}
+
+	accums := make([]docAccum, ix.n)
+	for _, t := range uniqueTokens {
 		count, ok := ix.df[t]
 		if !ok || count == 0 {
 			continue
@@ -212,23 +232,23 @@ func (ix *Index) calculateScores(tokens []string) []float64 {
 			docLen := ix.docLens[p.docIdx]
 			denom := p.tf + BM25K1*(1.0-BM25B+BM25B*(docLen/ix.avgdl))
 			bm25TF := (p.tf * (BM25K1 + 1.0)) / denom
-			scores[p.docIdx] += idf * bm25TF
+			accums[p.docIdx].rawBM25 += idf * bm25TF
+			accums[p.docIdx].coverageIDF += idf
+			accums[p.docIdx].matchedTerms++
 		}
 	}
-	return scores
-}
 
-func (ix *Index) collectHits(scores []float64, weightQ, minScore float64) []Hit {
 	var hits []Hit
-	for i, raw := range scores {
-		if raw <= 0 {
+	for i := range accums {
+		if accums[i].matchedTerms < minMatched {
 			continue
 		}
-		score := math.Min(1.0, raw/weightQ)
-		if score >= minScore {
+		score := accums[i].coverageIDF / weightQ
+		if score >= opt.MinScore {
 			hits = append(hits, Hit{
 				Chunk: ix.chunks[i],
 				Score: score,
+				rank:  accums[i].rawBM25,
 			})
 		}
 	}
@@ -237,8 +257,8 @@ func (ix *Index) collectHits(scores []float64, weightQ, minScore float64) []Hit 
 
 func sortHits(hits []Hit) {
 	sort.Slice(hits, func(i, j int) bool {
-		if hits[i].Score != hits[j].Score {
-			return hits[i].Score > hits[j].Score
+		if hits[i].rank != hits[j].rank {
+			return hits[i].rank > hits[j].rank
 		}
 		return hits[i].Chunk.ID < hits[j].Chunk.ID
 	})
