@@ -6,17 +6,26 @@ name: Security Scan
     - cron: '0 4 * * *'
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   vulncheck:
     runs-on: ubuntu-26.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: 'go.mod'
-          # See ci.yml: setup-go's cache key carries no job name, so every job
-          # in the repository would share one build cache entry.
+          # setup-go's cache key carries no job name, so every job in the
+          # repository would share one build cache entry. The two cache steps
+          # below key the caches per job instead.
           cache: false
 
       # A cache key joins the runner, the go.sum hash and, for the build cache,
@@ -24,7 +33,7 @@ jobs:
       # off for the two cache steps alone.
       # yamllint disable rule:line-length
       - name: Restore Go module cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/go/pkg/mod
           key: gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum') }}
@@ -34,7 +43,7 @@ jobs:
       # `vulncheck` names this job's build cache and must differ from every
       # other job's.
       - name: Restore Go build cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/go-build
           key: gobuild-${{ runner.os }}-${{ runner.arch }}-vulncheck-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
@@ -43,10 +52,15 @@ jobs:
             gobuild-${{ runner.os }}-${{ runner.arch }}-vulncheck-
       # yamllint enable rule:line-length
 
+      # The scanners come from the pinned tools module, not from `@latest`:
+      # gosec v2.29.0 built with its own golang.org/x/tools v0.49.0 cannot read
+      # the export data the Go 1.27.2 compiler writes and fails on every
+      # package. tools/go/go.mod selects x/tools v0.50.0 for both scanners.
       - name: Install Tools
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
+        run: >-
+          go install -modfile=tools/go/go.mod
+          golang.org/x/vuln/cmd/govulncheck
+          github.com/securego/gosec/v2/cmd/gosec
       - name: Run govulncheck
         run: govulncheck ./...
       - name: Run gosec
