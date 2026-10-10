@@ -232,12 +232,12 @@ func Load(getenv func(string) string) (Config, error) {
 	}, nil
 }
 
+// parseHealthAddr validates the optional listen address of the health listener. The host is
+// empty or an IP literal, never a name, so that starting the listener needs no name lookup. The
+// port is written in one way only: decimal, 1 to 65535, without sign or leading zero.
 func parseHealthAddr(raw string) (string, error) {
 	if raw == "" {
 		return "", nil
-	}
-	if strings.TrimSpace(raw) != raw || strings.ContainsAny(raw, " \t\r\n") {
-		return "", fmt.Errorf("%s holds whitespace: %q", EnvHealthAddr, raw)
 	}
 	host, port, err := net.SplitHostPort(raw)
 	if err != nil {
@@ -245,28 +245,20 @@ func parseHealthAddr(raw string) (string, error) {
 	}
 	portNum, err := strconv.ParseUint(port, 10, 16)
 	if err != nil || portNum == 0 || strconv.FormatUint(portNum, 10) != port {
-		return "", fmt.Errorf("%s port outside accepted range [1, 65535]: %q", EnvHealthAddr, port)
+		return "", fmt.Errorf("%s port must be a number from 1 to 65535 without leading zero: %q", EnvHealthAddr, port)
 	}
-	if host != "" {
-		if err := validateHealthHost(raw, host); err != nil {
-			return "", err
-		}
+	if host == "" {
+		return raw, nil
 	}
-	return raw, nil
-}
-
-func validateHealthHost(raw, host string) error {
 	ip := net.ParseIP(host)
 	if ip == nil {
-		return fmt.Errorf("%s host is not an IP literal: %q", EnvHealthAddr, host)
+		return "", fmt.Errorf("%s host is not an IP literal: %q", EnvHealthAddr, host)
 	}
-	if ip.To4() == nil && !strings.HasPrefix(raw, "[") {
-		return fmt.Errorf("%s IPv6 host must be enclosed in brackets", EnvHealthAddr)
-	}
+	// SplitHostPort takes brackets around any host. They belong to IPv6 only.
 	if ip.To4() != nil && strings.HasPrefix(raw, "[") {
-		return fmt.Errorf("%s IPv4 host must not be enclosed in brackets", EnvHealthAddr)
+		return "", fmt.Errorf("%s IPv4 host must not be enclosed in brackets", EnvHealthAddr)
 	}
-	return nil
+	return raw, nil
 }
 
 func parseCorpusDir(raw string) (string, error) {

@@ -183,15 +183,14 @@ func initHealth(ctx context.Context, addr string) (*healthHarness, error) {
 	if addr == "" {
 		return nil, nil
 	}
-	var lc net.ListenConfig
-	ln, err := lc.Listen(ctx, "tcp", addr)
+	ln, err := health.Listen(ctx, addr)
 	if err != nil {
-		return nil, fmt.Errorf("listen %s (%s): %w", config.EnvHealthAddr, addr, err)
+		return nil, fmt.Errorf("%s: %w", config.EnvHealthAddr, err)
 	}
 	state := &health.State{}
 	return &healthHarness{
 		state:  state,
-		server: health.NewServer(state),
+		server: health.NewServer(state, slog.Default()),
 		ln:     ln,
 	}, nil
 }

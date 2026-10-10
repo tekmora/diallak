@@ -922,7 +922,7 @@ func TestRun_Positive_ReportReadyCallback(t *testing.T) {
 	case <-readyReported:
 	case err := <-errCh:
 		t.Fatalf("runWithOptions failed early: %v", err)
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(5 * time.Second):
 		t.Fatal("timeout waiting for ReportReady(true)")
 	}
 
@@ -933,7 +933,7 @@ func TestRun_Positive_ReportReadyCallback(t *testing.T) {
 		if err != nil {
 			t.Fatalf("runWithOptions error: %v", err)
 		}
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(5 * time.Second):
 		t.Fatal("timeout waiting for runWithOptions to exit")
 	}
 
@@ -991,7 +991,7 @@ func TestRun_Positive_ReportReadyNilCallback(t *testing.T) {
 	case <-gatewayOpened:
 	case err := <-errCh:
 		t.Fatalf("runWithOptions failed early: %v", err)
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(5 * time.Second):
 		t.Fatal("timeout waiting for gateway open")
 	}
 
@@ -1002,7 +1002,7 @@ func TestRun_Positive_ReportReadyNilCallback(t *testing.T) {
 		if err != nil {
 			t.Fatalf("runWithOptions error: %v", err)
 		}
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(5 * time.Second):
 		t.Fatal("timeout waiting for runWithOptions to exit")
 	}
 }

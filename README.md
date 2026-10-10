@@ -72,6 +72,8 @@ from Greek *tekmerion*, "decisive proof". The repository was first named
 
 The bot reads its settings from the environment and fails closed when one is
 missing or malformed ([`internal/config`](internal/config/config.go)).
+What a deployment needs beyond these settings (image, network, resources, the
+documentation directory) is in [docs/hosting.md](docs/hosting.md).
 
 <!-- markdownlint-disable MD013 -->
 | Variable | Required | Meaning |
@@ -153,8 +155,8 @@ and can never mention anyone.
 ### Health checks
 
 When `DIALLAK_HEALTH_ADDR` is configured, the bot starts an HTTP listener for
-deployment health and readiness probes ([`internal/health`](internal/health)).
-The listener is off by default.
+deployment health and readiness probes ([`internal/health`](internal/health),
+[ADR-0007](docs/adr/0007-health-listener.md)). The listener is off by default.
 
 - `GET /healthz` reports process liveness and answers `200 ok` while the server
   runs.

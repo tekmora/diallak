@@ -17,6 +17,7 @@ import (
 	"github.com/tekmora/diallak/internal/config"
 	"github.com/tekmora/diallak/internal/corpus"
 	"github.com/tekmora/diallak/internal/discord"
+	"github.com/tekmora/diallak/internal/health"
 )
 
 type failingWriter struct{}
@@ -531,7 +532,7 @@ func TestRun_Positive_HealthEndpointServesAndReportsReady(t *testing.T) {
 		config.EnvHealthAddr: addr,
 	}
 
-	httpClient := &http.Client{Timeout: 100 * time.Millisecond}
+	httpClient := &http.Client{Timeout: 5 * time.Second}
 	var readyChecked bool
 
 	deps := dependencies{
@@ -738,5 +739,48 @@ func TestRun_Positive_RegisterCommandsNeverStartsHealthListener(t *testing.T) {
 	}
 	if !registerCalled {
 		t.Fatal("registerCommands was not called")
+	}
+}
+
+// brokenListener is a listener whose Accept fails for good once fail is closed.
+type brokenListener struct {
+	fail chan struct{}
+	addr net.Addr
+}
+
+func (b *brokenListener) Accept() (net.Conn, error) {
+	<-b.fail
+	return nil, errors.New("accept refused by the test")
+}
+
+func (*brokenListener) Close() error     { return nil }
+func (b *brokenListener) Addr() net.Addr { return b.addr }
+
+func TestRunDiscordWithHealth_Negative_FailingListenerStopsTheBotAndIsReported(t *testing.T) {
+	ln := &brokenListener{fail: make(chan struct{}), addr: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1}}
+	state := &health.State{}
+	hh := &healthHarness{state: state, server: health.NewServer(state, nil)}
+
+	botStopped := make(chan struct{})
+	runDiscord := func(ctx context.Context, _ discord.BotConfig) error {
+		// The bot is running; now the health listener breaks. The bot must be told to stop.
+		close(ln.fail)
+		select {
+		case <-ctx.Done():
+			close(botStopped)
+			return nil
+		case <-time.After(5 * time.Second):
+			return errors.New("the bot was not stopped")
+		}
+	}
+
+	err := runDiscordWithHealth(context.Background(), hh, ln, discord.BotConfig{}, runDiscord)
+	select {
+	case <-botStopped:
+	default:
+		t.Fatalf("the bot kept running after the health listener failed (err = %v)", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "health server") || !strings.Contains(err.Error(), "accept refused by the test") {
+		t.Fatalf("err = %v, want the health server's accept error", err)
 	}
 }

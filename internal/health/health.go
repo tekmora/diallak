@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"sync/atomic"
@@ -130,10 +131,18 @@ func withReadHeaderTimeout(d time.Duration) serverOption {
 }
 
 // NewServer constructs an HTTP probe server with standard timeouts.
-func NewServer(state *State, opts ...serverOption) *Server {
+//
+// The handler writes no log line. What the HTTP server itself reports, such as a failing accept,
+// goes to logger as a warning; a nil logger drops it. Without this the standard library would
+// print such lines unstructured to standard error.
+func NewServer(state *State, logger *slog.Logger, opts ...serverOption) *Server {
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
+	}
 	s := &Server{
 		server: &http.Server{
 			Handler:           NewHandler(state),
+			ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
 			ReadHeaderTimeout: ReadHeaderTimeout,
 			ReadTimeout:       ReadTimeout,
 			WriteTimeout:      WriteTimeout,

@@ -832,20 +832,24 @@ func TestLoad_Negative_HealthAddrRefusesInvalidValues(t *testing.T) {
 	cases := []struct {
 		name string
 		val  string
+		want string
 	}{
-		{"no port", "127.0.0.1"},
-		{"port 0", "127.0.0.1:0"},
-		{"port out of range", "127.0.0.1:65536"},
-		{"port negative", "127.0.0.1:-1"},
-		{"port not a number", "127.0.0.1:abc"},
-		{"host not IP literal", "localhost:8080"},
-		{"host domain", "example.com:8080"},
-		{"leading space", " 127.0.0.1:8080"},
-		{"trailing space", "127.0.0.1:8080 "},
-		{"extra text path", "127.0.0.1:8080/healthz"},
-		{"extra text trailing", "127.0.0.1:8080 extra"},
-		{"ipv6 without brackets", "::1:8080"},
-		{"ipv4 in brackets", "[127.0.0.1]:8080"},
+		{"no port", "127.0.0.1", "host:port"},
+		{"port 0", "127.0.0.1:0", "port"},
+		{"port out of range", "127.0.0.1:65536", "port"},
+		{"port negative", "127.0.0.1:-1", "port"},
+		{"port with a sign", "127.0.0.1:+8080", "port"},
+		{"port with a leading zero", "127.0.0.1:08080", "port"},
+		{"port not a number", "127.0.0.1:abc", "port"},
+		{"host not IP literal", "localhost:8080", "not an IP literal"},
+		{"host domain", "example.com:8080", "not an IP literal"},
+		{"leading space", " 127.0.0.1:8080", "not an IP literal"},
+		{"space as host", " :8080", "not an IP literal"},
+		{"trailing space", "127.0.0.1:8080 ", "port"},
+		{"extra text path", "127.0.0.1:8080/healthz", "port"},
+		{"extra text trailing", "127.0.0.1:8080 extra", "port"},
+		{"ipv6 without brackets", "::1:8080", "host:port"},
+		{"ipv4 in brackets", "[127.0.0.1]:8080", "brackets"},
 	}
 
 	for _, tc := range cases {
@@ -858,6 +862,9 @@ func TestLoad_Negative_HealthAddrRefusesInvalidValues(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), EnvHealthAddr) {
 				t.Errorf("error %q does not name %s", err.Error(), EnvHealthAddr)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %q does not say what is wrong (%q)", err.Error(), tc.want)
 			}
 			if cfg.HealthAddr != "" {
 				t.Errorf("cfg.HealthAddr = %q, want empty on error", cfg.HealthAddr)

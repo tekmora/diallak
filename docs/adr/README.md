@@ -15,4 +15,5 @@ record that supersedes it.
 | [0004](0004-community-questions.md) | 2026-10-10 | Community questions: Discussions and the hub | Accepted |
 | [0005](0005-moderation-and-escalation.md) | 2026-10-10 | Moderation and escalation | Accepted |
 | [0006](0006-ai-act-role.md) | 2026-10-10 | Role and duties under the EU AI Act | Accepted |
+| [0007](0007-health-listener.md) | 2026-10-10 | Health listener for probes | Proposed |
 <!-- markdownlint-enable MD013 -->

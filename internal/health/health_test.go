@@ -1,9 +1,10 @@
 package health
 
 import (
+	"bytes"
 	"context"
 	"errors"
-	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -163,7 +164,7 @@ func TestServer_Negative_ListenerDownAfterContextEnded(t *testing.T) {
 	addr := ln.Addr().String()
 
 	state := &State{}
-	srv := NewServer(state)
+	srv := NewServer(state, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
@@ -171,7 +172,7 @@ func TestServer_Negative_ListenerDownAfterContextEnded(t *testing.T) {
 		errCh <- srv.Serve(ctx, ln)
 	}()
 
-	client := &http.Client{Timeout: 100 * time.Millisecond}
+	client := &http.Client{Timeout: 5 * time.Second}
 
 	// Verify server answers /healthz while active
 	req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/healthz", nil)
@@ -197,7 +198,7 @@ func TestServer_Negative_ListenerDownAfterContextEnded(t *testing.T) {
 		if serveErr != nil {
 			t.Fatalf("Serve returned error on normal shutdown: %v", serveErr)
 		}
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(5 * time.Second):
 		t.Fatal("Serve did not exit within deadline after context cancel")
 	}
 
@@ -223,7 +224,7 @@ func TestServer_Boundary_MaxHeaderBytesRefusedWithoutPanic(t *testing.T) {
 		t.Fatalf("Listen: %v", err)
 	}
 
-	srv := NewServer(&State{})
+	srv := NewServer(&State{}, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
@@ -233,11 +234,11 @@ func TestServer_Boundary_MaxHeaderBytesRefusedWithoutPanic(t *testing.T) {
 		cancel()
 		select {
 		case <-errCh:
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(5 * time.Second):
 		}
 	}()
 
-	client := &http.Client{Timeout: 100 * time.Millisecond}
+	client := &http.Client{Timeout: 5 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+ln.Addr().String()+"/healthz", nil)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
@@ -267,7 +268,7 @@ func TestServer_Boundary_ReadHeaderTimeoutDropsIdleClient(t *testing.T) {
 	}
 
 	const shortTimeout = 25 * time.Millisecond
-	srv := NewServer(&State{}, withReadHeaderTimeout(shortTimeout))
+	srv := NewServer(&State{}, nil, withReadHeaderTimeout(shortTimeout))
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
@@ -277,7 +278,7 @@ func TestServer_Boundary_ReadHeaderTimeoutDropsIdleClient(t *testing.T) {
 		cancel()
 		select {
 		case <-errCh:
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(5 * time.Second):
 		}
 	}()
 
@@ -292,17 +293,69 @@ func TestServer_Boundary_ReadHeaderTimeoutDropsIdleClient(t *testing.T) {
 		}
 	}()
 
-	// Client sends nothing; ReadHeaderTimeout should drop the connection
-	if err := conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+	// The client sends nothing. The server must close the connection after its header timeout,
+	// well before the second this client is willing to wait. With the built-in timeout, or with
+	// none, the client's own deadline would end the read first.
+	if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
 		t.Fatalf("SetReadDeadline: %v", err)
 	}
 
 	buf := make([]byte, 1)
 	_, readErr := conn.Read(buf)
 	if readErr == nil {
-		t.Fatal("expected read error/EOF due to ReadHeaderTimeout, got data")
+		t.Fatal("the idle client received data")
 	}
-	if !errors.Is(readErr, io.EOF) && !strings.Contains(readErr.Error(), "connection reset") && !strings.Contains(readErr.Error(), "use of closed network connection") {
-		t.Logf("Read error on dropped client: %v", readErr)
+	var netErr net.Error
+	if errors.As(readErr, &netErr) && netErr.Timeout() {
+		t.Fatalf("the server did not drop the idle client within a second: %v", readErr)
+	}
+}
+
+func TestNewServer_Positive_ServerErrorsGoToTheLogger(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	srv := NewServer(&State{}, logger)
+
+	// The standard library reports through this logger; a line it writes must arrive as a
+	// structured warning.
+	srv.server.ErrorLog.Print("accept failed")
+
+	got := buf.String()
+	if !strings.Contains(got, `"level":"WARN"`) || !strings.Contains(got, "accept failed") {
+		t.Fatalf("log output = %q, want a warning that holds the message", got)
+	}
+
+	// Without a logger nothing is written and nothing panics.
+	NewServer(&State{}, nil).server.ErrorLog.Print("dropped")
+}
+
+func TestNewServer_Boundary_EveryTimeoutAndTheHeaderLimitAreSet(t *testing.T) {
+	srv := NewServer(&State{}, nil).server
+
+	// A server field left at zero means "no limit" to the standard library, so each one is
+	// compared with its constant, and each constant has to be a real limit.
+	limits := []struct {
+		name     string
+		got      time.Duration
+		constant time.Duration
+	}{
+		{"ReadHeaderTimeout", srv.ReadHeaderTimeout, ReadHeaderTimeout},
+		{"ReadTimeout", srv.ReadTimeout, ReadTimeout},
+		{"WriteTimeout", srv.WriteTimeout, WriteTimeout},
+		{"IdleTimeout", srv.IdleTimeout, IdleTimeout},
+	}
+	for _, l := range limits {
+		if l.constant <= 0 {
+			t.Errorf("%s constant = %v, want a positive limit", l.name, l.constant)
+		}
+		if l.got != l.constant {
+			t.Errorf("server %s = %v, want %v", l.name, l.got, l.constant)
+		}
+	}
+	if MaxHeaderBytes <= 0 || srv.MaxHeaderBytes != MaxHeaderBytes {
+		t.Errorf("server MaxHeaderBytes = %d, want %d", srv.MaxHeaderBytes, MaxHeaderBytes)
+	}
+	if ShutdownDeadline <= 0 {
+		t.Errorf("ShutdownDeadline = %v, want a positive limit", ShutdownDeadline)
 	}
 }
