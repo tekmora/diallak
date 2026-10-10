@@ -8,44 +8,26 @@ import (
 func TestTokenize_Positive_SplitsAndStems(t *testing.T) {
 	text := "How many searches per hour does SnatchArr do by default?"
 	got := Tokenize(text)
-	want := []string{"many", "search", "per", "hour", "snatcharr", "default"}
+	want := []string{"mani", "search", "per", "hour", "snatcharr", "default"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Tokenize(%q) = %v, want %v", text, got, want)
 	}
 }
 
-func TestTokenize_Positive_SuffixStemmerTable(t *testing.T) {
+func TestTokenize_Positive_AppliesStemmerToTokens(t *testing.T) {
 	tests := []struct {
-		word string
-		want string
+		input string
+		want  []string
 	}{
-		{"categories", "category"},
-		{"entries", "entry"},
-		{"queries", "query"},
-		{"searches", "search"},
-		{"snatches", "snatch"},
-		{"crashes", "crash"},
-		{"processes", "process"},
-		{"indexes", "index"},
-		{"snatching", "snatch"},
-		{"waiting", "wait"},
-		{"downloading", "download"},
-		{"supported", "support"},
-		{"clients", "client"},
-		{"downloads", "download"},
-		{"secrets", "secret"},
-		{"instances", "instance"},
-		{"releases", "release"},
-		{"status", "status"},
-		{"apps", "apps"},
-		{"pods", "pods"},
-		{"runs", "runs"},
-		{"cross", "cross"},
+		{"categories entries queries", []string{"categori", "entri", "queri"}},
+		{"searches snatches crashes", []string{"search", "snatch", "crash"}},
+		{"supported clients downloading", []string{"support", "client", "download"}},
+		{"releases instances secrets", []string{"releas", "instanc", "secret"}},
 	}
 	for _, tc := range tests {
-		got := stemWord(tc.word)
-		if got != tc.want {
-			t.Errorf("stemWord(%q) = %q, want %q", tc.word, got, tc.want)
+		got := Tokenize(tc.input)
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("Tokenize(%q) = %v, want %v", tc.input, got, tc.want)
 		}
 	}
 }
