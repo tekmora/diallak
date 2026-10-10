@@ -2,6 +2,7 @@ package corpus
 
 import (
 	"context"
+	"io/fs"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -175,5 +176,31 @@ func TestLoad_Boundary_LimitsAndSizes(t *testing.T) {
 	}
 	if len(chunks) < 2 {
 		t.Errorf("expected chunk splitting, got %d chunks", len(chunks))
+	}
+}
+
+func TestLoad_Negative_RefusesMatchedNonRegularFile(t *testing.T) {
+	src := Source{Repository: "owner/repo", Revision: "v1", Patterns: []string{"docs/**/*.md"}}
+	// A checkout can carry a symbolic link whose target lies outside the corpus directory. The
+	// loader must not read through it, so a matched entry that is no regular file is an error.
+	fsys := fstest.MapFS{
+		"docs/real.md": &fstest.MapFile{Data: []byte("# Real\nBody")},
+		"docs/link.md": &fstest.MapFile{Data: []byte("real.md"), Mode: fs.ModeSymlink},
+	}
+	_, err := Load(context.Background(), fsys, src, DefaultLimits())
+	if err == nil || !strings.Contains(err.Error(), "not a regular file") || !strings.Contains(err.Error(), "docs/link.md") {
+		t.Fatalf("Load err = %v, want an error naming docs/link.md as not a regular file", err)
+	}
+}
+
+func TestLoad_Boundary_MaxChunkBytesHoldsOneRune(t *testing.T) {
+	src := Source{Repository: "owner/repo", Revision: "v1", Patterns: []string{"*.md"}}
+	fsys := fstest.MapFS{"a.md": &fstest.MapFile{Data: []byte("# T\nBody")}}
+	// One rune takes up to four bytes; a smaller chunk limit cannot cut on a rune boundary.
+	if _, err := Load(context.Background(), fsys, src, Limits{MaxFiles: 1, MaxFileBytes: 100, MaxChunks: 10, MaxChunkBytes: 3}); err == nil || !strings.Contains(err.Error(), "MaxChunkBytes") {
+		t.Fatalf("Load with MaxChunkBytes 3 err = %v, want an error naming MaxChunkBytes", err)
+	}
+	if _, err := Load(context.Background(), fsys, src, Limits{MaxFiles: 1, MaxFileBytes: 100, MaxChunks: 10, MaxChunkBytes: 4}); err != nil {
+		t.Fatalf("Load with MaxChunkBytes 4 err = %v, want nil", err)
 	}
 }

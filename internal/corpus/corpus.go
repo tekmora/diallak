@@ -67,6 +67,12 @@ type loadState struct {
 }
 
 // Load walks fsys in lexical order, filtering by src.Patterns, and chunks all matching files.
+//
+// Load fails closed. A matched path that is no regular file is an error: a checkout can carry a
+// symbolic link whose target lies outside the corpus directory, and reading through it would put
+// a foreign file into the corpus. A file over lim.MaxFileBytes, invalid UTF-8, more matched files
+// than lim.MaxFiles, more chunks than lim.MaxChunks and a source that matches no file are errors
+// too, each naming the path.
 func Load(ctx context.Context, fsys fs.FS, src Source, lim Limits) ([]Chunk, error) {
 	if err := validateSourceAndLimits(src, lim); err != nil {
 		return nil, fmt.Errorf("validate source or limits: %w", err)
@@ -100,6 +106,10 @@ func (s *loadState) handleEntry(p string, d fs.DirEntry, err error) error {
 	}
 	if !matched {
 		return nil
+	}
+
+	if !d.Type().IsRegular() {
+		return fmt.Errorf("matched path %q is not a regular file", p)
 	}
 
 	s.matchedFiles++
@@ -136,6 +146,9 @@ func validateSourceAndLimits(src Source, lim Limits) error {
 	}
 	if lim.MaxFiles <= 0 || lim.MaxFileBytes <= 0 || lim.MaxChunks <= 0 || lim.MaxChunkBytes <= 0 {
 		return errors.New("all limits must be positive")
+	}
+	if lim.MaxChunkBytes < utf8.UTFMax {
+		return fmt.Errorf("MaxChunkBytes %d cannot hold one rune (%d bytes)", lim.MaxChunkBytes, utf8.UTFMax)
 	}
 	return nil
 }
