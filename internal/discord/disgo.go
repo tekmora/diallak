@@ -32,9 +32,21 @@ const (
 
 var errEmptyApplicationID = errors.New("application id is empty")
 
+// clientOptions are the seams of this package's tests: the address of the platform's REST API, the
+// deadline of the application lookup and the function that opens the gateway. The exported
+// functions pass the zero value, which means the real platform and the defaults.
 type clientOptions struct {
-	restURL     string
-	openGateway func(ctx context.Context, client *bot.Client, token string) error
+	restURL       string
+	lookupTimeout time.Duration
+	openGateway   func(ctx context.Context, client *bot.Client, token string) error
+}
+
+// lookupDeadline is the configured deadline of the application lookup, or the default.
+func (o clientOptions) lookupDeadline() time.Duration {
+	if o.lookupTimeout > 0 {
+		return o.lookupTimeout
+	}
+	return applicationLookupTimeout
 }
 
 // BotConfig configures the live Discord gateway client and runtime adapter.
@@ -70,7 +82,7 @@ func registerCommandsWithOptions(ctx context.Context, token string, guildID uint
 	}
 	defer client.Close(ctx)
 
-	appID, err := lookupApplicationID(ctx, client.Rest, token)
+	appID, err := lookupApplicationID(ctx, client.Rest, token, opts.lookupDeadline())
 	if err != nil {
 		return err
 	}
@@ -85,8 +97,16 @@ func registerCommandsWithOptions(ctx context.Context, token string, guildID uint
 	return nil
 }
 
-func lookupApplicationID(ctx context.Context, restClient rest.Rest, token string) (snowflake.ID, error) {
-	lookupCtx, cancel := context.WithTimeout(ctx, applicationLookupTimeout)
+// lookupApplicationID asks the platform which application the token belongs to. The id is never
+// taken from the token: for an old application the two differ. Every failure is an error, and
+// the error text never holds the token.
+func lookupApplicationID(
+	ctx context.Context,
+	restClient rest.Rest,
+	token string,
+	deadline time.Duration,
+) (snowflake.ID, error) {
+	lookupCtx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 
 	app, err := restClient.GetCurrentApplication(rest.WithCtx(lookupCtx))
@@ -94,7 +114,7 @@ func lookupApplicationID(ctx context.Context, restClient rest.Rest, token string
 		return 0, fmt.Errorf("lookup current application: %w", sanitizeToken(err, token))
 	}
 	if app == nil || app.ID == 0 {
-		return 0, fmt.Errorf("lookup current application: %w", sanitizeToken(errEmptyApplicationID, token))
+		return 0, fmt.Errorf("lookup current application: %w", errEmptyApplicationID)
 	}
 	return app.ID, nil
 }
@@ -138,7 +158,7 @@ func preGatewayStep(
 	client *bot.Client,
 	opts clientOptions,
 ) (snowflake.ID, error) {
-	appID, err := lookupApplicationID(ctx, client.Rest, cfg.Token)
+	appID, err := lookupApplicationID(ctx, client.Rest, cfg.Token, opts.lookupDeadline())
 	if err != nil {
 		return 0, err
 	}
