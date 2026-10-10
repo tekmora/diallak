@@ -32,6 +32,10 @@ jobs:
         run: go vet ./...
       - name: Test
         run: go test -race ./...
+      # The release workflow refuses a tag without a changelog section through
+      # this script, so its refusals are tested on every change.
+      - name: Release notes script
+        run: sh .github/scripts/release-notes_test.sh
 
   governance:
     name: governance (praetor)
