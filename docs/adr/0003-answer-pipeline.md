@@ -35,8 +35,9 @@ import the Discord library ([ADR-0001](0001-architecture-and-boundaries.md)).
 
 - The corpus is built from sources listed in configuration. Each entry names a
   repository, a path pattern and a revision.
-- Sources are public documentation only: a project's README and the Markdown
-  files under its `docs/` directory. Issues, discussions and private
+- Sources are public documentation: a project's README and the Markdown files
+  under its `docs/` directory. Answered public discussions are a second kind of
+  source under [ADR-0004](0004-community-questions.md). Issues and private
   repositories are never sources.
 - Every chunk keeps its source link, its heading and the revision it was read
   from.
