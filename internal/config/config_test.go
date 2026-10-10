@@ -1,17 +1,20 @@
 package config
 
 import (
+	"bytes"
+	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func writeToken(t *testing.T, content string) string {
+func writeSecret(t *testing.T, name, content string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "token")
+	path := filepath.Join(t.TempDir(), name)
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatalf("write token fixture: %v", err)
+		t.Fatalf("write secret fixture %q: %v", name, err)
 	}
 	return path
 }
@@ -20,35 +23,106 @@ func env(values map[string]string) func(string) string {
 	return func(key string) string { return values[key] }
 }
 
-func TestLoad_Positive_ReadsTokenFileAndGuild(t *testing.T) {
-	path := writeToken(t, "secret-token\n")
-	cfg, err := Load(env(map[string]string{EnvTokenFile: path, EnvGuildID: "123456789012345678"}))
-	if err != nil {
-		t.Fatalf("Load = %v, want nil", err)
-	}
-	if cfg.Token != "secret-token" {
-		t.Errorf("Token = %q, want the trimmed file content", cfg.Token)
-	}
-	if cfg.GuildID != 123456789012345678 {
-		t.Errorf("GuildID = %d, want 123456789012345678", cfg.GuildID)
+func validBaseEnv(t *testing.T) map[string]string {
+	t.Helper()
+	tokenPath := writeSecret(t, "token", "secret-token\n")
+	return map[string]string{
+		EnvTokenFile: tokenPath,
+		EnvGuildID:   "123456789012345678",
+		EnvCorpusDir: "/var/data/corpus",
 	}
 }
 
+func TestLoad_Positive_ReadsConfiguration(t *testing.T) {
+	t.Run("minimal without model", func(t *testing.T) {
+		cfg, err := Load(env(validBaseEnv(t)))
+		if err != nil {
+			t.Fatalf("Load = %v, want nil", err)
+		}
+		if cfg.Token != "secret-token" {
+			t.Errorf("Token = %q, want trimmed content", cfg.Token)
+		}
+		if cfg.GuildID != 123456789012345678 {
+			t.Errorf("GuildID = %d, want 123456789012345678", cfg.GuildID)
+		}
+		if cfg.CorpusDir != "/var/data/corpus" {
+			t.Errorf("CorpusDir = %q, want /var/data/corpus", cfg.CorpusDir)
+		}
+		if cfg.HasModel() {
+			t.Errorf("HasModel = true, want false")
+		}
+		if cfg.ModelKey != "" {
+			t.Errorf("ModelKey = %q, want empty", cfg.ModelKey)
+		}
+	})
+
+	t.Run("with model without key", func(t *testing.T) {
+		base := validBaseEnv(t)
+		base[EnvModelBaseURL] = "http://127.0.0.1:8000"
+		base[EnvModelAlias] = "router/test"
+
+		cfg, err := Load(env(base))
+		if err != nil {
+			t.Fatalf("Load = %v, want nil", err)
+		}
+		if !cfg.HasModel() {
+			t.Errorf("HasModel = false, want true")
+		}
+		if cfg.ModelBaseURL != "http://127.0.0.1:8000" {
+			t.Errorf("ModelBaseURL = %q, want http://127.0.0.1:8000", cfg.ModelBaseURL)
+		}
+		if cfg.ModelAlias != "router/test" {
+			t.Errorf("ModelAlias = %q, want router/test", cfg.ModelAlias)
+		}
+		if cfg.ModelKey != "" {
+			t.Errorf("ModelKey = %q, want empty", cfg.ModelKey)
+		}
+	})
+
+	t.Run("with model and key file", func(t *testing.T) {
+		base := validBaseEnv(t)
+		base[EnvModelBaseURL] = "http://127.0.0.1:8000"
+		base[EnvModelAlias] = "router/test"
+		base[EnvModelKeyFile] = writeSecret(t, "key", "sk-endpoint-secret\n")
+
+		cfg, err := Load(env(base))
+		if err != nil {
+			t.Fatalf("Load = %v, want nil", err)
+		}
+		if !cfg.HasModel() {
+			t.Errorf("HasModel = false, want true")
+		}
+		if cfg.ModelKey != "sk-endpoint-secret" {
+			t.Errorf("ModelKey = %q, want sk-endpoint-secret", cfg.ModelKey)
+		}
+	})
+}
+
 func TestLoad_Negative_RefusesInvalidInput(t *testing.T) {
-	valid := writeToken(t, "secret-token")
+	validToken := writeSecret(t, "token", "secret-token")
+	validKey := writeSecret(t, "key", "secret-key")
+
 	cases := []struct {
 		name string
 		env  map[string]string
 		want string
 	}{
-		{"guild missing", map[string]string{EnvTokenFile: valid}, EnvGuildID + " is not set"},
-		{"guild not decimal", map[string]string{EnvTokenFile: valid, EnvGuildID: "0x10"}, "not a decimal snowflake"},
-		{"guild negative", map[string]string{EnvTokenFile: valid, EnvGuildID: "-1"}, "not a decimal snowflake"},
-		{"guild zero", map[string]string{EnvTokenFile: valid, EnvGuildID: "0"}, "must not be zero"},
-		{"token variable missing", map[string]string{EnvGuildID: "1"}, EnvTokenFile + " is not set"},
-		{"token file absent", map[string]string{EnvTokenFile: filepath.Join(t.TempDir(), "absent"), EnvGuildID: "1"}, "open token file"},
-		{"token file blank", map[string]string{EnvTokenFile: writeToken(t, " \n\t"), EnvGuildID: "1"}, "token file is empty"},
+		{"guild missing", map[string]string{EnvTokenFile: validToken, EnvCorpusDir: "/corpus"}, EnvGuildID + " is not set"},
+		{"guild not decimal", map[string]string{EnvTokenFile: validToken, EnvGuildID: "0x10", EnvCorpusDir: "/corpus"}, "not a decimal snowflake"},
+		{"guild negative", map[string]string{EnvTokenFile: validToken, EnvGuildID: "-1", EnvCorpusDir: "/corpus"}, "not a decimal snowflake"},
+		{"guild zero", map[string]string{EnvTokenFile: validToken, EnvGuildID: "0", EnvCorpusDir: "/corpus"}, "must not be zero"},
+		{"token variable missing", map[string]string{EnvGuildID: "1", EnvCorpusDir: "/corpus"}, EnvTokenFile + " is not set"},
+		{"token file absent", map[string]string{EnvTokenFile: filepath.Join(t.TempDir(), "absent"), EnvGuildID: "1", EnvCorpusDir: "/corpus"}, "open token file"},
+		{"token file blank", map[string]string{EnvTokenFile: writeSecret(t, "blank", " \n\t"), EnvGuildID: "1", EnvCorpusDir: "/corpus"}, "token file is empty"},
+		{"corpus variable missing", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1"}, EnvCorpusDir + " is not set"},
+		{"corpus path relative", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "relative/path"}, "must be an absolute path"},
+		{"model base set without alias", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelBaseURL: "http://127.0.0.1"}, "must both be set or both be unset"},
+		{"model alias set without base", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelAlias: "router/test"}, "must both be set or both be unset"},
+		{"model key set without model", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelKeyFile: validKey}, "set but no model is configured"},
+		{"model key file absent", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelBaseURL: "http://127.0.0.1", EnvModelAlias: "test", EnvModelKeyFile: filepath.Join(t.TempDir(), "absent_key")}, "open model key file"},
+		{"model key file blank", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelBaseURL: "http://127.0.0.1", EnvModelAlias: "test", EnvModelKeyFile: writeSecret(t, "blank_key", " \n")}, "model key file is empty"},
 	}
+
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg, err := Load(env(tc.env))
@@ -56,29 +130,103 @@ func TestLoad_Negative_RefusesInvalidInput(t *testing.T) {
 				t.Fatalf("Load error = %v, want one naming %q", err, tc.want)
 			}
 			if cfg != (Config{}) {
-				t.Errorf("Load returned %+v with an error, want the zero Config", cfg.GuildID)
+				t.Errorf("Load returned non-zero Config %+v with an error", cfg)
 			}
 		})
 	}
 }
 
-func TestLoad_Boundary_TokenSizeAndGuildRange(t *testing.T) {
-	atLimit := writeToken(t, strings.Repeat("a", MaxTokenBytes))
-	cfg, err := Load(env(map[string]string{EnvTokenFile: atLimit, EnvGuildID: "18446744073709551615"}))
+func TestLoad_Boundary_SecretSizesAndGuildRange(t *testing.T) {
+	atLimit := writeSecret(t, "token_limit", strings.Repeat("a", MaxTokenBytes))
+	keyAtLimit := writeSecret(t, "key_limit", strings.Repeat("b", MaxTokenBytes))
+
+	cfg, err := Load(env(map[string]string{
+		EnvTokenFile:    atLimit,
+		EnvGuildID:      "18446744073709551615",
+		EnvCorpusDir:    "/var/data/corpus",
+		EnvModelBaseURL: "http://127.0.0.1:8000",
+		EnvModelAlias:   "router/test",
+		EnvModelKeyFile: keyAtLimit,
+	}))
 	if err != nil {
-		t.Fatalf("Load at the size limit = %v, want nil", err)
+		t.Fatalf("Load at size limits = %v, want nil", err)
 	}
-	if len(cfg.Token) != MaxTokenBytes || cfg.GuildID != 18446744073709551615 {
-		t.Errorf("Load at the limits = %d token bytes, guild %d", len(cfg.Token), cfg.GuildID)
-	}
-
-	overLimit := writeToken(t, strings.Repeat("a", MaxTokenBytes+1))
-	if _, err := Load(env(map[string]string{EnvTokenFile: overLimit, EnvGuildID: "1"})); err == nil ||
-		!strings.Contains(err.Error(), "larger than") {
-		t.Errorf("Load over the size limit = %v, want an error naming the limit", err)
+	if len(cfg.Token) != MaxTokenBytes || cfg.GuildID != 18446744073709551615 || len(cfg.ModelKey) != MaxTokenBytes {
+		t.Errorf("Load at limits unexpected sizes: token %d, guild %d, key %d",
+			len(cfg.Token), cfg.GuildID, len(cfg.ModelKey))
 	}
 
-	if _, err := Load(env(map[string]string{EnvTokenFile: atLimit, EnvGuildID: "18446744073709551616"})); err == nil {
-		t.Error("Load with a guild id above uint64 = nil, want an error")
+	overLimit := writeSecret(t, "token_over", strings.Repeat("a", MaxTokenBytes+1))
+	if _, err := Load(env(map[string]string{
+		EnvTokenFile: overLimit,
+		EnvGuildID:   "1",
+		EnvCorpusDir: "/corpus",
+	})); err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Errorf("Load over token limit = %v, want larger than error", err)
+	}
+
+	keyOverLimit := writeSecret(t, "key_over", strings.Repeat("b", MaxTokenBytes+1))
+	if _, err := Load(env(map[string]string{
+		EnvTokenFile:    atLimit,
+		EnvGuildID:      "1",
+		EnvCorpusDir:    "/corpus",
+		EnvModelBaseURL: "http://127.0.0.1:8000",
+		EnvModelAlias:   "test",
+		EnvModelKeyFile: keyOverLimit,
+	})); err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Errorf("Load over key limit = %v, want larger than error", err)
+	}
+
+	if _, err := Load(env(map[string]string{
+		EnvTokenFile: atLimit,
+		EnvGuildID:   "18446744073709551616",
+		EnvCorpusDir: "/corpus",
+	})); err == nil {
+		t.Error("Load with guild id above uint64 = nil, want error")
+	}
+}
+
+func TestConfig_Negative_RedactionHidesSecrets(t *testing.T) {
+	cfg := Config{
+		Token:        "super-secret-discord-token",
+		GuildID:      42,
+		ModelBaseURL: "https://model.example.com",
+		ModelAlias:   "router/test",
+		ModelKey:     "super-secret-model-key",
+		CorpusDir:    "/var/data/corpus",
+	}
+
+	formats := []string{
+		fmt.Sprintf("%v", cfg),
+		fmt.Sprintf("%+v", cfg),
+		fmt.Sprintf("%#v", cfg),
+		cfg.String(),
+	}
+
+	for _, text := range formats {
+		if strings.Contains(text, "super-secret-discord-token") {
+			t.Fatalf("formatted config %q contains token", text)
+		}
+		if strings.Contains(text, "super-secret-model-key") {
+			t.Fatalf("formatted config %q contains model key", text)
+		}
+		if !strings.Contains(text, "[redacted]") {
+			t.Fatalf("formatted config %q does not contain [redacted]", text)
+		}
+	}
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	logger.Info("dump", slog.Any("cfg", cfg))
+	logText := buf.String()
+
+	if strings.Contains(logText, "super-secret-discord-token") {
+		t.Fatalf("slog JSON %q contains token", logText)
+	}
+	if strings.Contains(logText, "super-secret-model-key") {
+		t.Fatalf("slog JSON %q contains model key", logText)
+	}
+	if !strings.Contains(logText, "[redacted]") {
+		t.Fatalf("slog JSON %q does not contain [redacted]", logText)
 	}
 }
