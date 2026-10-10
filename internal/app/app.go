@@ -117,25 +117,23 @@ func buildPipeline(cfg config.Config, index *retrieval.Index, logger *slog.Logge
 	return pipeline, nil
 }
 
+// logAssemblyReady writes the one line that says what the process will answer from. The sources
+// form a list of "repository@revision" entries: one key per source would repeat the key.
 func logAssemblyReady(logger *slog.Logger, cfg config.Config, sources []corpus.ManifestSource, chunkCount int) {
-	sourceAttrs := make([]any, len(sources))
+	inventory := make([]string, len(sources))
 	for i, s := range sources {
 		rev := s.Revision
 		if utf8.RuneCountInString(rev) > 12 {
-			runes := []rune(rev)
-			rev = string(runes[:12])
+			rev = string([]rune(rev)[:12])
 		}
-		sourceAttrs[i] = slog.Group("source",
-			slog.String("repository", s.Repository),
-			slog.String("revision", rev),
-		)
+		inventory[i] = s.Repository + "@" + rev
 	}
 
 	attrs := []any{
 		slog.Int("sources", len(sources)),
 		slog.Int("chunks", chunkCount),
 		slog.Bool("has_model", cfg.HasModel()),
-		slog.Group("inventory", sourceAttrs...),
+		slog.Any("inventory", inventory),
 	}
 	if cfg.HasModel() {
 		attrs = append(attrs, slog.String("model_alias", cfg.ModelAlias))
