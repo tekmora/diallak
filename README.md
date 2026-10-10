@@ -62,7 +62,9 @@ from the Greek naming theme of the Tekmora family. Tekmora (tek-MOH-ra) comes fr
 make verify-all   # context check, audit, build and tests
 ```
 
-To run retrieval evaluation against the SnatchArr fixture:
+The retrieval evaluation runs with the tests. To see its numbers for the SnatchArr fixture
+([`internal/eval/testdata/snatcharr`](internal/eval/testdata/snatcharr/README.md)):
+
 ```bash
 go test -v ./internal/eval -run TestSnatchArrEval
 ```
