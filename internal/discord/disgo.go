@@ -21,13 +21,21 @@ import (
 )
 
 const (
-	defaultShutdownTimeout = 15 * time.Second
-	gatewayOpenTimeout     = 15 * time.Second
+	defaultShutdownTimeout   = 15 * time.Second
+	gatewayOpenTimeout       = 15 * time.Second
+	applicationLookupTimeout = 15 * time.Second
 
 	// maxBusyGoroutines is the fixed upper bound on concurrent goroutines executing immediate
 	// busy replies while all asking slots are saturated.
 	maxBusyGoroutines = 8
 )
+
+var errEmptyApplicationID = errors.New("application id is empty")
+
+type clientOptions struct {
+	restURL     string
+	openGateway func(ctx context.Context, client *bot.Client, token string) error
+}
 
 // BotConfig configures the live Discord gateway client and runtime adapter.
 type BotConfig struct {
@@ -40,6 +48,10 @@ type BotConfig struct {
 
 // RegisterCommands registers the single guild-scoped /ask command with Discord via REST.
 func RegisterCommands(ctx context.Context, token string, guildID uint64) error {
+	return registerCommandsWithOptions(ctx, token, guildID, clientOptions{})
+}
+
+func registerCommandsWithOptions(ctx context.Context, token string, guildID uint64, opts clientOptions) error {
 	if token == "" {
 		return errors.New("bot token is required")
 	}
@@ -47,24 +59,52 @@ func RegisterCommands(ctx context.Context, token string, guildID uint64) error {
 		return errors.New("guild ID must not be zero")
 	}
 
-	client, err := disgo.New(token)
+	var botOpts []bot.ConfigOpt
+	if opts.restURL != "" {
+		botOpts = append(botOpts, bot.WithRestClientConfigOpts(rest.WithURL(opts.restURL)))
+	}
+
+	client, err := disgo.New(token, botOpts...)
 	if err != nil {
 		return fmt.Errorf("create discord client: %w", sanitizeToken(err, token))
 	}
 	defer client.Close(ctx)
 
+	appID, err := lookupApplicationID(ctx, client.Rest, token)
+	if err != nil {
+		return err
+	}
+
 	cmd := buildCommandCreate()
 	commands := []discord.ApplicationCommandCreate{cmd}
 
-	_, err = client.Rest.SetGuildCommands(client.ApplicationID, snowflake.ID(guildID), commands, rest.WithCtx(ctx))
+	_, err = client.Rest.SetGuildCommands(appID, snowflake.ID(guildID), commands, rest.WithCtx(ctx))
 	if err != nil {
 		return fmt.Errorf("set guild commands: %w", sanitizeToken(err, token))
 	}
 	return nil
 }
 
+func lookupApplicationID(ctx context.Context, restClient rest.Rest, token string) (snowflake.ID, error) {
+	lookupCtx, cancel := context.WithTimeout(ctx, applicationLookupTimeout)
+	defer cancel()
+
+	app, err := restClient.GetCurrentApplication(rest.WithCtx(lookupCtx))
+	if err != nil {
+		return 0, fmt.Errorf("lookup current application: %w", sanitizeToken(err, token))
+	}
+	if app == nil || app.ID == 0 {
+		return 0, fmt.Errorf("lookup current application: %w", sanitizeToken(errEmptyApplicationID, token))
+	}
+	return app.ID, nil
+}
+
 // Run starts the Discord gateway connection and dispatches interactions to the handler.
 func Run(ctx context.Context, cfg BotConfig) error {
+	return runWithOptions(ctx, cfg, clientOptions{})
+}
+
+func runWithOptions(ctx context.Context, cfg BotConfig, opts clientOptions) error {
 	cfg, err := normalizeBotConfig(cfg)
 	if err != nil {
 		return err
@@ -76,12 +116,13 @@ func Run(ctx context.Context, cfg BotConfig) error {
 	var dispatching atomic.Bool
 	dispatching.Store(true)
 
-	client, err := buildClient(ctx, cfg, workerSem, &dispatching)
+	client, err := buildClient(ctx, cfg, workerSem, &dispatching, opts)
 	if err != nil {
 		return fmt.Errorf("build discord client: %w", sanitizeToken(err, cfg.Token))
 	}
 
-	if err := openGatewayWithTimeout(ctx, client, cfg.Token); err != nil {
+	if _, err := preGatewayStep(ctx, cfg, client, opts); err != nil {
+		client.Close(ctx)
 		return err
 	}
 
@@ -89,6 +130,33 @@ func Run(ctx context.Context, cfg BotConfig) error {
 	dispatching.Store(false)
 
 	return shutdownClient(cfg, client, cfg.ShutdownTimeout)
+}
+
+func preGatewayStep(
+	ctx context.Context,
+	cfg BotConfig,
+	client *bot.Client,
+	opts clientOptions,
+) (snowflake.ID, error) {
+	appID, err := lookupApplicationID(ctx, client.Rest, cfg.Token)
+	if err != nil {
+		return 0, err
+	}
+
+	matchesTokenID := appID == client.ApplicationID
+	cfg.Logger.Info("application verified",
+		slog.Uint64("application_id", uint64(appID)),
+		slog.Bool("matches_token_id", matchesTokenID),
+	)
+
+	opener := opts.openGateway
+	if opener == nil {
+		opener = openGatewayWithTimeout
+	}
+	if err := opener(ctx, client, cfg.Token); err != nil {
+		return 0, err
+	}
+	return appID, nil
 }
 
 // normalizeBotConfig validates cfg and fills its defaults, so every later use finds a logger and
@@ -160,8 +228,14 @@ func (h floorHandler) WithGroup(name string) slog.Handler {
 	return floorHandler{inner: h.inner.WithGroup(name)}
 }
 
-func buildClient(ctx context.Context, cfg BotConfig, workerSem chan struct{}, dispatching *atomic.Bool) (*bot.Client, error) {
-	return disgo.New(cfg.Token,
+func buildClient(
+	ctx context.Context,
+	cfg BotConfig,
+	workerSem chan struct{},
+	dispatching *atomic.Bool,
+	opts clientOptions,
+) (*bot.Client, error) {
+	botOpts := []bot.ConfigOpt{
 		bot.WithLogger(libraryLogger(cfg.Logger)),
 		bot.WithGatewayConfigOpts(
 			gateway.WithIntents(gatewayIntents()),
@@ -173,7 +247,11 @@ func buildClient(ctx context.Context, cfg BotConfig, workerSem chan struct{}, di
 		bot.WithEventListenerFunc(func(e *events.InteractionCreate) {
 			handleIncomingInteraction(ctx, cfg, e, workerSem, dispatching)
 		}),
-	)
+	}
+	if opts.restURL != "" {
+		botOpts = append(botOpts, bot.WithRestClientConfigOpts(rest.WithURL(opts.restURL)))
+	}
+	return disgo.New(cfg.Token, botOpts...)
 }
 
 func handleIncomingInteraction(
