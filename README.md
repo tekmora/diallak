@@ -126,22 +126,27 @@ commands in the server. It belongs to the cutover and is the operator's act.
 
 ## Release
 
-Publishing a GitHub release with a tag `vX.Y.Z` builds the container image
-`ghcr.io/tekmora/discord-bot:X.Y.Z` ([`release.yml`](.github/workflows/release.yml)). There is no
-`latest` tag. Merging to `main` releases nothing.
+Every pull request adds one changelog fragment under [`changelog.d`](changelog.d):
+
+```bash
+praetorctl changelog new --type=fixed --title="Refuse a question that is too long"
+```
+
+A release is cut in three steps:
+
+1. On a branch, `praetorctl release --version=vX.Y.Z --date=YYYY-MM-DD` renders the fragments into
+   `CHANGELOG.md`. The branch is merged like any other change.
+2. The merged commit on `main` is tagged `vX.Y.Z`, and the tag is pushed.
+3. The tag starts [`release.yml`](.github/workflows/release.yml). It refuses a version that has no
+   section in `CHANGELOG.md`, builds the container image `ghcr.io/tekmora/discord-bot:X.Y.Z`, and
+   publishes the release with the changelog section as its notes. There is no `latest` tag.
 
 The image is built in a reusable workflow of its own
 ([`release-image.yml`](.github/workflows/release-image.yml)) that also signs it with cosign, attests
-its build provenance and writes an SBOM, which is attached to the release. To check a signature:
+its build provenance and writes an SBOM, which is attached to the release.
 
-```bash
-cosign verify ghcr.io/tekmora/discord-bot:X.Y.Z \
-  --certificate-identity-regexp 'https://github.com/tekmora/discord-bot/' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com
-```
-
-No release exists yet. On the current plan GitHub offers build attestations for public repositories
-only, so the first release waits until this repository is public.
+No release exists yet, and merging to `main` releases nothing. How to check a signature is
+described here once it has been tried against the first release.
 
 ## Develop
 
