@@ -32,16 +32,17 @@ const (
 // Config is the validated configuration of one bot process.
 type Config struct {
 	// Token is the Discord bot token. It comes from a file, never from the environment itself,
-	// and must never be logged.
-	Token string
+	// and must never be logged. It is left out of JSON encodings.
+	Token string `json:"-"`
 	// GuildID is the snowflake of the hub guild the bot serves.
 	GuildID uint64
 	// ModelBaseURL is the base URL of the OpenAI-compatible model endpoint.
 	ModelBaseURL string
 	// ModelAlias is the routing name passed in model completion requests.
 	ModelAlias string
-	// ModelKey is the optional API key for the model endpoint, never logged.
-	ModelKey string
+	// ModelKey is the optional API key for the model endpoint. It is never logged and is left out
+	// of JSON encodings.
+	ModelKey string `json:"-"`
 	// CorpusDir is the absolute path to the local directory holding the corpus manifest and sources.
 	CorpusDir string
 }
