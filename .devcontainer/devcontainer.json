@@ -1,0 +1,48 @@
+{
+  "name": "tekmora/discord-bot",
+  "build": {
+    "dockerfile": "Dockerfile.praetor",
+    "context": "."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": false,
+      "upgradePackages": true
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:4": {},
+    "ghcr.io/devcontainers/features/go:1": {}
+  },
+  "customizations": {
+    "praetor": {
+      "bootstrap": {
+        "version": 1,
+        "state": "source-bundle",
+        "builderImage": "docker.io/library/golang@sha256:738d1cf061836894ff6bb8c33881080ac66de8cf0586615012a0c8f592649cfa",
+        "baseImage": "mcr.microsoft.com/devcontainers/base@sha256:91eff046d5c12318fc98e59258982b87ba896c467427ed8b5dab5a02107a5db7",
+        "sourceSHA256": "sha256:1c634a9f522a9af26f3af3a7339ffeff73417250d0d372bdf3a2d080e6fd0d1f",
+        "archiveSHA256": "sha256:ad045554328a52f7dc2528b541f85d309ea397e81b139232f5eb43bdac6f21e8",
+        "archiveParts": 6,
+        "dockerfileSHA256": "sha256:ff178c986c723c0df115a2a02518725bb62616d5c12f4310ec4c0711429c1c52"
+      }
+    },
+    "vscode": {
+      "extensions": [
+        "GitHub.vscode-pull-request-github",
+        "aquasecurity.trivy-vulnerability-scanner",
+        "eamodio.gitlens",
+        "github.copilot",
+        "golang.go"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "go.lintOnSave": "package",
+        "go.lintTool": "golangci-lint",
+        "go.toolsManagement.autoUpdate": false,
+        "go.useLanguageServer": true,
+        "security.workspace.trust.enabled": true
+      }
+    }
+  },
+  "remoteUser": "vscode",
+  "postCreateCommand": "export PATH=\"/usr/local/bin:$PATH\"; /usr/local/bin/praetorctl compile-context && /usr/bin/make verify-all"
+}

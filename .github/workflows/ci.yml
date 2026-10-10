@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race ./...
+
+  governance:
+    name: governance (praetor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      # PRAETOR_REF is the repository's engine pin: the git hooks and make read it from here
+      # (.config/lefthook/engine.sh) and run the same engine CI installs. One value only.
+      - name: Install praetorctl
+        env:
+          PRAETOR_REF: 9615f1b907cc7e677a3ae71f6e864deb4450b9de
+        run: |
+          go install "github.com/cordanaLLM/praetor/cmd/standardsctl@${PRAETOR_REF}"
+          ln -s "$(go env GOPATH)/bin/standardsctl" "$(go env GOPATH)/bin/praetorctl"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Context integrity
+        run: praetorctl compile-context --verify
+      - name: HISS audit
+        run: praetorctl audit
