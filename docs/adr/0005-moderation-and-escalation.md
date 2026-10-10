@@ -29,7 +29,7 @@ to the moderators with a link to the message and the reason it was flagged.
 
 | Role | May | May not |
 | :--- | :--- | :--- |
-| Moderator | Delete messages; time members out | Ban; manage channels or roles |
+| Moderator | Delete messages; time members out | Ban; manage channels, roles |
 | Subject guide | Be the visible helper for one topic | Moderate |
 
 A person can hold both roles. The moderator role has the least permissions that
