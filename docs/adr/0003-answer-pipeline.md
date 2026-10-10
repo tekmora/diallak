@@ -53,6 +53,10 @@ Retrieval returns a bounded number of chunks with scores. When no chunk passes
 the threshold, there is no source, and the pipeline refuses before it calls the
 model.
 
+A chunk is a source only when it shares at least two words with the question and
+covers enough of it. One overlapping word is not a source
+([`internal/retrieval`](../../internal/retrieval/retrieval.go)).
+
 The first slice uses a lexical index held in memory and built at start. It needs
 no vector store and no embedding model. Embeddings are added only when the
 evaluation set below shows the need.
@@ -71,7 +75,9 @@ API.
 - A credential, when the endpoint needs one, comes from a file, like the bot
   token.
 - Every request has a deadline, a bounded prompt (the retrieved chunks only) and
-  a bounded output length. Retries are bounded.
+  a bounded output length. The first version does not retry.
+- The client follows no redirect, so the prompt and the credential reach the
+  configured endpoint only ([`internal/model`](../../internal/model/model.go)).
 
 ### Every answer cites its sources; no source means refusal
 
@@ -82,10 +88,17 @@ API.
 - An answer with no valid citation is discarded. The member gets a refusal
   instead: the bot says it found no documented answer and points to human
   support.
-- An endpoint error or a timeout produces a failure message. The pipeline never
-  falls back to an uncited answer or to another model without saying so.
+- When the model says that the sources do not answer the question, the reply is
+  a refusal too.
+- When the configured endpoint fails or times out, the reply shows the retrieved
+  excerpts with their sources and says that the model is unavailable. The
+  failure is counted and logged with its class only, never with the question or
+  the endpoint's error text.
+- The pipeline never falls back to an uncited answer or to another model.
 
-Answer assembly also adds the AI label of ADR-0002.
+Answer assembly also adds the AI label of ADR-0002 and names the revision of
+every source it lists, so a reply stays traceable to the text it was written
+from ([`internal/answer`](../../internal/answer/answer.go)).
 
 ### Acknowledge first, answer after
 
@@ -99,7 +112,9 @@ A fixed set of questions written from the documentation, each with its expected
 sources, measures two things: whether citations are valid and whether the
 pipeline refuses when it should.
 
-- In CI the set runs with a fake model and needs no network.
+- In CI the set runs with a fake model and needs no network. The set for the
+  first project and the bar it is held to are in
+  [`internal/eval`](../../internal/eval/testdata/snatcharr/README.md).
 - A run against a real endpoint records the base URL and the alias that
   answered, so a result is never attributed to a model that did not produce it.
 
