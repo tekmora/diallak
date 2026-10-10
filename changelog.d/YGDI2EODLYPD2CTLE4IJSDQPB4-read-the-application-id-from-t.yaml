@@ -1,2 +1,0 @@
-type: fixed
-title: Read the application id from the platform instead of deriving it from the token
