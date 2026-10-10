@@ -62,6 +62,13 @@ from the Greek naming theme of the Tekmora family. Tekmora (tek-MOH-ra) comes fr
 make verify-all   # context check, audit, build and tests
 ```
 
+The retrieval evaluation runs with the tests. To see its numbers for the SnatchArr fixture
+([`internal/eval/testdata/snatcharr`](internal/eval/testdata/snatcharr/README.md)):
+
+```bash
+go test -v ./internal/eval -run TestSnatchArrEval
+```
+
 Git hooks run the Praetor engine this repository pins (`PRAETOR_REF` in
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)) through
 [`.config/lefthook/engine.sh`](.config/lefthook/engine.sh). Agent instructions live in
