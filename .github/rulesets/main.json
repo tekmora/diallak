@@ -50,6 +50,9 @@
             "context": "governance (praetor)"
           },
           {
+            "context": "REUSE lint"
+          },
+          {
             "context": "vulncheck"
           }
         ],
