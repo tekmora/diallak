@@ -21,12 +21,13 @@ checked. A value that was not measured says so.
 | Property | Value | Check |
 | :--- | :--- | :--- |
 | Name | `ghcr.io/tekmora/diallak:X.Y.Z`, to be pinned by digest | [`release-image.yml`](../.github/workflows/release-image.yml); there is no `latest` tag |
-| Digest | None yet: no release exists | [README](../README.md), "Release" |
+| Digest | 0.1.1: `sha256:65aacd457c9df4cd331c7ad356e9410ee241e188b36feb9d76b2b26eb2fa4e01` (the index of both platforms) | Release run of 2026-10-10; `crane digest ghcr.io/tekmora/diallak:0.1.1` |
 | Platform | `linux/amd64` and `linux/arm64`, one index | `platforms` in the same workflow; the Dockerfile compiles for the target platform without emulation |
-| Size | 21,658,114 bytes unpacked, `linux/amd64` | Local build of 2026-10-10 |
+| Size | 22,053,900 bytes unpacked, `linux/amd64` | The released image 0.1.1 |
 | User | `65532:65532`, not root | [`Dockerfile`](../Dockerfile) |
 | Contents | The static binary on a distroless base without a shell | [`Dockerfile`](../Dockerfile) |
-| Signature, provenance, SBOM | Written by the release workflow, one SBOM per platform | Not yet tried: no release exists |
+| Signature, provenance, SBOM | Signed by the release workflow at its tag, with build provenance; one SBOM per platform on the release page | [README](../README.md), "Verifying a release": tried against 0.1.1 |
+| Visibility | Private until the operator switches the package to public; until then a pull needs a login | Package settings of the organisation |
 <!-- markdownlint-enable MD013 -->
 
 The bot writes no file, so the root filesystem can be read-only and no temporary
@@ -175,8 +176,8 @@ Features that need stored state come with their own record
 
 ## Not verified yet
 
-- The gateway connection, the registration call and the release workflow have
-  never run.
-- No image has been released for either platform, and the arm64 binary has not
-  been run.
-- Signature, provenance and SBOM of a release have not been checked.
+- The gateway connection and the registration call have never run: both need
+  Discord and are the operator's acts.
+- The arm64 image has been built and signed, but not run.
+- The SBOM files have not been inspected beyond their presence.
+- Memory and CPU of a running bot have not been measured.
