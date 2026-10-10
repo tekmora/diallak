@@ -19,10 +19,11 @@ import (
 
 // Assembly holds the initialized components and metadata of the application.
 type Assembly struct {
-	Pipeline *answer.Pipeline
-	Chunks   int
-	Sources  []corpus.ManifestSource
-	HasModel bool
+	Pipeline      *answer.Pipeline
+	Chunks        int
+	Sources       []corpus.ManifestSource
+	HasModel      bool
+	RenderOptions answer.RenderOptions
 }
 
 // Build constructs and validates the application runtime from cfg.
@@ -72,6 +73,10 @@ func Build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Assemb
 		Chunks:   len(chunks),
 		Sources:  manifest.Sources,
 		HasModel: cfg.HasModel(),
+		RenderOptions: answer.RenderOptions{
+			Place:    cfg.SupportChannel,
+			MaxRunes: cfg.ReplyMaxChars,
+		},
 	}
 	return assembly, cleanup, nil
 }
@@ -97,6 +102,7 @@ func buildPipeline(cfg config.Config, index *retrieval.Index, logger *slog.Logge
 			BaseURL: cfg.ModelBaseURL,
 			Alias:   cfg.ModelAlias,
 			APIKey:  cfg.ModelKey,
+			Timeout: cfg.ModelTimeout,
 		}
 		mClient, err := model.New(mCfg, nil)
 		if err != nil {
@@ -105,10 +111,22 @@ func buildPipeline(cfg config.Config, index *retrieval.Index, logger *slog.Logge
 		generator = mClient
 	}
 
+	opts := retrieval.DefaultOptions()
+	if cfg.TopPassages > 0 {
+		opts.Limit = cfg.TopPassages
+	}
+	if cfg.MinScore > 0 {
+		opts.MinScore = cfg.MinScore
+	}
+
 	ansCfg := answer.Config{
-		Retriever: index,
-		Generator: generator,
-		Logger:    logger,
+		Retriever:          index,
+		Generator:          generator,
+		Options:            opts,
+		Logger:             logger,
+		MaxQuestionRunes:   cfg.QuestionMaxChars,
+		MaxExcerptRunes:    cfg.ExcerptChars,
+		SourceLinkTemplate: cfg.SourceLinkTemplate,
 	}
 	pipeline, err := answer.New(ansCfg)
 	if err != nil {

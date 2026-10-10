@@ -769,8 +769,8 @@ func TestRender_Boundary_TrimmingOverMaxRenderRunes(t *testing.T) {
 		Sources: sources,
 	}
 	renderedAns := Render(ans, RenderOptions{})
-	if len([]rune(renderedAns)) > MaxRenderRunes {
-		t.Errorf("renderedAns rune count %d > %d", len([]rune(renderedAns)), MaxRenderRunes)
+	if len([]rune(renderedAns)) > DefaultMaxRenderRunes {
+		t.Errorf("renderedAns rune count %d > %d", len([]rune(renderedAns)), DefaultMaxRenderRunes)
 	}
 	if !strings.Contains(renderedAns, "[1] Title 1 - Heading 1") {
 		t.Errorf("renderedAns dropped first source line: %s", renderedAns)
@@ -783,8 +783,8 @@ func TestRender_Boundary_TrimmingOverMaxRenderRunes(t *testing.T) {
 		Sources: sources,
 	}
 	renderedExc := Render(exc, RenderOptions{})
-	if len([]rune(renderedExc)) > MaxRenderRunes {
-		t.Errorf("renderedExc rune count %d > %d", len([]rune(renderedExc)), MaxRenderRunes)
+	if len([]rune(renderedExc)) > DefaultMaxRenderRunes {
+		t.Errorf("renderedExc rune count %d > %d", len([]rune(renderedExc)), DefaultMaxRenderRunes)
 	}
 	if !strings.Contains(renderedExc, "[1] Title 1 - Heading 1") {
 		t.Errorf("renderedExc dropped first source line: %s", renderedExc)
@@ -959,8 +959,8 @@ func TestRender_Boundary_LimitWith64RuneMultiBytePlace(t *testing.T) {
 
 		result := Render(ans, RenderOptions{Place: place64})
 		runeCount := utf8.RuneCountInString(result)
-		if runeCount > MaxRenderRunes {
-			t.Fatalf("RuneCountInString = %d, exceeds MaxRenderRunes %d", runeCount, MaxRenderRunes)
+		if runeCount > DefaultMaxRenderRunes {
+			t.Fatalf("RuneCountInString = %d, exceeds DefaultMaxRenderRunes %d", runeCount, DefaultMaxRenderRunes)
 		}
 		if !strings.HasSuffix(result, "\n\n"+wantFooter) {
 			t.Fatalf("result does not end with full footer %q; tail is: %q", wantFooter, result[len(result)-len(wantFooter)-10:])
@@ -989,8 +989,8 @@ func TestRender_Boundary_LimitWith64RuneMultiBytePlace(t *testing.T) {
 
 		result := Render(exc, RenderOptions{Place: place64})
 		runeCount := utf8.RuneCountInString(result)
-		if runeCount > MaxRenderRunes {
-			t.Fatalf("RuneCountInString = %d, exceeds MaxRenderRunes %d", runeCount, MaxRenderRunes)
+		if runeCount > DefaultMaxRenderRunes {
+			t.Fatalf("RuneCountInString = %d, exceeds DefaultMaxRenderRunes %d", runeCount, DefaultMaxRenderRunes)
 		}
 		if !strings.HasSuffix(result, "\n\n"+wantFooter) {
 			t.Fatalf("result does not end with full footer %q", wantFooter)
@@ -999,4 +999,147 @@ func TestRender_Boundary_LimitWith64RuneMultiBytePlace(t *testing.T) {
 			t.Fatalf("result does not start with LabelExcerpts")
 		}
 	})
+}
+
+func TestAsk_Positive_ExcerptCharsConfigured(t *testing.T) {
+	hit := sampleHit("doc1", "Doc One", "Section 1", strings.Repeat("abcd ", 100), "rev111111111111")
+	ret := &stubRetriever{hits: []retrieval.Hit{hit}}
+	p, err := New(Config{
+		Retriever:       ret,
+		MaxExcerptRunes: 50,
+	})
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	ans, err := p.Ask(context.Background(), "query")
+	if err != nil {
+		t.Fatalf("Ask() failed: %v", err)
+	}
+	if len(ans.Sources) != 1 {
+		t.Fatalf("len(ans.Sources) = %d, want 1", len(ans.Sources))
+	}
+	rawExcerpt := strings.TrimSuffix(ans.Sources[0].Excerpt, "...")
+	if utf8.RuneCountInString(rawExcerpt) > 50 {
+		t.Errorf("excerpt rune count = %d, want <= 50", utf8.RuneCountInString(rawExcerpt))
+	}
+}
+
+func TestRender_Positive_ReplyMaxCharsConfigured(t *testing.T) {
+	sources := make([]Source, 3)
+	for i := range sources {
+		sources[i] = Source{
+			N:        i + 1,
+			Title:    fmt.Sprintf("Title %d with long description", i+1),
+			Heading:  "Deep Subheading",
+			URL:      fmt.Sprintf("https://github.com/tekmora/diallak/blob/rev/docs/section%d.md", i+1),
+			Revision: "abcdef123456",
+			Excerpt:  strings.Repeat("Long excerpt line from section. ", 10),
+		}
+	}
+	exc := Answer{
+		Kind:    KindExcerpts,
+		Sources: sources,
+	}
+
+	opts := RenderOptions{Place: "#support", MaxRunes: 500}
+	rendered := Render(exc, opts)
+	runeCount := utf8.RuneCountInString(rendered)
+	if runeCount > 500 {
+		t.Errorf("rendered reply rune count = %d, want <= 500", runeCount)
+	}
+	wantFooter := Footer("#support")
+	if !strings.HasSuffix(rendered, "\n\n"+wantFooter) {
+		t.Errorf("rendered reply tail does not end with footer %q: %q", wantFooter, rendered)
+	}
+}
+
+func TestAsk_Positive_SourceLinkTemplateConfigured(t *testing.T) {
+	hit := sampleHit("doc1", "Doc One", "Section 1", "Content", "rev111111111111")
+	ret := &stubRetriever{hits: []retrieval.Hit{hit}}
+	tmpl := "https://git.example.com/{repository}/src/{revision}/{path}"
+	p, err := New(Config{
+		Retriever:          ret,
+		SourceLinkTemplate: tmpl,
+	})
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	ans, err := p.Ask(context.Background(), "query")
+	if err != nil {
+		t.Fatalf("Ask() failed: %v", err)
+	}
+	if len(ans.Sources) != 1 {
+		t.Fatalf("len(ans.Sources) = %d, want 1", len(ans.Sources))
+	}
+	wantURL := "https://git.example.com/tekmora/test-repo/src/rev111111111111/docs/doc1.md"
+	if ans.Sources[0].URL != wantURL {
+		t.Errorf("ans.Sources[0].URL = %q, want %q", ans.Sources[0].URL, wantURL)
+	}
+}
+
+func TestAsk_Positive_TopPassagesAndMinScore(t *testing.T) {
+	chunks := []corpus.Chunk{
+		{
+			ID:         "c1",
+			Repository: "tekmora/diallak",
+			Revision:   "rev123456",
+			Path:       "docs/c1.md",
+			Title:      "Alpha Authentication",
+			Heading:    "Alpha Overview",
+			Text:       "Alpha token authentication in documentation.",
+		},
+		{
+			ID:         "c2",
+			Repository: "tekmora/diallak",
+			Revision:   "rev123456",
+			Path:       "docs/c2.md",
+			Title:      "Beta Authentication",
+			Heading:    "Beta Overview",
+			Text:       "Beta token authentication in documentation.",
+		},
+	}
+	index, err := retrieval.Build(chunks)
+	if err != nil {
+		t.Fatalf("retrieval.Build failed: %v", err)
+	}
+
+	t.Run("top passages 1 limits to single source", func(t *testing.T) {
+		p, err := New(Config{
+			Retriever: index,
+			Options:   retrieval.Options{Limit: 1, MinScore: 0.10},
+		})
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+		ans, err := p.Ask(context.Background(), "token authentication")
+		if err != nil {
+			t.Fatalf("Ask() failed: %v", err)
+		}
+		if len(ans.Sources) != 1 {
+			t.Fatalf("len(ans.Sources) = %d, want 1", len(ans.Sources))
+		}
+	})
+
+	t.Run("high min score 0.90 refuses question that answers at 0.20", func(t *testing.T) {
+		p, err := New(Config{
+			Retriever: index,
+			Options:   retrieval.Options{Limit: 3, MinScore: 0.90},
+		})
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+		ans, err := p.Ask(context.Background(), "token authentication postgresql")
+		if err != nil {
+			t.Fatalf("Ask() failed: %v", err)
+		}
+		if ans.Kind != KindRefusal {
+			t.Errorf("ans.Kind = %v, want KindRefusal", ans.Kind)
+		}
+		if ans.Reason != ReasonNoSource {
+			t.Errorf("ans.Reason = %v, want ReasonNoSource", ans.Reason)
+		}
+	})
+
 }

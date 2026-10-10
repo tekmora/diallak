@@ -16,6 +16,9 @@ import (
 const (
 	// MaxLimit is the maximum number of hits that can be requested.
 	MaxLimit = 10
+	// DefaultLimit is the default maximum number of hits requested during retrieval.
+	// Source: chosen, not measured.
+	DefaultLimit = 3
 	// MaxQueryBytes is the maximum allowed query size in bytes.
 	MaxQueryBytes = 2000
 	// WeightText is the term frequency multiplier for document body tokens.
@@ -31,6 +34,7 @@ const (
 	// BM25B is the BM25 document length normalization parameter.
 	BM25B = 0.75
 	// MinMatchedTerms is the minimum number of distinct query terms a chunk must match to be eligible for retrieval.
+	// Source: architectural rule defined in ADR-0003 ("Evaluation", two-word rule); rule, not a default.
 	// One overlapping word is not a source.
 	MinMatchedTerms = 2
 	// DefaultMinScore is the default minimum score threshold for retrieval refusal.
@@ -54,10 +58,10 @@ type Options struct {
 	MinScore float64
 }
 
-// DefaultOptions returns standard retrieval options with Limit 3 and DefaultMinScore.
+// DefaultOptions returns standard retrieval options with DefaultLimit and DefaultMinScore.
 func DefaultOptions() Options {
 	return Options{
-		Limit:    3,
+		Limit:    DefaultLimit,
 		MinScore: DefaultMinScore,
 	}
 }

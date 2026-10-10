@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tekmora/diallak/internal/config"
 	"github.com/tekmora/diallak/internal/corpus"
@@ -72,7 +73,7 @@ func validEnv(t *testing.T) func(string) string {
 
 func noopDeps() dependencies {
 	return dependencies{
-		registerCommands: func(_ context.Context, _ string, _ uint64) error { return nil },
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
 		runDiscord:       func(_ context.Context, _ discord.BotConfig) error { return nil },
 	}
 }
@@ -152,7 +153,7 @@ func TestRun_Positive_SupportChannelReachesTheReplies(t *testing.T) {
 
 	var capturedCfg discord.BotConfig
 	deps := dependencies{
-		registerCommands: func(_ context.Context, _ string, _ uint64) error { return nil },
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
 		runDiscord: func(_ context.Context, cfg discord.BotConfig) error {
 			capturedCfg = cfg
 			return nil
@@ -188,7 +189,7 @@ func TestRun_Positive_RegisterCommands(t *testing.T) {
 	var calledWithGuild uint64
 
 	deps := dependencies{
-		registerCommands: func(_ context.Context, token string, guildID uint64) error {
+		registerCommands: func(_ context.Context, token string, guildID uint64, _ int) error {
 			calledWithToken = token
 			calledWithGuild = guildID
 			return nil
@@ -225,7 +226,7 @@ func TestRun_Negative_ControlPathIsolation(t *testing.T) {
 	var runCalls int
 
 	deps := dependencies{
-		registerCommands: func(_ context.Context, _ string, _ uint64) error {
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error {
 			registerCalls++
 			return nil
 		},
@@ -376,7 +377,7 @@ func TestRun_Negative_BuildFailure(t *testing.T) {
 
 func TestRun_Negative_RegisterCommandsError(t *testing.T) {
 	deps := dependencies{
-		registerCommands: func(_ context.Context, _ string, _ uint64) error {
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error {
 			return errors.New("network failure during registration")
 		},
 		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
@@ -393,7 +394,7 @@ func TestRun_Negative_RegisterCommandsError(t *testing.T) {
 
 func TestRun_Negative_RunDiscordError(t *testing.T) {
 	deps := dependencies{
-		registerCommands: func(_ context.Context, _ string, _ uint64) error {
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error {
 			return nil
 		},
 		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
@@ -448,5 +449,58 @@ func TestReport_Negative_ErrorIsPrintedAndExitsOne(t *testing.T) {
 func TestReport_Boundary_UnwritableErrorOutputExitsTwo(t *testing.T) {
 	if code := report(errors.New("boom"), failingWriter{}); code != 2 {
 		t.Fatalf("report with an unwritable error output = %d, want 2", code)
+	}
+}
+
+func TestRun_Positive_OptionalConfigurationThreaded(t *testing.T) {
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:          tokenPath,
+		config.EnvGuildID:            "42",
+		config.EnvCorpusDir:          corpusPath,
+		config.EnvTopPassages:        "2",
+		config.EnvMinScore:           "0.30",
+		config.EnvQuestionMaxChars:   "250",
+		config.EnvExcerptChars:       "150",
+		config.EnvReplyMaxChars:      "800",
+		config.EnvMaxConcurrentAsks:  "8",
+		config.EnvAskTimeout:         "30s",
+		config.EnvSourceLinkTemplate: "https://git.example.com/{repository}/blob/{revision}/{path}",
+	}
+
+	var capturedCfg discord.BotConfig
+	var calledWithMaxQuestion int
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64, maxQuestionChars int) error {
+			calledWithMaxQuestion = maxQuestionChars
+			return nil
+		},
+		runDiscord: func(_ context.Context, cfg discord.BotConfig) error {
+			capturedCfg = cfg
+			return nil
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps)
+	if err != nil {
+		t.Fatalf("run = %v, want nil", err)
+	}
+	if capturedCfg.Handler == nil {
+		t.Fatalf("run got nil handler")
+	}
+	wantLimits := discord.Limits{MaxConcurrent: 8, AskTimeout: 30 * time.Second, QuestionMaxChars: 250}
+	if got := capturedCfg.Handler.Limits(); got != wantLimits {
+		t.Errorf("limits of the handler the process serves with = %+v, want %+v", got, wantLimits)
+	}
+
+	var regOut bytes.Buffer
+	err = run(context.Background(), []string{"-register-commands"}, func(k string) string { return envMap[k] }, &regOut, deps)
+	if err != nil {
+		t.Fatalf("run -register-commands = %v, want nil", err)
+	}
+	if calledWithMaxQuestion != 250 {
+		t.Errorf("calledWithMaxQuestion = %d, want 250", calledWithMaxQuestion)
 	}
 }

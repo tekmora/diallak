@@ -8,12 +8,22 @@ import (
 	"io"
 	"io/fs"
 	"regexp"
+	"strings"
 	"unicode/utf8"
 )
 
 var (
 	repoRegexp = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 	revRegexp  = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+)
+
+const (
+	// DefaultSourceLinkTemplate is the default URL template for document links.
+	// Source: assumes the sources live on a forge with this path shape.
+	DefaultSourceLinkTemplate = "https://github.com/{repository}/blob/{revision}/{path}"
+
+	// MaxSourceLinkTemplateRunes is the maximum allowed length of a source link template in runes.
+	MaxSourceLinkTemplateRunes = 200
 )
 
 // Source identifies a documentation source repository and file paths.
@@ -34,9 +44,23 @@ type Chunk struct {
 	Text       string
 }
 
+// FormatURL formats a document URL using template with repository, revision, and path substituted.
+// If template is empty, DefaultSourceLinkTemplate is used.
+func (c Chunk) FormatURL(template string) string {
+	if template == "" {
+		template = DefaultSourceLinkTemplate
+	}
+	r := strings.NewReplacer(
+		"{repository}", c.Repository,
+		"{revision}", c.Revision,
+		"{path}", c.Path,
+	)
+	return r.Replace(template)
+}
+
 // URL returns the canonical GitHub web URL for this chunk's document.
 func (c Chunk) URL() string {
-	return fmt.Sprintf("https://github.com/%s/blob/%s/%s", c.Repository, c.Revision, c.Path)
+	return c.FormatURL(DefaultSourceLinkTemplate)
 }
 
 // Limits defines the upper bounds applied when loading a corpus from an fs.FS.

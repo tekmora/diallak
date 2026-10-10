@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -230,10 +231,10 @@ func TestFloorHandler_Negative_HandleDropsRecordsBelowTheFloor(t *testing.T) {
 
 func TestRegisterCommands_Negative_RefusesBeforeAnyClientExists(t *testing.T) {
 	// Both refusals name their cause; a later failure of the library would hide a missing check.
-	if err := RegisterCommands(context.Background(), "", 7); err == nil || !strings.Contains(err.Error(), "token is required") {
+	if err := RegisterCommands(context.Background(), "", 7, 0); err == nil || !strings.Contains(err.Error(), "token is required") {
 		t.Fatalf("RegisterCommands without token err = %v", err)
 	}
-	if err := RegisterCommands(context.Background(), "not-a-real-token", 0); err == nil || !strings.Contains(err.Error(), "guild ID must not be zero") {
+	if err := RegisterCommands(context.Background(), "not-a-real-token", 0, 0); err == nil || !strings.Contains(err.Error(), "guild ID must not be zero") {
 		t.Fatalf("RegisterCommands with guild 0 err = %v", err)
 	}
 }
@@ -353,8 +354,8 @@ func TestHandleAsk_Positive_AnswerRepliesNameTheConfiguredPlace(t *testing.T) {
 				Asker: &fakeAsker{askFunc: func(context.Context, string) (answer.Answer, error) {
 					return ans, nil
 				}},
-				GuildID:        42,
-				SupportChannel: "#help-desk",
+				GuildID:       42,
+				RenderOptions: answer.RenderOptions{Place: "#help-desk"},
 			})
 			if err != nil {
 				t.Fatalf("NewHandler = %v", err)
@@ -374,5 +375,101 @@ func TestHandleAsk_Positive_AnswerRepliesNameTheConfiguredPlace(t *testing.T) {
 				t.Fatalf("refusal does not name the configured place: %q", got[0])
 			}
 		})
+	}
+}
+
+func TestRegisterCommands_Positive_PayloadCarriesTheQuestionLimit(t *testing.T) {
+	const (
+		appID   uint64 = 555555555555555555
+		guildID uint64 = 666666666666666666
+	)
+	cases := []struct {
+		name    string
+		setting int
+		want    int
+	}{
+		{"not set: the built-in 500", 0, 500},
+		{"250", 250, 250},
+		{"1", 1, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var body []byte
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/applications/@me" {
+					writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d"}`, appID))
+					return
+				}
+				raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+				if err != nil {
+					http.Error(w, "read error", http.StatusInternalServerError)
+					return
+				}
+				mu.Lock()
+				body = raw
+				mu.Unlock()
+				writeTestResponse(w, http.StatusOK, "[]")
+			}))
+			t.Cleanup(srv.Close)
+
+			opts := clientOptions{restURL: srv.URL, maxQuestionChars: tc.setting}
+			if err := registerCommandsWithOptions(context.Background(), makeFakeToken(appID), guildID, opts); err != nil {
+				t.Fatalf("registerCommandsWithOptions = %v", err)
+			}
+
+			var payload []struct {
+				Options []struct {
+					MaxLength int `json:"max_length"`
+				} `json:"options"`
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if err := json.Unmarshal(body, &payload); err != nil {
+				t.Fatalf("payload %q does not parse: %v", body, err)
+			}
+			if len(payload) != 1 || len(payload[0].Options) != 1 {
+				t.Fatalf("payload %q is not one command with one option", body)
+			}
+			if got := payload[0].Options[0].MaxLength; got != tc.want {
+				t.Fatalf("max_length = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRegisterCommands_Negative_QuestionLimitOutOfRangeRefusedBeforeAnyClient(t *testing.T) {
+	// The token is not a credential and no address is given: a call that got past the check
+	// would try the real platform, so the error must come first and must name the limit.
+	for _, limit := range []int{-1, answer.MaxQuestionRunes + 1} {
+		err := RegisterCommands(context.Background(), "not-a-real-token", 7, limit)
+		if err == nil || !strings.Contains(err.Error(), "question limit") {
+			t.Fatalf("RegisterCommands with limit %d = %v, want a question limit error", limit, err)
+		}
+	}
+}
+
+func TestNewHandler_Boundary_LimitsInEffect(t *testing.T) {
+	asker := &fakeAsker{}
+	h, err := NewHandler(HandlerConfig{Asker: asker, GuildID: 42})
+	if err != nil {
+		t.Fatalf("NewHandler = %v", err)
+	}
+	if got, want := h.Limits(), (Limits{MaxConcurrent: 4, AskTimeout: 60 * time.Second, QuestionMaxChars: 500}); got != want {
+		t.Fatalf("built-in limits = %+v, want %+v", got, want)
+	}
+
+	h, err = NewHandler(HandlerConfig{Asker: asker, GuildID: 42, MaxConcurrent: 8, AskTimeout: 30 * time.Second, QuestionMaxChars: 250})
+	if err != nil {
+		t.Fatalf("NewHandler = %v", err)
+	}
+	if got, want := h.Limits(), (Limits{MaxConcurrent: 8, AskTimeout: 30 * time.Second, QuestionMaxChars: 250}); got != want {
+		t.Fatalf("configured limits = %+v, want %+v", got, want)
+	}
+
+	for _, limit := range []int{-1, answer.MaxQuestionRunes + 1} {
+		if _, err := NewHandler(HandlerConfig{Asker: asker, GuildID: 42, QuestionMaxChars: limit}); err == nil {
+			t.Fatalf("NewHandler accepted the question limit %d", limit)
+		}
 	}
 }

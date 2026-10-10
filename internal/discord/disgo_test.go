@@ -28,7 +28,7 @@ import (
 )
 
 func TestBuildCommandCreate_Positive_Properties(t *testing.T) {
-	cmd := buildCommandCreate()
+	cmd := buildCommandCreate(0)
 
 	if cmd.CommandName() != CommandName {
 		t.Errorf("command name = %q, want %q", cmd.CommandName(), CommandName)
@@ -67,6 +67,24 @@ func TestBuildCommandCreate_Positive_Properties(t *testing.T) {
 	}
 	if opt.Description == "" {
 		t.Errorf("option description is empty")
+	}
+}
+
+func TestBuildCommandCreate_Positive_CustomMaxQuestionLength(t *testing.T) {
+	cmd := buildCommandCreate(10)
+	slashCmd, ok := cmd.(discord.SlashCommandCreate)
+	if !ok {
+		t.Fatalf("command type is not SlashCommandCreate: %T", cmd)
+	}
+	if len(slashCmd.Options) != 1 {
+		t.Fatalf("options len = %d, want 1", len(slashCmd.Options))
+	}
+	opt, ok := slashCmd.Options[0].(discord.ApplicationCommandOptionString)
+	if !ok {
+		t.Fatalf("option 0 is not ApplicationCommandOptionString: %T", slashCmd.Options[0])
+	}
+	if opt.MaxLength == nil || *opt.MaxLength != 10 {
+		t.Errorf("option max length = %v, want 10", opt.MaxLength)
 	}
 }
 
@@ -289,10 +307,10 @@ func TestNewHandler_Negative_ValidationErrors(t *testing.T) {
 }
 
 func TestRegisterCommands_Negative_ValidationErrors(t *testing.T) {
-	if err := RegisterCommands(context.Background(), "", 42); err == nil {
+	if err := RegisterCommands(context.Background(), "", 42, 0); err == nil {
 		t.Errorf("RegisterCommands with empty token succeeded, want error")
 	}
-	if err := RegisterCommands(context.Background(), "token", 0); err == nil {
+	if err := RegisterCommands(context.Background(), "token", 0, 0); err == nil {
 		t.Errorf("RegisterCommands with zero guild ID succeeded, want error")
 	}
 }
@@ -830,11 +848,10 @@ func TestRegisterCommands_Positive_RegistrationPayloadDescription(t *testing.T) 
 }
 
 func TestBuildCommandCreate_Boundary_DescriptionLengthWithinLimit(t *testing.T) {
-	// Discord limits application command descriptions to 1-100 characters.
-	// Source: Discord Developer Documentation - Application Command Object Structure:
-	// https://discord.com/developers/docs/interactions/application-commands#application-command-object-application-command-structure
-	// (Table field: "description: Description for CHAT_INPUT commands; 1-100 characters")
-	cmd := buildCommandCreate()
+	// The platform limits the description of a command to 100 characters.
+	// Source: Discord API documentation, interactions/application-commands: "1-100 character
+	// description" (github.com/discord/discord-api-docs at 37148620d232, read 2026-10-10).
+	cmd := buildCommandCreate(0)
 	slashCmd, ok := cmd.(discord.SlashCommandCreate)
 	if !ok {
 		t.Fatalf("command is not SlashCommandCreate: %T", cmd)

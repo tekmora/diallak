@@ -36,9 +36,10 @@ var errEmptyApplicationID = errors.New("application id is empty")
 // deadline of the application lookup and the function that opens the gateway. The exported
 // functions pass the zero value, which means the real platform and the defaults.
 type clientOptions struct {
-	restURL       string
-	lookupTimeout time.Duration
-	openGateway   func(ctx context.Context, client *bot.Client, token string) error
+	restURL          string
+	lookupTimeout    time.Duration
+	openGateway      func(ctx context.Context, client *bot.Client, token string) error
+	maxQuestionChars int
 }
 
 // lookupDeadline is the configured deadline of the application lookup, or the default.
@@ -59,8 +60,10 @@ type BotConfig struct {
 }
 
 // RegisterCommands registers the single guild-scoped /ask command with Discord via REST.
-func RegisterCommands(ctx context.Context, token string, guildID uint64) error {
-	return registerCommandsWithOptions(ctx, token, guildID, clientOptions{})
+// maxQuestionChars is the longest question the command accepts, in runes; zero means
+// answer.MaxQuestionRunes.
+func RegisterCommands(ctx context.Context, token string, guildID uint64, maxQuestionChars int) error {
+	return registerCommandsWithOptions(ctx, token, guildID, clientOptions{maxQuestionChars: maxQuestionChars})
 }
 
 func registerCommandsWithOptions(ctx context.Context, token string, guildID uint64, opts clientOptions) error {
@@ -69,6 +72,10 @@ func registerCommandsWithOptions(ctx context.Context, token string, guildID uint
 	}
 	if guildID == 0 {
 		return errors.New("guild ID must not be zero")
+	}
+	maxQuestionChars, err := validateQuestionMaxChars(opts.maxQuestionChars)
+	if err != nil {
+		return err
 	}
 
 	var botOpts []bot.ConfigOpt
@@ -87,7 +94,7 @@ func registerCommandsWithOptions(ctx context.Context, token string, guildID uint
 		return err
 	}
 
-	cmd := buildCommandCreate()
+	cmd := buildCommandCreate(maxQuestionChars)
 	commands := []discord.ApplicationCommandCreate{cmd}
 
 	_, err = client.Rest.SetGuildCommands(appID, snowflake.ID(guildID), commands, rest.WithCtx(ctx))
@@ -374,8 +381,11 @@ func (a *interactionAdapter) Reply(ctx context.Context, text string) error {
 	return err
 }
 
-func buildCommandCreate() discord.ApplicationCommandCreate {
-	maxLen := answer.MaxQuestionRunes
+func buildCommandCreate(maxChars int) discord.ApplicationCommandCreate {
+	maxLen := maxChars
+	if maxLen <= 0 {
+		maxLen = answer.MaxQuestionRunes
+	}
 	return discord.SlashCommandCreate{
 		Name:        CommandName,
 		Description: CommandDescription,

@@ -76,12 +76,14 @@ type Generator interface {
 
 // Config configures pipeline dependencies and limits.
 type Config struct {
-	Retriever       Retriever
-	Generator       Generator
-	Options         retrieval.Options
-	Logger          *slog.Logger
-	MaxExcerptRunes int
-	MaxAnswerRunes  int
+	Retriever          Retriever
+	Generator          Generator
+	Options            retrieval.Options
+	Logger             *slog.Logger
+	MaxQuestionRunes   int
+	MaxExcerptRunes    int
+	MaxAnswerRunes     int
+	SourceLinkTemplate string
 }
 
 // Stats holds snapshot metrics of pipeline queries.
@@ -94,16 +96,32 @@ type Stats struct {
 }
 
 const (
-	// MaxQuestionRunes is the maximum allowed question length in runes.
-	MaxQuestionRunes = 500
+	// MaxQuestionRunes is the default limit and maximum allowed question length in runes.
+	// Source: derived from retrieval.MaxQueryBytes / utf8.UTFMax so any valid question in UTF-8
+	// fits within retrieval.MaxQueryBytes.
+	MaxQuestionRunes = retrieval.MaxQueryBytes / utf8.UTFMax
 	// NoAnswerSentinel is the exact model output indicating sources lack an answer.
 	NoAnswerSentinel = "NO_ANSWER"
+	// MinExcerptRunes is the minimum allowed excerpt length in runes.
+	MinExcerptRunes = 50
+	// MaxExcerptRunesLimit is the maximum allowed excerpt length in runes.
+	MaxExcerptRunesLimit = 1000
 	// DefaultMaxExcerptRunes is the default limit for excerpt lengths in runes.
+	// Source: chosen, not measured.
 	DefaultMaxExcerptRunes = 400
 	// DefaultMaxAnswerRunes is the default limit for generated answer text in runes.
+	// Source: chosen, not measured.
 	DefaultMaxAnswerRunes = 1200
-	// MaxRenderRunes is the upper limit for rendered chat message output in runes.
-	MaxRenderRunes = 1900
+	// MinRenderRunes is the minimum allowed rendered chat message output in runes.
+	MinRenderRunes = 500
+	// MaxAllowedRenderRunes is the platform's limit for the text of one message.
+	// Source: Discord API documentation, resources/message, "Create Message" and "Edit Message":
+	// "Message contents (up to 2000 characters)" (github.com/discord/discord-api-docs at
+	// 37148620d232, read 2026-10-10). The platform counts the characters; this package counts runes.
+	MaxAllowedRenderRunes = 2000
+	// DefaultMaxRenderRunes is the default limit for a rendered reply in runes.
+	// Source: chosen, not measured; it keeps 100 runes below MaxAllowedRenderRunes.
+	DefaultMaxRenderRunes = 1900
 	// UserPromptMaxChunkRunes bounds chunk text embedded in the model prompt.
 	UserPromptMaxChunkRunes = 1500
 	// LabelAnswer is the mandatory disclosure label for AI-generated answers.
@@ -125,12 +143,14 @@ var citationRegexp = regexp.MustCompile(`\[([0-9]+)\]`)
 //
 // Pipeline is safe for concurrent Ask calls.
 type Pipeline struct {
-	retriever       Retriever
-	generator       Generator
-	options         retrieval.Options
-	logger          *slog.Logger
-	maxExcerptRunes int
-	maxAnswerRunes  int
+	retriever          Retriever
+	generator          Generator
+	options            retrieval.Options
+	logger             *slog.Logger
+	maxQuestionRunes   int
+	maxExcerptRunes    int
+	maxAnswerRunes     int
+	sourceLinkTemplate string
 
 	asked         atomic.Uint64
 	answered      atomic.Uint64
@@ -147,6 +167,9 @@ func New(cfg Config) (*Pipeline, error) {
 	if cfg.Retriever == nil {
 		return nil, errors.New("retriever is required")
 	}
+	if cfg.MaxQuestionRunes < 0 {
+		return nil, fmt.Errorf("max question runes %d is negative", cfg.MaxQuestionRunes)
+	}
 	if cfg.MaxExcerptRunes < 0 {
 		return nil, fmt.Errorf("max excerpt runes %d is negative", cfg.MaxExcerptRunes)
 	}
@@ -154,6 +177,10 @@ func New(cfg Config) (*Pipeline, error) {
 		return nil, fmt.Errorf("max answer runes %d is negative", cfg.MaxAnswerRunes)
 	}
 
+	maxQuestion := cfg.MaxQuestionRunes
+	if maxQuestion == 0 {
+		maxQuestion = MaxQuestionRunes
+	}
 	maxExcerpt := cfg.MaxExcerptRunes
 	if maxExcerpt == 0 {
 		maxExcerpt = DefaultMaxExcerptRunes
@@ -172,12 +199,14 @@ func New(cfg Config) (*Pipeline, error) {
 	}
 
 	return &Pipeline{
-		retriever:       cfg.Retriever,
-		generator:       cfg.Generator,
-		options:         options,
-		logger:          logger,
-		maxExcerptRunes: maxExcerpt,
-		maxAnswerRunes:  maxAnswer,
+		retriever:          cfg.Retriever,
+		generator:          cfg.Generator,
+		options:            options,
+		logger:             logger,
+		maxQuestionRunes:   maxQuestion,
+		maxExcerptRunes:    maxExcerpt,
+		maxAnswerRunes:     maxAnswer,
+		sourceLinkTemplate: cfg.SourceLinkTemplate,
 	}, nil
 }
 
@@ -201,8 +230,8 @@ func (p *Pipeline) Ask(ctx context.Context, question string) (Answer, error) {
 	if q == "" {
 		return Answer{}, errors.New("question is empty")
 	}
-	if utf8.RuneCountInString(q) > MaxQuestionRunes {
-		return Answer{}, fmt.Errorf("question exceeds maximum %d runes", MaxQuestionRunes)
+	if utf8.RuneCountInString(q) > p.maxQuestionRunes {
+		return Answer{}, fmt.Errorf("question exceeds maximum %d runes", p.maxQuestionRunes)
 	}
 
 	hits, err := p.retriever.Search(q, p.options)
@@ -278,7 +307,7 @@ func (p *Pipeline) buildSources(hits []retrieval.Hit) []Source {
 			Title:    h.Chunk.Title,
 			Heading:  h.Chunk.Heading,
 			Path:     h.Chunk.Path,
-			URL:      h.Chunk.URL(),
+			URL:      h.Chunk.FormatURL(p.sourceLinkTemplate),
 			Revision: h.Chunk.Revision,
 			Excerpt:  cutRunes(h.Chunk.Text, p.maxExcerptRunes),
 		}
@@ -375,6 +404,9 @@ const minAnswerRunes = 200
 type RenderOptions struct {
 	// Place names where a person helps. An empty Place means DefaultPlace.
 	Place string
+	// MaxRunes is the maximum allowed rendered message length in runes.
+	// 0 uses DefaultMaxRenderRunes.
+	MaxRunes int
 }
 
 // placeOrDefault returns place, or DefaultPlace when place is empty.
@@ -409,20 +441,24 @@ func AppendFooter(text, place string) string {
 
 // Render formats an Answer into plain text for a chat message, appending the disclosure footer.
 //
-// The result never exceeds MaxRenderRunes including the footer. The footer is never cut and
+// The result never exceeds opts.MaxRunes (DefaultMaxRenderRunes when zero) including the footer. The footer is never cut and
 // never dropped. An answer text that is too long is cut and marked with "..."; its source
 // lines stay, because the text refers to them. Source lines are dropped from the end only
 // when they would leave less than minAnswerRunes for the text. Excerpt replies drop trailing
 // excerpts whole. A single source line longer than the limit is cut as a last resort.
 func Render(a Answer, opts RenderOptions) string {
 	place := placeOrDefault(opts.Place)
+	maxRunes := opts.MaxRunes
+	if maxRunes <= 0 {
+		maxRunes = DefaultMaxRenderRunes
+	}
 
 	var body string
 	switch a.Kind {
 	case KindAnswer:
-		body = renderAnswer(a, place)
+		body = renderAnswer(a, place, maxRunes)
 	case KindExcerpts:
-		body = renderExcerpts(a, place)
+		body = renderExcerpts(a, place, maxRunes)
 	case KindRefusal:
 		body = Refusal(place)
 	default:
@@ -431,9 +467,9 @@ func Render(a Answer, opts RenderOptions) string {
 	return AppendFooter(body, place)
 }
 
-func renderAnswer(a Answer, place string) string {
+func renderAnswer(a Answer, place string, maxRunes int) string {
 	footerRunes := 2 + utf8.RuneCountInString(Footer(place))
-	bodyMax := MaxRenderRunes - footerRunes
+	bodyMax := maxRunes - footerRunes
 
 	lines := make([]string, len(a.Sources))
 	for i, s := range a.Sources {
@@ -494,9 +530,9 @@ type excerptBlock struct {
 	excerpt string
 }
 
-func renderExcerpts(a Answer, place string) string {
+func renderExcerpts(a Answer, place string, maxRunes int) string {
 	footerRunes := 2 + utf8.RuneCountInString(Footer(place))
-	bodyMax := MaxRenderRunes - footerRunes
+	bodyMax := maxRunes - footerRunes
 
 	header := LabelExcerpts
 	if a.Reason == ReasonModelUnavailable {

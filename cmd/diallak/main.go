@@ -27,7 +27,7 @@ const (
 )
 
 type dependencies struct {
-	registerCommands func(ctx context.Context, token string, guildID uint64) error
+	registerCommands func(ctx context.Context, token string, guildID uint64, maxQuestionChars int) error
 	runDiscord       func(ctx context.Context, cfg discord.BotConfig) error
 }
 
@@ -84,12 +84,12 @@ func executeRegisterCommands(
 	ctx context.Context,
 	cfg config.Config,
 	out io.Writer,
-	register func(ctx context.Context, token string, guildID uint64) error,
+	register func(ctx context.Context, token string, guildID uint64, maxQuestionChars int) error,
 ) error {
 	regCtx, cancel := context.WithTimeout(ctx, registerTimeout)
 	defer cancel()
 
-	if err := register(regCtx, cfg.Token, cfg.GuildID); err != nil {
+	if err := register(regCtx, cfg.Token, cfg.GuildID, cfg.QuestionMaxChars); err != nil {
 		return fmt.Errorf("register commands: %w", err)
 	}
 
@@ -129,11 +129,15 @@ func executeBotRun(
 	}
 
 	handler, err := discord.NewHandler(discord.HandlerConfig{
-		Asker:          assembly.Pipeline,
-		GuildID:        cfg.GuildID,
-		Logger:         slog.Default(),
-		SupportChannel: cfg.SupportChannel,
+		Asker:            assembly.Pipeline,
+		GuildID:          cfg.GuildID,
+		Logger:           slog.Default(),
+		QuestionMaxChars: cfg.QuestionMaxChars,
+		MaxConcurrent:    cfg.MaxConcurrentAsks,
+		AskTimeout:       cfg.AskTimeout,
+		RenderOptions:    assembly.RenderOptions,
 	})
+
 	if err != nil {
 		return fmt.Errorf("create discord handler: %w", err)
 	}
