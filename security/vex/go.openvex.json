@@ -1,0 +1,16 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/tekmora/discord-bot/blob/main/security/vex/go.openvex.json",
+  "author": "tekmora/discord-bot maintainers",
+  "timestamp": "2026-10-10T16:47:53Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {"name": "GO-2026-5932"},
+      "last_updated": "2026-10-10T16:47:53Z",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "No package of golang.org/x/crypto/openpgp is built. go list -deps ./... names four packages of golang.org/x/crypto: chacha20, chacha20poly1305, internal/alias and internal/poly1305. They come in through the voice package of the Discord library."
+    }
+  ]
+}
