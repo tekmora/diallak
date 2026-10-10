@@ -28,10 +28,3 @@ register:
         kind: message
         format: json
         selector: invariants.*
-# No artifact is published yet. The release workflow with provenance, signing and an SBOM lands
-# with the first release; until then the audit has no release build to judge.
-exceptions:
-  - rule: "HISS-11"
-    path: ".github/workflows/release.yml"
-    reason: "skeleton repository publishes no artifacts yet; engine gap cordanaLLM/praetor#1154"
-    expires: "2027-01-08"
