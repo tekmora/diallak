@@ -93,11 +93,27 @@ no sharding.
 - On a termination signal the bot stops taking new work and closes the gateway
   within a deadline.
 
+### A new Discord application
+
+The bot runs under a new Discord application, not the one the current bot uses.
+
+- Both bots can run side by side until the cutover, each with its own token.
+  Rolling back means switching back to the other application.
+- The new application starts with no privileged intent enabled.
+- The operator creates the application. Its name and avatar follow the product
+  name.
+
+### An image and an environment contract
+
+This repository builds a container image ([Dockerfile](../../Dockerfile)) and
+documents the environment variables the bot reads. Deployment manifests live
+outside this repository.
+
 ### No function of any private infrastructure
 
 The bot carries no function of any private infrastructure. It talks to the
 Discord API and to endpoints given in configuration: the model endpoint of
-ADR-0003 and, with later features, the GitHub API and the funding platforms. No
+ADR-0003 and, with later features, public APIs such as the funding platforms. No
 private host name, cluster name or internal service name appears in code or
 documentation.
 
@@ -126,7 +142,9 @@ documentation.
 
 These are not settled by this record and get their own:
 
-- Where state is stored.
-- Where the bot is hosted.
-- Whether the bot uses a new Discord application or takes over the existing one.
-- Which identity the GitHub integration uses.
+- **Where state is stored.** The working assumption is SQLite through a pure-Go
+  driver, behind a store interface. It is decided with the first feature that
+  stores state, together with the retention periods of ADR-0002.
+- **GitHub write access.** The first version needs none: a bug report becomes a
+  prefilled new-issue link that the member submits under their own account. A
+  later write path gets its own record.

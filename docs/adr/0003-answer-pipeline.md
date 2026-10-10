@@ -33,13 +33,19 @@ import the Discord library ([ADR-0001](0001-architecture-and-boundaries.md)).
 
 ### Corpus: project documentation only
 
-- The corpus is built from documentation sources listed in configuration.
+- The corpus is built from sources listed in configuration. Each entry names a
+  repository, a path pattern and a revision.
+- Sources are public documentation only: a project's README and the Markdown
+  files under its `docs/` directory. Issues, discussions and private
+  repositories are never sources.
 - Every chunk keeps its source link, its heading and the revision it was read
   from.
 - The corpus never contains text from Discord
   ([ADR-0002](0002-data-and-compliance.md)).
 
-Which projects and which documents belong to the corpus is an open decision.
+The corpus starts with one project. A second project is added once the
+evaluation set for the first exists. Which projects, and in which order, is the
+operator's choice and a change to the configuration list only.
 
 ### Retrieval decides whether there is an answer
 
@@ -47,16 +53,21 @@ Retrieval returns a bounded number of chunks with scores. When no chunk passes
 the threshold, there is no source, and the pipeline refuses before it calls the
 model.
 
-The retrieval method and the index storage are open. The first slice starts with
-the simplest method that passes the evaluation set below.
+The first slice uses a lexical index held in memory and built at start. It needs
+no vector store and no embedding model. Embeddings are added only when the
+evaluation set below shows the need.
 
 ### Generation: an OpenAI-compatible endpoint from configuration
 
 The model runs behind an HTTP endpoint that speaks the OpenAI-compatible chat
 API.
 
-- Configuration gives a **base URL** and a **model alias**. The alias is
-  whatever name the endpoint routes on. Code never contains a model name.
+- Configuration gives a **base URL** (`DISCORD_BOT_MODEL_BASE_URL`) and a
+  **model alias** (`DISCORD_BOT_MODEL_ALIAS`). The alias is whatever name the
+  endpoint routes on. Code never contains a model name.
+- When the two are not set, the bot answers without a model: the reply shows the
+  best excerpts with their sources and says that no model wrote it. The refusal
+  rule below still holds.
 - A credential, when the endpoint needs one, comes from a file, like the bot
   token.
 - Every request has a deadline, a bounded prompt (the retrieved chunks only) and
@@ -106,8 +117,9 @@ pipeline refuses when it should.
 
 - **Retrieval only.** Returning the best documentation excerpts without
   generated text is cheaper and cannot invent content. The first version
-  generates answers by operator decision; the refusal path keeps the same safety
-  property.
+  generates answers by operator decision, and the refusal path keeps the same
+  safety property. Retrieval only remains the mode when no endpoint is
+  configured.
 - **A fixed model.** Rejected: it couples code to one model and hides
   substitutions.
 - **Answers without citations, with a disclaimer.** Rejected: a disclaimer does
