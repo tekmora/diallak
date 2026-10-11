@@ -104,6 +104,7 @@ func buildPipeline(cfg config.Config, index *retrieval.Index, logger *slog.Logge
 		mCfg := model.Config{
 			BaseURL: cfg.ModelBaseURL,
 			Alias:   cfg.ModelAlias,
+			Policy:  cfg.ModelPolicy,
 			APIKey:  cfg.ModelKey,
 			Timeout: cfg.ModelTimeout,
 		}

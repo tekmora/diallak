@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -31,7 +32,18 @@ const (
 	// ProbeTimeout is the maximum duration for a startup or health probe.
 	// Source: chosen, not measured.
 	ProbeTimeout = 10 * time.Second
+	// PolicyHeader names the HTTP header liteLLM uses to return applied guardrail policies.
+	PolicyHeader = "x-litellm-applied-policies"
 )
+
+// PolicyError reports that the model response did not name the configured guardrail policy.
+type PolicyError struct {
+	Applied []string
+}
+
+func (e *PolicyError) Error() string {
+	return "model reply did not name the configured policy"
+}
 
 // StatusError reports an unexpected HTTP status code from the model endpoint.
 type StatusError struct {
@@ -65,12 +77,18 @@ const (
 	ClassRejected
 	// ClassUnavailable represents transient reachability, timeout, or server-side failures.
 	ClassUnavailable
+	// ClassPolicy represents a response that does not name the configured guardrail policy.
+	ClassPolicy
 )
 
 // Classify categorizes err into a Class.
 func Classify(err error) Class {
 	if err == nil {
 		return ClassOther
+	}
+	var policyErr *PolicyError
+	if errors.As(err, &policyErr) {
+		return ClassPolicy
 	}
 	var statusErr *StatusError
 	if errors.As(err, &statusErr) {
@@ -92,12 +110,22 @@ func Classify(err error) Class {
 	return ClassOther
 }
 
-var aliasRegexp = regexp.MustCompile(`^[A-Za-z0-9._:/-]{1,128}$`)
+var (
+	aliasRegexp  = regexp.MustCompile(`^[A-Za-z0-9._:/-]{1,128}$`)
+	policyRegexp = regexp.MustCompile(`^[A-Za-z0-9._:/-]{1,128}$`)
+)
+
+// ValidPolicyName reports whether name may be configured as the policy a
+// reply must name: 1 to 128 characters of letters, digits and "._:/-".
+func ValidPolicyName(name string) bool {
+	return policyRegexp.MatchString(name)
+}
 
 // Config holds configuration parameters for the model client.
 type Config struct {
 	BaseURL         string
 	Alias           string
+	Policy          string
 	APIKey          string
 	Timeout         time.Duration
 	MaxOutputTokens int
@@ -107,6 +135,7 @@ type Config struct {
 type Client struct {
 	baseURL    string
 	alias      string
+	policy     string
 	apiKey     string
 	timeout    time.Duration
 	maxTokens  int
@@ -117,6 +146,7 @@ type Client struct {
 //
 // BaseURL must be a valid http or https URL without userinfo, query, or fragment.
 // Alias must match ^[A-Za-z0-9._:/-]{1,128}$.
+// Policy must match ^[A-Za-z0-9._:/-]{1,128}$.
 // Timeout must be positive and at most MaxTimeout (0 uses DefaultTimeout).
 // MaxOutputTokens must be between 1 and 4096 (0 uses DefaultMaxOutputTokens).
 // If hc is nil, New creates its own http.Client. That client follows no redirect: a redirecting
@@ -128,6 +158,9 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	}
 	if !aliasRegexp.MatchString(cfg.Alias) {
 		return nil, fmt.Errorf("invalid model alias %q", cfg.Alias)
+	}
+	if !ValidPolicyName(cfg.Policy) {
+		return nil, errors.New("invalid model policy: 1 to 128 characters of letters, digits and \"._:/-\"")
 	}
 
 	timeout, err := validateTimeout(cfg.Timeout)
@@ -148,6 +181,7 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	return &Client{
 		baseURL:    strings.TrimRight(cfg.BaseURL, "/"),
 		alias:      cfg.Alias,
+		policy:     cfg.Policy,
 		apiKey:     cfg.APIKey,
 		timeout:    timeout,
 		maxTokens:  maxTokens,
@@ -262,6 +296,16 @@ func (c *Client) sendRequest(ctx context.Context, timeout time.Duration, reqBody
 		return nil, &StatusError{Code: resp.StatusCode}
 	}
 
+	applied, named := readAppliedPolicies(resp.Header, c.policy)
+	if !named {
+		slices.Sort(applied)
+		policyErr := &PolicyError{Applied: applied}
+		if _, copyErr := io.Copy(io.Discard, io.LimitReader(resp.Body, int64(MaxResponseBytes+1))); copyErr != nil {
+			return nil, errors.Join(policyErr, fmt.Errorf("drain response body: %w", copyErr))
+		}
+		return nil, policyErr
+	}
+
 	data, err := io.ReadAll(io.LimitReader(resp.Body, int64(MaxResponseBytes+1)))
 	if err != nil {
 		return nil, fmt.Errorf("read response body: %w", &TransportError{Err: err})
@@ -271,6 +315,41 @@ func (c *Client) sendRequest(ctx context.Context, timeout time.Duration, reqBody
 	}
 
 	return data, nil
+}
+
+const (
+	maxAppliedPolicies = 64
+	maxPolicyNameBytes = 128
+)
+
+// readAppliedPolicies reads the names in the policy header and reports whether
+// want is one of them. It reads at most maxAppliedPolicies entries over all
+// header lines, empty ones included, so a long header costs no more than that.
+// want is compared with the whole name; only the returned names are cut to
+// maxPolicyNameBytes.
+func readAppliedPolicies(header http.Header, want string) ([]string, bool) {
+	var applied []string
+	named := false
+	read := 0
+	values := header.Values(PolicyHeader)
+	for i := 0; i < len(values) && read < maxAppliedPolicies; i++ {
+		parts := strings.SplitN(values[i], ",", maxAppliedPolicies-read+1)
+		for j := 0; j < len(parts) && read < maxAppliedPolicies; j++ {
+			read++
+			name := strings.TrimSpace(parts[j])
+			if name == "" {
+				continue
+			}
+			if name == want {
+				named = true
+			}
+			if len(name) > maxPolicyNameBytes {
+				name = name[:maxPolicyNameBytes]
+			}
+			applied = append(applied, name)
+		}
+	}
+	return applied, named
 }
 
 // Complete sends a prompt to the chat completion endpoint and returns the generated content.

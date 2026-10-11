@@ -61,6 +61,7 @@ func TestLoad_Positive_ReadsConfiguration(t *testing.T) {
 		base := validBaseEnv(t)
 		base[EnvModelBaseURL] = "http://127.0.0.1:8000"
 		base[EnvModelAlias] = "router/test"
+		base[EnvModelPolicy] = "example-policy"
 
 		cfg, err := Load(env(base))
 		if err != nil {
@@ -75,6 +76,9 @@ func TestLoad_Positive_ReadsConfiguration(t *testing.T) {
 		if cfg.ModelAlias != "router/test" {
 			t.Errorf("ModelAlias = %q, want router/test", cfg.ModelAlias)
 		}
+		if cfg.ModelPolicy != "example-policy" {
+			t.Errorf("ModelPolicy = %q, want example-policy", cfg.ModelPolicy)
+		}
 		if cfg.ModelKey != "" {
 			t.Errorf("ModelKey = %q, want empty", cfg.ModelKey)
 		}
@@ -84,6 +88,7 @@ func TestLoad_Positive_ReadsConfiguration(t *testing.T) {
 		base := validBaseEnv(t)
 		base[EnvModelBaseURL] = "http://127.0.0.1:8000"
 		base[EnvModelAlias] = "router/test"
+		base[EnvModelPolicy] = "example-policy"
 		base[EnvModelKeyFile] = writeSecret(t, "key", "sk-endpoint-secret\n")
 
 		cfg, err := Load(env(base))
@@ -92,6 +97,9 @@ func TestLoad_Positive_ReadsConfiguration(t *testing.T) {
 		}
 		if !cfg.HasModel() {
 			t.Errorf("HasModel = false, want true")
+		}
+		if cfg.ModelPolicy != "example-policy" {
+			t.Errorf("ModelPolicy = %q, want example-policy", cfg.ModelPolicy)
 		}
 		if cfg.ModelKey != "sk-endpoint-secret" {
 			t.Errorf("ModelKey = %q, want sk-endpoint-secret", cfg.ModelKey)
@@ -119,9 +127,11 @@ func TestLoad_Negative_RefusesInvalidInput(t *testing.T) {
 		{"corpus path relative", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "relative/path"}, "must be an absolute path"},
 		{"model base set without alias", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelBaseURL: "http://127.0.0.1"}, "must both be set or both be unset"},
 		{"model alias set without base", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelAlias: "router/test"}, "must both be set or both be unset"},
+		{"model base and alias without policy", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelBaseURL: "http://127.0.0.1", EnvModelAlias: "test"}, EnvModelPolicy + " is not set"},
 		{"model key set without model", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelKeyFile: validKey}, "set but no model is configured"},
-		{"model key file absent", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelBaseURL: "http://127.0.0.1", EnvModelAlias: "test", EnvModelKeyFile: filepath.Join(t.TempDir(), "absent_key")}, "open model key file"},
-		{"model key file blank", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelBaseURL: "http://127.0.0.1", EnvModelAlias: "test", EnvModelKeyFile: writeSecret(t, "blank_key", " \n")}, "model key file is empty"},
+		{"model policy set without model", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelPolicy: "example-policy"}, EnvModelPolicy + " is set but no model is configured"},
+		{"model key file absent", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelBaseURL: "http://127.0.0.1", EnvModelAlias: "test", EnvModelPolicy: "example-policy", EnvModelKeyFile: filepath.Join(t.TempDir(), "absent_key")}, "open model key file"},
+		{"model key file blank", map[string]string{EnvTokenFile: validToken, EnvGuildID: "1", EnvCorpusDir: "/corpus", EnvModelBaseURL: "http://127.0.0.1", EnvModelAlias: "test", EnvModelPolicy: "example-policy", EnvModelKeyFile: writeSecret(t, "blank_key", " \n")}, "model key file is empty"},
 	}
 
 	for _, tc := range cases {
@@ -147,6 +157,7 @@ func TestLoad_Boundary_SecretSizesAndGuildRange(t *testing.T) {
 		EnvCorpusDir:    "/var/data/corpus",
 		EnvModelBaseURL: "http://127.0.0.1:8000",
 		EnvModelAlias:   "router/test",
+		EnvModelPolicy:  "example-policy",
 		EnvModelKeyFile: keyAtLimit,
 	}))
 	if err != nil {
@@ -173,6 +184,7 @@ func TestLoad_Boundary_SecretSizesAndGuildRange(t *testing.T) {
 		EnvCorpusDir:    "/corpus",
 		EnvModelBaseURL: "http://127.0.0.1:8000",
 		EnvModelAlias:   "test",
+		EnvModelPolicy:  "example-policy",
 		EnvModelKeyFile: keyOverLimit,
 	})); err == nil || !strings.Contains(err.Error(), "larger than") {
 		t.Errorf("Load over key limit = %v, want larger than error", err)
@@ -193,6 +205,7 @@ func TestConfig_Negative_RedactionHidesSecrets(t *testing.T) {
 		GuildID:      42,
 		ModelBaseURL: "https://model.example.com",
 		ModelAlias:   "router/test",
+		ModelPolicy:  "example-policy",
 		ModelKey:     "super-secret-model-key",
 		CorpusDir:    "/var/data/corpus",
 	}
@@ -214,6 +227,9 @@ func TestConfig_Negative_RedactionHidesSecrets(t *testing.T) {
 		if !strings.Contains(text, "[redacted]") {
 			t.Fatalf("formatted config %q does not contain [redacted]", text)
 		}
+		if !strings.Contains(text, "example-policy") {
+			t.Fatalf("formatted config %q does not contain ModelPolicy", text)
+		}
 	}
 
 	var buf bytes.Buffer
@@ -229,6 +245,9 @@ func TestConfig_Negative_RedactionHidesSecrets(t *testing.T) {
 	}
 	if !strings.Contains(logText, "[redacted]") {
 		t.Fatalf("slog JSON %q does not contain [redacted]", logText)
+	}
+	if !strings.Contains(logText, "example-policy") {
+		t.Fatalf("slog JSON %q does not contain ModelPolicy", logText)
 	}
 }
 
@@ -809,6 +828,7 @@ func TestLoad_Boundary_AskTimeoutLeavesRoomForTheModelTimeoutInEffect(t *testing
 		base := validBaseEnv(t)
 		base[EnvModelBaseURL] = "https://model.example.com"
 		base[EnvModelAlias] = "router/test"
+		base[EnvModelPolicy] = "example-policy"
 		for k, v := range extra {
 			base[k] = v
 		}
@@ -952,4 +972,73 @@ func TestLoad_Boundary_HealthAddrPorts(t *testing.T) {
 	if _, err := Load(env(base)); err == nil || !strings.Contains(err.Error(), EnvHealthAddr) {
 		t.Errorf("port 65536 err = %v, want error naming %s", err, EnvHealthAddr)
 	}
+}
+
+func TestLoad_Negative_ModelPolicyValidationTable(t *testing.T) {
+	cases := []struct {
+		name      string
+		policyVal string
+		wantVar   string
+	}{
+		{name: "comma refused", policyVal: "example,policy", wantVar: EnvModelPolicy},
+		{name: "space refused", policyVal: "example policy", wantVar: EnvModelPolicy},
+		{name: "129 chars refused", policyVal: strings.Repeat("a", 129), wantVar: EnvModelPolicy},
+		{name: "empty refused", policyVal: "", wantVar: EnvModelPolicy},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			base := validBaseEnv(t)
+			base[EnvModelBaseURL] = "http://127.0.0.1:8000"
+			base[EnvModelAlias] = "router/test"
+			base[EnvModelPolicy] = tc.policyVal
+			cfg, err := Load(env(base))
+			if err == nil {
+				t.Fatalf("Load with policy %q succeeded, want error", tc.policyVal)
+			}
+			if cfg != (Config{}) {
+				t.Errorf("Load returned non-zero Config on error: %+v", cfg)
+			}
+			errStr := err.Error()
+			if !strings.Contains(errStr, tc.wantVar) {
+				t.Errorf("error %q does not name expected variable %q", errStr, tc.wantVar)
+			}
+			if tc.policyVal != "" && strings.Contains(errStr, tc.policyVal) {
+				t.Errorf("error %q echoes rejected policy value %q", errStr, tc.policyVal)
+			}
+		})
+	}
+}
+
+func TestLoad_Boundary_ModelPolicyLengthAndPunctuation(t *testing.T) {
+	t.Run("128 chars accepted", func(t *testing.T) {
+		base := validBaseEnv(t)
+		base[EnvModelBaseURL] = "http://127.0.0.1:8000"
+		base[EnvModelAlias] = "router/test"
+		policy128 := strings.Repeat("p", 128)
+		base[EnvModelPolicy] = policy128
+		cfg, err := Load(env(base))
+		if err != nil {
+			t.Fatalf("Load with 128-char policy failed: %v", err)
+		}
+		if cfg.ModelPolicy != policy128 {
+			t.Errorf("ModelPolicy = %q, want 128-char policy", cfg.ModelPolicy)
+		}
+	})
+
+	t.Run("each allowed punctuation accepted", func(t *testing.T) {
+		// Allowed punctuation in allow-list: . _ : / -
+		punctPolicy := "a.b_c:d/e-f"
+		base := validBaseEnv(t)
+		base[EnvModelBaseURL] = "http://127.0.0.1:8000"
+		base[EnvModelAlias] = "router/test"
+		base[EnvModelPolicy] = punctPolicy
+		cfg, err := Load(env(base))
+		if err != nil {
+			t.Fatalf("Load with punctuation policy %q failed: %v", punctPolicy, err)
+		}
+		if cfg.ModelPolicy != punctPolicy {
+			t.Errorf("ModelPolicy = %q, want %q", cfg.ModelPolicy, punctPolicy)
+		}
+	})
 }

@@ -26,6 +26,7 @@ func TestNew_Positive_ValidConfigurations(t *testing.T) {
 			cfg: Config{
 				BaseURL: "http://localhost:8080",
 				Alias:   "router/test",
+				Policy:  "example-policy",
 			},
 			wantURL:     "http://localhost:8080",
 			wantTimeout: DefaultTimeout,
@@ -36,6 +37,7 @@ func TestNew_Positive_ValidConfigurations(t *testing.T) {
 			cfg: Config{
 				BaseURL:         "https://example.com/api/v1/",
 				Alias:           "custom-alias.v1:prod",
+				Policy:          "example-policy",
 				APIKey:          "secret-key",
 				Timeout:         2 * time.Minute,
 				MaxOutputTokens: 1024,
@@ -74,62 +76,77 @@ func TestNew_Negative_ValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "empty base URL",
-			cfg:     Config{BaseURL: "", Alias: "router/test", APIKey: secretKey},
+			cfg:     Config{BaseURL: "", Alias: "router/test", Policy: "example-policy", APIKey: secretKey},
 			wantErr: "unsupported base URL scheme",
 		},
 		{
 			name:    "invalid scheme ftp",
-			cfg:     Config{BaseURL: "ftp://localhost:8080", Alias: "router/test", APIKey: secretKey},
+			cfg:     Config{BaseURL: "ftp://localhost:8080", Alias: "router/test", Policy: "example-policy", APIKey: secretKey},
 			wantErr: "unsupported base URL scheme",
 		},
 		{
 			name:    "empty host",
-			cfg:     Config{BaseURL: "http:///path", Alias: "router/test", APIKey: secretKey},
+			cfg:     Config{BaseURL: "http:///path", Alias: "router/test", Policy: "example-policy", APIKey: secretKey},
 			wantErr: "base URL host is empty",
 		},
 		{
 			name:    "contains userinfo",
-			cfg:     Config{BaseURL: "http://user:pass@localhost:8080", Alias: "router/test", APIKey: secretKey},
+			cfg:     Config{BaseURL: "http://user:pass@localhost:8080", Alias: "router/test", Policy: "example-policy", APIKey: secretKey},
 			wantErr: "userinfo",
 		},
 		{
 			name:    "contains query",
-			cfg:     Config{BaseURL: "http://localhost:8080?foo=bar", Alias: "router/test", APIKey: secretKey},
+			cfg:     Config{BaseURL: "http://localhost:8080?foo=bar", Alias: "router/test", Policy: "example-policy", APIKey: secretKey},
 			wantErr: "query",
 		},
 		{
 			name:    "contains fragment",
-			cfg:     Config{BaseURL: "http://localhost:8080#section", Alias: "router/test", APIKey: secretKey},
+			cfg:     Config{BaseURL: "http://localhost:8080#section", Alias: "router/test", Policy: "example-policy", APIKey: secretKey},
 			wantErr: "fragment",
 		},
 		{
 			name:    "empty alias",
-			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "", APIKey: secretKey},
+			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "", Policy: "example-policy", APIKey: secretKey},
 			wantErr: "invalid model alias",
 		},
 		{
 			name:    "alias with invalid characters",
-			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "bad alias!", APIKey: secretKey},
+			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "bad alias!", Policy: "example-policy", APIKey: secretKey},
 			wantErr: "invalid model alias",
 		},
 		{
+			name:    "empty policy",
+			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "router/test", Policy: "", APIKey: secretKey},
+			wantErr: "invalid model policy",
+		},
+		{
+			name:    "policy with space",
+			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "router/test", Policy: "bad policy", APIKey: secretKey},
+			wantErr: "invalid model policy",
+		},
+		{
+			name:    "policy with comma",
+			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "router/test", Policy: "bad,policy", APIKey: secretKey},
+			wantErr: "invalid model policy",
+		},
+		{
 			name:    "negative timeout",
-			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "router/test", Timeout: -1 * time.Second, APIKey: secretKey},
+			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "router/test", Policy: "example-policy", Timeout: -1 * time.Second, APIKey: secretKey},
 			wantErr: "outside (0,",
 		},
 		{
 			name:    "timeout exceeds maximum",
-			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "router/test", Timeout: MaxTimeout + time.Second, APIKey: secretKey},
+			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "router/test", Policy: "example-policy", Timeout: MaxTimeout + time.Second, APIKey: secretKey},
 			wantErr: "outside (0,",
 		},
 		{
 			name:    "negative max output tokens",
-			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "router/test", MaxOutputTokens: -5, APIKey: secretKey},
+			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "router/test", Policy: "example-policy", MaxOutputTokens: -5, APIKey: secretKey},
 			wantErr: "outside 1..4096",
 		},
 		{
 			name:    "max output tokens exceeds limit",
-			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "router/test", MaxOutputTokens: 4097, APIKey: secretKey},
+			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "router/test", Policy: "example-policy", MaxOutputTokens: 4097, APIKey: secretKey},
 			wantErr: "outside 1..4096",
 		},
 	}
@@ -154,6 +171,7 @@ func TestNew_Boundary_Limits(t *testing.T) {
 	baseCfg := Config{
 		BaseURL: "http://localhost:8080",
 		Alias:   "router/test",
+		Policy:  "example-policy",
 	}
 
 	// Alias boundary: exactly 128 chars vs 129 chars
@@ -169,6 +187,28 @@ func TestNew_Boundary_Limits(t *testing.T) {
 	cfg129.Alias = invalidAlias129
 	if _, err := New(cfg129, nil); err == nil {
 		t.Error("New() with 129-char alias passed, want error")
+	}
+
+	// Policy boundary: exactly 128 chars vs 129 chars, and punctuation
+	validPolicy128 := strings.Repeat("p", 128)
+	cfgPolicy128 := baseCfg
+	cfgPolicy128.Policy = validPolicy128
+	if _, err := New(cfgPolicy128, nil); err != nil {
+		t.Errorf("New() with 128-char policy failed: %v", err)
+	}
+
+	invalidPolicy129 := strings.Repeat("p", 129)
+	cfgPolicy129 := baseCfg
+	cfgPolicy129.Policy = invalidPolicy129
+	if _, err := New(cfgPolicy129, nil); err == nil {
+		t.Error("New() with 129-char policy passed, want error")
+	}
+
+	punctPolicy := "a.b_c:d/e-f"
+	cfgPunct := baseCfg
+	cfgPunct.Policy = punctPolicy
+	if _, err := New(cfgPunct, nil); err != nil {
+		t.Errorf("New() with punctuation policy failed: %v", err)
 	}
 
 	// MaxOutputTokens boundary: 1, 4096 vs 0, 4097
@@ -225,6 +265,7 @@ func TestComplete_Positive_RequestShapeAndResponse(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			http.Error(w, "encode error", http.StatusInternalServerError)
 			return
@@ -235,6 +276,7 @@ func TestComplete_Positive_RequestShapeAndResponse(t *testing.T) {
 	client, err := New(Config{
 		BaseURL:         server.URL,
 		Alias:           "router/test",
+		Policy:          "example-policy",
 		APIKey:          "test-secret-key",
 		MaxOutputTokens: 256,
 	}, server.Client())
@@ -287,6 +329,7 @@ func TestComplete_Positive_AuthorizationAbsentWithoutKey(t *testing.T) {
 				{Message: chatMessage{Role: "assistant", Content: "OK"}},
 			},
 		}
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			http.Error(w, "encode error", http.StatusInternalServerError)
 			return
@@ -297,6 +340,7 @@ func TestComplete_Positive_AuthorizationAbsentWithoutKey(t *testing.T) {
 	client, err := New(Config{
 		BaseURL: server.URL,
 		Alias:   "router/test",
+		Policy:  "example-policy",
 		APIKey:  "",
 	}, server.Client())
 	if err != nil {
@@ -320,6 +364,7 @@ func TestComplete_Positive_TrailingSlashInBaseURL(t *testing.T) {
 				{Message: chatMessage{Role: "assistant", Content: "OK"}},
 			},
 		}
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			http.Error(w, "encode error", http.StatusInternalServerError)
 			return
@@ -330,6 +375,7 @@ func TestComplete_Positive_TrailingSlashInBaseURL(t *testing.T) {
 	client, err := New(Config{
 		BaseURL: server.URL + "///",
 		Alias:   "router/test",
+		Policy:  "example-policy",
 	}, server.Client())
 	if err != nil {
 		t.Fatalf("New() unexpected error: %v", err)
@@ -356,6 +402,7 @@ func TestComplete_Negative_Non200Status(t *testing.T) {
 	client, err := New(Config{
 		BaseURL: server.URL,
 		Alias:   "router/test",
+		Policy:  "example-policy",
 		APIKey:  "secret-key",
 	}, server.Client())
 	if err != nil {
@@ -376,6 +423,7 @@ func TestComplete_Negative_Non200Status(t *testing.T) {
 
 func TestComplete_Negative_MalformedJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte("{invalid-json")); err != nil {
 			http.Error(w, "write error", http.StatusInternalServerError)
@@ -387,6 +435,7 @@ func TestComplete_Negative_MalformedJSON(t *testing.T) {
 	client, err := New(Config{
 		BaseURL: server.URL,
 		Alias:   "router/test",
+		Policy:  "example-policy",
 	}, server.Client())
 	if err != nil {
 		t.Fatalf("New() failed: %v", err)
@@ -403,6 +452,7 @@ func TestComplete_Negative_MalformedJSON(t *testing.T) {
 
 func TestComplete_Negative_NoChoices(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte(`{"choices":[]}`)); err != nil {
 			http.Error(w, "write error", http.StatusInternalServerError)
@@ -414,6 +464,7 @@ func TestComplete_Negative_NoChoices(t *testing.T) {
 	client, err := New(Config{
 		BaseURL: server.URL,
 		Alias:   "router/test",
+		Policy:  "example-policy",
 	}, server.Client())
 	if err != nil {
 		t.Fatalf("New() failed: %v", err)
@@ -430,6 +481,7 @@ func TestComplete_Negative_NoChoices(t *testing.T) {
 
 func TestComplete_Negative_EmptyContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte(`{"choices":[{"message":{"content":""}}]}`)); err != nil {
 			http.Error(w, "write error", http.StatusInternalServerError)
@@ -441,6 +493,7 @@ func TestComplete_Negative_EmptyContent(t *testing.T) {
 	client, err := New(Config{
 		BaseURL: server.URL,
 		Alias:   "router/test",
+		Policy:  "example-policy",
 	}, server.Client())
 	if err != nil {
 		t.Fatalf("New() failed: %v", err)
@@ -457,6 +510,7 @@ func TestComplete_Negative_EmptyContent(t *testing.T) {
 
 func TestComplete_Negative_BodyOverMaxResponseBytes(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		w.WriteHeader(http.StatusOK)
 		data := make([]byte, MaxResponseBytes+10)
 		if _, err := w.Write(data); err != nil {
@@ -469,6 +523,7 @@ func TestComplete_Negative_BodyOverMaxResponseBytes(t *testing.T) {
 	client, err := New(Config{
 		BaseURL: server.URL,
 		Alias:   "router/test",
+		Policy:  "example-policy",
 	}, server.Client())
 	if err != nil {
 		t.Fatalf("New() failed: %v", err)
@@ -497,6 +552,7 @@ func TestComplete_Negative_ServerSlowerThanTimeout(t *testing.T) {
 	client, err := New(Config{
 		BaseURL: server.URL,
 		Alias:   "router/test",
+		Policy:  "example-policy",
 		Timeout: 50 * time.Millisecond,
 	}, server.Client())
 	if err != nil {
@@ -514,6 +570,7 @@ func TestComplete_Negative_ServerSlowerThanTimeout(t *testing.T) {
 
 func TestComplete_Negative_CancelledContext(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`)); err != nil {
 			http.Error(w, "write error", http.StatusInternalServerError)
@@ -525,6 +582,7 @@ func TestComplete_Negative_CancelledContext(t *testing.T) {
 	client, err := New(Config{
 		BaseURL: server.URL,
 		Alias:   "router/test",
+		Policy:  "example-policy",
 	}, server.Client())
 	if err != nil {
 		t.Fatalf("New() failed: %v", err)
@@ -556,6 +614,7 @@ func TestComplete_Negative_NeverLeaksAPIKey(t *testing.T) {
 	client, err := New(Config{
 		BaseURL: server.URL,
 		Alias:   "router/test",
+		Policy:  "example-policy",
 		APIKey:  secretKey,
 	}, server.Client())
 	if err != nil {
@@ -576,6 +635,7 @@ func TestComplete_Negative_DefaultClientRefusesRedirects(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		followed = true
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		if _, err := w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"redirected"}}]}`)); err != nil {
 			t.Errorf("write response: %v", err)
 		}
@@ -587,7 +647,7 @@ func TestComplete_Negative_DefaultClientRefusesRedirects(t *testing.T) {
 	t.Cleanup(redirector.Close)
 
 	// The prompt and the credential go to the configured endpoint only. A redirect is an error.
-	client, err := New(Config{BaseURL: redirector.URL, Alias: "router/test", APIKey: "key-for-redirect-test"}, nil)
+	client, err := New(Config{BaseURL: redirector.URL, Alias: "router/test", Policy: "example-policy", APIKey: "key-for-redirect-test"}, nil)
 	if err != nil {
 		t.Fatalf("New() failed: %v", err)
 	}
@@ -615,6 +675,7 @@ func TestComplete_Positive_ConfiguredTimeoutSeenByServer(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		observedDeadline, hasDeadline = r.Context().Deadline()
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		if _, err := w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"hello"}}]}`)); err != nil {
 			t.Errorf("write response: %v", err)
 		}
@@ -632,6 +693,7 @@ func TestComplete_Positive_ConfiguredTimeoutSeenByServer(t *testing.T) {
 	client, err := New(Config{
 		BaseURL: "http://diallak.test",
 		Alias:   "router/test",
+		Policy:  "example-policy",
 		Timeout: configuredTimeout,
 	}, testClient)
 	if err != nil {
@@ -659,6 +721,7 @@ func TestClassify_Boundary_Table(t *testing.T) {
 		want Class
 	}{
 		{name: "nil", err: nil, want: ClassOther},
+		{name: "policy error", err: &PolicyError{Applied: []string{"other"}}, want: ClassPolicy},
 		{name: "status 399", err: &StatusError{Code: 399}, want: ClassRejected},
 		{name: "status 400", err: &StatusError{Code: 400}, want: ClassRejected},
 		{name: "status 407", err: &StatusError{Code: 407}, want: ClassRejected},
@@ -718,6 +781,7 @@ func TestProbe_Positive_RequestShape(t *testing.T) {
 					http.Error(w, "unmarshal error", http.StatusBadRequest)
 					return
 				}
+				w.Header().Set("x-litellm-applied-policies", "example-policy")
 				w.WriteHeader(http.StatusOK)
 				if _, writeErr := w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"pong"}}]}`)); writeErr != nil {
 					t.Errorf("write response: %v", writeErr)
@@ -728,6 +792,7 @@ func TestProbe_Positive_RequestShape(t *testing.T) {
 			c, err := New(Config{
 				BaseURL: server.URL,
 				Alias:   "test-alias",
+				Policy:  "example-policy",
 				APIKey:  key,
 			}, server.Client())
 			if err != nil {
@@ -762,6 +827,7 @@ func TestProbe_Positive_RequestShape(t *testing.T) {
 
 func TestProbe_Positive_Status200WithNonJSONBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		w.WriteHeader(http.StatusOK)
 		if _, writeErr := w.Write([]byte("x")); writeErr != nil {
 			t.Errorf("write response: %v", writeErr)
@@ -769,7 +835,7 @@ func TestProbe_Positive_Status200WithNonJSONBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c, err := New(Config{BaseURL: server.URL, Alias: "test-alias"}, server.Client())
+	c, err := New(Config{BaseURL: server.URL, Alias: "test-alias", Policy: "example-policy"}, server.Client())
 	if err != nil {
 		t.Fatalf("New() failed: %v", err)
 	}
@@ -793,6 +859,7 @@ func TestProbe_Boundary_DeadlineDerivedFromContext(t *testing.T) {
 	c, err := New(Config{
 		BaseURL: server.URL,
 		Alias:   "test-alias",
+		Policy:  "example-policy",
 		Timeout: 50 * time.Millisecond,
 	}, server.Client())
 	if err != nil {
@@ -827,6 +894,7 @@ func TestClient_Negative_KeyAbsentFromEveryErrorText(t *testing.T) {
 	c, err := New(Config{
 		BaseURL: server.URL,
 		Alias:   "test-alias",
+		Policy:  "example-policy",
 		APIKey:  secretKey,
 	}, server.Client())
 	if err != nil {
@@ -853,6 +921,7 @@ func TestClient_Negative_KeyAbsentFromEveryErrorText(t *testing.T) {
 func TestClient_Boundary_BodySlowerThanTimeoutIsUnavailable(t *testing.T) {
 	done := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		w.WriteHeader(http.StatusOK)
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
@@ -868,6 +937,7 @@ func TestClient_Boundary_BodySlowerThanTimeoutIsUnavailable(t *testing.T) {
 	client, err := New(Config{
 		BaseURL: server.URL,
 		Alias:   "router/test",
+		Policy:  "example-policy",
 		Timeout: 50 * time.Millisecond,
 	}, server.Client())
 	if err != nil {
@@ -905,6 +975,7 @@ func TestProbe_Boundary_DeadlineNeverAboveProbeTimeout(t *testing.T) {
 	c, err := New(Config{
 		BaseURL: "http://127.0.0.1:1",
 		Alias:   "test-alias",
+		Policy:  "example-policy",
 		Timeout: MaxTimeout,
 	}, httpClient)
 	if err != nil {
@@ -919,5 +990,202 @@ func TestProbe_Boundary_DeadlineNeverAboveProbeTimeout(t *testing.T) {
 	}
 	if left <= 0 || left > ProbeTimeout {
 		t.Errorf("probe deadline lies %v ahead, want above 0 and at most %v", left, ProbeTimeout)
+	}
+}
+
+func runPolicyServer(headers http.Header, status int, body string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		for k, vv := range headers {
+			for _, v := range vv {
+				w.Header().Add(k, v)
+			}
+		}
+		w.WriteHeader(status)
+		if _, err := w.Write([]byte(body)); err != nil {
+			http.Error(w, "write error", http.StatusInternalServerError)
+		}
+	}))
+}
+
+func TestComplete_Positive_PolicyValidationTable(t *testing.T) {
+	const validBody = `{"choices":[{"message":{"content":"ok"}}]}`
+	tests := []struct {
+		name    string
+		headers http.Header
+	}{
+		{"name alone", http.Header{PolicyHeader: []string{"example-policy"}}},
+		{"name first of three", http.Header{PolicyHeader: []string{"example-policy,other1,other2"}}},
+		{"name middle of three", http.Header{PolicyHeader: []string{"other1,example-policy,other2"}}},
+		{"name last of three", http.Header{PolicyHeader: []string{"other1,other2,example-policy"}}},
+		{"spaces around names", http.Header{PolicyHeader: []string{"  other1  ,  example-policy  ,  other2  "}}},
+		{"two header lines name in second", http.Header{PolicyHeader: []string{"other1", "example-policy"}}},
+		{"empty entries", http.Header{PolicyHeader: []string{",,example-policy,,other,,"}}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := runPolicyServer(tc.headers, http.StatusOK, validBody)
+			defer server.Close()
+
+			c, err := New(Config{BaseURL: server.URL, Alias: "test-alias", Policy: "example-policy"}, server.Client())
+			if err != nil {
+				t.Fatalf("New() failed: %v", err)
+			}
+			out, err := c.Complete(context.Background(), "sys", "usr")
+			if err != nil {
+				t.Fatalf("Complete() failed: %v", err)
+			}
+			if out != "ok" {
+				t.Errorf("out = %q, want %q", out, "ok")
+			}
+		})
+	}
+}
+
+func build65NamesHeader() http.Header {
+	names := make([]string, 64)
+	for i := range names {
+		names[i] = fmt.Sprintf("other-%d", i)
+	}
+	all := append(names, "example-policy")
+	return http.Header{PolicyHeader: []string{strings.Join(all, ",")}}
+}
+
+func TestComplete_Negative_PolicyValidationTable(t *testing.T) {
+	const secretBody = `{"choices":[{"message":{"content":"secret-model-reply"}}]}`
+	tests := []struct {
+		name    string
+		headers http.Header
+	}{
+		{"header absent", http.Header{}},
+		{"header without name", http.Header{PolicyHeader: []string{"other1,other2"}}},
+		{"name differs only in case", http.Header{PolicyHeader: []string{"Example-Policy"}}},
+		{"name prefix", http.Header{PolicyHeader: []string{"example"}}},
+		{"name suffix", http.Header{PolicyHeader: []string{"policy"}}},
+		{"65 names with wanted at 65", build65NamesHeader()},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := runPolicyServer(tc.headers, http.StatusOK, secretBody)
+			defer server.Close()
+
+			c, err := New(Config{BaseURL: server.URL, Alias: "test-alias", Policy: "example-policy"}, server.Client())
+			if err != nil {
+				t.Fatalf("New() failed: %v", err)
+			}
+			out, err := c.Complete(context.Background(), "sys", "usr")
+			if err == nil {
+				t.Fatal("Complete() want PolicyError, got nil")
+			}
+			if out != "" {
+				t.Errorf("Complete() out = %q, want empty", out)
+			}
+			var polErr *PolicyError
+			if !errors.As(err, &polErr) {
+				t.Fatalf("err type %T, want *PolicyError", err)
+			}
+			if Classify(err) != ClassPolicy {
+				t.Errorf("Classify(%v) = %v, want ClassPolicy", err, Classify(err))
+			}
+			if strings.Contains(err.Error(), "secret-model-reply") {
+				t.Errorf("error %q leaked body", err.Error())
+			}
+			if strings.Contains(err.Error(), "example-policy") || strings.Contains(err.Error(), "other1") {
+				t.Errorf("error %q leaked policy header names", err.Error())
+			}
+		})
+	}
+}
+
+func TestComplete_Negative_Status500WithHeaderReturnsStatusError(t *testing.T) {
+	server := runPolicyServer(http.Header{PolicyHeader: []string{"example-policy"}}, http.StatusInternalServerError, "error")
+	defer server.Close()
+
+	c, err := New(Config{BaseURL: server.URL, Alias: "test-alias", Policy: "example-policy"}, server.Client())
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+	_, err = c.Complete(context.Background(), "sys", "usr")
+	if err == nil {
+		t.Fatal("Complete() want error, got nil")
+	}
+	var statusErr *StatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatalf("err %T, want *StatusError", err)
+	}
+	if statusErr.Code != 500 {
+		t.Errorf("status code = %d, want 500", statusErr.Code)
+	}
+	if Classify(err) != ClassUnavailable {
+		t.Errorf("Classify = %v, want ClassUnavailable", Classify(err))
+	}
+}
+
+func TestProbe_Positive_PolicyValidationTable(t *testing.T) {
+	tests := []struct {
+		name    string
+		headers http.Header
+	}{
+		{"name alone", http.Header{PolicyHeader: []string{"example-policy"}}},
+		{"two lines name in second", http.Header{PolicyHeader: []string{"other", "example-policy"}}},
+		{"spaces around name", http.Header{PolicyHeader: []string{"  example-policy  , other"}}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := runPolicyServer(tc.headers, http.StatusOK, "pong")
+			defer server.Close()
+
+			c, err := New(Config{BaseURL: server.URL, Alias: "test-alias", Policy: "example-policy"}, server.Client())
+			if err != nil {
+				t.Fatalf("New() failed: %v", err)
+			}
+			if err := c.Probe(context.Background()); err != nil {
+				t.Fatalf("Probe() unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestProbe_Negative_PolicyValidationTable(t *testing.T) {
+	const secretBody = "secret-probe-reply"
+	tests := []struct {
+		name    string
+		headers http.Header
+	}{
+		{"header absent", http.Header{}},
+		{"header without name", http.Header{PolicyHeader: []string{"other"}}},
+		{"case mismatch", http.Header{PolicyHeader: []string{"Example-Policy"}}},
+		{"65 names with wanted at 65", build65NamesHeader()},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := runPolicyServer(tc.headers, http.StatusOK, secretBody)
+			defer server.Close()
+
+			c, err := New(Config{BaseURL: server.URL, Alias: "test-alias", Policy: "example-policy"}, server.Client())
+			if err != nil {
+				t.Fatalf("New() failed: %v", err)
+			}
+			err = c.Probe(context.Background())
+			if err == nil {
+				t.Fatal("Probe() want PolicyError, got nil")
+			}
+			var polErr *PolicyError
+			if !errors.As(err, &polErr) {
+				t.Fatalf("err type %T, want *PolicyError", err)
+			}
+			if Classify(err) != ClassPolicy {
+				t.Errorf("Classify(%v) = %v, want ClassPolicy", err, Classify(err))
+			}
+			if strings.Contains(err.Error(), secretBody) {
+				t.Errorf("error %q leaked body", err.Error())
+			}
+			if strings.Contains(err.Error(), "example-policy") || strings.Contains(err.Error(), "other") {
+				t.Errorf("error %q leaked policy names", err.Error())
+			}
+		})
 	}
 }

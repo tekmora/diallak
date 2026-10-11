@@ -114,6 +114,7 @@ func TestRun_Positive_ReadyWithModel(t *testing.T) {
 		config.EnvCorpusDir:    corpusPath,
 		config.EnvModelBaseURL: "http://127.0.0.1:8000",
 		config.EnvModelAlias:   "router/test",
+		config.EnvModelPolicy:  "example-policy",
 		config.EnvModelKeyFile: keyPath,
 	}
 
@@ -339,6 +340,27 @@ func TestRun_Negative_ConfigurationErrors(t *testing.T) {
 				config.EnvModelKeyFile: keyPath,
 			},
 			wantVar: config.EnvModelKeyFile,
+		},
+		{
+			name: "model base and alias without policy",
+			env: map[string]string{
+				config.EnvGuildID:      "42",
+				config.EnvTokenFile:    tokenPath,
+				config.EnvCorpusDir:    corpusPath,
+				config.EnvModelBaseURL: "http://127.0.0.1:8000",
+				config.EnvModelAlias:   "router/test",
+			},
+			wantVar: config.EnvModelPolicy,
+		},
+		{
+			name: "model policy without model",
+			env: map[string]string{
+				config.EnvGuildID:     "42",
+				config.EnvTokenFile:   tokenPath,
+				config.EnvCorpusDir:   corpusPath,
+				config.EnvModelPolicy: "example-policy",
+			},
+			wantVar: config.EnvModelPolicy,
 		},
 	}
 
@@ -803,6 +825,7 @@ func TestRun_Negative_UnknownAliasStopsTheStart(t *testing.T) {
 		config.EnvCorpusDir:    corpusPath,
 		config.EnvModelBaseURL: server.URL,
 		config.EnvModelAlias:   "test-alias",
+		config.EnvModelPolicy:  "example-policy",
 	}
 
 	var out bytes.Buffer
@@ -826,7 +849,7 @@ func TestRun_Negative_UnknownAliasStopsTheStart(t *testing.T) {
 		t.Errorf("error %q should contain 'status 404'", err.Error())
 	}
 	want := "model start probe: model endpoint returned status 404; check " +
-		config.EnvModelBaseURL + ", " + config.EnvModelAlias + " and " + config.EnvModelKeyFile
+		config.EnvModelBaseURL + ", " + config.EnvModelAlias + ", " + config.EnvModelKeyFile + " and " + config.EnvModelPolicy
 	if err.Error() != want {
 		t.Errorf("error = %q, want %q", err.Error(), want)
 	}
@@ -854,6 +877,7 @@ func TestRun_Negative_RejectedProbeStopsTheStart(t *testing.T) {
 				config.EnvCorpusDir:    corpusPath,
 				config.EnvModelBaseURL: server.URL,
 				config.EnvModelAlias:   "test-alias",
+				config.EnvModelPolicy:  "example-policy",
 			}
 
 			var out bytes.Buffer
@@ -913,6 +937,7 @@ func TestRun_Positive_ProbeUnavailableAllowsStart(t *testing.T) {
 				config.EnvCorpusDir:    corpusPath,
 				config.EnvModelBaseURL: baseURL,
 				config.EnvModelAlias:   "test-alias",
+				config.EnvModelPolicy:  "example-policy",
 			}
 
 			var out bytes.Buffer
@@ -940,6 +965,7 @@ func TestRun_Positive_ProbeUnavailableAllowsStart(t *testing.T) {
 
 func TestRun_Positive_ProbeReady(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -952,6 +978,7 @@ func TestRun_Positive_ProbeReady(t *testing.T) {
 		config.EnvCorpusDir:    corpusPath,
 		config.EnvModelBaseURL: server.URL,
 		config.EnvModelAlias:   "test-alias",
+		config.EnvModelPolicy:  "example-policy",
 	}
 
 	var out bytes.Buffer
@@ -1014,6 +1041,7 @@ func TestRun_Positive_RegisterCommandsSendsNoProbe(t *testing.T) {
 		config.EnvCorpusDir:    corpusPath,
 		config.EnvModelBaseURL: server.URL,
 		config.EnvModelAlias:   "test-alias",
+		config.EnvModelPolicy:  "example-policy",
 	}
 
 	var out bytes.Buffer
@@ -1028,6 +1056,105 @@ func TestRun_Positive_RegisterCommandsSendsNoProbe(t *testing.T) {
 	}
 	if probeCalls != 0 {
 		t.Errorf("probeCalls = %d, want 0", probeCalls)
+	}
+}
+
+func TestRun_Negative_ModelVariablesWithoutPolicyStopsStart(t *testing.T) {
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:    tokenPath,
+		config.EnvGuildID:      "42",
+		config.EnvCorpusDir:    corpusPath,
+		config.EnvModelBaseURL: "http://127.0.0.1:8000",
+		config.EnvModelAlias:   "test-alias",
+	}
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, noopDeps())
+	code := report(err, &errOut)
+	if code != 1 {
+		t.Fatalf("report() code = %d, want 1", code)
+	}
+	if !strings.Contains(errOut.String(), config.EnvModelPolicy) {
+		t.Errorf("error output %q does not name %s", errOut.String(), config.EnvModelPolicy)
+	}
+}
+
+func TestRun_Negative_ProbeWithoutPolicyHeaderStopsStart(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte("ok")); err != nil {
+			http.Error(w, "write error", http.StatusInternalServerError)
+		}
+	}))
+	defer server.Close()
+
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:    tokenPath,
+		config.EnvGuildID:      "42",
+		config.EnvCorpusDir:    corpusPath,
+		config.EnvModelBaseURL: server.URL,
+		config.EnvModelAlias:   "test-alias",
+		config.EnvModelPolicy:  "example-policy",
+	}
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, noopDeps())
+	code := report(err, &errOut)
+	if code != 1 {
+		t.Fatalf("report() code = %d, want 1", code)
+	}
+	if !strings.Contains(errOut.String(), "model start probe") {
+		t.Errorf("error output %q should mention model start probe", errOut.String())
+	}
+}
+
+func TestRun_Positive_ProbeWithPolicyHeaderStarts(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte("ok")); err != nil {
+			http.Error(w, "write error", http.StatusInternalServerError)
+		}
+	}))
+	defer server.Close()
+
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:    tokenPath,
+		config.EnvGuildID:      "42",
+		config.EnvCorpusDir:    corpusPath,
+		config.EnvModelBaseURL: server.URL,
+		config.EnvModelAlias:   "test-alias",
+		config.EnvModelPolicy:  "example-policy",
+	}
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	var discordCalls int
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
+		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+			discordCalls++
+			return nil
+		},
+	}
+	err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps)
+	code := report(err, &errOut)
+	if code != 0 {
+		t.Fatalf("report() code = %d, want 0; err = %s", code, errOut.String())
+	}
+	if discordCalls != 1 {
+		t.Errorf("discordCalls = %d, want 1", discordCalls)
+	}
+	if !strings.HasSuffix(out.String(), "model ready\n") {
+		t.Errorf("output %q should end with 'model ready\\n'", out.String())
 	}
 }
 
@@ -1063,6 +1190,9 @@ func TestRun_Positive_HealthEndpointReportsTheModelState(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if tc.status == http.StatusOK {
+					w.Header().Set("x-litellm-applied-policies", "example-policy")
+				}
 				w.WriteHeader(tc.status)
 			}))
 			defer server.Close()
@@ -1084,6 +1214,7 @@ func TestRun_Positive_HealthEndpointReportsTheModelState(t *testing.T) {
 				config.EnvHealthAddr:   addr,
 				config.EnvModelBaseURL: server.URL,
 				config.EnvModelAlias:   "test-alias",
+				config.EnvModelPolicy:  "example-policy",
 			}
 			var got string
 			deps := dependencies{

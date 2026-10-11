@@ -30,6 +30,9 @@ const (
 // ErrNotReady is returned by Complete when the endpoint is not ready and no trial is due.
 var ErrNotReady = errors.New("model not ready")
 
+// ErrPolicyMissing is returned when the model endpoint does not name the configured policy, latching the gate.
+var ErrPolicyMissing = errors.New("model policy missing")
+
 // GateConfig configures a model Gate.
 type GateConfig struct {
 	Endpoint      Endpoint
@@ -47,6 +50,7 @@ type Gate struct {
 
 	mu            sync.Mutex
 	ready         bool
+	policyLatched bool
 	nextTrial     time.Time
 	trialInFlight bool
 }
@@ -108,6 +112,10 @@ func (g *Gate) Start(ctx context.Context) error {
 // Complete executes a model completion or gates it if the endpoint is not ready.
 func (g *Gate) Complete(ctx context.Context, system, user string) (string, error) {
 	g.mu.Lock()
+	if g.policyLatched {
+		g.mu.Unlock()
+		return "", ErrPolicyMissing
+	}
 	if g.ready {
 		g.mu.Unlock()
 		return g.completeReady(ctx, system, user)
@@ -119,6 +127,13 @@ func (g *Gate) completeReady(ctx context.Context, system, user string) (string, 
 	res, err := g.endpoint.Complete(ctx, system, user)
 	if err == nil {
 		return res, nil
+	}
+	// A reply without the policy is a fact about the endpoint, whatever
+	// became of the caller's context while its body was discarded.
+	if Classify(err) == ClassPolicy {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		return "", g.latchLocked(err)
 	}
 	if ctx.Err() != nil {
 		return "", err
@@ -137,6 +152,10 @@ func (g *Gate) completeReady(ctx context.Context, system, user string) (string, 
 }
 
 func (g *Gate) completeNotReady(ctx context.Context, system, user string) (string, error) {
+	if g.policyLatched {
+		g.mu.Unlock()
+		return "", ErrPolicyMissing
+	}
 	now := g.now()
 	if g.trialInFlight || now.Before(g.nextTrial) {
 		g.mu.Unlock()
@@ -152,12 +171,16 @@ func (g *Gate) completeNotReady(ctx context.Context, system, user string) (strin
 	g.trialInFlight = false
 
 	if err == nil {
-		wasReady := g.ready
-		g.ready = true
-		if !wasReady {
+		// A trial that began before the latch closed does not open the gate again.
+		if !g.ready && !g.policyLatched {
+			g.ready = true
 			g.logger.Info("model ready")
 		}
 		return res, nil
+	}
+
+	if Classify(err) == ClassPolicy {
+		return "", g.latchLocked(err)
 	}
 
 	if ctx.Err() != nil {
@@ -176,6 +199,41 @@ func (g *Gate) State() string {
 		return StateReady
 	}
 	return StateNotReady
+}
+
+// latchLocked closes the gate for good after a reply without the policy and
+// returns the error for the call that met it. The caller holds g.mu.
+func (g *Gate) latchLocked(err error) error {
+	wasLatched := g.policyLatched
+	g.policyLatched = true
+	g.ready = false
+	if !wasLatched {
+		g.logPolicyMissing(err)
+	}
+	return fmt.Errorf("%w: %w", ErrPolicyMissing, err)
+}
+
+// Reason reports why the gate is not ready. It returns "" when ready or when not ready for an absence,
+// and "policy" when latched.
+func (g *Gate) Reason() string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.policyLatched {
+		return "policy"
+	}
+	return ""
+}
+
+func (g *Gate) logPolicyMissing(err error) {
+	appliedCount := 0
+	var policyErr *PolicyError
+	if errors.As(err, &policyErr) {
+		appliedCount = len(policyErr.Applied)
+	}
+	g.logger.Warn("model not ready",
+		slog.String("error_class", "policy"),
+		slog.Int("applied", appliedCount),
+	)
 }
 
 func (g *Gate) logNotReady(err error) {

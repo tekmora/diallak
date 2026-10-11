@@ -173,7 +173,7 @@ func TestBuild_Positive_ModelTimeoutFollowsTheSetting(t *testing.T) {
 	// The endpoint never answers. With the timeout set to one second the request ends there and
 	// the reply falls back to excerpts; with the built-in timeout the ten seconds of askWith
 	// would end first and Ask would return an error.
-	cfg := config.Config{CorpusDir: dir, ModelBaseURL: srv.URL, ModelAlias: "router/test", ModelTimeout: time.Second}
+	cfg := config.Config{CorpusDir: dir, ModelBaseURL: srv.URL, ModelAlias: "router/test", ModelPolicy: "example-policy", ModelTimeout: time.Second}
 	start := time.Now()
 	ans, err := askWith(t, cfg, rotationQuestion)
 	if err != nil {
