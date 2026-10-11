@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Updates arrive as pull requests and are merged by a person after CI; nothing merges on its own.",
+    "minimumReleaseAge: a release is proposed three days after it was published, so a release that is withdrawn in its first days never reaches a pull request.",
+    "helpers:pinGitHubActionDigests: every action stays pinned to a commit, with the version in the comment beside it."
+  ],
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    ":dependencyDashboard",
+    ":semanticCommits"
+  ],
+  "minimumReleaseAge": "3 days",
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "packageRules": [
+    {
+      "description": "Generated devcontainer files: the Praetor engine renders them and its audit refuses an edit, so no update is proposed for them.",
+      "matchFileNames": [
+        ".devcontainer/devcontainer.json",
+        ".devcontainer/Dockerfile.praetor"
+      ],
+      "enabled": false
+    }
+  ]
+}
