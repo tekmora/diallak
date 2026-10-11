@@ -28,8 +28,8 @@ func TestValidate_Negative_IDsOfEveryKind(t *testing.T) {
 		{"category", func(_ *testing.T, def *Definition) { def.Categories[0].ID = "C" }, CodeID, "categories[C]", "regex"},
 		{"channel", func(t *testing.T, def *Definition) { channelOf(t, def, "lounge").ID = "L" }, CodeID, "channels[L]", "regex"},
 		{"area", func(t *testing.T, def *Definition) { areaOf(t, def, "games").ID = "A" }, CodeID, "areas[A]", "regex"},
-		{"question", func(_ *testing.T, def *Definition) { def.Onboarding.Questions[0].ID = "Q" },
-			CodeID, "onboarding.questions[Q]", "regex"},
+		{"question", func(_ *testing.T, def *Definition) { def.Choices.Questions[0].ID = "Q" },
+			CodeID, "choices.questions[Q]", "regex"},
 		{"automation", func(t *testing.T, def *Definition) { automationOf(t, def, "news").ID = "N" },
 			CodeID, "automation[N]", "regex"},
 		{"two channels with one id", func(t *testing.T, def *Definition) {
@@ -67,10 +67,12 @@ func TestValidate_Negative_EmptyTexts(t *testing.T) {
 		{"reasoning of a closing rule", func(t *testing.T, def *Definition) {
 			areaOf(t, def, "games").Closing.Reasoning = ""
 		}, CodeText, "areas[games].closing.reasoning", "empty"},
-		{"question title", func(_ *testing.T, def *Definition) { def.Onboarding.Questions[0].Title = "" },
-			CodeText, "onboarding.questions[interests].title", "empty"},
-		{"option title", func(_ *testing.T, def *Definition) { def.Onboarding.Questions[0].Options[2].Title = " " },
-			CodeText, "onboarding.questions[interests].options[interest-games].title", "empty"},
+		{"question title", func(_ *testing.T, def *Definition) { def.Choices.Questions[0].Title = "" },
+			CodeText, "choices.questions[interests].title", "empty"},
+		{"question title of spaces", func(_ *testing.T, def *Definition) { def.Choices.Questions[1].Title = " \t" },
+			CodeText, "choices.questions[languages].title", "empty"},
+		{"option title", func(_ *testing.T, def *Definition) { def.Choices.Questions[0].Options[2].Title = " " },
+			CodeText, "choices.questions[interests].options[interest-games].title", "empty"},
 		{"what an automation does", func(t *testing.T, def *Definition) { automationOf(t, def, "news").What = "" },
 			CodeText, "automation[news].what", "empty"},
 	})
@@ -82,6 +84,9 @@ func TestValidate_Negative_ValuesOutsideTheFixedSets(t *testing.T) {
 			CodeEnum, "roles[contributor].kind", "vip"},
 		{"who assigns a role", func(t *testing.T, def *Definition) { roleOf(t, def, "contributor").AssignedBy = "anyone" },
 			CodeEnum, "roles[contributor].assigned_by", "anyone"},
+		{"former assigned_by value", func(t *testing.T, def *Definition) {
+			roleOf(t, def, "contributor").AssignedBy = "on" + "boarding"
+		}, CodeEnum, "roles[contributor].assigned_by", "on" + "boarding"},
 		{"basis of a role", func(t *testing.T, def *Definition) { roleOf(t, def, "contributor").Basis = "rumour" },
 			CodeEnum, "roles[contributor].basis", "rumour"},
 		{"channel type", func(t *testing.T, def *Definition) { channelOf(t, def, "lounge").Type = "stage" },
@@ -139,9 +144,9 @@ func TestValidate_Negative_ReferencesToNothing(t *testing.T) {
 			CodeRef, "areas[games].opening.metric", "mood"},
 		{"metric of a closing rule", func(t *testing.T, def *Definition) { areaOf(t, def, "games").Closing.Metric = "mood" },
 			CodeRef, "areas[games].closing.metric", "mood"},
-		{"role of an onboarding option", func(_ *testing.T, def *Definition) {
-			def.Onboarding.Questions[0].Options[0].Role = "nobody"
-		}, CodeRef, "onboarding.questions[interests].options[nobody]", "nobody"},
+		{"role of a choice option", func(_ *testing.T, def *Definition) {
+			def.Choices.Questions[0].Options[0].Role = "nobody"
+		}, CodeRef, "choices.questions[interests].options[nobody]", "nobody"},
 	})
 }
 
@@ -280,23 +285,23 @@ func TestValidate_Negative_WhoGrantsARole(t *testing.T) {
 		return func(t *testing.T, def *Definition) { roleOf(t, def, roleID).AssignedBy = who }
 	}
 	option := func(roleID string) func(t *testing.T, def *Definition) {
-		return func(_ *testing.T, def *Definition) { def.Onboarding.Questions[0].Options[0].Role = roleID }
+		return func(_ *testing.T, def *Definition) { def.Choices.Questions[0].Options[0].Role = roleID }
 	}
 	runPlanted(t, []plantedCase{
-		{"onboarding makes a moderator", by("moderator", "onboarding"), CodeRoleGrant, "roles[moderator].assigned_by", "operator"},
+		{"choice makes a moderator", by("moderator", "choice"), CodeRoleGrant, "roles[moderator].assigned_by", "operator"},
 		{"the bot makes an operator", by("operator", "bot"), CodeRoleGrant, "roles[operator].assigned_by", "operator"},
 		{"the operator hands out an interest", by("interest-games", "operator"),
-			CodeRoleGrant, "roles[interest-games].assigned_by", "onboarding"},
-		{"the bot hands out a language", by("lang-es", "bot"), CodeRoleGrant, "roles[lang-es].assigned_by", "onboarding"},
+			CodeRoleGrant, "roles[interest-games].assigned_by", "choice"},
+		{"the bot hands out a language", by("lang-es", "bot"), CodeRoleGrant, "roles[lang-es].assigned_by", "choice"},
 		{"the operator assigns the bot's role", by("bot", "operator"), CodeRoleGrant, "roles[bot].assigned_by", "platform"},
 		{"the operator assigns the role of every member", by("everyone", "operator"),
 			CodeRoleGrant, "roles[everyone].assigned_by", "platform"},
-		{"onboarding gives a recognition role", by("contributor", "onboarding"),
+		{"choice gives a recognition role", by("contributor", "choice"),
 			CodeRoleGrant, "roles[contributor].assigned_by", "operator or bot"},
-		{"an onboarding option gives the contributor role", option("contributor"),
-			CodeRoleGrant, "onboarding.questions[interests].options[contributor]", "neither interest nor language"},
-		{"an onboarding option gives the moderator role", option("moderator"),
-			CodeRoleGrant, "onboarding.questions[interests].options[moderator]", "neither interest nor language"},
+		{"a choice option gives the contributor role", option("contributor"),
+			CodeRoleGrant, "choices.questions[interests].options[contributor]", "neither interest nor language"},
+		{"a choice option gives the moderator role", option("moderator"),
+			CodeRoleGrant, "choices.questions[interests].options[moderator]", "neither interest nor language"},
 	})
 }
 

@@ -251,7 +251,7 @@ func checkInterestOrLangAllow(v *validator, accPath, kind string, allow []string
 
 func (v *validator) checkRoleGrants() {
 	v.checkRoleAssignedBy()
-	v.checkOnboardingGrantRoles()
+	v.checkChoiceGrantRoles()
 }
 
 func (v *validator) checkRoleAssignedBy() {
@@ -268,8 +268,8 @@ func checkSingleRoleAssignedBy(v *validator, p string, r Role) {
 			v.add(CodeRoleGrant, p, fmt.Sprintf("role kind %s must have assigned_by operator", r.Kind))
 		}
 	case "interest", "language":
-		if r.AssignedBy != "onboarding" {
-			v.add(CodeRoleGrant, p, fmt.Sprintf("role kind %s must have assigned_by onboarding", r.Kind))
+		if r.AssignedBy != "choice" {
+			v.add(CodeRoleGrant, p, fmt.Sprintf("role kind %s must have assigned_by choice", r.Kind))
 		}
 	case "everyone", "bot":
 		if r.AssignedBy != "platform" {
@@ -278,23 +278,6 @@ func checkSingleRoleAssignedBy(v *validator, p string, r Role) {
 	case "recognition":
 		if r.AssignedBy != "operator" && r.AssignedBy != "bot" {
 			v.add(CodeRoleGrant, p, "recognition role must have assigned_by operator or bot")
-		}
-	}
-}
-
-func (v *validator) checkOnboardingGrantRoles() {
-	roleMap := make(map[string]Role, len(v.def.Roles))
-	for _, r := range v.def.Roles {
-		roleMap[r.ID] = r
-	}
-	for _, q := range v.def.Onboarding.Questions {
-		p := fmt.Sprintf("onboarding.questions[%s]", q.ID)
-		for _, opt := range q.Options {
-			r, ok := roleMap[opt.Role]
-			if ok && r.Kind != "interest" && r.Kind != "language" {
-				v.add(CodeRoleGrant, fmt.Sprintf("%s.options[%s]", p, opt.Role),
-					"onboarding option grants role that is neither interest nor language")
-			}
 		}
 	}
 }

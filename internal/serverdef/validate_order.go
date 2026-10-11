@@ -81,7 +81,7 @@ func (v *validator) checkSingleRolePosition(r Role, botIdx int, firstIndex map[s
 			fmt.Sprintf("role %q assigned by operator must stand above the bot role", r.ID))
 		return
 	}
-	if r.AssignedBy == "bot" || r.AssignedBy == "onboarding" {
+	if r.AssignedBy == "bot" || r.AssignedBy == "choice" {
 		if rIdx < botIdx {
 			v.add(CodeRoleOrder, fmt.Sprintf("role_order[%s]", r.ID),
 				fmt.Sprintf("role %q assigned by %s must stand below the bot role", r.ID, r.AssignedBy))

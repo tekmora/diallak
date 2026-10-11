@@ -40,7 +40,7 @@ func (v *validator) checkIDs() {
 	for _, a := range v.def.Areas {
 		areaIDs = append(areaIDs, a.ID)
 	}
-	for _, q := range v.def.Onboarding.Questions {
+	for _, q := range v.def.Choices.Questions {
 		questionIDs = append(questionIDs, q.ID)
 	}
 	for _, auto := range v.def.Automation {
@@ -52,7 +52,7 @@ func (v *validator) checkIDs() {
 	checkItemIDs(v, "categories", categoryIDs)
 	checkItemIDs(v, "channels", channelIDs)
 	checkItemIDs(v, "areas", areaIDs)
-	checkItemIDs(v, "onboarding.questions", questionIDs)
+	checkItemIDs(v, "choices.questions", questionIDs)
 	checkItemIDs(v, "automation", autoIDs)
 }
 
@@ -64,7 +64,7 @@ func (v *validator) checkTexts() {
 	v.checkCategoryTexts()
 	v.checkChannelTexts()
 	v.checkAreaTexts()
-	v.checkOnboardingTexts()
+	v.checkChoiceTexts()
 	v.checkAutomationTexts()
 }
 
@@ -140,21 +140,6 @@ func (v *validator) checkAreaTexts() {
 	}
 }
 
-func (v *validator) checkOnboardingTexts() {
-	for _, q := range v.def.Onboarding.Questions {
-		p := fmt.Sprintf("onboarding.questions[%s]", q.ID)
-		if strings.TrimSpace(q.Title) == "" {
-			v.add(CodeText, p+".title", "question title must not be empty")
-		}
-		for _, opt := range q.Options {
-			if strings.TrimSpace(opt.Title) == "" {
-				v.add(CodeText, fmt.Sprintf("%s.options[%s].title", p, opt.Role),
-					"option title must not be empty")
-			}
-		}
-	}
-}
-
 func (v *validator) checkAutomationTexts() {
 	for _, auto := range v.def.Automation {
 		if strings.TrimSpace(auto.What) == "" {
@@ -174,7 +159,7 @@ func inSet(val string, allowed []string) bool {
 
 func (v *validator) checkEnums() {
 	roleKinds := []string{"everyone", "operator", "moderator", "bot", "recognition", "interest", "language"}
-	roleAssignedBy := []string{"platform", "operator", "onboarding", "bot"}
+	roleAssignedBy := []string{"platform", "operator", "choice", "bot"}
 	roleBases := []string{"decided", "proposal"}
 	for _, r := range v.def.Roles {
 		p := fmt.Sprintf("roles[%s]", r.ID)
@@ -190,6 +175,7 @@ func (v *validator) checkEnums() {
 	}
 	v.checkChannelAndAreaEnums()
 	v.checkAutomationEnums()
+	v.checkChoiceEnums()
 }
 
 func (v *validator) checkChannelAndAreaEnums() {
@@ -287,7 +273,7 @@ func (v *validator) checkReferences() {
 
 	v.checkChannelRefs(catMap, areaMap, roleMap)
 	v.checkAreaRefs(roleMap, metricMap)
-	v.checkOnboardingRefs(roleMap)
+	v.checkChoiceRefs(roleMap)
 }
 
 func (v *validator) checkChannelRefs(catMap, areaMap, roleMap map[string]struct{}) {
@@ -324,18 +310,6 @@ func (v *validator) checkAreaRefs(roleMap, metricMap map[string]struct{}) {
 		if a.Closing != nil {
 			if _, ok := metricMap[a.Closing.Metric]; !ok {
 				v.add(CodeRef, p+".closing.metric", fmt.Sprintf("unknown metric %q", a.Closing.Metric))
-			}
-		}
-	}
-}
-
-func (v *validator) checkOnboardingRefs(roleMap map[string]struct{}) {
-	for _, q := range v.def.Onboarding.Questions {
-		p := fmt.Sprintf("onboarding.questions[%s]", q.ID)
-		for _, opt := range q.Options {
-			if _, ok := roleMap[opt.Role]; !ok {
-				v.add(CodeRef, fmt.Sprintf("%s.options[%s]", p, opt.Role),
-					fmt.Sprintf("unknown option role %q", opt.Role))
 			}
 		}
 	}

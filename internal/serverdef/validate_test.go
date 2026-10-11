@@ -466,26 +466,26 @@ func TestValidate_Negative_NothingAttachesFails(t *testing.T) {
 }
 
 func TestValidate_Negative_RoleGrantFails(t *testing.T) {
-	t.Run("operator assigned by onboarding", func(t *testing.T) {
+	t.Run("operator assigned by choice", func(t *testing.T) {
 		def := valid(t)
 		for i, r := range def.Roles {
 			if r.Kind == "operator" {
-				def.Roles[i].AssignedBy = "onboarding"
+				def.Roles[i].AssignedBy = "choice"
 				break
 			}
 		}
 		findings := Validate(def)
 		if !hasCode(findings, CodeRoleGrant) {
-			t.Errorf("operator assigned by onboarding missing code %s", CodeRoleGrant)
+			t.Errorf("operator assigned by choice missing code %s", CodeRoleGrant)
 		}
 	})
 
-	t.Run("onboarding option grants moderator", func(t *testing.T) {
+	t.Run("choice option grants moderator", func(t *testing.T) {
 		def := valid(t)
-		def.Onboarding.Questions[0].Options[0].Role = "moderator"
+		def.Choices.Questions[0].Options[0].Role = "moderator"
 		findings := Validate(def)
 		if !hasCode(findings, CodeRoleGrant) {
-			t.Errorf("onboarding granting moderator missing code %s", CodeRoleGrant)
+			t.Errorf("choice granting moderator missing code %s", CodeRoleGrant)
 		}
 	})
 }
