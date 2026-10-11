@@ -849,3 +849,75 @@ func TestClient_Negative_KeyAbsentFromEveryErrorText(t *testing.T) {
 		t.Fatalf("Complete error leaked APIKey: %s", completeErr.Error())
 	}
 }
+
+func TestClient_Boundary_BodySlowerThanTimeoutIsUnavailable(t *testing.T) {
+	done := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		select {
+		case <-r.Context().Done():
+		case <-done:
+		}
+	}))
+	defer server.Close()
+	defer close(done)
+
+	client, err := New(Config{
+		BaseURL: server.URL,
+		Alias:   "router/test",
+		Timeout: 50 * time.Millisecond,
+	}, server.Client())
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	probeErr := client.Probe(context.Background())
+	if probeErr == nil {
+		t.Fatal("Probe() want an error for a body that never ends, got nil")
+	}
+	if got := Classify(probeErr); got != ClassUnavailable {
+		t.Errorf("Classify(Probe error %v) = %v, want ClassUnavailable", probeErr, got)
+	}
+
+	_, completeErr := client.Complete(context.Background(), "sys", "usr")
+	if completeErr == nil {
+		t.Fatal("Complete() want an error for a body that never ends, got nil")
+	}
+	if got := Classify(completeErr); got != ClassUnavailable {
+		t.Errorf("Classify(Complete error %v) = %v, want ClassUnavailable", completeErr, got)
+	}
+}
+
+func TestProbe_Boundary_DeadlineNeverAboveProbeTimeout(t *testing.T) {
+	var left time.Duration
+	httpClient := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		deadline, ok := r.Context().Deadline()
+		if !ok {
+			return nil, errors.New("request carries no deadline")
+		}
+		left = time.Until(deadline)
+		return nil, errors.New("stop after reading the deadline")
+	})}
+
+	c, err := New(Config{
+		BaseURL: "http://127.0.0.1:1",
+		Alias:   "test-alias",
+		Timeout: MaxTimeout,
+	}, httpClient)
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+	if MaxTimeout <= ProbeTimeout {
+		t.Fatalf("MaxTimeout %v must be above ProbeTimeout %v for this case", MaxTimeout, ProbeTimeout)
+	}
+
+	if probeErr := c.Probe(context.Background()); probeErr == nil {
+		t.Fatal("Probe() want the transport error, got nil")
+	}
+	if left <= 0 || left > ProbeTimeout {
+		t.Errorf("probe deadline lies %v ahead, want above 0 and at most %v", left, ProbeTimeout)
+	}
+}

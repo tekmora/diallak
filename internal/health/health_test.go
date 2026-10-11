@@ -430,6 +430,9 @@ func TestHandler_Negative_ModelzMethodNotAllowed(t *testing.T) {
 			if got := rec.Header().Get("Allow"); got != "GET, HEAD" {
 				t.Errorf("%s /modelz Allow = %q, want 'GET, HEAD'", method, got)
 			}
+			if got := rec.Body.String(); got != "method not allowed\n" {
+				t.Errorf("%s /modelz body = %q, want only the refusal", method, got)
+			}
 		})
 	}
 }
@@ -476,4 +479,13 @@ func TestState_Positive_SetModelStateNilSafe(t *testing.T) {
 	var s *State
 	s.SetModelState(func() string { return "ready" })
 	s.SetModelState(nil)
+}
+
+func TestHandler_Boundary_ModelzWithoutState(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/modelz", nil)
+	NewHandler(nil).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "model: not configured\n" {
+		t.Errorf("/modelz without a state = %d %q, want 200 %q", rec.Code, rec.Body.String(), "model: not configured\n")
+	}
 }

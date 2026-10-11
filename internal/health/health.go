@@ -144,11 +144,7 @@ func (h *Handler) handleModelz(w http.ResponseWriter, r *http.Request) {
 		writeResponse(w, r, http.StatusMethodNotAllowed, "method not allowed\n")
 		return
 	}
-	val := "not configured"
-	if h.state != nil {
-		val = h.state.ModelState()
-	}
-	writeResponse(w, r, http.StatusOK, fmt.Sprintf("model: %s\n", val))
+	writeResponse(w, r, http.StatusOK, fmt.Sprintf("model: %s\n", h.state.ModelState()))
 }
 
 func writeResponse(w http.ResponseWriter, r *http.Request, statusCode int, body string) {

@@ -195,7 +195,7 @@ func errorClassAttrs(err error) []slog.Attr {
 			slog.Int("code", statusErr.Code),
 		}
 	}
-	if errors.Is(err, context.DeadlineExceeded) || isTimeout(err) {
+	if isTimeout(err) {
 		return []slog.Attr{
 			slog.String("error_class", "timeout"),
 		}

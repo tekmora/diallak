@@ -283,12 +283,20 @@ func TestGate_Positive_ReadyTransitions(t *testing.T) {
 
 	cancelCtx, cancel := context.WithCancel(context.Background())
 	cancel()
-	ep.completeErr = context.Canceled
+	ep.completeErr = &TransportError{Err: context.Canceled}
 	if _, err := g.Complete(cancelCtx, "s", "u"); err == nil {
 		t.Fatal("expected error on cancel, got nil")
 	}
 	if g.State() != StateReady {
 		t.Fatalf("after cancel, state = %q, want ready", g.State())
+	}
+
+	ep.completeErr = errors.New("decode response json: unexpected end")
+	if _, err := g.Complete(context.Background(), "s", "u"); err == nil {
+		t.Fatal("expected error on an unreadable reply, got nil")
+	}
+	if g.State() != StateReady {
+		t.Fatalf("after an unreadable reply, state = %q, want ready", g.State())
 	}
 
 	ep.completeErr = &StatusError{Code: 503}
@@ -458,4 +466,52 @@ func TestGate_Positive_RaceFree(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestGate_Boundary_ConcurrentFailuresLogOneStateChange(t *testing.T) {
+	const calls = 2
+	var logged bytes.Buffer
+	entered := make(chan struct{}, calls)
+	release := make(chan struct{})
+
+	ep := &fakeEndpoint{
+		completeErr: &StatusError{Code: 503},
+		onComplete: func() {
+			entered <- struct{}{}
+			<-release
+		},
+	}
+	g, err := NewGate(GateConfig{Endpoint: ep, Logger: slog.New(slog.NewTextHandler(&logged, nil))})
+	if err != nil {
+		t.Fatalf("NewGate: %v", err)
+	}
+	if err := g.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	var done sync.WaitGroup
+	for range calls {
+		done.Go(func() {
+			if _, callErr := g.Complete(context.Background(), "s", "u"); callErr == nil {
+				t.Error("Complete() want the 503 error, got nil")
+			}
+		})
+	}
+	for range calls {
+		select {
+		case <-entered:
+		case <-time.After(5 * time.Second):
+			close(release)
+			t.Fatal("the two calls did not both reach the endpoint: the gate was not ready after a passed probe")
+		}
+	}
+	close(release)
+	done.Wait()
+
+	if g.State() != StateNotReady {
+		t.Fatalf("state = %q, want not ready", g.State())
+	}
+	if got := strings.Count(logged.String(), "model not ready"); got != 1 {
+		t.Errorf("%d lines say the model is not ready, want 1:\n%s", got, logged.String())
+	}
 }

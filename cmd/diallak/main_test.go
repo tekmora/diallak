@@ -822,6 +822,11 @@ func TestRun_Negative_UnknownAliasStopsTheStart(t *testing.T) {
 	if !strings.Contains(err.Error(), "status 404") {
 		t.Errorf("error %q should contain 'status 404'", err.Error())
 	}
+	want := "model start probe: model endpoint returned status 404; check " +
+		config.EnvModelBaseURL + ", " + config.EnvModelAlias + " and " + config.EnvModelKeyFile
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
 	if discordCalls != 0 {
 		t.Errorf("discordCalls = %d, want 0", discordCalls)
 	}
@@ -1020,5 +1025,80 @@ func TestRun_Positive_RegisterCommandsSendsNoProbe(t *testing.T) {
 	}
 	if probeCalls != 0 {
 		t.Errorf("probeCalls = %d, want 0", probeCalls)
+	}
+}
+
+func fetchModelz(ctx context.Context, addr string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/modelz", nil)
+	if err != nil {
+		return "", fmt.Errorf("new /modelz request: %w", err)
+	}
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("get /modelz: %w", err)
+	}
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	if closeErr := resp.Body.Close(); closeErr != nil {
+		return "", fmt.Errorf("close /modelz body: %w", closeErr)
+	}
+	if readErr != nil {
+		return "", fmt.Errorf("read /modelz body: %w", readErr)
+	}
+	return fmt.Sprintf("%d %s", resp.StatusCode, body), nil
+}
+
+func TestRun_Positive_HealthEndpointReportsTheModelState(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		want   string
+	}{
+		{name: "probe passes", status: http.StatusOK, want: "200 model: ready\n"},
+		{name: "probe meets a server error", status: http.StatusServiceUnavailable, want: "200 model: not ready\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+			}))
+			defer server.Close()
+
+			var lc net.ListenConfig
+			probeLn, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatalf("listen: %v", err)
+			}
+			addr := probeLn.Addr().String()
+			if closeErr := probeLn.Close(); closeErr != nil {
+				t.Fatalf("close probe listener: %v", closeErr)
+			}
+
+			envMap := map[string]string{
+				config.EnvTokenFile:    writeSecret(t, "token", "distinctive-token-xyz"),
+				config.EnvGuildID:      "42",
+				config.EnvCorpusDir:    setupTestCorpus(t),
+				config.EnvHealthAddr:   addr,
+				config.EnvModelBaseURL: server.URL,
+				config.EnvModelAlias:   "test-alias",
+			}
+			var got string
+			deps := dependencies{
+				registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
+				runDiscord: func(ctx context.Context, _ discord.BotConfig) error {
+					var fetchErr error
+					got, fetchErr = fetchModelz(ctx, addr)
+					return fetchErr
+				},
+			}
+
+			var out bytes.Buffer
+			if err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps); err != nil {
+				t.Fatalf("run = %v, want nil", err)
+			}
+			if got != tc.want {
+				t.Errorf("/modelz = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

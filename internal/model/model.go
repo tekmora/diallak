@@ -42,7 +42,7 @@ func (e *StatusError) Error() string {
 	return fmt.Sprintf("model endpoint returned status %d", e.Code)
 }
 
-// TransportError marks an error originating from the HTTP client transport.
+// TransportError marks an error from sending the request or reading the response body.
 type TransportError struct {
 	Err error
 }
@@ -264,7 +264,7 @@ func (c *Client) sendRequest(ctx context.Context, timeout time.Duration, reqBody
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, int64(MaxResponseBytes+1)))
 	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
+		return nil, fmt.Errorf("read response body: %w", &TransportError{Err: err})
 	}
 	if len(data) > MaxResponseBytes {
 		return nil, fmt.Errorf("response body exceeds max %d bytes", MaxResponseBytes)
