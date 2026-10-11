@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -111,7 +112,8 @@ func checkTokenAndGuild(token string, guildID uint64) error {
 }
 
 func newRestClient(token string, restURL string) (*bot.Client, error) {
-	var botOpts []bot.ConfigOpt
+	// Without a logger the library writes to the process default with every attribute it has.
+	botOpts := []bot.ConfigOpt{bot.WithLogger(libraryLogger(slog.Default()))}
 	if restURL != "" {
 		botOpts = append(botOpts, bot.WithRestClientConfigOpts(rest.WithURL(restURL)))
 	}
@@ -270,16 +272,117 @@ func gatewayIntents() gateway.Intents {
 
 // libraryLogFloor is the lowest level at which the Discord library may write to the log. Below it
 // the library logs request and response bodies and raw gateway payloads, which carry questions and
-// answers; those never reach a log, whatever level the process runs at.
+// answers; those never reach a log, whatever level the process runs at. Records at or above the
+// floor pass only allow-listed attributes with primitive values and bounded string lengths.
 const libraryLogFloor = slog.LevelWarn
 
+const (
+	maxRecordAttrs = 32
+	maxErrorLinks  = 8
+	maxStringBytes = 64
+)
+
+// libraryAllowedAttrs is the allow-list of attribute keys a record of the Discord library may carry:
+// counters, durations, flags, status codes, type names and the name of the library part. A key
+// outside it is dropped with its value, so a key a later library version adds stays out of the log
+// until it is listed here. The key "data" is not listed: one library site writes a whole event under
+// it.
+var libraryAllowedAttrs = map[string]struct{}{
+	"name":               {},
+	"shard_id":           {},
+	"shard_count":        {},
+	"retry_after":        {},
+	"try":                {},
+	"delay":              {},
+	"last_heartbeat_ago": {},
+	"reconnect":          {},
+	"can_resume":         {},
+	"code":               {},
+	"type":               {},
+	"event_type":         {},
+}
+
+func isAllowedKey(key string) bool {
+	_, ok := libraryAllowedAttrs[key]
+	return ok
+}
+
+func cutString(s string) string {
+	if len(s) > maxStringBytes {
+		return s[:maxStringBytes]
+	}
+	return s
+}
+
+func formatErrorTypes(err error) string {
+	parts := make([]string, 0, maxErrorLinks)
+	curr := err
+	for i := 0; i < maxErrorLinks && curr != nil; i++ {
+		parts = append(parts, fmt.Sprintf("%T", curr))
+		rv := reflect.ValueOf(curr)
+		if rv.Kind() == reflect.Pointer && rv.IsNil() {
+			break
+		}
+		curr = errors.Unwrap(curr)
+	}
+	return strings.Join(parts, ">")
+}
+
+func extractError(attr slog.Attr) (error, bool) {
+	if attr.Key != "err" {
+		return nil, false
+	}
+	if e, ok := attr.Value.Resolve().Any().(error); ok && e != nil {
+		return e, true
+	}
+	return nil, false
+}
+
+// sanitizeValue passes a number, a flag, a duration or a string cut to maxStringBytes, and refuses
+// every other kind: a group, a time or a structured value could carry content under a listed key.
+func sanitizeValue(key string, val slog.Value) (slog.Attr, bool) {
+	switch val.Kind() {
+	case slog.KindInt64, slog.KindUint64, slog.KindFloat64, slog.KindBool, slog.KindDuration:
+		return slog.Attr{Key: key, Value: val}, true
+	case slog.KindString:
+		return slog.String(key, cutString(val.String())), true
+	case slog.KindAny:
+		anyVal := val.Any()
+		if anyVal != nil && reflect.ValueOf(anyVal).Kind() == reflect.String {
+			return slog.String(key, cutString(reflect.ValueOf(anyVal).String())), true
+		}
+		return slog.Attr{}, false
+	default:
+		return slog.Attr{}, false
+	}
+}
+
+// filterAttr returns the attribute to log, whether there is one, and whether it replaces the given
+// one. An error under "err" becomes its chain of type names: an error text can quote the value that
+// failed to parse.
+func filterAttr(attr slog.Attr) (slog.Attr, bool, bool) {
+	if attr.Key == "err" {
+		if errVal, ok := extractError(attr); ok {
+			return slog.String("error_types", formatErrorTypes(errVal)), true, true
+		}
+		return slog.Attr{}, false, false
+	}
+	if !isAllowedKey(attr.Key) {
+		return slog.Attr{}, false, false
+	}
+	kept, ok := sanitizeValue(attr.Key, attr.Value.Resolve())
+	return kept, ok, false
+}
+
 // libraryLogger returns the logger handed to the Discord library: base, cut off below
-// libraryLogFloor.
+// libraryLogFloor, passing only allow-listed attributes (retry_after, try, delay, last_heartbeat_ago,
+// reconnect, can_resume, code, type, event_type, data, name, shard_id, shard_count) and summarizing
+// err as error_types.
 func libraryLogger(base *slog.Logger) *slog.Logger {
 	return slog.New(floorHandler{inner: base.Handler()})
 }
 
-// floorHandler drops every record below libraryLogFloor and passes the rest to inner.
+// floorHandler drops every record below libraryLogFloor and passes only allow-listed attributes to inner.
 type floorHandler struct {
 	inner slog.Handler
 }
@@ -289,25 +392,71 @@ func (h floorHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return level >= libraryLogFloor && h.inner.Enabled(ctx, level)
 }
 
-// Handle passes a record at or above the floor to inner.
+// Handle passes a record at or above the floor to inner with allow-listed attributes.
 func (h floorHandler) Handle(ctx context.Context, record slog.Record) error {
 	if record.Level < libraryLogFloor {
 		return nil
 	}
-	if err := h.inner.Handle(ctx, record); err != nil {
+
+	totalAttrs := record.NumAttrs()
+	readLimit := totalAttrs
+	if readLimit > maxRecordAttrs {
+		readLimit = maxRecordAttrs
+	}
+
+	keptAttrs := make([]slog.Attr, 0, readLimit)
+	var droppedCount int
+	var readCount int
+
+	record.Attrs(func(attr slog.Attr) bool {
+		if readCount >= maxRecordAttrs {
+			return false
+		}
+		readCount++
+		filtered, kept, replaced := filterAttr(attr)
+		if kept {
+			keptAttrs = append(keptAttrs, filtered)
+		}
+		if !kept || replaced {
+			droppedCount++
+		}
+		return true
+	})
+
+	if totalAttrs > readCount {
+		droppedCount += totalAttrs - readCount
+	}
+	if droppedCount > 0 {
+		keptAttrs = append(keptAttrs, slog.Int("dropped_attrs", droppedCount))
+	}
+
+	newRecord := slog.NewRecord(record.Time, record.Level, record.Message, record.PC)
+	newRecord.AddAttrs(keptAttrs...)
+	if err := h.inner.Handle(ctx, newRecord); err != nil {
 		return fmt.Errorf("handle library log record: %w", err)
 	}
 	return nil
 }
 
-// WithAttrs keeps the floor on the derived handler.
+// WithAttrs applies the allow-list filter before passing attributes to inner.
 func (h floorHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return floorHandler{inner: h.inner.WithAttrs(attrs)}
+	limit := len(attrs)
+	if limit > maxRecordAttrs {
+		limit = maxRecordAttrs
+	}
+	filtered := make([]slog.Attr, 0, limit)
+	for i := 0; i < limit; i++ {
+		attr, kept, _ := filterAttr(attrs[i])
+		if kept {
+			filtered = append(filtered, attr)
+		}
+	}
+	return floorHandler{inner: h.inner.WithAttrs(filtered)}
 }
 
-// WithGroup keeps the floor on the derived handler.
-func (h floorHandler) WithGroup(name string) slog.Handler {
-	return floorHandler{inner: h.inner.WithGroup(name)}
+// WithGroup returns the receiver unchanged because a group would rename keys and defeat the allow-list.
+func (h floorHandler) WithGroup(_ string) slog.Handler {
+	return h
 }
 
 func buildClient(
