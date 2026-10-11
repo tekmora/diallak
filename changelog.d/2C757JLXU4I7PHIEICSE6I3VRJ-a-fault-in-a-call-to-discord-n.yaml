@@ -1,0 +1,2 @@
+type: fixed
+title: A fault in a call to Discord no longer writes reply text or the reply address to the log
