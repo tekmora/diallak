@@ -96,16 +96,33 @@ jobs:
           pattern: ${{ needs.image.outputs.sbom-pattern }}
           merge-multiple: true
           path: sbom
-      # A rebuild of an existing tag keeps its release and replaces the SBOMs.
+      # The notes are the changelog section plus the image by tag and by
+      # digest, so a deployment finds the digest to pin on the release page.
+      # A rebuild of an existing tag keeps its release, rewrites the notes
+      # with the new digest and replaces the SBOMs. The scripts come from the
+      # tag: a tag from before 0.1.2 has no image note, and its release page
+      # is then left as it is.
       - name: Publish the release with its notes and the SBOMs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.meta.outputs.tag }}
+          IMAGE: ghcr.io/${{ github.repository }}
+          DIGEST: ${{ needs.image.outputs.digest }}
         run: |
           sh .github/scripts/release-notes.sh "${TAG#v}" CHANGELOG.md > notes.md
+          named=no
+          if [ -f .github/scripts/release-image-note.sh ]; then
+            sh .github/scripts/release-image-note.sh \
+              "$IMAGE" "${TAG#v}" "$DIGEST" >> notes.md
+            named=yes
+          else
+            echo "::warning::$TAG has no image note script: no digest in notes"
+          fi
           if ! gh release view "$TAG" > /dev/null 2>&1; then
             gh release create "$TAG" --verify-tag --title "$TAG" \
               --notes-file notes.md
+          elif [ "$named" = yes ]; then
+            gh release edit "$TAG" --notes-file notes.md
           fi
           gh release upload "$TAG" sbom/*.spdx.json --clobber

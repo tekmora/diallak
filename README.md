@@ -205,8 +205,9 @@ A release is cut in three steps:
 2. The merged commit on `main` is tagged `vX.Y.Z`, and the tag is pushed.
 3. The tag starts [`release.yml`](.github/workflows/release.yml). It refuses a
    version that has no section in `CHANGELOG.md`, builds the container image
-   `ghcr.io/tekmora/diallak:X.Y.Z`, and publishes the release with the changelog
-   section as its notes. There is no `latest` tag.
+   `ghcr.io/tekmora/diallak:X.Y.Z`, and publishes the release. Its notes are
+   the changelog section, followed by the image by tag and by digest. There is
+   no `latest` tag.
 
 The image is built in a reusable workflow of its own
 ([`release-image.yml`](.github/workflows/release-image.yml)) for `linux/amd64`
@@ -238,8 +239,8 @@ verify` asks GitHub for the attestation and needs a GitHub login
 (`gh auth login`), but none to the registry.
 
 For another version, replace `0.1.1` in all three places. A deployment pins the
-image by digest; the digest of each release is in
-[docs/hosting.md](docs/hosting.md).
+image by digest. From 0.1.2 on, the release page of a version names its digest;
+the one of 0.1.1 is in [docs/hosting.md](docs/hosting.md).
 
 ## Develop
 
