@@ -1247,34 +1247,47 @@ func TestRun_Positive_ServerCompare_ExitZeroAndDifferences(t *testing.T) {
 }
 
 func TestRun_Negative_ServerAndRegisterCommandsMutuallyExclusive(t *testing.T) {
-	var readCalls int
-	var registerCalls int
-	deps := dependencies{
-		readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
-			readCalls++
-			return nil, nil
-		},
-		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error {
-			registerCalls++
-			return nil
-		},
+	modes := []string{
+		"plan",
+		"compare",
+		"apply=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	}
+	for _, mode := range modes {
+		t.Run(mode, func(t *testing.T) {
+			var calls int
+			deps := dependencies{
+				readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+					calls++
+					return nil, nil
+				},
+				registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error {
+					calls++
+					return nil
+				},
+				applyServer: func(_ context.Context, _ string, _ uint64, _ discord.ApplyInput, _ io.Writer) error {
+					calls++
+					return nil
+				},
+			}
 
-	var out bytes.Buffer
-	err := run(context.Background(), []string{"-server=plan", "-register-commands"}, validEnv(t), &out, deps)
-	if err == nil {
-		t.Fatal("run succeeded with mutually exclusive flags, want error")
-	}
-	if readCalls != 0 {
-		t.Errorf("readCalls = %d, want 0", readCalls)
-	}
-	if registerCalls != 0 {
-		t.Errorf("registerCalls = %d, want 0", registerCalls)
-	}
+			var out bytes.Buffer
+			err := run(context.Background(), []string{"-server=" + mode, "-register-commands"}, validEnv(t), &out, deps)
+			const want = "-server and -register-commands cannot be used together"
+			if err == nil || err.Error() != want {
+				t.Fatalf("error = %v, want %q", err, want)
+			}
+			if calls != 0 {
+				t.Errorf("calls to the platform = %d, want 0", calls)
+			}
+			if out.Len() != 0 {
+				t.Errorf("output = %q, want none", out.String())
+			}
 
-	var errOut bytes.Buffer
-	if code := report(err, &errOut); code != 1 {
-		t.Errorf("report exit code = %d, want 1", code)
+			var errOut bytes.Buffer
+			if code := report(err, &errOut); code != 1 {
+				t.Errorf("report exit code = %d, want 1", code)
+			}
+		})
 	}
 }
 
@@ -1468,6 +1481,11 @@ func TestRun_Negative_ServerApplyInvalidDigest(t *testing.T) {
 		"apply=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0",
 		"apply=md5:0123456789abcdef0123456789abcdef",
 		"apply=sha256:0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+		// the characters next to the two accepted ranges
+		"apply=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
+		"apply=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde`",
+		"apply=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde/",
+		"apply=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde:",
 	}
 	for _, mode := range cases {
 		t.Run(mode, func(t *testing.T) {

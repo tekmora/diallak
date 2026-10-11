@@ -133,6 +133,8 @@ type fakePlatform struct {
 	hangRelease        chan struct{}
 	onWrite            func(writeCount int)
 	getRolesOverride   []fakeRole
+	delaySuffix        string
+	delay              time.Duration
 }
 
 func newFakePlatform(t *testing.T, guildID, botUserID, botRoleID uint64) *fakePlatform {
@@ -175,7 +177,10 @@ func (f *fakePlatform) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	f.mu.Lock()
 	if r.Method == http.MethodDelete {
-		f.t.Fatalf("unexpected DELETE request: %s %s", r.Method, r.URL.Path)
+		f.mu.Unlock()
+		f.t.Errorf("unexpected DELETE request: %s %s", r.Method, r.URL.Path)
+		http.NotFound(w, r)
+		return
 	}
 
 	f.recorded = append(f.recorded, recordedCall{
@@ -223,8 +228,19 @@ func (f *fakePlatform) handleRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	delay := time.Duration(0)
+	if f.delaySuffix != "" && strings.HasSuffix(r.URL.Path, f.delaySuffix) {
+		delay = f.delay
+	}
 	f.mu.Unlock()
 
+	if delay > 0 {
+		select {
+		case <-time.After(delay):
+		case <-r.Context().Done():
+			return
+		}
+	}
 	f.routeRequest(w, r, body)
 }
 
