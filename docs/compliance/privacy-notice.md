@@ -34,8 +34,9 @@ on grounds relating to your particular situation. After an objection your data
 is no longer processed, unless compelling legitimate grounds override your
 interests.
 
-To object, write to the e-mail address under "Who is responsible" or open a
-private thread in the support forum, addressed to the operator.
+To object, write to the e-mail address under "Who is responsible". That is the
+binding path. A private thread in the ticket channel of the server, addressed
+to the operator, is accepted too.
 
 ## Who is responsible
 
@@ -137,9 +138,11 @@ The processing does not rest on consent, so there is no consent to withdraw.
 You have the right to lodge a complaint with a supervisory authority, in
 particular in the Member State where you live or work (Article 77).
 
-To send a request, write to the e-mail address under "Who is responsible". A
-private thread in the support forum, addressed to the operator, is accepted
-too.
+To send a request, write to the e-mail address under "Who is responsible".
+That is the binding path. A private thread in the ticket channel of the
+server, addressed to the operator, is accepted too. Such a thread is visible to
+you, to the people you add and to moderators who manage threads; use e-mail
+when you want none of them to read along.
 
 ## Whether you have to provide data
 

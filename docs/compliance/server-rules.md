@@ -20,7 +20,8 @@ linked when someone provides it and is marked as a translation.
    room you can opt into.
 3. **Ask for help in the support forum, one post per question.** Others then
    find the answer. A post may carry a language tag; an answer points to the
-   English thread when one exists. A sensitive case goes into a private thread.
+   English thread when one exists. A sensitive case does not go into the
+   forum: open a private thread in the ticket channel.
 4. **Keep to the topic of a channel.**
 5. **The assistant is automated.** Its replies say so and can be wrong: check
    the sources it cites. Do not put secrets or personal data into a question.
@@ -28,9 +29,11 @@ linked when someone provides it and is marked as a translation.
 6. **Report security problems privately**, as [SECURITY.md](../../SECURITY.md)
    describes, not in a public channel.
 7. **Moderators may remove content and time members out.** People decide every
-   unclear case, never the bot alone. To appeal, open a private thread in the
-   support forum and address it to the operator. If you can no longer reach the
-   server, write to the e-mail address in the [imprint](imprint.md).
+   unclear case, never the bot alone. To appeal, write to the e-mail address in
+   the [imprint](imprint.md): that is the binding path, and it works when you
+   can no longer reach the server. A private thread in the ticket channel,
+   addressed to the operator, is accepted too. Moderators who manage threads
+   can see such a thread.
 8. **Discord's own rules apply.** You must follow Discord's Terms of Service
    and Community Guidelines and meet Discord's minimum age for your country.
    The server has no mature content and no age-restricted channel.

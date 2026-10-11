@@ -48,5 +48,6 @@ Nothing here is published to members before these are passed.
 | The legal research on the points the privacy notice and the imprint list is judged | Open |
 | The address service is contracted | Open; the operator contracts it |
 | The identity block is filled: name, address, e-mail | Open; it waits for the address |
+| The ticket channel exists in the server, and a member can open a private thread there | Open; the operator creates it. The server rules and the privacy notice name it as the second path next to e-mail |
 | The imprint and the privacy notice are published and linked from the bot's profile, the server rules, the README and Discord's developer portal | Open |
 <!-- markdownlint-enable MD013 -->
