@@ -441,30 +441,38 @@ func checkJSONTokens(data []byte) error {
 	return errors.New("JSON token stream exceeded limit")
 }
 
-// Load reads and parses a server definition from r using strict JSON decoding.
-func Load(r io.Reader) (*Definition, error) {
+// DecodeStrict reads and parses JSON from r into target using strict JSON decoding.
+func DecodeStrict(r io.Reader, what string, into any) error {
 	limited := io.LimitReader(r, int64(MaxBytes+1))
 	data, err := io.ReadAll(limited)
 	if err != nil {
-		return nil, fmt.Errorf("read definition: %w", err)
+		return fmt.Errorf("read %s: %w", what, err)
 	}
 	if len(data) > MaxBytes {
-		return nil, fmt.Errorf("definition size %d exceeds limit of %d bytes", len(data), MaxBytes)
+		return fmt.Errorf("%s size %d exceeds limit of %d bytes", what, len(data), MaxBytes)
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
-		return nil, errors.New("empty JSON input")
+		return errors.New("empty JSON input")
 	}
 
 	if err := checkJSONTokens(data); err != nil {
-		return nil, fmt.Errorf("validate JSON structure: %w", err)
+		return fmt.Errorf("validate JSON structure: %w", err)
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
-	var def Definition
-	if err := dec.Decode(&def); err != nil {
-		return nil, fmt.Errorf("decode definition: %w", err)
+	if err := dec.Decode(into); err != nil {
+		return fmt.Errorf("decode %s: %w", what, err)
 	}
 
+	return nil
+}
+
+// Load reads and parses a server definition from r using strict JSON decoding.
+func Load(r io.Reader) (*Definition, error) {
+	var def Definition
+	if err := DecodeStrict(r, "definition", &def); err != nil {
+		return nil, err
+	}
 	return &def, nil
 }
