@@ -13,6 +13,7 @@ legal advice. The operator reviews each one before it is used.
 | [Privacy notice](privacy-notice.md) | What members are told about their data, point by point of GDPR Article 13 | Draft; content decided by the operator, legal review before the public launch |
 | [Record of processing](record-of-processing.md) | The record of processing activities that GDPR Article 30 asks for | Draft, built from the data inventory |
 | [Server rules](server-rules.md) | The short add-on to the code of conduct that a member reads when joining | Draft wording accepted; final once the code of conduct exists |
+| [Support forum answer](support-forum-answer.md) | The entries the documents above gain when the bot answers first in the support forum | Draft for a feature that is not built; [ADR-0009](../adr/0009-support-forum-first-answer.md) is proposed |
 <!-- markdownlint-enable MD013 -->
 
 The rules these documents implement are in

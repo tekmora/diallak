@@ -17,4 +17,5 @@ record that supersedes it.
 | [0006](0006-ai-act-role.md) | 2026-10-10 | Role and duties under the EU AI Act | Accepted |
 | [0007](0007-health-listener.md) | 2026-10-10 | Health listener for probes | Accepted |
 | [0008](0008-code-of-conduct-place.md) | 2026-10-10 | Where the code of conduct lives | Accepted |
+| [0009](0009-support-forum-first-answer.md) | 2026-10-11 | First answer in the support forum | Proposed |
 <!-- markdownlint-enable MD013 -->

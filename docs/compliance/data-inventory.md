@@ -97,3 +97,7 @@ These will add entries here when they are built:
   change.
 - Reading GitHub Discussions ([ADR-0004](../adr/0004-community-questions.md)).
 - Supporter roles.
+- A first answer in the support forum, for which the bot reads the title and
+  the first message of a new post
+  ([ADR-0009](../adr/0009-support-forum-first-answer.md), proposed). The
+  entries are drafted in [Support forum answer](support-forum-answer.md).
