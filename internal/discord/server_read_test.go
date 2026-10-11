@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -740,18 +741,19 @@ func TestReadServer_Positive_ChannelsComplete_CutoffAndAdmin(t *testing.T) {
 	}
 }
 
-func TestReadServer_Negative_UnknownBitOnRole(t *testing.T) {
+func TestReadServer_Positive_UnknownBitOnRoleKept(t *testing.T) {
 	const (
 		guildID   uint64 = 1001
 		botUserID uint64 = 2001
 	)
 	appJSON := fmt.Sprintf(`{"id":"9001","bot":{"id":"%d"}}`, botUserID)
-	// Role has unknown bit 47: 1<<47 = 140737488355328
+	// The role an integration manages holds bit 47 beside VIEW_CHANNEL, as
+	// the first read of a live server found it: 1<<47 | 1<<10.
 	guildJSON := fmt.Sprintf(`{
 		"id": "%d",
 		"roles": [
 			{"id": "%d", "name": "@everyone", "position": 0, "permissions": "1024"},
-			{"id": "5001", "name": "BrokenRole", "position": 1, "permissions": "140737488355328"},
+			{"id": "5001", "name": "Server Booster", "position": 3, "permissions": "140737488356352", "managed": true},
 			{"id": "5002", "name": "BotRole", "position": 2, "permissions": "1024", "managed": true, "tags": {"bot_id": "%d"}}
 		]
 	}`, guildID, guildID, botUserID)
@@ -762,20 +764,28 @@ func TestReadServer_Negative_UnknownBitOnRole(t *testing.T) {
 	defer srv.Close()
 
 	opts := clientOptions{restURL: srv.URL}
-	_, err := readServerWithOptions(context.Background(), makeFakeToken(1001), guildID, opts)
-	if err == nil {
-		t.Fatal("readServerWithOptions succeeded on unknown bit, want error")
+	snap, err := readServerWithOptions(context.Background(), makeFakeToken(1001), guildID, opts)
+	if err != nil {
+		t.Fatalf("readServerWithOptions failed on a bit the table does not name: %v", err)
 	}
-	errStr := err.Error()
-	if !strings.Contains(errStr, "BrokenRole") {
-		t.Errorf("error %q does not name role BrokenRole", errStr)
+	if err := serverplan.Check(snap); err != nil {
+		t.Fatalf("snapshot does not pass its own check: %v", err)
 	}
-	if strings.Contains(errStr, "5001") {
-		t.Errorf("error %q contains platform ID 5001", errStr)
+	if len(snap.Roles) != 3 {
+		t.Fatalf("roles = %+v, want 3", snap.Roles)
+	}
+	want := serverplan.Role{Name: "Server Booster", Managed: true, Permissions: []string{"VIEW_CHANNEL"}, UnknownBits: []int{47}}
+	if !reflect.DeepEqual(snap.Roles[0], want) {
+		t.Errorf("role = %+v, want %+v", snap.Roles[0], want)
+	}
+	for _, r := range snap.Roles[1:] {
+		if r.UnknownBits != nil {
+			t.Errorf("role %q has unknown bits %v, want none", r.Name, r.UnknownBits)
+		}
 	}
 }
 
-func TestReadServer_Negative_UnknownBitOnEntry(t *testing.T) {
+func TestReadServer_Positive_UnknownBitOnEntryKept(t *testing.T) {
 	const (
 		guildID   uint64 = 1001
 		botUserID uint64 = 2001
@@ -805,16 +815,19 @@ func TestReadServer_Negative_UnknownBitOnEntry(t *testing.T) {
 	defer srv.Close()
 
 	opts := clientOptions{restURL: srv.URL}
-	_, err := readServerWithOptions(context.Background(), makeFakeToken(1001), guildID, opts)
-	if err == nil {
-		t.Fatal("readServerWithOptions succeeded on unknown entry bit, want error")
+	snap, err := readServerWithOptions(context.Background(), makeFakeToken(1001), guildID, opts)
+	if err != nil {
+		t.Fatalf("readServerWithOptions failed on an entry bit the table does not name: %v", err)
 	}
-	errStr := err.Error()
-	if !strings.Contains(errStr, "@everyone") {
-		t.Errorf("error %q does not name role @everyone", errStr)
+	if err := serverplan.Check(snap); err != nil {
+		t.Fatalf("snapshot does not pass its own check: %v", err)
 	}
-	if strings.Contains(errStr, strconv.FormatUint(guildID, 10)) {
-		t.Errorf("error %q contains platform ID", errStr)
+	if len(snap.Channels) != 1 || len(snap.Channels[0].Access) != 1 {
+		t.Fatalf("channels = %+v, want one channel with one entry", snap.Channels)
+	}
+	want := serverplan.Access{Role: "@everyone", Allow: []string{}, Deny: []string{}, UnknownAllow: []int{47}}
+	if !reflect.DeepEqual(snap.Channels[0].Access[0], want) {
+		t.Errorf("entry = %+v, want %+v", snap.Channels[0].Access[0], want)
 	}
 }
 
@@ -1250,25 +1263,39 @@ func TestReadServer_Boundary_BotRoleNameHeldTwice(t *testing.T) {
 	}
 }
 
-func TestReadServer_Negative_UnknownBitsNamedByNumber(t *testing.T) {
+func TestReadServer_Boundary_UnknownBitsKeptByNumber(t *testing.T) {
 	const (
 		guildID   uint64 = 1001
 		botUserID uint64 = 2001
 	)
 	bit47 := uint64(1) << 47
 	bits47and53 := bit47 | uint64(1)<<53
+	// Every permission the table names, and with it the highest bit a signed
+	// value can hold.
+	documented, err := serverdef.PermissionMask(serverdef.Permissions())
+	if err != nil {
+		t.Fatalf("PermissionMask: %v", err)
+	}
 	cases := []struct {
 		name          string
 		everyonePerms uint64
 		plainPerms    uint64
 		entryAllow    uint64
 		entryDeny     uint64
-		want          string
+		wantEveryone  []int
+		wantPlain     []int
+		wantAllow     []int
+		wantDeny      []int
+		wantPlainLen  int
 	}{
-		{"everyone role", bit47, 1024, 0, 0, `role "@everyone" has unknown permission bits: 47`},
-		{"plain role", 1024, bits47and53, 0, 0, `role "Plain" has unknown permission bits: 47, 53`},
-		{"entry allow", 1024, 1024, bit47, 0, `channel "ch-test": role "Plain" has unknown permission bits: 47`},
-		{"entry deny", 1024, 1024, 0, bits47and53, `channel "ch-test": role "Plain" has unknown permission bits: 47, 53`},
+		{"no unknown bit", 1024, 1024, 1024, 0, nil, nil, nil, nil, 1},
+		{"every documented bit", documented, documented, documented, 0, nil, nil, nil, nil, 52},
+		{"everyone role", bit47 | 1024, 1024, 0, 0, []int{47}, nil, nil, nil, 1},
+		{"plain role", 1024, bits47and53 | 1024, 0, 0, nil, []int{47, 53}, nil, nil, 1},
+		{"entry allow", 1024, 1024, bit47, 0, nil, nil, []int{47}, nil, 1},
+		{"entry deny", 1024, 1024, 0, bits47and53, nil, nil, nil, []int{47, 53}, 1},
+		{"every side at once", bit47, bit47, bit47, bit47, []int{47}, []int{47}, []int{47}, []int{47}, 0},
+		{"highest bit of the value", 1024, documented | uint64(1)<<62, 0, 0, nil, []int{62}, nil, nil, 52},
 	}
 	appJSON := fmt.Sprintf(`{"id":"9001","bot":{"id":"%d"}}`, botUserID)
 	memberJSON := fmt.Sprintf(`{"user":{"id":"%d"},"roles":["5002"]}`, botUserID)
@@ -1286,14 +1313,61 @@ func TestReadServer_Negative_UnknownBitsNamedByNumber(t *testing.T) {
 			srv := newStandardServer(guildID, botUserID, appJSON, guildJSON, memberJSON, channelsJSON)
 			defer srv.Close()
 
-			_, err := readServerWithOptions(context.Background(), makeFakeToken(1001), guildID, clientOptions{restURL: srv.URL})
-			if err == nil {
-				t.Fatal("readServerWithOptions succeeded, want an error for the unknown bits")
+			snap, err := readServerWithOptions(context.Background(), makeFakeToken(1001), guildID, clientOptions{restURL: srv.URL})
+			if err != nil {
+				t.Fatalf("readServerWithOptions failed: %v", err)
 			}
-			if err.Error() != tc.want {
-				t.Errorf("error = %q, want %q", err.Error(), tc.want)
+			if err := serverplan.Check(snap); err != nil {
+				t.Fatalf("snapshot does not pass its own check: %v", err)
+			}
+			// Roles from the highest: BotRole, Plain, @everyone.
+			plain, everyone := snap.Roles[1], snap.Roles[2]
+			entry := snap.Channels[0].Access[0]
+			if !reflect.DeepEqual(everyone.UnknownBits, tc.wantEveryone) {
+				t.Errorf("@everyone unknown bits = %v, want %v", everyone.UnknownBits, tc.wantEveryone)
+			}
+			if !reflect.DeepEqual(plain.UnknownBits, tc.wantPlain) {
+				t.Errorf("Plain unknown bits = %v, want %v", plain.UnknownBits, tc.wantPlain)
+			}
+			if len(plain.Permissions) != tc.wantPlainLen {
+				t.Errorf("Plain holds %d named permissions, want %d: %v", len(plain.Permissions), tc.wantPlainLen, plain.Permissions)
+			}
+			if !reflect.DeepEqual(entry.UnknownAllow, tc.wantAllow) {
+				t.Errorf("entry unknown allow = %v, want %v", entry.UnknownAllow, tc.wantAllow)
+			}
+			if !reflect.DeepEqual(entry.UnknownDeny, tc.wantDeny) {
+				t.Errorf("entry unknown deny = %v, want %v", entry.UnknownDeny, tc.wantDeny)
 			}
 		})
+	}
+}
+
+func TestReadServer_Boundary_UnknownBitGivesTheCallerNoRight(t *testing.T) {
+	const (
+		guildID   uint64 = 1001
+		botUserID uint64 = 2001
+	)
+	appJSON := fmt.Sprintf(`{"id":"9001","bot":{"id":"%d"}}`, botUserID)
+	// The bot's own role and a second role it holds both carry bit 47.
+	guildJSON := fmt.Sprintf(`{"id":"%d","roles":[
+		{"id":"%d","name":"@everyone","position":0,"permissions":"1024"},
+		{"id":"5001","name":"Helper","position":1,"permissions":"140737488355328"},
+		{"id":"5002","name":"BotRole","position":2,"permissions":"140737488356352","managed":true,"tags":{"bot_id":"%d"}}
+	]}`, guildID, guildID, botUserID)
+	memberJSON := fmt.Sprintf(`{"user":{"id":"%d"},"roles":["5001","5002"]}`, botUserID)
+
+	srv := newStandardServer(guildID, botUserID, appJSON, guildJSON, memberJSON, `[]`)
+	defer srv.Close()
+
+	snap, err := readServerWithOptions(context.Background(), makeFakeToken(1001), guildID, clientOptions{restURL: srv.URL})
+	if err != nil {
+		t.Fatalf("readServerWithOptions failed: %v", err)
+	}
+	if want := []string{"VIEW_CHANNEL"}; !reflect.DeepEqual(snap.Caller.Permissions, want) {
+		t.Errorf("caller permissions = %v, want %v", snap.Caller.Permissions, want)
+	}
+	if snap.Caller.Role != "BotRole" || !reflect.DeepEqual(snap.Roles[0].UnknownBits, []int{47}) {
+		t.Errorf("caller role = %q with unknown bits %v, want BotRole with [47]", snap.Caller.Role, snap.Roles[0].UnknownBits)
 	}
 }
 

@@ -7,8 +7,6 @@ import (
 	"net/url"
 	"slices"
 	"sort"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/disgoorg/disgo/bot"
@@ -199,26 +197,22 @@ func parseRoles(rawRoles []discord.Role, guildID uint64) ([]serverplan.Role, *di
 			continue
 		}
 		permNames, unknown := serverdef.PermissionNames(permissionsToMask(r.Permissions))
-		if unknown != 0 {
-			return nil, nil, nil, fmt.Errorf("role %q has unknown permission bits: %s", r.Name, formatUnknownBits(unknown))
-		}
 		snapRoles = append(snapRoles, serverplan.Role{
 			Name:        r.Name,
 			Everyone:    false,
 			Managed:     r.Managed,
 			Permissions: permNames,
+			UnknownBits: unknownBits(unknown),
 		})
 	}
 
 	everyonePerms, unknown := serverdef.PermissionNames(permissionsToMask(everyoneRole.Permissions))
-	if unknown != 0 {
-		return nil, nil, nil, fmt.Errorf("role %q has unknown permission bits: %s", everyoneRole.Name, formatUnknownBits(unknown))
-	}
 	snapRoles = append(snapRoles, serverplan.Role{
 		Name:        everyoneRole.Name,
 		Everyone:    true,
 		Managed:     everyoneRole.Managed,
 		Permissions: everyonePerms,
+		UnknownBits: unknownBits(unknown),
 	})
 
 	return snapRoles, everyoneRole, roleByID, nil
@@ -251,7 +245,8 @@ func resolveCaller(
 		}
 		callerMask |= permissionsToMask(r.Permissions)
 	}
-	// parseRoles has refused every role with a bit the table does not hold.
+	// A bit the table does not name gives the caller no right the plan knows;
+	// the snapshot reports such bits per role.
 	callerPerms, _ := serverdef.PermissionNames(callerMask)
 
 	return serverplan.Caller{
@@ -403,17 +398,13 @@ func parseOverwrites(
 				return nil, 0, fmt.Errorf("channel %q has overwrite for unknown role", channelName)
 			}
 			allow, unkAllow := serverdef.PermissionNames(permissionsToMask(ro.Allow))
-			if unkAllow != 0 {
-				return nil, 0, fmt.Errorf("channel %q: role %q has unknown permission bits: %s", channelName, role.Name, formatUnknownBits(unkAllow))
-			}
 			deny, unkDeny := serverdef.PermissionNames(permissionsToMask(ro.Deny))
-			if unkDeny != 0 {
-				return nil, 0, fmt.Errorf("channel %q: role %q has unknown permission bits: %s", channelName, role.Name, formatUnknownBits(unkDeny))
-			}
 			access = append(access, serverplan.Access{
-				Role:  role.Name,
-				Allow: allow,
-				Deny:  deny,
+				Role:         role.Name,
+				Allow:        allow,
+				Deny:         deny,
+				UnknownAllow: unknownBits(unkAllow),
+				UnknownDeny:  unknownBits(unkDeny),
 			})
 		}
 	}
@@ -431,14 +422,18 @@ func determineChannelsComplete(caller serverplan.Caller, now time.Time) bool {
 	return now.Before(cutoff)
 }
 
-func formatUnknownBits(unknown uint64) string {
-	var bits []string
+// unknownBits lists the numbers of the bits set in unknown, in rising order.
+// The read keeps such a bit as a number: Discord's reference describes a
+// permission value as an integer of open length that new permissions are added
+// to, so a bit the table does not name is no reason to stop.
+func unknownBits(unknown uint64) []int {
+	var bits []int
 	for b := 0; b < 64; b++ {
 		if unknown&(uint64(1)<<b) != 0 {
-			bits = append(bits, strconv.Itoa(b))
+			bits = append(bits, b)
 		}
 	}
-	return strings.Join(bits, ", ")
+	return bits
 }
 
 // permissionsToMask converts Disgo's signed int64 permission bitmask into an unsigned uint64.

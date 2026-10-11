@@ -47,6 +47,9 @@ const (
 	ReasonAboveCaller = "above-caller"
 	// ReasonLacksRight indicates the caller lacks permissions required for the change.
 	ReasonLacksRight = "lacks-right"
+	// ReasonUnknownBits indicates the role or entry has bits set that the
+	// permission table does not name; the change would clear them.
+	ReasonUnknownBits = "unknown-permission-bits"
 )
 
 // Change describes an accepted step in the execution plan.
@@ -304,6 +307,9 @@ func (ctx *planContext) checkRefusal(c candidate) (string, string) {
 	if r, d := ctx.checkManagedRole(c); r != "" {
 		return r, d
 	}
+	if r, d := ctx.checkUnknownBits(c); r != "" {
+		return r, d
+	}
 	if r, d := ctx.checkAboveCaller(c); r != "" {
 		return r, d
 	}
@@ -406,6 +412,69 @@ func (ctx *planContext) checkManagedRole(c candidate) (string, string) {
 		}
 	}
 	return "", ""
+}
+
+// checkUnknownBits refuses a change of permissions on a role or an entry that
+// has bits set the permission table does not name. Both changes send the whole
+// value, so they would clear a bit whose meaning is not known here.
+func (ctx *planContext) checkUnknownBits(c candidate) (string, string) {
+	if c.roleID == "" || (c.action != ActionSetRolePermissions && c.action != ActionSetAccess) {
+		return "", ""
+	}
+	sr := ctx.snapRole(c.roleID)
+	if sr == nil {
+		return "", ""
+	}
+	if c.action == ActionSetRolePermissions {
+		if len(sr.UnknownBits) > 0 {
+			return ReasonUnknownBits, "bits " + bitList(sr.UnknownBits)
+		}
+		return "", ""
+	}
+	ch := ctx.defChannel(c.channelID)
+	if ch == nil {
+		return "", ""
+	}
+	if detail := entryBitsDetail(ctx.snap, ch.Name, sr.Name); detail != "" {
+		return ReasonUnknownBits, detail
+	}
+	return "", ""
+}
+
+// entryBitsDetail returns the unknown bits of the first entry for the named
+// role on a server channel of the given name that has any, or "" for none.
+func entryBitsDetail(s *Snapshot, channelName, roleName string) string {
+	for i := range s.Channels {
+		sch := &s.Channels[i]
+		if sch.Name != channelName {
+			continue
+		}
+		for j := range sch.Access {
+			if sch.Access[j].Role != roleName {
+				continue
+			}
+			if detail := accessBitsDetail(&sch.Access[j]); detail != "" {
+				return detail
+			}
+		}
+	}
+	return ""
+}
+
+// snapRole returns the one server role a role of the definition is matched to,
+// or nil when there is none or more than one.
+func (ctx *planContext) snapRole(roleID string) *Role {
+	for i := range ctx.def.Roles {
+		if ctx.def.Roles[i].ID != roleID {
+			continue
+		}
+		matched := matchRoleInSnapshot(&ctx.def.Roles[i], ctx.snap)
+		if len(matched) != 1 {
+			return nil
+		}
+		return &matched[0]
+	}
+	return nil
 }
 
 func getRoleName(def *serverdef.Definition, roleID string) string {

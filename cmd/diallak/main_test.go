@@ -1373,6 +1373,45 @@ func TestRun_Positive_ServerCompare_ExitZeroAndDifferences(t *testing.T) {
 	}
 }
 
+func TestRun_Positive_ServerModes_UnnamedBitOnManagedRoleIsReported(t *testing.T) {
+	tests := []struct {
+		mode string
+		want string
+	}{
+		{mode: "compare", want: "  unknown-permission-bits server.roles[Server Booster]; bits 47\n"},
+		{mode: "plan", want: "plan digest: sha256:"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.mode, func(t *testing.T) {
+			snap := loadFreshServerSnapshot(t)
+			snap.Roles = append([]serverplan.Role{{
+				Name:        "Server Booster",
+				Managed:     true,
+				Permissions: []string{"VIEW_CHANNEL"},
+				UnknownBits: []int{47},
+			}}, snap.Roles...)
+			deps := dependencies{
+				readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+					return snap, nil
+				},
+			}
+
+			var out bytes.Buffer
+			err := run(context.Background(), []string{"-server=" + tt.mode}, validEnv(t), &out, deps)
+			if err != nil {
+				t.Fatalf("run -server=%s: %v", tt.mode, err)
+			}
+			if got := out.String(); !strings.Contains(got, tt.want) {
+				t.Errorf("output does not contain %q:\n%s", tt.want, got)
+			}
+			var errOut bytes.Buffer
+			if code := report(err, &errOut); code != 0 {
+				t.Errorf("report exit code = %d, want 0", code)
+			}
+		})
+	}
+}
+
 func TestRun_Negative_ServerAndRegisterCommandsMutuallyExclusive(t *testing.T) {
 	modes := []string{
 		"plan",
