@@ -27,11 +27,14 @@ type Caller struct {
 }
 
 // Role describes an observed role and its server-wide permissions.
+// UnknownBits holds the numbers of the bits the role has set that the
+// permission table does not name, in rising order.
 type Role struct {
 	Name        string   `json:"name"`
 	Everyone    bool     `json:"everyone"`
 	Managed     bool     `json:"managed"`
 	Permissions []string `json:"permissions"`
+	UnknownBits []int    `json:"unknown_bits,omitempty"`
 }
 
 // Category represents a channel category in the snapshot.
@@ -49,10 +52,14 @@ type Channel struct {
 }
 
 // Access describes the permissions granted or denied to a role in a channel.
+// UnknownAllow and UnknownDeny hold the numbers of the bits the entry has set
+// that the permission table does not name, in rising order.
 type Access struct {
-	Role  string   `json:"role"`
-	Allow []string `json:"allow"`
-	Deny  []string `json:"deny"`
+	Role         string   `json:"role"`
+	Allow        []string `json:"allow"`
+	Deny         []string `json:"deny"`
+	UnknownAllow []int    `json:"unknown_allow,omitempty"`
+	UnknownDeny  []int    `json:"unknown_deny,omitempty"`
 }
 
 var allowedChannelTypes = map[string]struct{}{
@@ -181,6 +188,30 @@ func checkPermList(perms []string, vocab map[string]struct{}, ctx string) []erro
 	return errs
 }
 
+// permissionBits is the number of bits a permission value holds here.
+const permissionBits = 64
+
+// checkUnknownBits accepts only bit numbers the permission table does not
+// name, each once and in rising order.
+func checkUnknownBits(bits []int, ctx string) []error {
+	var errs []error
+	last := -1
+	for _, b := range bits {
+		if b < 0 || b >= permissionBits {
+			errs = append(errs, fmt.Errorf("unknown bit %d in %s is outside 0 to %d", b, ctx, permissionBits-1))
+			continue
+		}
+		if b <= last {
+			errs = append(errs, fmt.Errorf("unknown bit %d in %s is not in rising order", b, ctx))
+		}
+		last = b
+		if names, _ := serverdef.PermissionNames(uint64(1) << b); len(names) > 0 {
+			errs = append(errs, fmt.Errorf("unknown bit %d in %s is the permission %q", b, ctx, names[0]))
+		}
+	}
+	return errs
+}
+
 func checkPermissions(s *Snapshot) []error {
 	vocabList := serverdef.Permissions()
 	vocab := make(map[string]struct{}, len(vocabList))
@@ -193,6 +224,7 @@ func checkPermissions(s *Snapshot) []error {
 	for i := range s.Roles {
 		ctx := fmt.Sprintf("role %q", s.Roles[i].Name)
 		errs = append(errs, checkPermList(s.Roles[i].Permissions, vocab, ctx)...)
+		errs = append(errs, checkUnknownBits(s.Roles[i].UnknownBits, ctx)...)
 	}
 	for i := range s.Channels {
 		ch := &s.Channels[i]
@@ -202,6 +234,8 @@ func checkPermissions(s *Snapshot) []error {
 			denyCtx := fmt.Sprintf("channel %q access[%s].deny", ch.Name, acc.Role)
 			errs = append(errs, checkPermList(acc.Allow, vocab, allowCtx)...)
 			errs = append(errs, checkPermList(acc.Deny, vocab, denyCtx)...)
+			errs = append(errs, checkUnknownBits(acc.UnknownAllow, allowCtx)...)
+			errs = append(errs, checkUnknownBits(acc.UnknownDeny, denyCtx)...)
 		}
 	}
 	return errs

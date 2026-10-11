@@ -50,6 +50,9 @@ const (
 	KindChannelExtra = "channel-extra"
 	// KindFeatureMissing indicates the server lacks a feature required by the definition.
 	KindFeatureMissing = "feature-missing"
+	// KindUnknownBits indicates a server role or permission entry has bits set
+	// that the permission table does not name.
+	KindUnknownBits = "unknown-permission-bits"
 )
 
 // Difference describes one discrepancy between the declarative definition and the snapshot.
@@ -81,7 +84,60 @@ func Compare(def *serverdef.Definition, s *Snapshot) ([]Difference, error) {
 	if featDiff := compareFeatures(def, s); featDiff != nil {
 		diffs = append(diffs, *featDiff)
 	}
+	diffs = append(diffs, compareUnknownBits(s)...)
 	return diffs, nil
+}
+
+// bitList renders bit numbers as "47, 53".
+func bitList(bits []int) string {
+	parts := make([]string, 0, len(bits))
+	for _, b := range bits {
+		parts = append(parts, fmt.Sprintf("%d", b))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// accessBitsDetail renders the unknown bits of an entry by side, or "" for none.
+func accessBitsDetail(acc *Access) string {
+	var parts []string
+	if len(acc.UnknownAllow) > 0 {
+		parts = append(parts, "allow "+bitList(acc.UnknownAllow))
+	}
+	if len(acc.UnknownDeny) > 0 {
+		parts = append(parts, "deny "+bitList(acc.UnknownDeny))
+	}
+	return strings.Join(parts, "; ")
+}
+
+// compareUnknownBits reports every role and every permission entry of the
+// server that has a bit set the permission table does not name. The objects
+// carry the server's names, because the finding does not depend on the
+// definition: a role or channel the definition does not hold is reported too.
+func compareUnknownBits(s *Snapshot) []Difference {
+	var diffs []Difference
+	for i := range s.Roles {
+		sr := &s.Roles[i]
+		if len(sr.UnknownBits) > 0 {
+			diffs = append(diffs, Difference{
+				Kind:   KindUnknownBits,
+				Object: fmt.Sprintf("server.roles[%s]", sr.Name),
+				Detail: "bits " + bitList(sr.UnknownBits),
+			})
+		}
+	}
+	for i := range s.Channels {
+		sch := &s.Channels[i]
+		for j := range sch.Access {
+			if detail := accessBitsDetail(&sch.Access[j]); detail != "" {
+				diffs = append(diffs, Difference{
+					Kind:   KindUnknownBits,
+					Object: fmt.Sprintf("server.channels[%s].access[%s]", sch.Name, sch.Access[j].Role),
+					Detail: detail,
+				})
+			}
+		}
+	}
+	return diffs
 }
 
 func findBotRoleID(def *serverdef.Definition) string {

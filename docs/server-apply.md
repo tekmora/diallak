@@ -113,11 +113,18 @@ of channels, in that order, and stops at the first failure.
   `other`.
 - **Entries for single members** are counted per channel and not read further;
   the snapshot holds no member.
-- **A permission bit the table does not hold** stops the read with the name of
-  the role and the number of the bit. The table
+- **A permission bit the table does not name** is kept as its number, per
+  role and per side of an entry, and the read goes on
+  (`TestReadServer_Boundary_UnknownBitsKeptByNumber`). The table
   ([`serverdef.Permissions`](../internal/serverdef/serverdef.go)) holds the 52
   permissions Discord documents; the test
   `TestPermissions_Positive_NamesAndBitsPinned` pins every name and bit.
+  Discord's reference describes a permission value as an integer of open
+  length that new permissions are added to (Discord developer documentation,
+  "Permissions"), and a server can hold a bit that page does not list: the
+  read of release 0.2.0 stopped on bit 47 of a role. Such a bit gives the
+  caller no right the plan counts
+  (`TestReadServer_Boundary_UnknownBitGivesTheCallerNoRight`).
 - **Errors name no id.** A failed request is reported with its step and its
   cause; the address, which holds the server's id and the bot user's id, is
   dropped, and the token is replaced
@@ -131,6 +138,13 @@ of channels, in that order, and stops at the first failure.
 every member holds, listed last; a caller role that exists; known permission
 names and channel types, no negative count of member entries. An example is
 [`testdata/fresh-server.json`](../internal/serverplan/testdata/fresh-server.json).
+
+A role may carry `unknown_bits`, and an entry `unknown_allow` and
+`unknown_deny`: the numbers of the bits it has set that the table does not
+name. `Check` accepts only numbers from 0 to 63 without a name in the table,
+each once and in rising order
+(`TestCheck_Boundary_UnknownBitsAreTheBitsWithoutAName`). A snapshot without
+such a bit holds none of the three keys.
 
 Objects are matched by name. The bot's role in the definition is matched to
 the caller's role, whatever it is called on the server. Two roles, categories
@@ -160,6 +174,7 @@ administrator rights cannot tell a missing channel from a hidden one.
 | `access-member` | A channel holds entries for single members; the definition gives access to roles only. Reported with the count, never planned as a change |
 | `role-extra`, `category-extra`, `channel-extra` | The server has something the definition does not |
 | `feature-missing` | The definition has an announcement channel and the server lacks the feature `NEWS` |
+| `unknown-permission-bits` | A role or a permission entry of the server has a bit set that the table does not name. Reported with the server's own names and the numbers of the bits, for objects the definition does not hold too |
 <!-- markdownlint-enable MD013 -->
 
 A raised bot role shows up here: while the operator has given it more rights or
@@ -207,9 +222,17 @@ A refused change carries the first reason that holds, in this order.
 | `outside-own-changes` | The bot's role is not raised, and the change is not the entry of an area's role on that area's channel |
 | `missing-feature` | The server lacks the feature the channel type needs |
 | `managed-role` | An integration manages the role |
+| `unknown-permission-bits` | The role, or the entry the change would replace, has a bit set that the table does not name. Both changes send the whole value and would clear it |
 | `above-caller` | The role stands above the caller's role, or the new order would move or pass a role that does; Discord lets a bot edit and sort only roles below its own |
 | `lacks-right` | The caller does not hold a right the change needs |
 <!-- markdownlint-enable MD013 -->
+
+A bit without a name stops a change only where that change would write over
+it: a role that already has the permissions of the definition is left alone,
+and so is every other entry of the same channel
+(`TestPlan_Boundary_UnknownBitsLeaveTheRestAlone`). Because a plan with a
+refusal is not applied, the run waits until a person has settled the bit on
+the server (`TestApplyServer_Negative_UnknownBitStopsTheRun`).
 
 With its three rights the bot may plan one kind of change only: the entry of
 an area's role on that area's channel, which is how an area opens and closes.
