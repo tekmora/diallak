@@ -141,3 +141,12 @@ jobs:
           artifact-name: ${{ steps.names.outputs.sbom_arm64 }}
           output-file: ${{ steps.names.outputs.sbom_arm64 }}
           upload-release-assets: false
+      # The files themselves get build provenance too, so that a downloaded
+      # SBOM can be checked the way the image is. The subject of each
+      # attestation is the file's SHA-256; the caller uploads the same bytes.
+      - name: Attest the SBOM files
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: |
+            ${{ steps.names.outputs.sbom_amd64 }}
+            ${{ steps.names.outputs.sbom_arm64 }}
