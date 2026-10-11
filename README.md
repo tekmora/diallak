@@ -98,7 +98,9 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 Without the two model variables the bot replies with cited excerpts and says
 that no model wrote them. In the live server that is the only mode for now: no
 deployment sets the two variables until the gates of
-[ADR-0006](docs/adr/0006-ai-act-role.md) are passed.
+[ADR-0013](docs/adr/0013-guardrail-policy-and-receipt.md) are passed: every
+reply of the model has to name the deployment's guardrail policy, and the
+member can ask for a receipt of the guardrails that ran. Neither is built yet.
 
 With both variables set the bot sends the endpoint one small request at start
 ([ADR-0012](docs/adr/0012-model-state.md)):
