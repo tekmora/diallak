@@ -6,7 +6,7 @@ legal advice. The operator reviews each one before it is used.
 <!-- markdownlint-disable MD013 -->
 | Document | What it is | State |
 | :--- | :--- | :--- |
-| [Role under the EU AI Act](../adr/0006-ai-act-role.md) | Which role the project has and which duties follow | Accepted record, with gates for model-written answers |
+| [Role under the EU AI Act](../adr/0006-ai-act-role.md) | Which role the project has and which duties follow | Accepted record; its gates for model-written answers are replaced by [ADR-0013](../adr/0013-guardrail-policy-and-receipt.md) |
 | [AI disclosure](ai-disclosure.md) | What the bot tells members about itself, and where | Draft |
 | [Data inventory](data-inventory.md) | What the bot receives, keeps, logs and passes on | Draft, checked against the code |
 | [Imprint](imprint.md) | Who provides the bot and the server | Draft; the identity block is filled before the public launch |
@@ -26,17 +26,24 @@ translations.
 
 ## Gates for model-written answers
 
-Model-written answers stay off in the live server until the four gates of
-[ADR-0006](../adr/0006-ai-act-role.md) are passed.
+Model-written answers stay off in the live server until the gates of
+[ADR-0013](../adr/0013-guardrail-policy-and-receipt.md), "What may go live,
+and when", are passed. They replace the four gates of
+[ADR-0006](../adr/0006-ai-act-role.md); the "Supersedes" section of ADR-0013
+says what became of each.
 
 <!-- markdownlint-disable MD013 -->
 | Gate | State |
 | :--- | :--- |
-| 1. The notices of the AI disclosure are in the code | Passed: [AI disclosure](ai-disclosure.md), "Notices in the code", names the texts and the tests that pin them |
-| 2. The codes of practice under Article 50(7) are read for the marking of text | Open |
-| 3. The privacy notice is published | Open: the [privacy notice](privacy-notice.md) is a draft and waits for the operator's open points |
-| 4. The gaps of the operator's model endpoint are closed | Open; they are closed in the operator's deployment, not in this repository |
+| 1. The check for the guardrail policy, at the start and on every reply, and the receipt are in the code | Open: not built ([issue 63](https://github.com/tekmora/diallak/issues/63)) |
+| 2. Each has its planted case in the test suite | Open |
+| 3. The privacy notice, the data inventory and the AI disclosure say what the code does, and none says that personal data is masked without the limit of the masking | Open: they change in the same pull request as the code |
 <!-- markdownlint-enable MD013 -->
+
+A deployment passes a gate of its own at every start: the bot does not run in
+model mode when the reply to its first request does not name the policy. The
+record's second step, in which the bot gets the masked text and shows it in the
+receipt, is not a gate for going live.
 
 ## Gates for the public launch
 

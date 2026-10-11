@@ -21,4 +21,5 @@ record that supersedes it.
 | [0010](0010-bot-rights-and-apply-path.md) | 2026-10-11 | Bot rights from decided functions, and one apply path | Accepted |
 | [0011](0011-area-roles-from-member-choice.md) | 2026-10-11 | The bot gives area roles from the member's own choice | Accepted |
 | [0012](0012-model-state.md) | 2026-10-11 | The model's state: a start probe, a gate and a health path | Accepted |
+| [0013](0013-guardrail-policy-and-receipt.md) | 2026-10-11 | A guardrail policy on every model call, and a receipt for the member | Accepted |
 <!-- markdownlint-enable MD013 -->

@@ -46,9 +46,9 @@ is missing or out of range stops the start with a message that names it.
   They are read once at start.
 - **The guild id is configuration.** It never appears in this repository.
 - **Model mode is off unless both model variables are set.** In the live server
-  they stay unset until the gates of [ADR-0006](adr/0006-ai-act-role.md) are
-  passed ([compliance](compliance/README.md), "Gates for model-written
-  answers").
+  they stay unset until the gates of
+  [ADR-0013](adr/0013-guardrail-policy-and-receipt.md) are passed
+  ([compliance](compliance/README.md), "Gates for model-written answers").
 
 ## Start, stop and replace
 

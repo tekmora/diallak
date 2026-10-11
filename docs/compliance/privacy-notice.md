@@ -91,9 +91,9 @@ outcome of a request, such as `answer` or `refusal`, and how long it took
 - Nobody else. The bot sells nothing and shares nothing for advertising.
 
 Model mode is switched off in the live server until the gates of
-[ADR-0006](../adr/0006-ai-act-role.md) are passed. Until then your question
-leaves the bot only as far as the reply needs it: the reply holds documentation
-text, not your question.
+[ADR-0013](../adr/0013-guardrail-policy-and-receipt.md) are passed. Until
+then your question leaves the bot only as far as the reply needs it: the reply
+holds documentation text, not your question.
 
 ## Where the bot runs
 
