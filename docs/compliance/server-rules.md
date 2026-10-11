@@ -16,8 +16,9 @@ linked when someone provides it and is marked as a translation.
 1. **The code of conduct applies here.** It says how people treat each other in
    every space of the organisation. The link follows once the code of conduct
    exists.
-2. **Technical channels and support are in English.** Each language has a social
-   room you can opt into.
+2. **Technical channels and support are in English.** A language gets a social
+   room when enough members ask for it and a moderator or subject guide who
+   reads the language watches the room. There is none at the start.
 3. **Ask for help in the support forum, one post per question.** Others then
    find the answer. A post may carry a language tag; an answer points to the
    English thread when one exists. A sensitive case does not go into the
