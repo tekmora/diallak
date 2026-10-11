@@ -86,9 +86,9 @@
       "id": "contributor",
       "name": "Contributor",
       "kind": "recognition",
-      "purpose": "First step of the contributor ladder: a contribution of this member was merged. Credited in releases.",
+      "purpose": "The one role of the contributor ladder: a contribution of this member was merged. Credited in releases. The subject guide roles stand above it; there is no third step.",
       "assigned_by": "operator",
-      "basis": "proposal",
+      "basis": "decided",
       "permissions": []
     },
     {
@@ -101,30 +101,12 @@
       "permissions": []
     },
     {
-      "id": "supporter-3-months",
-      "name": "Supporter for 3 months",
-      "kind": "recognition",
-      "purpose": "A thank-you for support over time. Nothing attaches to it. The step of three months is a proposal.",
-      "assigned_by": "bot",
-      "basis": "proposal",
-      "permissions": []
-    },
-    {
-      "id": "supporter-6-months",
-      "name": "Supporter for 6 months",
-      "kind": "recognition",
-      "purpose": "A thank-you for support over time. Nothing attaches to it. The step of six months is a proposal.",
-      "assigned_by": "bot",
-      "basis": "proposal",
-      "permissions": []
-    },
-    {
       "id": "supporter-12-months",
       "name": "Supporter for a year",
       "kind": "recognition",
-      "purpose": "A thank-you for support over time. Nothing attaches to it. The step of twelve months is a proposal.",
+      "purpose": "A thank-you for a year of support. Nothing attaches to it.",
       "assigned_by": "bot",
-      "basis": "proposal",
+      "basis": "decided",
       "permissions": []
     },
     {
@@ -133,7 +115,7 @@
       "kind": "interest",
       "purpose": "The member chose this topic. Counts towards opening the area and shows it once it is open.",
       "assigned_by": "onboarding",
-      "basis": "proposal",
+      "basis": "decided",
       "permissions": []
     },
     {
@@ -142,7 +124,7 @@
       "kind": "interest",
       "purpose": "The member chose this topic. Counts towards opening the area and shows it once it is open.",
       "assigned_by": "onboarding",
-      "basis": "proposal",
+      "basis": "decided",
       "permissions": []
     },
     {
@@ -151,7 +133,7 @@
       "kind": "interest",
       "purpose": "The member chose this topic. Counts towards opening the area and shows it once it is open.",
       "assigned_by": "onboarding",
-      "basis": "proposal",
+      "basis": "decided",
       "permissions": []
     },
     {
@@ -160,7 +142,7 @@
       "kind": "interest",
       "purpose": "The member chose this topic. Counts towards opening the area and shows it once it is open.",
       "assigned_by": "onboarding",
-      "basis": "proposal",
+      "basis": "decided",
       "permissions": []
     },
     {
