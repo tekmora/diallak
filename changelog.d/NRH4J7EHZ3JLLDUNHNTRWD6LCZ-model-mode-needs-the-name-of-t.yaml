@@ -1,3 +1,0 @@
-type: changed
-title: Model mode needs the name of the gateway policy and refuses a reply without it
-breaking: true
