@@ -35,6 +35,9 @@ var errEmptyApplicationID = errors.New("application id is empty")
 // serverCallTimeout is chosen, not measured.
 const serverCallTimeout = 10 * time.Second
 
+// applyCallTimeout is chosen, not measured; it has to cover the library's wait on a 429.
+const applyCallTimeout = 60 * time.Second
+
 // clientOptions are the seams of this package's tests: the address of the platform's REST API, the
 // deadline of the application lookup and the function that opens the gateway. The exported
 // functions pass the zero value, which means the real platform and the defaults.
@@ -45,6 +48,7 @@ type clientOptions struct {
 	maxQuestionChars  int
 	now               func() time.Time
 	serverCallTimeout time.Duration
+	applyCallTimeout  time.Duration
 }
 
 // lookupDeadline is the configured deadline of the application lookup, or the default.
@@ -67,6 +71,13 @@ func (o clientOptions) callTimeout() time.Duration {
 		return o.serverCallTimeout
 	}
 	return serverCallTimeout
+}
+
+func (o clientOptions) getApplyCallTimeout() time.Duration {
+	if o.applyCallTimeout > 0 {
+		return o.applyCallTimeout
+	}
+	return applyCallTimeout
 }
 
 // BotConfig configures the live Discord gateway client and runtime adapter.
@@ -136,7 +147,7 @@ func registerCommandsWithOptions(ctx context.Context, token string, guildID uint
 
 	_, err = client.Rest.SetGuildCommands(appID, snowflake.ID(guildID), commands, rest.WithCtx(ctx))
 	if err != nil {
-		return fmt.Errorf("set guild commands: %w", sanitizeToken(err, token))
+		return callError("set guild commands", err, token)
 	}
 	return nil
 }
@@ -155,7 +166,7 @@ func lookupApplicationID(
 
 	app, err := restClient.GetCurrentApplication(rest.WithCtx(lookupCtx))
 	if err != nil {
-		return 0, fmt.Errorf("lookup current application: %w", sanitizeToken(err, token))
+		return 0, callError("lookup current application", err, token)
 	}
 	if app == nil || app.ID == 0 {
 		return 0, fmt.Errorf("lookup current application: %w", errEmptyApplicationID)

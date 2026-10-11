@@ -227,22 +227,32 @@ func TestDigest_Positive_Sha256Format(t *testing.T) {
 			{Step: 1, Action: "create-role", Object: "roles[dev]", Needs: []string{"MANAGE_ROLES"}, Detail: "infx"},
 		},
 	}
+	const defA = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const defB = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
-	d1, err := Digest(r1)
+	d1, err := Digest(r1, defA)
 	if err != nil {
-		t.Fatalf("Digest(r1): %v", err)
+		t.Fatalf("Digest(r1, defA): %v", err)
 	}
-	d1Repeat, err := Digest(r1)
+	d1Repeat, err := Digest(r1, defA)
 	if err != nil {
-		t.Fatalf("Digest(r1Repeat): %v", err)
+		t.Fatalf("Digest(r1Repeat, defA): %v", err)
 	}
 	if d1 != d1Repeat {
 		t.Errorf("Digest not stable: %q vs %q", d1, d1Repeat)
 	}
 
-	d2, err := Digest(r2)
+	dDefDiff, err := Digest(r1, defB)
 	if err != nil {
-		t.Fatalf("Digest(r2): %v", err)
+		t.Fatalf("Digest(r1, defB): %v", err)
+	}
+	if d1 == dDefDiff {
+		t.Errorf("Digest equal when only definition differs: %q", d1)
+	}
+
+	d2, err := Digest(r2, defA)
+	if err != nil {
+		t.Fatalf("Digest(r2, defA): %v", err)
 	}
 	if d1 == d2 {
 		t.Errorf("Digest equal for differing detail: %q", d1)
@@ -256,6 +266,7 @@ func TestDigest_Positive_Sha256Format(t *testing.T) {
 	if err := Render(&buf, r1); err != nil {
 		t.Fatalf("Render: %v", err)
 	}
+	buf.WriteString("definition: " + defA + "\n")
 	expectedHex := fmt.Sprintf("sha256:%x", sha256.Sum256(buf.Bytes()))
 	if d1 != expectedHex {
 		t.Errorf("Digest = %q, want %q", d1, expectedHex)

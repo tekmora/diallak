@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 	"github.com/tekmora/diallak/internal/discord"
 	"github.com/tekmora/diallak/internal/health"
 	"github.com/tekmora/diallak/internal/serverplan"
+	"github.com/tekmora/diallak/server"
 )
 
 type failingWriter struct{}
@@ -1154,8 +1156,23 @@ func TestRun_Positive_ServerPlan_ExitZeroAndOutputAndDigest(t *testing.T) {
 	if !strings.Contains(got, "changes:") {
 		t.Errorf("output does not contain 'changes:': %q", got)
 	}
-	if !strings.Contains(got, "plan digest: sha256:") {
-		t.Errorf("output does not contain 'plan digest: sha256:': %q", got)
+	wantDefLine := fmt.Sprintf("definition: %s\n", server.DefinitionDigest())
+	if !strings.Contains(got, wantDefLine) {
+		t.Errorf("output does not contain definition line %q: %q", wantDefLine, got)
+	}
+	idx := strings.LastIndex(got, "plan digest: sha256:")
+	if idx == -1 {
+		t.Fatalf("output does not contain 'plan digest: sha256:': %q", got)
+	}
+	textAbove := got[:idx]
+	if !strings.HasSuffix(textAbove, wantDefLine) {
+		t.Errorf("text above digest does not end with definition line: %q", textAbove)
+	}
+	expectedDigest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(textAbove)))
+	planDigestLine := got[idx:]
+	wantPlanDigestLine := fmt.Sprintf("plan digest: %s\n", expectedDigest)
+	if planDigestLine != wantPlanDigestLine {
+		t.Errorf("plan digest line = %q, want %q", planDigestLine, wantPlanDigestLine)
 	}
 	var errOut bytes.Buffer
 	if code := report(err, &errOut); code != 0 {
@@ -1230,34 +1247,47 @@ func TestRun_Positive_ServerCompare_ExitZeroAndDifferences(t *testing.T) {
 }
 
 func TestRun_Negative_ServerAndRegisterCommandsMutuallyExclusive(t *testing.T) {
-	var readCalls int
-	var registerCalls int
-	deps := dependencies{
-		readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
-			readCalls++
-			return nil, nil
-		},
-		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error {
-			registerCalls++
-			return nil
-		},
+	modes := []string{
+		"plan",
+		"compare",
+		"apply=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	}
+	for _, mode := range modes {
+		t.Run(mode, func(t *testing.T) {
+			var calls int
+			deps := dependencies{
+				readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+					calls++
+					return nil, nil
+				},
+				registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error {
+					calls++
+					return nil
+				},
+				applyServer: func(_ context.Context, _ string, _ uint64, _ discord.ApplyInput, _ io.Writer) error {
+					calls++
+					return nil
+				},
+			}
 
-	var out bytes.Buffer
-	err := run(context.Background(), []string{"-server=plan", "-register-commands"}, validEnv(t), &out, deps)
-	if err == nil {
-		t.Fatal("run succeeded with mutually exclusive flags, want error")
-	}
-	if readCalls != 0 {
-		t.Errorf("readCalls = %d, want 0", readCalls)
-	}
-	if registerCalls != 0 {
-		t.Errorf("registerCalls = %d, want 0", registerCalls)
-	}
+			var out bytes.Buffer
+			err := run(context.Background(), []string{"-server=" + mode, "-register-commands"}, validEnv(t), &out, deps)
+			const want = "-server and -register-commands cannot be used together"
+			if err == nil || err.Error() != want {
+				t.Fatalf("error = %v, want %q", err, want)
+			}
+			if calls != 0 {
+				t.Errorf("calls to the platform = %d, want 0", calls)
+			}
+			if out.Len() != 0 {
+				t.Errorf("output = %q, want none", out.String())
+			}
 
-	var errOut bytes.Buffer
-	if code := report(err, &errOut); code != 1 {
-		t.Errorf("report exit code = %d, want 1", code)
+			var errOut bytes.Buffer
+			if code := report(err, &errOut); code != 1 {
+				t.Errorf("report exit code = %d, want 1", code)
+			}
+		})
 	}
 }
 
@@ -1280,7 +1310,7 @@ func TestRun_Negative_ServerUnknownModeListsValues(t *testing.T) {
 			if readCalls != 0 {
 				t.Errorf("readCalls = %d, want 0", readCalls)
 			}
-			want := fmt.Sprintf("invalid -server mode %q: must be plan or compare", mode)
+			want := fmt.Sprintf("invalid -server mode %q: must be plan, compare or apply=<plan digest>", mode)
 			if err.Error() != want {
 				t.Errorf("error = %q, want %q", err.Error(), want)
 			}
@@ -1434,6 +1464,237 @@ func TestRun_Positive_ServerCommandIsolation(t *testing.T) {
 		}
 	}
 
+	if runCalled != 0 {
+		t.Errorf("runCalled = %d, want 0", runCalled)
+	}
+	if registerCalled != 0 {
+		t.Errorf("registerCalled = %d, want 0", registerCalled)
+	}
+}
+
+func TestRun_Negative_ServerApplyInvalidDigest(t *testing.T) {
+	cases := []string{
+		"apply=",
+		"apply=sha256:",
+		"apply=sha256:1234",
+		"apply=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeG",
+		"apply=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0",
+		"apply=md5:0123456789abcdef0123456789abcdef",
+		"apply=sha256:0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+		// the characters next to the two accepted ranges
+		"apply=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
+		"apply=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde`",
+		"apply=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde/",
+		"apply=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde:",
+	}
+	for _, mode := range cases {
+		t.Run(mode, func(t *testing.T) {
+			var applyCalls int
+			deps := dependencies{
+				applyServer: func(_ context.Context, _ string, _ uint64, _ discord.ApplyInput, _ io.Writer) error {
+					applyCalls++
+					return nil
+				},
+			}
+
+			var out bytes.Buffer
+			err := run(context.Background(), []string{"-server=" + mode}, validEnv(t), &out, deps)
+			if err == nil {
+				t.Fatalf("run succeeded with invalid apply mode %q, want error", mode)
+			}
+			if applyCalls != 0 {
+				t.Errorf("applyCalls = %d, want 0", applyCalls)
+			}
+			want := fmt.Sprintf("invalid -server mode %q: apply needs the digest that -server=plan printed, as apply=sha256:<64 hex digits>", mode)
+			if err.Error() != want {
+				t.Errorf("error = %q, want %q", err.Error(), want)
+			}
+			if out.Len() != 0 {
+				t.Errorf("output = %q, want none", out.String())
+			}
+
+			var errOut bytes.Buffer
+			if code := report(err, &errOut); code != 1 {
+				t.Errorf("report exit code = %d, want 1", code)
+			}
+		})
+	}
+}
+
+func TestRun_Positive_ServerApply_ExitZeroAndOutput(t *testing.T) {
+	const validDigest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	var calledWithToken string
+	var calledWithGuild uint64
+	var capturedInput discord.ApplyInput
+
+	deps := dependencies{
+		applyServer: func(_ context.Context, token string, guildID uint64, in discord.ApplyInput, out io.Writer) error {
+			calledWithToken = token
+			calledWithGuild = guildID
+			capturedInput = in
+			_, err := io.WriteString(out, "changes: 1\n  1. create-role roles[mod]: done\napplied: 1 of 1\n")
+			return err
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-server=apply=" + validDigest}, validEnv(t), &out, deps)
+	if err != nil {
+		t.Fatalf("run -server=apply failed: %v", err)
+	}
+
+	var errOut bytes.Buffer
+	if code := report(err, &errOut); code != 0 {
+		t.Errorf("report code = %d, want 0", code)
+	}
+	if calledWithToken != "distinctive-token-xyz" {
+		t.Errorf("calledWithToken = %q, want distinctive-token-xyz", calledWithToken)
+	}
+	if calledWithGuild != 42 {
+		t.Errorf("calledWithGuild = %d, want 42", calledWithGuild)
+	}
+	if capturedInput.Definition == nil {
+		t.Error("capturedInput.Definition is nil")
+	}
+	if capturedInput.DefinitionDigest != server.DefinitionDigest() {
+		t.Errorf("DefinitionDigest = %q, want %q", capturedInput.DefinitionDigest, server.DefinitionDigest())
+	}
+	if capturedInput.PlanDigest != validDigest {
+		t.Errorf("PlanDigest = %q, want %q", capturedInput.PlanDigest, validDigest)
+	}
+	wantOut := "changes: 1\n  1. create-role roles[mod]: done\napplied: 1 of 1\n"
+	if out.String() != wantOut {
+		t.Errorf("output = %q, want %q", out.String(), wantOut)
+	}
+}
+
+func TestRun_Negative_ServerApply_FailureReturnsExitOne(t *testing.T) {
+	const validDigest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	deps := dependencies{
+		applyServer: func(_ context.Context, _ string, _ uint64, _ discord.ApplyInput, out io.Writer) error {
+			_, err := io.WriteString(out, "changes: 1\n  1. create-role roles[mod]: failed\napplied: 0 of 1\n")
+			if err != nil {
+				return err
+			}
+			return errors.New("step 1 create-role roles[mod]: create role: 50035: Invalid Form Body")
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-server=apply=" + validDigest}, validEnv(t), &out, deps)
+	if err == nil {
+		t.Fatal("run succeeded when applyServer failed, want error")
+	}
+	wantSubstr := "apply: step 1 create-role roles[mod]: create role: 50035: Invalid Form Body"
+	if !strings.Contains(err.Error(), wantSubstr) {
+		t.Errorf("error = %q, want containing %q", err.Error(), wantSubstr)
+	}
+
+	var errOut bytes.Buffer
+	if code := report(err, &errOut); code != 1 {
+		t.Errorf("report exit code = %d, want 1", code)
+	}
+	wantErrOut := "diallak: " + wantSubstr + "\n"
+	if errOut.String() != wantErrOut {
+		t.Errorf("errOut = %q, want %q", errOut.String(), wantErrOut)
+	}
+}
+
+func TestRun_Boundary_ServerApplyTimeoutFifteenMinutes(t *testing.T) {
+	const validDigest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	var capturedDeadline time.Time
+	var hasDeadline bool
+
+	deps := dependencies{
+		applyServer: func(ctx context.Context, _ string, _ uint64, _ discord.ApplyInput, _ io.Writer) error {
+			capturedDeadline, hasDeadline = ctx.Deadline()
+			return nil
+		},
+	}
+
+	start := time.Now()
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-server=apply=" + validDigest}, validEnv(t), &out, deps)
+	if err != nil {
+		t.Fatalf("run -server=apply failed: %v", err)
+	}
+	if !hasDeadline {
+		t.Fatal("ctx passed to applyServer has no deadline")
+	}
+	remaining := time.Until(capturedDeadline)
+	if remaining < 14*time.Minute+50*time.Second || remaining > 15*time.Minute+500*time.Millisecond {
+		t.Errorf("remaining deadline = %v (from start %v), want ~15m", remaining, start)
+	}
+}
+
+func TestRun_Positive_DefaultDependenciesApplyServer(t *testing.T) {
+	deps := defaultDependencies()
+	if deps.applyServer == nil {
+		t.Fatal("defaultDependencies().applyServer is nil")
+	}
+	err := deps.applyServer(context.Background(), "", 1001, discord.ApplyInput{}, io.Discard)
+	if err == nil {
+		t.Fatal("expected error with empty token, got nil")
+	}
+	if !strings.Contains(err.Error(), "bot token is required") {
+		t.Errorf("error = %q, want 'bot token is required'", err.Error())
+	}
+}
+
+func TestRun_Positive_ServerApplyCommandIsolation(t *testing.T) {
+	const validDigest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer func() {
+		if closeErr := ln.Close(); closeErr != nil {
+			t.Errorf("close listener: %v", closeErr)
+		}
+	}()
+
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:  tokenPath,
+		config.EnvGuildID:    "42",
+		config.EnvCorpusDir:  corpusPath,
+		config.EnvHealthAddr: ln.Addr().String(),
+	}
+
+	var runCalled, registerCalled, readCalled, applyCalled int
+	deps := dependencies{
+		readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+			readCalled++
+			return nil, nil
+		},
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error {
+			registerCalled++
+			return nil
+		},
+		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+			runCalled++
+			return nil
+		},
+		applyServer: func(_ context.Context, _ string, _ uint64, _ discord.ApplyInput, _ io.Writer) error {
+			applyCalled++
+			return nil
+		},
+	}
+
+	var out bytes.Buffer
+	err = run(context.Background(), []string{"-server=apply=" + validDigest}, func(k string) string { return envMap[k] }, &out, deps)
+	if err != nil {
+		t.Fatalf("run -server=apply failed: %v", err)
+	}
+
+	if applyCalled != 1 {
+		t.Errorf("applyCalled = %d, want 1", applyCalled)
+	}
+	if readCalled != 0 {
+		t.Errorf("readCalled = %d, want 0", readCalled)
+	}
 	if runCalled != 0 {
 		t.Errorf("runCalled = %d, want 0", runCalled)
 	}

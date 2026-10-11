@@ -2,6 +2,7 @@
 package server
 
 import (
+	"crypto/sha256"
 	_ "embed"
 	"fmt"
 	"strings"
@@ -24,4 +25,10 @@ func Definition() (*serverdef.Definition, error) {
 		return nil, fmt.Errorf("validate definition: %d findings", len(findings))
 	}
 	return def, nil
+}
+
+// DefinitionDigest returns the sha256 checksum of the embedded definition.json as "sha256:<hex>".
+func DefinitionDigest() string {
+	sum := sha256.Sum256([]byte(definitionJSON))
+	return fmt.Sprintf("sha256:%x", sum)
 }

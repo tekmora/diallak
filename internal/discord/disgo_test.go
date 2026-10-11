@@ -1006,3 +1006,123 @@ func TestRun_Positive_ReportReadyNilCallback(t *testing.T) {
 		t.Fatal("timeout waiting for runWithOptions to exit")
 	}
 }
+
+func TestRegisterCommands_Negative_TransportFailureLookupCurrentApplication(t *testing.T) {
+	const (
+		appID   uint64 = 1001
+		guildID uint64 = 2001
+	)
+	fakeToken := makeFakeToken(appID)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	restURL := srv.URL
+	srv.Close()
+
+	err := registerCommandsWithOptions(context.Background(), fakeToken, guildID, clientOptions{restURL: restURL})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	msg := err.Error()
+	if !strings.HasPrefix(msg, "lookup current application: ") {
+		t.Errorf("error = %q, want prefix 'lookup current application: '", msg)
+	}
+	if strings.Contains(msg, "http") {
+		t.Errorf("error %q contains 'http'", msg)
+	}
+	if strings.Contains(msg, strconv.FormatUint(appID, 10)) {
+		t.Errorf("error %q contains appID %d", msg, appID)
+	}
+	if strings.Contains(msg, strconv.FormatUint(guildID, 10)) {
+		t.Errorf("error %q contains guildID %d", msg, guildID)
+	}
+}
+
+func TestRegisterCommands_Negative_TransportFailureSetGuildCommands(t *testing.T) {
+	const (
+		appID   uint64 = 1001
+		guildID uint64 = 2001
+	)
+	fakeToken := makeFakeToken(appID)
+
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/applications/@me" {
+			w.Header().Set("Connection", "close")
+			writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"diallak-app"}`, appID))
+			if closeErr := srv.Listener.Close(); closeErr != nil {
+				t.Logf("Listener.Close: %v", closeErr)
+			}
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	err := registerCommandsWithOptions(context.Background(), fakeToken, guildID, clientOptions{restURL: srv.URL})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	msg := err.Error()
+	if !strings.HasPrefix(msg, "set guild commands: ") {
+		t.Errorf("error = %q, want prefix 'set guild commands: '", msg)
+	}
+	if strings.Contains(msg, "http") {
+		t.Errorf("error %q contains 'http'", msg)
+	}
+	if strings.Contains(msg, strconv.FormatUint(appID, 10)) {
+		t.Errorf("error %q contains appID %d", msg, appID)
+	}
+	if strings.Contains(msg, strconv.FormatUint(guildID, 10)) {
+		t.Errorf("error %q contains guildID %d", msg, guildID)
+	}
+}
+
+func TestRegisterCommands_Negative_PlatformRefusalKeepsCodeAndMessage(t *testing.T) {
+	const (
+		appID   uint64 = 1001
+		guildID uint64 = 2001
+	)
+	fakeToken := makeFakeToken(appID)
+
+	t.Run("lookup refusal", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			writeTestResponse(w, http.StatusUnauthorized, `{"code":40001,"message":"Unauthorized"}`)
+		}))
+		defer srv.Close()
+
+		err := registerCommandsWithOptions(context.Background(), fakeToken, guildID, clientOptions{restURL: srv.URL})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		msg := err.Error()
+		if !strings.HasPrefix(msg, "lookup current application: ") {
+			t.Errorf("error = %q, want prefix 'lookup current application: '", msg)
+		}
+		if !strings.Contains(msg, "40001: Unauthorized") {
+			t.Errorf("error %q does not contain '40001: Unauthorized'", msg)
+		}
+	})
+
+	t.Run("set guild commands refusal", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/applications/@me" {
+				writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"diallak-app"}`, appID))
+				return
+			}
+			writeTestResponse(w, http.StatusForbidden, `{"code":50013,"message":"Missing Permissions"}`)
+		}))
+		defer srv.Close()
+
+		err := registerCommandsWithOptions(context.Background(), fakeToken, guildID, clientOptions{restURL: srv.URL})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		msg := err.Error()
+		if !strings.HasPrefix(msg, "set guild commands: ") {
+			t.Errorf("error = %q, want prefix 'set guild commands: '", msg)
+		}
+		if !strings.Contains(msg, "50013: Missing Permissions") {
+			t.Errorf("error %q does not contain '50013: Missing Permissions'", msg)
+		}
+	})
+}

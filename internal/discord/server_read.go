@@ -41,24 +41,38 @@ func readServerWithOptions(ctx context.Context, token string, guildID uint64, op
 	}
 	defer client.Close(ctx)
 
+	snap, _, err := fetchSnapshotAndIndex(ctx, client, token, guildID, opts)
+	return snap, err
+}
+
+func fetchSnapshotAndIndex(
+	ctx context.Context,
+	client *bot.Client,
+	token string,
+	guildID uint64,
+	opts clientOptions,
+) (*serverplan.Snapshot, *serverIndex, error) {
 	data, err := fetchServerData(ctx, client, token, guildID, opts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	return buildSnapshotAndIndex(data, guildID, opts.getNow())
+}
 
+func buildSnapshotAndIndex(data *serverData, guildID uint64, now time.Time) (*serverplan.Snapshot, *serverIndex, error) {
 	snapRoles, everyoneRole, roleByID, err := parseRoles(data.guild.Roles, guildID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	caller, err := resolveCaller(data.app.Bot, data.member.RoleIDs, data.guild.Roles, everyoneRole, roleByID)
+	caller, botRoleID, err := resolveCaller(data.app.Bot, data.member.RoleIDs, data.guild.Roles, everyoneRole, roleByID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	categories, channels, err := parseChannelsAndCategories(data.channels, roleByID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	features := make([]string, len(data.guild.Features))
@@ -72,13 +86,26 @@ func readServerWithOptions(ctx context.Context, token string, guildID uint64, op
 		Roles:            snapRoles,
 		Categories:       categories,
 		Channels:         channels,
-		ChannelsComplete: determineChannelsComplete(caller, opts.getNow()),
+		ChannelsComplete: determineChannelsComplete(caller, now),
 	}
 
 	if err := serverplan.Check(snap); err != nil {
-		return nil, fmt.Errorf("check snapshot: %w", err)
+		return nil, nil, fmt.Errorf("check snapshot: %w", err)
 	}
-	return snap, nil
+
+	idx := newServerIndex(guildID, botRoleID)
+	for _, r := range data.guild.Roles {
+		idx.addRole(r.Name, r.ID)
+	}
+	for _, ch := range data.channels {
+		if ch.Type() == discord.ChannelTypeGuildCategory {
+			idx.addCategory(ch.Name(), ch.ID())
+		} else {
+			idx.addChannel(ch.Name(), ch.ID())
+		}
+	}
+
+	return snap, idx, nil
 }
 
 type serverData struct {
@@ -140,16 +167,19 @@ func callError(step string, err error, token string) error {
 	return fmt.Errorf("%s: %w", step, sanitizeToken(err, token))
 }
 
+func sortRolesDescending(roles []discord.Role) {
+	sort.Slice(roles, func(i, j int) bool {
+		if roles[i].Position != roles[j].Position {
+			return roles[i].Position > roles[j].Position
+		}
+		return roles[i].ID < roles[j].ID
+	})
+}
+
 func parseRoles(rawRoles []discord.Role, guildID uint64) ([]serverplan.Role, *discord.Role, map[snowflake.ID]discord.Role, error) {
 	rolesCopy := make([]discord.Role, len(rawRoles))
 	copy(rolesCopy, rawRoles)
-
-	sort.Slice(rolesCopy, func(i, j int) bool {
-		if rolesCopy[i].Position != rolesCopy[j].Position {
-			return rolesCopy[i].Position > rolesCopy[j].Position
-		}
-		return rolesCopy[i].ID < rolesCopy[j].ID
-	})
+	sortRolesDescending(rolesCopy)
 
 	roleByID := make(map[snowflake.ID]discord.Role, len(rawRoles))
 	var everyoneRole *discord.Role
@@ -200,7 +230,7 @@ func resolveCaller(
 	guildRoles []discord.Role,
 	everyoneRole *discord.Role,
 	roleByID map[snowflake.ID]discord.Role,
-) (serverplan.Caller, error) {
+) (serverplan.Caller, snowflake.ID, error) {
 	var botRole *discord.Role
 	for i := range guildRoles {
 		r := &guildRoles[i]
@@ -210,14 +240,14 @@ func resolveCaller(
 		}
 	}
 	if botRole == nil || !slices.Contains(memberRoleIDs, botRole.ID) {
-		return serverplan.Caller{}, errors.New("the bot has no role of its own on this server")
+		return serverplan.Caller{}, 0, errors.New("the bot has no role of its own on this server")
 	}
 
 	callerMask := permissionsToMask(everyoneRole.Permissions)
 	for _, rID := range memberRoleIDs {
 		r, ok := roleByID[rID]
 		if !ok {
-			return serverplan.Caller{}, errors.New("the bot holds a role that the server's role list does not have; the server changed during the read")
+			return serverplan.Caller{}, 0, errors.New("the bot holds a role that the server's role list does not have; the server changed during the read")
 		}
 		callerMask |= permissionsToMask(r.Permissions)
 	}
@@ -227,7 +257,70 @@ func resolveCaller(
 	return serverplan.Caller{
 		Role:        botRole.Name,
 		Permissions: callerPerms,
-	}, nil
+	}, botRole.ID, nil
+}
+
+type serverIndex struct {
+	everyoneRoleID snowflake.ID
+	botRoleID      snowflake.ID
+	roles          map[string][]snowflake.ID
+	categories     map[string][]snowflake.ID
+	channels       map[string][]snowflake.ID
+}
+
+func newServerIndex(guildID uint64, botRoleID snowflake.ID) *serverIndex {
+	return &serverIndex{
+		everyoneRoleID: snowflake.ID(guildID),
+		botRoleID:      botRoleID,
+		roles:          make(map[string][]snowflake.ID),
+		categories:     make(map[string][]snowflake.ID),
+		channels:       make(map[string][]snowflake.ID),
+	}
+}
+
+func (idx *serverIndex) addRole(name string, id snowflake.ID) {
+	idx.roles[name] = append(idx.roles[name], id)
+}
+
+func (idx *serverIndex) addCategory(name string, id snowflake.ID) {
+	idx.categories[name] = append(idx.categories[name], id)
+}
+
+func (idx *serverIndex) addChannel(name string, id snowflake.ID) {
+	idx.channels[name] = append(idx.channels[name], id)
+}
+
+func (idx *serverIndex) lookupRole(name string) (snowflake.ID, error) {
+	ids := idx.roles[name]
+	if len(ids) == 0 {
+		return 0, fmt.Errorf("role %q not found", name)
+	}
+	if len(ids) > 1 {
+		return 0, fmt.Errorf("role %q is held more than once", name)
+	}
+	return ids[0], nil
+}
+
+func (idx *serverIndex) lookupCategory(name string) (snowflake.ID, error) {
+	ids := idx.categories[name]
+	if len(ids) == 0 {
+		return 0, fmt.Errorf("category %q not found", name)
+	}
+	if len(ids) > 1 {
+		return 0, fmt.Errorf("category %q is held more than once", name)
+	}
+	return ids[0], nil
+}
+
+func (idx *serverIndex) lookupChannel(name string) (snowflake.ID, error) {
+	ids := idx.channels[name]
+	if len(ids) == 0 {
+		return 0, fmt.Errorf("channel %q not found", name)
+	}
+	if len(ids) > 1 {
+		return 0, fmt.Errorf("channel %q is held more than once", name)
+	}
+	return ids[0], nil
 }
 
 func parseChannelsAndCategories(

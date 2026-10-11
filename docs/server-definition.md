@@ -4,12 +4,12 @@
 server as data: its roles, channels and permissions, the rooms that open later
 and who does what. A validator checks the file with every test run.
 
-**Nothing applies the file to a server.** It says so itself (`"applied":
+**The file has not been applied to a server.** It says so itself (`"applied":
 false`), and the validator refuses a file that claims otherwise. The path that
-will apply it is decided
+applies it is decided
 ([ADR-0010](adr/0010-bot-rights-and-apply-path.md), "One apply path") and
-built up to the last step: reading the server, comparing it with the file and
-planning the changes work and change nothing
+built: reading the server, comparing it with the file, planning the changes
+and applying one plan. None of it was run against Discord
 ([Applying the server definition](server-apply.md)).
 
 ## In short
@@ -195,9 +195,9 @@ decided, planned, or observed on the server.
   apply, read-only compare. Every run uses the bot's identity. For the first
   set-up the operator raises the bot's role for the run and lowers it
   afterwards; with its three rights the bot runs the same path for its own
-  changes. It is decided in ADR-0010. Reading the server, compare and plan
-  are built ([Applying the server definition](server-apply.md)); the apply
-  step is not.
+  changes. It is decided in ADR-0010. All four steps are built and tested
+  against a local server only
+  ([Applying the server definition](server-apply.md)).
 
 ## Not decided and not verified
 
