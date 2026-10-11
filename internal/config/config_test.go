@@ -549,6 +549,10 @@ func TestLoad_Negative_SourceLinkTemplate(t *testing.T) {
 		{"user name in the address", "https://user@github.com/{repository}/blob/{revision}/{path}"},
 		{"no host", "https:///{repository}/blob/{revision}/{path}"},
 		{"placeholder as host only", "https://{repository}{revision}{path}@"},
+		{"placeholder is the host", "https://{repository}/blob/{revision}/{path}"},
+		{"placeholder inside the host", "https://{repository}.example.com/{revision}/{path}"},
+		{"placeholder as port", "https://example.com:{revision}/{repository}/{path}"},
+		{"placeholder as user", "https://{path}@example.com/{repository}/{revision}"},
 		{"exceeds 200 runes", "https://github.com/{repository}/blob/{revision}/{path}" + strings.Repeat("x", 151)},
 	}
 
@@ -701,6 +705,31 @@ func TestLoad_Boundary_SourceLinkTemplateLength(t *testing.T) {
 	})
 }
 
+func TestLoad_Positive_SourceLinkTemplatePlaceholderPlaces(t *testing.T) {
+	cases := []struct {
+		name string
+		val  string
+	}{
+		{"placeholder in path", "https://example.com/{repository}/blob/{revision}/{path}"},
+		{"placeholders in query and fragment", "https://example.com/x?repo={repository}&rev={revision}#{path}"},
+		{"placeholder with port", "https://example.com:8443/{repository}/{revision}/{path}"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			base := validBaseEnv(t)
+			base[EnvSourceLinkTemplate] = tc.val
+			cfg, err := Load(env(base))
+			if err != nil {
+				t.Fatalf("Load with template %s = %v, want nil", tc.name, err)
+			}
+			if cfg.SourceLinkTemplate != tc.val {
+				t.Errorf("cfg.SourceLinkTemplate = %q, want %q", cfg.SourceLinkTemplate, tc.val)
+			}
+		})
+	}
+}
+
 func TestParseSourceLinkTemplate_Negative_ErrorNamesTheFailedCheck(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -713,6 +742,8 @@ func TestParseSourceLinkTemplate_Negative_ErrorNamesTheFailedCheck(t *testing.T)
 		{"placeholder missing", "https://user@example.com/{revision}/{path}", "exactly once, found 0"},
 		{"placeholder twice", "https://user@example.com/{repository}/{repository}/{revision}/{path}", "exactly once, found 2"},
 		{"address", "https://user@example.com/{repository}/{revision}/{path}", "without a user name"},
+		{"placeholder in host", "https://{repository}/{revision}/{path}", "before the path"},
+		{"placeholder missing and one in the host", "https://{repository}/{revision}", "exactly once, found 0"},
 	}
 
 	for _, tc := range cases {

@@ -61,7 +61,7 @@ func TestReadme_Negative_OptionalSettingsTableMatchesTheCode(t *testing.T) {
 		{config.EnvMaxConcurrentAsks, fmt.Sprintf("`%d` | `%d` to `%d`", discord.DefaultMaxConcurrent, config.MinConcurrentAsks, config.MaxConcurrentAsksLimit)},
 		{config.EnvAskTimeout, fmt.Sprintf("`%s` | `%s` to `%s`", short(discord.DefaultAskTimeout), short(config.MinAskTimeout), short(config.MaxAskTimeout))},
 		{config.EnvModelTimeout, fmt.Sprintf("`%s` | `%s` to `%s`, and below the ask timeout", short(model.DefaultTimeout), short(model.MinTimeout), short(model.MaxTimeout))},
-		{config.EnvSourceLinkTemplate, fmt.Sprintf("`%s` | an `https://` address that holds each of the three placeholders once, at most %d characters", corpus.DefaultSourceLinkTemplate, corpus.MaxSourceLinkTemplateRunes)},
+		{config.EnvSourceLinkTemplate, fmt.Sprintf("`%s` | an `https://` address that holds each of the three placeholders once, after the host, at most %d characters", corpus.DefaultSourceLinkTemplate, corpus.MaxSourceLinkTemplateRunes)},
 	}
 	for _, row := range rows {
 		pattern := `(?m)^\| ` + regexp.QuoteMeta("`"+row.variable+"`") + ` \| [^|]+ \| ` + regexp.QuoteMeta(row.defaultAndRng) + ` \|$`
