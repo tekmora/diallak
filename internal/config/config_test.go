@@ -701,6 +701,33 @@ func TestLoad_Boundary_SourceLinkTemplateLength(t *testing.T) {
 	})
 }
 
+func TestParseSourceLinkTemplate_Negative_ErrorNamesTheFailedCheck(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   string
+		wantSub string
+	}{
+		{"length", "http://example.com/" + strings.Repeat("x", 200), "exceeds"},
+		{"scheme", "http://example.com/<>", "must start with 'https://'"},
+		{"character", "https://example.com/<bad>", "angle bracket"},
+		{"placeholder missing", "https://user@example.com/{revision}/{path}", "exactly once, found 0"},
+		{"placeholder twice", "https://user@example.com/{repository}/{repository}/{revision}/{path}", "exactly once, found 2"},
+		{"address", "https://user@example.com/{repository}/{revision}/{path}", "without a user name"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseSourceLinkTemplate(tc.input)
+			if err == nil {
+				t.Fatalf("parseSourceLinkTemplate(%q) succeeded, want error", tc.input)
+			}
+			if !strings.Contains(err.Error(), tc.wantSub) {
+				t.Errorf("parseSourceLinkTemplate(%q) error = %q, want substring %q", tc.input, err.Error(), tc.wantSub)
+			}
+		})
+	}
+}
+
 func TestConfig_Positive_StringAndLogValueContainAllFields(t *testing.T) {
 	cfg := Config{
 		Token:              "super-secret-token",

@@ -465,19 +465,12 @@ func parseSourceLinkTemplate(raw string) (string, error) {
 	if !strings.HasPrefix(raw, "https://") {
 		return "", fmt.Errorf("%s must start with 'https://'", EnvSourceLinkTemplate)
 	}
-	for _, r := range raw {
-		// A reply puts the link between angle brackets, so neither may be part of it.
-		if r == ' ' || r == '<' || r == '>' || !unicode.IsPrint(r) {
-			return "", fmt.Errorf("%s holds a space, an angle bracket or a character that is not printable", EnvSourceLinkTemplate)
-		}
+	if err := checkSourceLinkCharacters(raw); err != nil {
+		return "", err
 	}
-	placeholders := [3]string{"{repository}", "{revision}", "{path}"}
-	filled := raw
-	for _, p := range placeholders {
-		if count := strings.Count(raw, p); count != 1 {
-			return "", fmt.Errorf("%s must contain placeholder %q exactly once, found %d", EnvSourceLinkTemplate, p, count)
-		}
-		filled = strings.Replace(filled, p, "x", 1)
+	filled, err := checkSourceLinkPlaceholders(raw)
+	if err != nil {
+		return "", err
 	}
 	// With its placeholders filled the template must be a web address with a host and without
 	// a user name: a link in a reply never carries a credential.
@@ -486,6 +479,33 @@ func parseSourceLinkTemplate(raw string) (string, error) {
 		return "", fmt.Errorf("%s is not an https address with a host and without a user name", EnvSourceLinkTemplate)
 	}
 	return raw, nil
+}
+
+// checkSourceLinkCharacters refuses a template that holds a space, an angle bracket or a
+// character that is not printable.
+func checkSourceLinkCharacters(raw string) error {
+	for _, r := range raw {
+		// A reply puts the link between angle brackets, so neither may be part of it.
+		if r == ' ' || r == '<' || r == '>' || !unicode.IsPrint(r) {
+			return fmt.Errorf("%s holds a space, an angle bracket or a character that is not printable", EnvSourceLinkTemplate)
+		}
+	}
+	return nil
+}
+
+// checkSourceLinkPlaceholders refuses a template that does not hold each of the three
+// placeholders exactly once. It returns the template with every placeholder replaced by a
+// letter, which is the form the address check reads.
+func checkSourceLinkPlaceholders(raw string) (string, error) {
+	placeholders := [3]string{"{repository}", "{revision}", "{path}"}
+	filled := raw
+	for _, p := range placeholders {
+		if count := strings.Count(raw, p); count != 1 {
+			return "", fmt.Errorf("%s must contain placeholder %q exactly once, found %d", EnvSourceLinkTemplate, p, count)
+		}
+		filled = strings.Replace(filled, p, "x", 1)
+	}
+	return filled, nil
 }
 
 // validateTimeoutCrossConstraint refuses a model timeout that the ask timeout would cut short.
