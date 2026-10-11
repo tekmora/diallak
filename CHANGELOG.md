@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 
+## [0.3.0] - 2026-10-11
+
+### Changed
+
+- README: supporter perks, the gate for model answers and where drafts, wishes and polls will live
+- **BREAKING**: Model mode needs the name of the gateway policy and refuses a reply without it
+
+### Fixed
+
+- A fault in a call to Discord no longer writes reply text or the reply address to the log
+
+
 ## [0.2.1] - 2026-10-11
 
 ### Changed
