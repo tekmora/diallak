@@ -14,8 +14,10 @@ a later unit together with the operator.
   forum, a ticket channel, a voice room for scheduled events, and two channels
   for the moderators.
 - **Later, at a threshold:** four topic areas (home lab and self-hosting, media
-  and video, games, AI news and tools) and one social room per language. Each
-  opens when enough members asked for it and closes when it stays empty.
+  and video, games, AI news and tools) and social rooms for languages. Each
+  opens when enough members asked for it and closes when it stays empty. A
+  language room also needs a moderator or subject guide who reads the
+  language; there is none at the start.
 - **Who sees what** is computed from the file, not written by hand. The
   validator refuses, among others, a role that could mention everyone and a
   role that could read other members' ticket threads without being a
@@ -143,9 +145,11 @@ The `automation` part names the party for each task and whether it is built.
 
 ## Not decided and not verified
 
-- **Language rooms** open at a threshold here. The server rules say that each
-  language has a social room; whether the first rooms exist from the first day
-  is the operator's decision.
+- **Language rooms.** The operator decided that a language room opens at a
+  threshold and needs a person who reads the language, and that none exists at
+  the start ([server rules](compliance/server-rules.md), rule 2). The numbers
+  of the threshold, and that a member asks for a language through an
+  onboarding answer, are proposals.
 - **The contributor ladder** has one step in the file, the contributor role.
   Further steps are not decided.
 - **The steps of the supporter roles** (3, 6 and 12 months) are a proposal.
