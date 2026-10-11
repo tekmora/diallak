@@ -5,11 +5,10 @@ as data. One path brings a server to that description: plan, dry run, apply,
 read-only compare
 ([ADR-0010](adr/0010-bot-rights-and-apply-path.md), "One apply path").
 
-**Half of the path is built, and it changes nothing.** The package
-[`internal/serverplan`](../internal/serverplan) compares the definition with a
-description of a server and lists the changes that would close the gap. It
-reads two files and talks to nobody. Reading a real server and making the
-changes are a later unit; until then nothing applies the definition.
+**Three of the four steps are built, and they change nothing.** The bot reads
+its server, compares it with the definition and lists the changes that would
+close the gap. Every request it makes for that is a read. Making the changes is
+a later unit; until then nothing applies the definition.
 
 ## In short
 
@@ -22,27 +21,90 @@ changes are a later unit; until then nothing applies the definition.
 - **Plan** turns the differences into an ordered list of changes. Each change
   names the rights it needs. A change the caller may not make is refused, with
   a reason, before anything is tried.
-- **Dry run** is the plan as text.
+- **Dry run** is the plan as text, followed by a digest of that text.
+- **Reading** the server takes four read requests under the bot's identity and
+  gives a snapshot.
 - **The path deletes nothing.** What the server has and the definition does
   not is reported and left alone.
 
 ## Try it
 
 ```bash
-go test ./internal/serverplan/
+go test ./internal/serverplan/ ./internal/discord/
 ```
 
 The tests build a snapshot of the server exactly as the definition describes
 it, expect no difference and no change, and then plant one difference per case
 (`TestCompare_Negative_EachKind`, `TestPlan_Negative_Reasons` in
-[`internal/serverplan`](../internal/serverplan)). No command runs the path yet.
+[`internal/serverplan`](../internal/serverplan)). The reader is tested against
+a local server that answers as Discord does
+(`TestReadServer_Positive_FixtureMatchesDefinition` in
+[`internal/discord`](../internal/discord/server_read_test.go)).
+
+## The two commands
+
+```bash
+diallak -server=plan
+diallak -server=compare
+```
+
+Both need the same environment as a normal start
+([README, "Run"](../README.md#run)), read the server once and exit.
+Neither opens the gateway, registers a command or changes anything; the test
+`TestReadServer_Positive_FourRequestsInOrderAndNothingElse` holds the reader to
+four `GET` requests. The definition they use is the one built into the binary
+([`server/definition.go`](../server/definition.go)).
+
+- **`-server=plan`** prints the dry run and a last line that starts with
+  `plan digest: sha256:`. The digest covers exactly the text above it
+  (`serverplan.Digest`). The apply step will take it, so that it runs only the
+  plan a person has read.
+- **`-server=compare`** prints `mode: own` or `mode: raised`, the number of
+  differences, and one line per difference. `raised` means the bot's role
+  holds a permission the definition does not give it (`serverplan.Raised`).
+  After a first set-up, `mode: own` is the proof that the extra rights are
+  gone.
+
+The exit code is 0 when the read worked, also with refused changes or with
+differences: the output is the result. It is 1 with one line on standard error
+when the configuration is incomplete, the read failed, the mode is not `plan`
+or `compare`, or `-server` is combined with `-register-commands`. The whole
+run ends after 60 seconds and each request after 10 (`serverTimeout` in
+[`cmd/diallak/main.go`](../cmd/diallak/main.go), `serverCallTimeout` in
+[`internal/discord/disgo.go`](../internal/discord/disgo.go)).
+
+## How the server is read
+
+`discord.ReadServer`
+([`server_read.go`](../internal/discord/server_read.go)) asks for the
+application, the server with its roles, the bot's own membership and the list
+of channels, in that order, and stops at the first failure.
+
+- **The caller** is the role Discord manages for this bot, and its rights are
+  the union of the rights of every role the bot holds.
+- **Roles** are sorted from the highest to the lowest; two roles on the same
+  position are sorted as Discord ranks them, the lower id first.
+- **Channels** of a type the definition does not know are kept with the type
+  `other`.
+- **Entries for single members** are counted per channel and not read further;
+  the snapshot holds no member.
+- **A permission bit the table does not hold** stops the read with the name of
+  the role and the number of the bit. The table
+  ([`serverdef.Permissions`](../internal/serverdef/serverdef.go)) holds the 52
+  permissions Discord documents; the test
+  `TestPermissions_Positive_NamesAndBitsPinned` pins every name and bit.
+- **Errors name no id.** A failed request is reported with its step and its
+  cause; the address, which holds the server's id and the bot user's id, is
+  dropped, and the token is replaced
+  (`TestReadServer_Negative_TransportErrorNamesNoID`,
+  `TestReadServer_Negative_AuthorizationHeaderSanitized`).
 
 ## What a snapshot holds
 
 `LoadSnapshot` reads a snapshot with the same strict loader as the definition
 (`serverdef.DecodeStrict`) and then checks it (`Check`): exactly one role that
 every member holds, listed last; a caller role that exists; known permission
-names and channel types. An example is
+names and channel types, no negative count of member entries. An example is
 [`testdata/fresh-server.json`](../internal/serverplan/testdata/fresh-server.json).
 
 Objects are matched by name. The bot's role in the definition is matched to
@@ -70,6 +132,7 @@ administrator rights cannot tell a missing channel from a hidden one.
 | `channel-not-visible` | A channel has no match and the list is not complete: either hidden from the bot by the definition, as the ticket channel is, or missing or hidden |
 | `channel-type`, `channel-category` | A channel has another type or sits in another category |
 | `access-missing`, `access-differs`, `access-extra` | A permission entry of a channel is absent, differs, or exists on the server only |
+| `access-member` | A channel holds entries for single members; the definition gives access to roles only. Reported with the count, never planned as a change |
 | `role-extra`, `category-extra`, `channel-extra` | The server has something the definition does not |
 | `feature-missing` | The definition has an announcement channel and the server lacks the feature `NEWS` |
 <!-- markdownlint-enable MD013 -->
@@ -127,11 +190,15 @@ an area's role on that area's channel, which is how an area opens and closes.
 Everything else waits for a run in which the operator has raised the bot's
 role.
 
-## Not built
+## Not built, not tried
 
-- Reading a server into a snapshot, and the apply step with a deadline on each
-  call.
-- A command that runs the path.
+- The apply step. No code changes a server.
+- Nothing was run against Discord. The reader is tested against a local server
+  only; the first read of the real server is part of the first set-up.
+- Not tested: how Discord answers when the list of channels leaves out hidden
+  channels after 2026-11-16. The reader marks the list as incomplete from that
+  day on unless the bot holds `ADMINISTRATOR`
+  (`TestReadServer_Positive_ChannelsComplete_CutoffAndAdmin`).
 - A change is judged on its own. An entry for a role whose creation was
   refused is not refused with it; what the apply step does with a plan that
   holds a refusal is settled when that step is built.
