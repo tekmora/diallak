@@ -114,7 +114,7 @@
       "name": "Interest: home lab and self-hosting",
       "kind": "interest",
       "purpose": "The member chose this topic. Counts towards opening the area and shows it once it is open.",
-      "assigned_by": "onboarding",
+      "assigned_by": "choice",
       "basis": "decided",
       "permissions": []
     },
@@ -123,7 +123,7 @@
       "name": "Interest: media and video",
       "kind": "interest",
       "purpose": "The member chose this topic. Counts towards opening the area and shows it once it is open.",
-      "assigned_by": "onboarding",
+      "assigned_by": "choice",
       "basis": "decided",
       "permissions": []
     },
@@ -132,7 +132,7 @@
       "name": "Interest: games",
       "kind": "interest",
       "purpose": "The member chose this topic. Counts towards opening the area and shows it once it is open.",
-      "assigned_by": "onboarding",
+      "assigned_by": "choice",
       "basis": "decided",
       "permissions": []
     },
@@ -141,7 +141,7 @@
       "name": "Interest: AI news and tools",
       "kind": "interest",
       "purpose": "The member chose this topic. Counts towards opening the area and shows it once it is open.",
-      "assigned_by": "onboarding",
+      "assigned_by": "choice",
       "basis": "decided",
       "permissions": []
     },
@@ -150,7 +150,7 @@
       "name": "Language: Español",
       "kind": "language",
       "purpose": "The member wants the Spanish social room. Counts towards opening it and shows it once it is open.",
-      "assigned_by": "onboarding",
+      "assigned_by": "choice",
       "basis": "proposal",
       "permissions": []
     },
@@ -159,7 +159,7 @@
       "name": "Language: Français",
       "kind": "language",
       "purpose": "The member wants the French social room. Counts towards opening it and shows it once it is open.",
-      "assigned_by": "onboarding",
+      "assigned_by": "choice",
       "basis": "proposal",
       "permissions": []
     },
@@ -168,7 +168,7 @@
       "name": "Language: Deutsch",
       "kind": "language",
       "purpose": "The member wants the German social room. Counts towards opening it and shows it once it is open.",
-      "assigned_by": "onboarding",
+      "assigned_by": "choice",
       "basis": "proposal",
       "permissions": []
     },
@@ -177,7 +177,7 @@
       "name": "Language: Italiano",
       "kind": "language",
       "purpose": "The member wants the Italian social room. Counts towards opening it and shows it once it is open.",
-      "assigned_by": "onboarding",
+      "assigned_by": "choice",
       "basis": "proposal",
       "permissions": []
     }
@@ -678,13 +678,12 @@
       }
     }
   ],
-  "onboarding": {
-    "by": "platform",
+  "choices": {
+    "by": "bot",
     "questions": [
       {
         "id": "interests",
         "title": "What interests you besides the projects?",
-        "required": false,
         "multiple": true,
         "options": [
           {"title": "Home lab and self-hosting", "role": "interest-home-lab"},
@@ -696,7 +695,6 @@
       {
         "id": "languages",
         "title": "Which language rooms would you like to see?",
-        "required": false,
         "multiple": true,
         "options": [
           {"title": "Español", "role": "lang-es"},
@@ -737,6 +735,13 @@
       "record": "docs/adr/0005-moderation-and-escalation.md"
     },
     {
+      "id": "area-choices",
+      "what": "Gives and takes the interest and language roles from the member's own choice, made through the areas command.",
+      "by": "bot",
+      "state": "decided",
+      "record": "docs/adr/0011-area-roles-from-member-choice.md"
+    },
+    {
       "id": "area-lifecycle",
       "what": "Opens and closes the threshold areas and language rooms from the readings of their rules. Until it is built, the operator does this by hand.",
       "by": "bot",
@@ -770,12 +775,6 @@
       "by": "platform",
       "state": "decided",
       "record": "docs/adr/0005-moderation-and-escalation.md"
-    },
-    {
-      "id": "onboarding-questions",
-      "what": "Asks a new member the onboarding questions and gives the roles of the chosen options.",
-      "by": "platform",
-      "state": "planned"
     },
     {
       "id": "role-grants",

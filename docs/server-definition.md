@@ -59,7 +59,7 @@ after the definition and a file over one mebibyte are refused
 | `categories` | The groups channels are shown in | 6 |
 | `channels` | Every channel with type, purpose, owner and the permissions it changes per role | 16 |
 | `areas` | The rooms that open at a threshold, each with an opening and a closing rule | 8 |
-| `onboarding` | The questions a new member is asked and the role each answer gives | 2 questions |
+| `choices` | The questions the bot's areas command offers and the role each option gives | 2 questions |
 | `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 15 |
 <!-- markdownlint-enable MD013 -->
 
@@ -112,6 +112,7 @@ Each finding has a code, a path into the file and a message.
 | `role-order` | A role missing from the order or listed twice; a role the operator assigns that does not stand above the bot's role; a role the bot or onboarding assigns that does not stand below it |
 | `nothing-attaches` | A permission on a recognition, interest or language role |
 | `role-grant` | A role assigned by the wrong party, such as onboarding handing out the moderator role |
+| `choice-limit` | A question with more than 25 options, or an option title longer than 100 characters |
 | `automation-record` | Something the bot or the platform does without a decision record, a planned bot feature not marked as needing one, or the state `observed` on anything but the platform or together with a record |
 | `id`, `text`, `enum`, `ref`, `version`, `singleton`, `permission-name`, `access-shape` | Malformed ids, empty texts, unknown values, references to nothing, a wrong version, a missing or doubled base role, unknown or doubled permissions |
 <!-- markdownlint-enable MD013 -->

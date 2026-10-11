@@ -81,8 +81,11 @@ const (
 	// CodeNothingAttaches flags permissions attached to roles that must remain empty.
 	CodeNothingAttaches = "nothing-attaches"
 
-	// CodeRoleGrant flags an invalid role assignment mechanism or unauthorized onboarding grant.
+	// CodeRoleGrant flags an invalid role assignment mechanism or unauthorized choice grant.
 	CodeRoleGrant = "role-grant"
+
+	// CodeChoiceLimit flags a choice question or option exceeding Discord menu limits.
+	CodeChoiceLimit = "choice-limit"
 
 	// CodeTicketThreadReader flags a non-moderator role that can read private ticket threads.
 	CodeTicketThreadReader = "ticket-thread-reader"
@@ -143,7 +146,7 @@ type Definition struct {
 	Categories []Category   `json:"categories"`
 	Channels   []Channel    `json:"channels"`
 	Areas      []Area       `json:"areas"`
-	Onboarding Onboarding   `json:"onboarding"`
+	Choices    Choices      `json:"choices"`
 	Automation []Automation `json:"automation"`
 }
 
@@ -227,17 +230,16 @@ type Rule struct {
 	Reasoning  string `json:"reasoning"`
 }
 
-// Onboarding defines welcome questionnaire metadata and choices.
-type Onboarding struct {
+// Choices defines the questions the bot's areas command offers, each option one role.
+type Choices struct {
 	By        string     `json:"by"`
 	Questions []Question `json:"questions"`
 }
 
-// Question defines one questionnaire item presented to joining members.
+// Question defines one questionnaire item presented by the areas command.
 type Question struct {
 	ID       string   `json:"id"`
 	Title    string   `json:"title"`
-	Required bool     `json:"required"`
 	Multiple bool     `json:"multiple"`
 	Options  []Option `json:"options"`
 }

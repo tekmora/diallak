@@ -39,6 +39,7 @@ func Validate(def *Definition) []Finding {
 	v.checkNothingAttaches()
 	v.checkRoleGrants()
 	v.checkRoleOrder()
+	v.checkChoiceLimits()
 	v.checkTicketThreadReader()
 	v.checkTicketShape()
 	v.checkStaffVisibility()

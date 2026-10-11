@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/tekmora/diallak/internal/serverdef"
@@ -46,5 +47,27 @@ func TestDefinition_Positive_EqualsDiskFile(t *testing.T) {
 
 	if !reflect.DeepEqual(def, diskDef) {
 		t.Errorf("embedded definition does not equal disk definition")
+	}
+}
+
+func TestDefinition_Negative_UnknownFieldsRefused(t *testing.T) {
+	orig := definitionJSON
+	withRequired := strings.Replace(orig, `"multiple": true`, `"required": false, "multiple": true`, 1)
+	if withRequired == orig {
+		t.Fatal("string replace for required did not change text")
+	}
+	_, err := serverdef.Load(strings.NewReader(withRequired))
+	if err == nil || !strings.Contains(err.Error(), "required") {
+		t.Errorf("Load with required = false error = %v, want error holding 'required'", err)
+	}
+
+	oldKey := "on" + "boarding"
+	withOldKey := strings.Replace(orig, `"choices": {`, `"`+oldKey+`": {`, 1)
+	if withOldKey == orig {
+		t.Fatal("string replace for old key did not change text")
+	}
+	_, err = serverdef.Load(strings.NewReader(withOldKey))
+	if err == nil || !strings.Contains(err.Error(), oldKey) {
+		t.Errorf("Load with old key error = %v, want error holding %q", err, oldKey)
 	}
 }

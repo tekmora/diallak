@@ -89,7 +89,7 @@ func TestServerDefinitionDoc_Negative_NamesEveryCodeAndCount(t *testing.T) {
 		{"categories", strconv.Itoa(len(def.Categories))},
 		{"channels", strconv.Itoa(len(def.Channels))},
 		{"areas", strconv.Itoa(len(def.Areas))},
-		{"onboarding", strconv.Itoa(len(def.Onboarding.Questions)) + " questions"},
+		{"choices", strconv.Itoa(len(def.Choices.Questions)) + " questions"},
 		{"automation", strconv.Itoa(len(def.Automation))},
 	}
 	for _, row := range counts {

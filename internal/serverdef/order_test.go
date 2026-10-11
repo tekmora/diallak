@@ -216,7 +216,7 @@ func TestRoleOrder_Boundary_SecondListingOfAnID(t *testing.T) {
 }
 
 func TestRoleOrder_Boundary_EveryoneHasNoPosition(t *testing.T) {
-	for _, by := range []string{"operator", "bot", "onboarding"} {
+	for _, by := range []string{"operator", "bot", "choice"} {
 		t.Run("everyone assigned by "+by, func(t *testing.T) {
 			first := valid(t)
 			roleOf(t, first, "everyone").AssignedBy = by
@@ -232,5 +232,15 @@ func TestRoleOrder_Boundary_EveryoneHasNoPosition(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRoleOrder_ChoiceRoleMovedAboveBot(t *testing.T) {
+	def := valid(t)
+	def.RoleOrder = moveBefore(def.RoleOrder, "interest-games", "bot")
+	findings := Validate(def)
+	if !hasFinding(findings, CodeRoleOrder, "role_order[interest-games]", "below") ||
+		!hasFinding(findings, CodeRoleOrder, "role_order[interest-games]", "choice") {
+		t.Errorf("expected finding with 'below' and 'choice', got: %+v", findings)
 	}
 }
