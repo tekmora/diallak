@@ -233,6 +233,10 @@ cosign verify ghcr.io/tekmora/diallak:0.1.1 \
 gh attestation verify oci://ghcr.io/tekmora/diallak:0.1.1 --repo tekmora/diallak
 ```
 
+The package is public, so `cosign verify` needs no login. `gh attestation
+verify` asks GitHub for the attestation and needs a GitHub login
+(`gh auth login`), but none to the registry.
+
 For another version, replace `0.1.1` in all three places. A deployment pins the
 image by digest; the digest of each release is in
 [docs/hosting.md](docs/hosting.md).
