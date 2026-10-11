@@ -2,6 +2,8 @@ package server
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -97,5 +99,23 @@ func TestDefinition_Positive_AreaChoicesIsTheBotsDecidedAutomation(t *testing.T)
 	if def.Choices.By != "bot" || len(def.Choices.Questions) != 2 {
 		t.Errorf("choices = by %q with %d questions, want by bot with 2",
 			def.Choices.By, len(def.Choices.Questions))
+	}
+}
+
+func TestDefinitionDigest_Positive_ShapeAndEqualsDiskFile(t *testing.T) {
+	digest := DefinitionDigest()
+	if !strings.HasPrefix(digest, "sha256:") || len(digest) != len("sha256:")+64 {
+		t.Fatalf("DefinitionDigest() = %q, want sha256:<64 hex>", digest)
+	}
+	data, err := os.ReadFile("definition.json")
+	if err != nil {
+		data, err = os.ReadFile("../server/definition.json")
+		if err != nil {
+			t.Fatalf("read definition.json from disk: %v", err)
+		}
+	}
+	expected := fmt.Sprintf("sha256:%x", sha256.Sum256(data))
+	if digest != expected {
+		t.Errorf("DefinitionDigest() = %q, want %q", digest, expected)
 	}
 }

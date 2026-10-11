@@ -94,11 +94,15 @@ func RenderDifferences(w io.Writer, raised bool, diffs []Difference) error {
 	return nil
 }
 
-// Digest computes the sha256 checksum of the plan output written by Render.
-func Digest(r Result) (string, error) {
+// Digest computes the sha256 checksum of the plan output written by Render,
+// followed by the line "definition: <definition>\n".
+func Digest(r Result, definition string) (string, error) {
 	h := sha256.New()
 	if err := Render(h, r); err != nil {
 		return "", fmt.Errorf("render for digest: %w", err)
+	}
+	if _, err := fmt.Fprintf(h, "definition: %s\n", definition); err != nil {
+		return "", fmt.Errorf("write definition for digest: %w", err)
 	}
 	return fmt.Sprintf("sha256:%x", h.Sum(nil)), nil
 }

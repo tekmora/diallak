@@ -127,7 +127,11 @@ func executeServerCommand(
 		if err := serverplan.Render(out, res); err != nil {
 			return fmt.Errorf("render plan: %w", err)
 		}
-		digest, err := serverplan.Digest(res)
+		defDigest := server.DefinitionDigest()
+		if _, writeErr := fmt.Fprintf(out, "definition: %s\n", defDigest); writeErr != nil {
+			return fmt.Errorf("write definition digest: %w", writeErr)
+		}
+		digest, err := serverplan.Digest(res, defDigest)
 		if err != nil {
 			return fmt.Errorf("digest plan: %w", err)
 		}

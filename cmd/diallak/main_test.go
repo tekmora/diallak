@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 	"github.com/tekmora/diallak/internal/discord"
 	"github.com/tekmora/diallak/internal/health"
 	"github.com/tekmora/diallak/internal/serverplan"
+	"github.com/tekmora/diallak/server"
 )
 
 type failingWriter struct{}
@@ -1154,8 +1156,23 @@ func TestRun_Positive_ServerPlan_ExitZeroAndOutputAndDigest(t *testing.T) {
 	if !strings.Contains(got, "changes:") {
 		t.Errorf("output does not contain 'changes:': %q", got)
 	}
-	if !strings.Contains(got, "plan digest: sha256:") {
-		t.Errorf("output does not contain 'plan digest: sha256:': %q", got)
+	wantDefLine := fmt.Sprintf("definition: %s\n", server.DefinitionDigest())
+	if !strings.Contains(got, wantDefLine) {
+		t.Errorf("output does not contain definition line %q: %q", wantDefLine, got)
+	}
+	idx := strings.LastIndex(got, "plan digest: sha256:")
+	if idx == -1 {
+		t.Fatalf("output does not contain 'plan digest: sha256:': %q", got)
+	}
+	textAbove := got[:idx]
+	if !strings.HasSuffix(textAbove, wantDefLine) {
+		t.Errorf("text above digest does not end with definition line: %q", textAbove)
+	}
+	expectedDigest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(textAbove)))
+	planDigestLine := got[idx:]
+	wantPlanDigestLine := fmt.Sprintf("plan digest: %s\n", expectedDigest)
+	if planDigestLine != wantPlanDigestLine {
+		t.Errorf("plan digest line = %q, want %q", planDigestLine, wantPlanDigestLine)
 	}
 	var errOut bytes.Buffer
 	if code := report(err, &errOut); code != 0 {
