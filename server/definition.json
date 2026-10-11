@@ -798,7 +798,7 @@
     },
     {
       "id": "apply-definition",
-      "what": "Applies this definition to the server on one path: plan, dry run, apply, read-only compare. The operator runs it for the first set-up; the bot runs the same path for its own changes. Not built.",
+      "what": "Applies this definition to the server on one path: plan, dry run, apply, read-only compare. Every run uses the bot's identity: for the first set-up the operator raises the bot's role for the run and lowers it afterwards; with its three rights the bot runs the same path for its own changes. Not built.",
       "by": "operator",
       "state": "decided",
       "record": "docs/adr/0010-bot-rights-and-apply-path.md"

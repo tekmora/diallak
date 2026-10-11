@@ -179,9 +179,10 @@ The `automation` part names the party for each task and whether it is built.
   guide roles, reading the ticket threads, scheduling events and opening the
   voice room for them.
 - **Applying the definition** is one path with four steps: plan, dry run,
-  apply, read-only compare. The operator runs it for the first set-up and the
-  bot runs the same path for its own changes. It is decided in ADR-0010 and
-  not built.
+  apply, read-only compare. Every run uses the bot's identity. For the first
+  set-up the operator raises the bot's role for the run and lowers it
+  afterwards; with its three rights the bot runs the same path for its own
+  changes. It is decided in ADR-0010 and not built.
 
 ## Not decided and not verified
 
@@ -204,12 +205,14 @@ The `automation` part names the party for each task and whether it is built.
   `COMMUNITY`, and the level was 1 (ADR-0010, "What was read from the
   server"). The plan step reads them again on every run and refuses a change
   the server lacks the feature for; no list of perks is taken from memory.
-- **Onboarding at launch.** Discord's documentation asks for at least seven
-  default channels, five of them writable for every member, before onboarding
-  can be switched on. The launch set has six channels every member sees and
-  three in which every member can write. Whether members choose their
-  interests through the platform's onboarding or another way is not decided
-  (ADR-0010, "Open points").
+- **How members choose their interests.** Discord's documentation asks for at
+  least seven default channels, five of them writable for every member, before
+  its onboarding can be switched on. The launch set has six channels every
+  member sees and three in which every member can write. The platform's
+  onboarding is therefore not used: the bot will give the interest and
+  language roles from the member's own choice. That function needs its own
+  record; until then the file keeps the two onboarding questions (ADR-0010,
+  "Open points").
 - **Onboarding** and the two measurements are described as Discord's
   documentation gives them
   ([`discord/discord-api-docs`](https://github.com/discord/discord-api-docs/tree/37148620d2324292b76047541d5f8331f81ea77a)

@@ -157,15 +157,23 @@ One implementation brings the definition to the server. It has four steps:
 4. **Compare.** Read the server again, without changing it, and report every
    difference from the definition.
 
-Who runs it decides what the plan can hold:
+Every run uses the bot's own identity, in the place where the bot runs. There
+is no second application and no second credential. What the bot's role holds
+at the time of a run decides what the plan can hold:
 
-- **The operator runs the path for the first set-up** and for everything the
-  bot does not hold the right for: creating roles and channels, the
-  permissions of roles, the order of roles, the filter rules and the
-  onboarding questions.
-- **The bot runs the same path for its own changes:** a role given to or taken
-  from a member, and the entry of an area's role on an area's channel. A plan
-  that holds anything else is refused for the bot.
+- **For the first set-up the operator raises the bot's role** for the length
+  of the run and lowers it again afterwards. These are the operator's two acts
+  on the server. The raised run does what the three rights do not cover:
+  creating roles and channels, the permissions of roles, the order of roles
+  and the filter rules. Discord lets a bot sort and edit only roles below its
+  own and give a role only rights it holds itself ("Permission Hierarchy"), so
+  for that run the bot's role stands above the roles it sets up and holds the
+  rights the plan names. The plan lists them before the operator acts. The
+  compare step reports the raised rights and the raised position as
+  differences from the definition until the operator has taken them away.
+- **With its three rights the bot runs the same path for its own changes:** a
+  role given to or taken from a member, and the entry of an area's role on an
+  area's channel. A plan that holds anything else is refused.
 
 The path creates and changes. It deletes nothing: what the server has and the
 definition does not is reported by the compare step and left alone.
@@ -266,15 +274,20 @@ definition stand as they are.
   Contributor role only when it knows which member a merged contribution
   belongs to. That is member data and gets its own record before the function
   is built.
-- **Onboarding at launch.** Discord's documentation asks for at least seven
-  default channels, five of them writable for every member, before onboarding
-  can be switched on ("Modify Guild Onboarding"). The launch set of the
-  definition has six channels every member sees and three in which every
-  member can write. Whether members choose their interests through the
-  platform's onboarding or another way is not decided; the definition keeps
-  the two questions as they are until it is.
-- **Whose credential the operator's run uses.** The path is the same for both
-  callers; which identity the operator runs it with is not decided.
+- **How members choose their interests.** Discord's documentation asks for at
+  least seven default channels, five of them writable for every member, before
+  its onboarding can be switched on ("Modify Guild Onboarding"). The launch
+  set of the definition has six channels every member sees and three in which
+  every member can write. The direction is settled: the platform's onboarding
+  is not used, and the bot gives the interest and language roles from the
+  member's own choice, with the right to manage roles it holds by this record.
+  That function gets its own record, which also changes the definition. Until
+  then the definition keeps its two onboarding questions and the interest and
+  language roles stay assigned by onboarding.
+- **The Operator role in the first set-up.** A bot gives a role only rights it
+  holds itself. Whether the path sets up the Operator role, which would put
+  that role's rights on the bot's role for the run, or the operator creates
+  that one role by hand, is decided with the unit that builds the path.
 - **Not tried.** Everything in this record is read from Discord's
   documentation. Not tried against Discord: that a timeout obeys the role
   order (the documentation names kick, ban and nickname changes), that
@@ -294,8 +307,12 @@ Derived from that answer and confirmed in the project's planning, open to the
 operator's veto:
 
 - The three rights, the channel entries and the role order as listed.
-- No `MANAGE_GUILD`: the filter's alert goes into the queue channel, and the
-  onboarding questions are set only through the operator's run.
+- No `MANAGE_GUILD` as a standing right: the filter's alert goes into the
+  queue channel, and the filter rules are set only in the raised run.
+- The first set-up runs under the bot's own identity with a role the operator
+  raises and lowers; no second application is created.
+- The platform's onboarding is not used; the bot gives the interest and
+  language roles after a record of its own.
 - No entry on the announcement channel until a record names the bot as its
   poster.
 
