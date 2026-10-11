@@ -42,6 +42,42 @@ if sh "$script" 0.1.0 > /dev/null 2>&1; then
   fail "a missing argument is accepted"
 fi
 
+# release-image-note.sh prints the block that names the image of a release by
+# tag and by digest. It must refuse everything that is not an image name, a
+# version X.Y.Z and a sha256 digest.
+note=.github/scripts/release-image-note.sh
+digest=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+# The backticks are Markdown, not a command.
+# shellcheck disable=SC2016
+want=$(printf '%s\n' '' '## Image' '' \
+  '- `ghcr.io/example/app:0.1.0`' \
+  "- \`ghcr.io/example/app@$digest\`" '' \
+  'Verify the image before you use it: README, "Verifying a release".')
+got=$(sh "$note" ghcr.io/example/app 0.1.0 "$digest") ||
+  fail "image note exits non-zero"
+[ "$got" = "$want" ] || fail "image note prints the wrong block"
+
+short=${digest%?}
+for bad in "$short" "${digest}0" "SHA256:${digest#sha256:}" \
+  "${digest#sha256:}" "sha256:$(printf '%064d' 0 | tr 0 G)" ''; do
+  if sh "$note" ghcr.io/example/app 0.1.0 "$bad" > /dev/null 2>&1; then
+    fail "digest '$bad' is accepted"
+  fi
+done
+for version in v0.1.0 0.1 '' '0.1.0 x'; do
+  if sh "$note" ghcr.io/example/app "$version" "$digest" > /dev/null 2>&1; then
+    fail "image note accepts version '$version'"
+  fi
+done
+for image in '' 'ghcr.io/Example/app' 'ghcr.io/example/app:1' 'a b'; do
+  if sh "$note" "$image" 0.1.0 "$digest" > /dev/null 2>&1; then
+    fail "image note accepts image '$image'"
+  fi
+done
+if sh "$note" ghcr.io/example/app 0.1.0 > /dev/null 2>&1; then
+  fail "image note accepts a missing argument"
+fi
+
 if [ "$failures" -ne 0 ]; then
   echo "release-notes self-test: $failures failure(s)" >&2
   exit 1

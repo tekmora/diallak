@@ -21,7 +21,7 @@ checked. A value that was not measured says so.
 | Property | Value | Check |
 | :--- | :--- | :--- |
 | Name | `ghcr.io/tekmora/diallak:X.Y.Z`, to be pinned by digest | [`release-image.yml`](../.github/workflows/release-image.yml); there is no `latest` tag |
-| Digest | 0.1.1: `sha256:65aacd457c9df4cd331c7ad356e9410ee241e188b36feb9d76b2b26eb2fa4e01` (the index of both platforms) | Release run of 2026-10-10; `crane digest ghcr.io/tekmora/diallak:0.1.1` |
+| Digest | On the release page of the version, from 0.1.2 on. 0.1.1: `sha256:65aacd457c9df4cd331c7ad356e9410ee241e188b36feb9d76b2b26eb2fa4e01` (the index of both platforms) | [`release.yml`](../.github/workflows/release.yml) writes it; `crane digest ghcr.io/tekmora/diallak:X.Y.Z` returns the same value |
 | Platform | `linux/amd64` and `linux/arm64`, one index | `platforms` in the same workflow; the Dockerfile compiles for the target platform without emulation |
 | Size | 22,053,900 bytes unpacked, `linux/amd64` | The released image 0.1.1 |
 | User | `65532:65532`, not root | [`Dockerfile`](../Dockerfile) |
