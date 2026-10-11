@@ -174,3 +174,63 @@ func TestRoleOrder_Boundary_EmptyAndBotMissing(t *testing.T) {
 		}
 	})
 }
+
+func roleOrderFindings(def *Definition) []Finding {
+	var kept []Finding
+	for _, f := range Validate(def) {
+		if f.Code == CodeRoleOrder {
+			kept = append(kept, f)
+		}
+	}
+	return kept
+}
+
+func TestRoleOrder_Boundary_SecondListingOfAnID(t *testing.T) {
+	t.Run("a second listing below the bot is one finding", func(t *testing.T) {
+		def := valid(t)
+		def.RoleOrder = append(def.RoleOrder, "operator")
+		got := roleOrderFindings(def)
+		if len(got) != 1 {
+			t.Fatalf("want exactly 1 role-order finding, got %d: %+v", len(got), got)
+		}
+		if got[0].Path != "role_order[operator]" || !strings.Contains(got[0].Message, "twice") {
+			t.Errorf("finding = %+v, want role_order[operator] with 'twice'", got[0])
+		}
+	})
+	t.Run("three listings are one finding", func(t *testing.T) {
+		def := valid(t)
+		def.RoleOrder = append(def.RoleOrder, "lang-it", "lang-it")
+		got := roleOrderFindings(def)
+		if len(got) != 1 {
+			t.Fatalf("want exactly 1 role-order finding, got %d: %+v", len(got), got)
+		}
+	})
+	t.Run("the first listing decides the position", func(t *testing.T) {
+		def := valid(t)
+		def.RoleOrder = append([]string{"contributor"}, def.RoleOrder...)
+		got := roleOrderFindings(def)
+		if !hasFinding(got, CodeRoleOrder, "role_order[contributor]", "below") {
+			t.Errorf("no finding for a first listing above the bot: %+v", got)
+		}
+	})
+}
+
+func TestRoleOrder_Boundary_EveryoneHasNoPosition(t *testing.T) {
+	for _, by := range []string{"operator", "bot", "onboarding"} {
+		t.Run("everyone assigned by "+by, func(t *testing.T) {
+			first := valid(t)
+			roleOf(t, first, "everyone").AssignedBy = by
+			first.RoleOrder = append([]string{"everyone"}, first.RoleOrder...)
+			last := valid(t)
+			roleOf(t, last, "everyone").AssignedBy = by
+			last.RoleOrder = append(last.RoleOrder, "everyone")
+			for _, def := range []*Definition{first, last} {
+				for _, f := range roleOrderFindings(def) {
+					if strings.Contains(f.Message, "above") || strings.Contains(f.Message, "below") {
+						t.Errorf("position finding for the role every member holds: %+v", f)
+					}
+				}
+			}
+		})
+	}
+}

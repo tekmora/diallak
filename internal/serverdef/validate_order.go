@@ -3,16 +3,6 @@ package serverdef
 import "fmt"
 
 func (v *validator) checkRoleOrder() {
-	if len(v.def.RoleOrder) == 0 {
-		for _, r := range v.def.Roles {
-			if r.Kind != "everyone" {
-				v.add(CodeRoleOrder, fmt.Sprintf("roles[%s]", r.ID),
-					fmt.Sprintf("role %q is not listed in role_order", r.ID))
-			}
-		}
-		return
-	}
-
 	orderCounts := make(map[string]int, len(v.def.RoleOrder))
 	firstIndex := make(map[string]int, len(v.def.RoleOrder))
 	for i, id := range v.def.RoleOrder {
@@ -74,14 +64,12 @@ func (v *validator) checkRoleOrderPositions(firstIndex, orderCounts map[string]i
 	botIdx := firstIndex[botRole.ID]
 
 	for _, r := range v.def.Roles {
-		if r.ID != botRole.ID {
-			v.checkSingleRolePosition(r, botIdx, firstIndex)
-		}
+		v.checkSingleRolePosition(r, botIdx, firstIndex)
 	}
 }
 
 func (v *validator) checkSingleRolePosition(r Role, botIdx int, firstIndex map[string]int) {
-	if r.Kind == "everyone" || r.AssignedBy == "platform" {
+	if r.Kind == "everyone" {
 		return
 	}
 	rIdx, ok := firstIndex[r.ID]

@@ -82,6 +82,10 @@ func TestBotRights_Negative_EntryBeyondTheChannelKind(t *testing.T) {
 			acc := accessOf(channelOf(t, def, "lounge"), "bot")
 			acc.Allow = []string{"VIEW_CHANNEL"}
 		}, CodeBotRights, "channels[lounge].access[bot]", "beyond"},
+		{"SEND_MESSAGES added to support", func(_ *testing.T, def *Definition) {
+			acc := accessOf(channelOf(t, def, "support"), "bot")
+			acc.Allow = append(acc.Allow, "SEND_MESSAGES")
+		}, CodeBotRights, "channels[support].access[bot]", "SEND_MESSAGES"},
 		{"MANAGE_MESSAGES added to support", func(_ *testing.T, def *Definition) {
 			acc := accessOf(channelOf(t, def, "support"), "bot")
 			acc.Allow = append(acc.Allow, "MANAGE_MESSAGES")

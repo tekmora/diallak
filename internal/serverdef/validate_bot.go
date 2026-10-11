@@ -15,12 +15,8 @@ func (v *validator) checkBotRights() {
 
 func (v *validator) checkBotRolePermissions(botRole *Role) {
 	path := fmt.Sprintf("roles[%s].permissions", botRole.ID)
-	permSet := make(map[string]struct{}, len(botRole.Permissions))
-	for _, p := range botRole.Permissions {
-		permSet[p] = struct{}{}
-	}
 	for _, right := range botRights {
-		if _, ok := permSet[right]; !ok {
+		if !inSet(right, botRole.Permissions) {
 			v.add(CodeBotRights, path, fmt.Sprintf("bot role lacks %s", right))
 		}
 	}
