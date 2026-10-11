@@ -515,3 +515,36 @@ func TestGate_Boundary_ConcurrentFailuresLogOneStateChange(t *testing.T) {
 		t.Errorf("%d lines say the model is not ready, want 1:\n%s", got, logged.String())
 	}
 }
+
+func TestGate_Negative_ErrorTextNeverReachesTheLog(t *testing.T) {
+	const marker = "distinctive-endpoint-text"
+	var logged bytes.Buffer
+	ep := &fakeEndpoint{probeErr: &TransportError{Err: errors.New("dial " + marker)}}
+	g, err := NewGate(GateConfig{Endpoint: ep, Logger: slog.New(slog.NewTextHandler(&logged, nil)), RetryInterval: time.Nanosecond})
+	if err != nil {
+		t.Fatalf("NewGate: %v", err)
+	}
+	if err := g.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	time.Sleep(time.Millisecond)
+	ep.completeRes = "ok"
+	if _, callErr := g.Complete(context.Background(), "s", "u"); callErr != nil {
+		t.Fatalf("trial: %v", callErr)
+	}
+	ep.completeErr = fmt.Errorf("do request: %w", &TransportError{Err: errors.New("reset " + marker)})
+	if _, callErr := g.Complete(context.Background(), "s", "u"); callErr == nil {
+		t.Fatal("Complete() want the transport error, got nil")
+	}
+
+	out := logged.String()
+	if got := strings.Count(out, "model not ready"); got != 2 {
+		t.Fatalf("%d lines say the model is not ready, want 2:\n%s", got, out)
+	}
+	if !strings.Contains(out, "error_class=transport") {
+		t.Errorf("the log does not name the class:\n%s", out)
+	}
+	if strings.Contains(out, marker) {
+		t.Errorf("the log holds the text of the error:\n%s", out)
+	}
+}
