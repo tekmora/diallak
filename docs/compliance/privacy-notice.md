@@ -117,9 +117,15 @@ provider, the country of its data centre and the agreement that binds it.
 | Data | Kept |
 | :--- | :--- |
 | Your question, in the bot | In memory until the reply is sent |
-| Your question, at the model endpoint (model mode only) | Not kept: the endpoint must not keep or train on what it receives (ADR-0002). The endpoint keeps its records about a request for 30 days; what such a record holds is stated here before model mode goes live |
+| Your question, at the model endpoint (model mode only) | Not written to storage and not used for training (ADR-0002). The three rows below name what the endpoint holds for a time anyway |
+| The answer, in the endpoint's cache (model mode only) | At most 60 minutes, in memory only. The cache finds an entry by a hash of the request, so it holds the answer but not your question. The bot sends no member id: another member who sends the identical question within that time gets the same answer |
+| A blocked question, in the endpoint's log (model mode only) | When a filter of the endpoint blocks a question, one log line holds the fragment that matched, never the whole question. The line is deleted after about 74 hours at most |
+| The endpoint's record of a request (model mode only) | 30 days. The record holds figures about the request only: which key and which model, how many tokens, and when. It holds no question and no answer |
 | Log lines of the bot, which hold no personal data | 30 days |
 <!-- markdownlint-enable MD013 -->
+
+The three periods of the endpoint, and what each place holds, were measured
+on the operator's endpoint on 2026-10-11.
 
 ## Your rights
 

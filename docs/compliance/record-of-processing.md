@@ -19,7 +19,7 @@ pass on more data changes this record in the same pull request, like the
 | (c) Data subjects and data | Members of the community server who use `/ask`: the question they type and the id of the server. Discord attaches further fields to a command (member id, name, roles, locale); the bot reads none of them and keeps none |
 | (d) Recipients | Discord, which delivers the reply. In model mode only: the model endpoint the operator runs, which receives the question and documentation passages, no member id and no name |
 | (e) Transfers to a third country | The bot and the model endpoint run in Germany and send data to no other place. The reply is delivered by Discord; what this entry has to say about that is part of the legal review named in the [privacy notice](privacy-notice.md) |
-| (f) Time limits for erasure | The question: in memory until the reply is sent. Bot logs, which hold no personal data: 30 days. Decided for later features: a support ticket 30 days after it is closed, the moderation trail 90 days |
+| (f) Time limits for erasure | The question: in memory until the reply is sent. Bot logs, which hold no personal data: 30 days. In model mode, at the endpoint: an answer in the memory cache at most 60 minutes, a log line with the matched fragment of a blocked question about 74 hours, the record of a request, which holds no question and no answer, 30 days. Decided for later features: a support ticket 30 days after it is closed, the moderation trail 90 days |
 | (g) Security measures | See the next section |
 <!-- markdownlint-enable MD013 -->
 
