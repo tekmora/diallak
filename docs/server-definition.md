@@ -46,7 +46,7 @@ after the definition and a file over one mebibyte are refused
 | Part | Content | In the file today |
 | :--- | :--- | :--- |
 | `metrics` | What a threshold rule may measure, and from which data | 2 |
-| `roles` | Every role with its kind, who assigns it and its server-wide permissions | 19 |
+| `roles` | Every role with its kind, who assigns it and its server-wide permissions | 17 |
 | `categories` | The groups channels are shown in | 6 |
 | `channels` | Every channel with type, purpose, owner and the permissions it changes per role | 16 |
 | `areas` | The rooms that open at a threshold, each with an opening and a closing rule | 8 |
@@ -119,9 +119,13 @@ Every condition of every rule has a test that plants exactly that defect
 | An area or room closes | Days since the last message in its channel | At least 30 | 30 days |
 <!-- markdownlint-enable MD013 -->
 
-- **Not measured.** The values are first guesses; the reasoning stands next to
-  each rule in the file. They are replaced by measurements once the server has
-  members.
+- **The measure is decided, the numbers are not measured.** The operator
+  decided that a topic area opens by the count of members who chose its
+  interest when joining. The values are first guesses; the reasoning stands
+  next to each rule in the file. They are corrected from measured joins once
+  the server has members, in the file and not in code. The window is read as
+  standing demand: the count has to hold on every daily reading, so a short
+  burst does not open a room and a slowly growing server still can.
 - **No message is read.** Both measurements come from counts and times the
   platform reports. That the platform reports them as the file assumes is read
   from Discord's documentation and not tried (`"verified": false`).
@@ -150,9 +154,18 @@ The `automation` part names the party for each task and whether it is built.
   the start ([server rules](compliance/server-rules.md), rule 2). The numbers
   of the threshold, and that a member asks for a language through an
   onboarding answer, are proposals.
-- **The contributor ladder** has one step in the file, the contributor role.
-  Further steps are not decided.
-- **The steps of the supporter roles** (3, 6 and 12 months) are a proposal.
+- **The contributor ladder** is decided: one role, Contributor, after one
+  merged contribution, and the subject guide roles above it. There is no third
+  step.
+- **Supporter roles** are decided: one role for supporters and one cosmetic
+  role after a year of support. Nothing attaches to either.
+- **The boost level of the server.** The definition sets no banner, no role
+  icon, no audio bitrate and no vanity address; Discord's documentation ties
+  each of these to a server feature or a boost level. By that documentation
+  the announcement channel needs the server feature `NEWS`. Before anything is
+  applied, the apply step reads the server's boost level and feature list from
+  the platform and stops when the definition needs something the server does
+  not have; no list of perks is taken from memory.
 - **Onboarding** and the two measurements are described as Discord's
   documentation gives them
   ([`discord/discord-api-docs`](https://github.com/discord/discord-api-docs/tree/37148620d2324292b76047541d5f8331f81ea77a)
