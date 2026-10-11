@@ -111,7 +111,7 @@ with a message that names the variable
 | `DIALLAK_MAX_CONCURRENT_ASKS` | How many questions are answered at the same time; one more gets the busy reply | `4` | `1` to `64` |
 | `DIALLAK_ASK_TIMEOUT` | Time one question may take in total | `60s` | `1s` to `10m` |
 | `DIALLAK_MODEL_TIMEOUT` | Time one request to the model endpoint may take | `45s` | `1s` to `5m`, and below the ask timeout |
-| `DIALLAK_SOURCE_LINK_TEMPLATE` | Shape of the link to a source | `https://github.com/{repository}/blob/{revision}/{path}` | an `https://` address that holds each of the three placeholders once, at most 200 characters |
+| `DIALLAK_SOURCE_LINK_TEMPLATE` | Shape of the link to a source | `https://github.com/{repository}/blob/{revision}/{path}` | an `https://` address that holds each of the three placeholders once, after the host, at most 200 characters |
 <!-- markdownlint-enable MD013 -->
 
 The question limit also sets the length the `/ask` command accepts, so a change

@@ -468,15 +468,15 @@ func parseSourceLinkTemplate(raw string) (string, error) {
 	if err := checkSourceLinkCharacters(raw); err != nil {
 		return "", err
 	}
-	filled, err := checkSourceLinkPlaceholders(raw)
-	if err != nil {
+	if err := checkSourceLinkPlaceholders(raw); err != nil {
 		return "", err
 	}
-	// With its placeholders filled the template must be a web address with a host and without
-	// a user name: a link in a reply never carries a credential.
-	parsed, err := url.Parse(filled)
+	// The address check reads the template as written; a placeholder may stand in the path,
+	// the query or the fragment only, so the host of every link is the one the operator wrote
+	// and no value filled in later can add a user name.
+	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Host == "" || parsed.User != nil {
-		return "", fmt.Errorf("%s is not an https address with a host and without a user name", EnvSourceLinkTemplate)
+		return "", fmt.Errorf("%s is not an https address with a host and without a user name, or holds a placeholder before the path", EnvSourceLinkTemplate)
 	}
 	return raw, nil
 }
@@ -494,18 +494,15 @@ func checkSourceLinkCharacters(raw string) error {
 }
 
 // checkSourceLinkPlaceholders refuses a template that does not hold each of the three
-// placeholders exactly once. It returns the template with every placeholder replaced by a
-// letter, which is the form the address check reads.
-func checkSourceLinkPlaceholders(raw string) (string, error) {
+// placeholders exactly once.
+func checkSourceLinkPlaceholders(raw string) error {
 	placeholders := [3]string{"{repository}", "{revision}", "{path}"}
-	filled := raw
 	for _, p := range placeholders {
 		if count := strings.Count(raw, p); count != 1 {
-			return "", fmt.Errorf("%s must contain placeholder %q exactly once, found %d", EnvSourceLinkTemplate, p, count)
+			return fmt.Errorf("%s must contain placeholder %q exactly once, found %d", EnvSourceLinkTemplate, p, count)
 		}
-		filled = strings.Replace(filled, p, "x", 1)
 	}
-	return filled, nil
+	return nil
 }
 
 // validateTimeoutCrossConstraint refuses a model timeout that the ask timeout would cut short.
