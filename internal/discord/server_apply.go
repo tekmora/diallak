@@ -297,10 +297,14 @@ func executeSingleChange(
 	idx *serverIndex,
 	timeout time.Duration,
 ) error {
+	auditReason := "diallak apply " + in.PlanDigest
+	if c.Action == "set-role-order" {
+		// two requests, each under its own deadline
+		return applySetRoleOrder(ctx, client, guildID, in.Definition, c, idx, auditReason, timeout)
+	}
+
 	callCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-
-	auditReason := "diallak apply " + in.PlanDigest
 
 	switch c.Action {
 	case "create-role":
@@ -315,8 +319,6 @@ func executeSingleChange(
 		return applyMoveChannel(callCtx, client, in.Definition, c.Object, idx, auditReason)
 	case "set-access":
 		return applySetAccess(callCtx, client, in.Definition, c.Object, idx, auditReason)
-	case "set-role-order":
-		return applySetRoleOrder(callCtx, client, guildID, in.Definition, c, idx, auditReason)
 	default:
 		return fmt.Errorf("unsupported action %q", c.Action)
 	}
@@ -573,20 +575,20 @@ func applyMoveChannel(
 		return err
 	}
 
-	var parentID *snowflake.ID
-	if defCh.Category != "" {
-		catDef, ok := findCategoryInDef(def, defCh.Category)
-		if !ok {
-			return fmt.Errorf("category %q not found in definition", defCh.Category)
-		}
-		catID, err := idx.lookupCategory(catDef.Name)
-		if err != nil {
-			return err
-		}
-		parentID = &catID
+	// Without a parent the request body would be empty and change nothing.
+	if defCh.Category == "" {
+		return fmt.Errorf("channel %q has no category in the definition", id)
+	}
+	catDef, ok := findCategoryInDef(def, defCh.Category)
+	if !ok {
+		return fmt.Errorf("category %q not found in definition", defCh.Category)
+	}
+	catID, err := idx.lookupCategory(catDef.Name)
+	if err != nil {
+		return err
 	}
 
-	update, err := buildGuildChannelUpdate(defCh.Type, parentID)
+	update, err := buildGuildChannelUpdate(defCh.Type, &catID)
 	if err != nil {
 		return err
 	}
@@ -670,8 +672,17 @@ func applySetAccess(
 	return nil
 }
 
-func fetchAndSortRoles(ctx context.Context, client *bot.Client, guildID uint64, botRoleID snowflake.ID) ([]discord.Role, int, error) {
-	rawRoles, err := client.Rest.GetRoles(snowflake.ID(guildID), rest.WithCtx(ctx))
+func fetchAndSortRoles(
+	ctx context.Context,
+	client *bot.Client,
+	guildID uint64,
+	botRoleID snowflake.ID,
+	timeout time.Duration,
+) ([]discord.Role, int, error) {
+	readCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	rawRoles, err := client.Rest.GetRoles(snowflake.ID(guildID), rest.WithCtx(readCtx))
 	if err != nil {
 		return nil, -1, callError("read roles", err, client.Token)
 	}
@@ -709,8 +720,9 @@ func applySetRoleOrder(
 	c serverplan.Change,
 	idx *serverIndex,
 	reason string,
+	timeout time.Duration,
 ) error {
-	sortedRoles, callerIdx, err := fetchAndSortRoles(ctx, client, guildID, idx.botRoleID)
+	sortedRoles, callerIdx, err := fetchAndSortRoles(ctx, client, guildID, idx.botRoleID, timeout)
 	if err != nil {
 		return err
 	}
@@ -739,8 +751,11 @@ func applySetRoleOrder(
 		return nil
 	}
 
+	writeCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	updates := buildRolePositionUpdates(newBelow)
-	_, err = client.Rest.UpdateRolePositions(snowflake.ID(guildID), updates, rest.WithCtx(ctx), rest.WithReason(reason))
+	_, err = client.Rest.UpdateRolePositions(snowflake.ID(guildID), updates, rest.WithCtx(writeCtx), rest.WithReason(reason))
 	if err != nil {
 		return callError("set role order", err, client.Token)
 	}
@@ -757,14 +772,6 @@ func resolveTargetRoles(
 	for _, raw := range rawList {
 		tID := strings.TrimSpace(raw)
 		if tID == "" {
-			continue
-		}
-		if tID == "everyone" {
-			ids = append(ids, idx.everyoneRoleID)
-			continue
-		}
-		if tID == "bot" {
-			ids = append(ids, idx.botRoleID)
 			continue
 		}
 		defRole, ok := findRoleInDef(def, tID)
