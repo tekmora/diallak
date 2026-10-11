@@ -80,9 +80,10 @@ func (v *validator) checkAreaChannelDetails(a Area, ch Channel) {
 	if ch.Opens != "threshold" {
 		v.add(CodeAreaChannel, chPath+".opens", "area channel must have opens threshold")
 	}
-	effEveryone := Effective(v.def, "everyone", ch.ID)
+	everyone := everyoneID(v.def)
+	effEveryone := Effective(v.def, everyone, ch.ID)
 	if _, ok := effEveryone["VIEW_CHANNEL"]; ok {
-		v.add(CodeAreaChannel, fmt.Sprintf("%s.access[everyone]", chPath),
+		v.add(CodeAreaChannel, fmt.Sprintf("%s.access[%s]", chPath, everyone),
 			"everyone must not have effective VIEW_CHANNEL in area channel")
 	}
 	effAreaRole := Effective(v.def, a.Role, ch.ID)

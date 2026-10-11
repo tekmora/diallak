@@ -27,15 +27,27 @@ func findAccess(accessList []Access, roleID string) *Access {
 	return nil
 }
 
-func computeBasePermissions(def *Definition, roleID string) map[string]struct{} {
-	base := make(map[string]struct{})
-	everyoneRole := findRole(def.Roles, "everyone")
-	if everyoneRole != nil {
-		for _, p := range everyoneRole.Permissions {
-			base[p] = struct{}{}
+// everyoneID returns the id of the role every member holds, which is the role of kind everyone.
+// It returns the empty string when the definition has no such role.
+func everyoneID(def *Definition) string {
+	for i := range def.Roles {
+		if def.Roles[i].Kind == "everyone" {
+			return def.Roles[i].ID
 		}
 	}
-	if roleID != "everyone" {
+	return ""
+}
+
+func computeBasePermissions(def *Definition, everyone, roleID string) map[string]struct{} {
+	base := make(map[string]struct{})
+	if everyone != "" {
+		if everyoneRole := findRole(def.Roles, everyone); everyoneRole != nil {
+			for _, p := range everyoneRole.Permissions {
+				base[p] = struct{}{}
+			}
+		}
+	}
+	if roleID != everyone {
 		r := findRole(def.Roles, roleID)
 		if r != nil {
 			for _, p := range r.Permissions {
@@ -58,8 +70,11 @@ func applyAccessOverwrite(perms map[string]struct{}, acc *Access) {
 	}
 }
 
-// Effective calculates the effective permissions of roleID within channelID.
-// It follows Discord's documented permission overwrite hierarchy.
+// Effective calculates the effective permissions of roleID within channelID for a member who holds
+// only that role. It follows Discord's documented order: the permissions of the role every member
+// holds and of the role itself, then the channel's entry for every member, then the entry for the
+// role, each applied as deny before allow. An administrator has every permission, and a channel
+// that cannot be seen leaves none.
 func Effective(def *Definition, roleID, channelID string) map[string]struct{} {
 	if def == nil {
 		return make(map[string]struct{})
@@ -69,7 +84,8 @@ func Effective(def *Definition, roleID, channelID string) map[string]struct{} {
 		return make(map[string]struct{})
 	}
 
-	result := computeBasePermissions(def, roleID)
+	everyone := everyoneID(def)
+	result := computeBasePermissions(def, everyone, roleID)
 	if _, isAdmin := result["ADMINISTRATOR"]; isAdmin {
 		all := make(map[string]struct{}, len(vocabulary))
 		for _, p := range vocabulary {
@@ -78,10 +94,11 @@ func Effective(def *Definition, roleID, channelID string) map[string]struct{} {
 		return all
 	}
 
-	everyoneAcc := findAccess(ch.Access, "everyone")
-	applyAccessOverwrite(result, everyoneAcc)
+	if everyone != "" {
+		applyAccessOverwrite(result, findAccess(ch.Access, everyone))
+	}
 
-	if roleID != "everyone" {
+	if roleID != everyone {
 		roleAcc := findAccess(ch.Access, roleID)
 		applyAccessOverwrite(result, roleAcc)
 	}

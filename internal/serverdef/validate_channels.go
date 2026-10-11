@@ -33,20 +33,20 @@ func (v *validator) checkTicketShape() {
 		if ch.Opens != "start" {
 			v.add(CodeTicketShape, p+".opens", "ticket channel must have opens start")
 		}
-		eff := Effective(v.def, "everyone", ch.ID)
+		eff := Effective(v.def, everyoneID(v.def), ch.ID)
 		if _, ok := eff["VIEW_CHANNEL"]; !ok {
-			v.add(CodeTicketShape, p+".access[everyone]", "everyone must have VIEW_CHANNEL in tickets")
+			v.add(CodeTicketShape, p+".access["+everyoneID(v.def)+"]", "everyone must have VIEW_CHANNEL in tickets")
 		}
 		if _, ok := eff["CREATE_PRIVATE_THREADS"]; !ok {
-			v.add(CodeTicketShape, p+".access[everyone]",
+			v.add(CodeTicketShape, p+".access["+everyoneID(v.def)+"]",
 				"everyone must have CREATE_PRIVATE_THREADS in tickets")
 		}
 		if _, ok := eff["SEND_MESSAGES_IN_THREADS"]; !ok {
-			v.add(CodeTicketShape, p+".access[everyone]",
+			v.add(CodeTicketShape, p+".access["+everyoneID(v.def)+"]",
 				"everyone must have SEND_MESSAGES_IN_THREADS in tickets")
 		}
 		if _, ok := eff["SEND_MESSAGES"]; ok {
-			v.add(CodeTicketShape, p+".access[everyone]", "everyone must not have SEND_MESSAGES in tickets")
+			v.add(CodeTicketShape, p+".access["+everyoneID(v.def)+"]", "everyone must not have SEND_MESSAGES in tickets")
 		}
 	}
 }
@@ -130,8 +130,8 @@ func (v *validator) checkVoiceClosed() {
 		if ch.Type != "voice" {
 			continue
 		}
-		p := fmt.Sprintf("channels[%s].access[everyone]", ch.ID)
-		eff := Effective(v.def, "everyone", ch.ID)
+		p := fmt.Sprintf("channels[%s].access[%s]", ch.ID, everyoneID(v.def))
+		eff := Effective(v.def, everyoneID(v.def), ch.ID)
 		if _, ok := eff["CONNECT"]; ok {
 			v.add(CodeVoiceClosed, p, "everyone must not have effective CONNECT in voice channel")
 		}
