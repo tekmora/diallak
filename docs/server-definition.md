@@ -6,8 +6,10 @@ and who does what. A validator checks the file with every test run.
 
 **Nothing applies the file to a server.** It says so itself (`"applied":
 false`), and the validator refuses a file that claims otherwise. The path that
-will apply it is decided and not built
-([ADR-0010](adr/0010-bot-rights-and-apply-path.md), "One apply path").
+will apply it is decided
+([ADR-0010](adr/0010-bot-rights-and-apply-path.md), "One apply path") and half
+built: comparing the file with a description of a server and planning the
+changes work and change nothing ([Applying the server definition](server-apply.md)).
 
 ## In short
 
@@ -189,7 +191,9 @@ decided, planned, or observed on the server.
   apply, read-only compare. Every run uses the bot's identity. For the first
   set-up the operator raises the bot's role for the run and lowers it
   afterwards; with its three rights the bot runs the same path for its own
-  changes. It is decided in ADR-0010 and not built.
+  changes. It is decided in ADR-0010. Compare and plan are built
+  ([Applying the server definition](server-apply.md)); reading a server and
+  the apply step are not.
 
 ## Not decided and not verified
 

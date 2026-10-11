@@ -1,0 +1,45 @@
+{
+  "features": [
+    "COMMUNITY"
+  ],
+  "caller": {
+    "role": "Diallak",
+    "permissions": [
+      "VIEW_CHANNEL",
+      "SEND_MESSAGES"
+    ]
+  },
+  "roles": [
+    {
+      "name": "Diallak",
+      "everyone": false,
+      "managed": true,
+      "permissions": [
+        "VIEW_CHANNEL",
+        "SEND_MESSAGES"
+      ]
+    },
+    {
+      "name": "@everyone",
+      "everyone": true,
+      "managed": false,
+      "permissions": [
+        "VIEW_CHANNEL"
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "name": "General"
+    }
+  ],
+  "channels": [
+    {
+      "name": "general",
+      "type": "text",
+      "category": "General",
+      "access": []
+    }
+  ],
+  "channels_complete": true
+}
