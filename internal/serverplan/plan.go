@@ -435,21 +435,30 @@ func (ctx *planContext) checkUnknownBits(c candidate) (string, string) {
 	if ch == nil {
 		return "", ""
 	}
-	for i := range ctx.snap.Channels {
-		sch := &ctx.snap.Channels[i]
-		if sch.Name != ch.Name {
+	if detail := entryBitsDetail(ctx.snap, ch.Name, sr.Name); detail != "" {
+		return ReasonUnknownBits, detail
+	}
+	return "", ""
+}
+
+// entryBitsDetail returns the unknown bits of the first entry for the named
+// role on a server channel of the given name that has any, or "" for none.
+func entryBitsDetail(s *Snapshot, channelName, roleName string) string {
+	for i := range s.Channels {
+		sch := &s.Channels[i]
+		if sch.Name != channelName {
 			continue
 		}
 		for j := range sch.Access {
-			if sch.Access[j].Role != sr.Name {
+			if sch.Access[j].Role != roleName {
 				continue
 			}
 			if detail := accessBitsDetail(&sch.Access[j]); detail != "" {
-				return ReasonUnknownBits, detail
+				return detail
 			}
 		}
 	}
-	return "", ""
+	return ""
 }
 
 // snapRole returns the one server role a role of the definition is matched to,
