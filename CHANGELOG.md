@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 
+## [0.3.1] - 2026-10-11
+
+### Fixed
+
+- A permission bit the table does not name on a role no longer stops the server plan: the change clears it and the plan line names it
+
+
 ## [0.3.0] - 2026-10-11
 
 ### Changed
