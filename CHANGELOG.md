@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 
+## [0.2.0] - 2026-10-11
+
+### Security
+
+- Release: the SBOM files on the release page get build provenance, so a downloaded file can be checked with gh attestation verify
+
+### Added
+
+- Start probe of the model endpoint and a model state on the health listener
+- Read a server into a snapshot; plan and compare commands that change nothing
+- Propose the record for the first answer in the support forum (#39)
+- Add the server definition as data with a validator
+- Apply command: make planned server changes gated by the plan digest
+- Server definition: observed platform state, with Membership Screening as the first entry
+- Decision record 0011: the bot gives area roles from the member's own choice
+- Apply path, offline half: compare and plan against a server snapshot
+- Dependency updates: Renovate proposes them as pull requests, three days after a release, with actions pinned to a commit
+
+### Changed
+
+- Split the check of the source link template into smaller functions
+- Accept the record for the support forum answer and add an opt-out tag (#39)
+- Decision record 0013: a guardrail policy on every model call and a receipt for the member replace the gates for model mode
+- Say that a language room opens at a threshold and needs a reader
+- **BREAKING**: Server definition: the key onboarding becomes choices, done by the bot
+- Apply the decided opening measure, contributor ladder and supporter roles
+- Server definition: the bot holds three rights, bounded by role order
+- Move the private path for requests and appeals to a ticket channel (#37)
+
+### Removed
+
+- Editor and agent client files outside the set in use
+
+### Fixed
+
+- **BREAKING**: Refuse a placeholder before the path of the source link template (#45)
+
+
 ## [0.1.2] - 2026-10-11
 
 ### Added

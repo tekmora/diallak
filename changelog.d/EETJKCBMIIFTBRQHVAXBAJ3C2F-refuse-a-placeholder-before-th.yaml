@@ -1,4 +1,0 @@
-type: fixed
-title: Refuse a placeholder before the path of the source link template
-issue: "45"
-breaking: true
