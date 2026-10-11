@@ -28,7 +28,69 @@ const (
 	DefaultMaxOutputTokens = 512
 	// MaxResponseBytes is the maximum allowed HTTP response size in bytes (1 MiB).
 	MaxResponseBytes = 1 << 20
+	// ProbeTimeout is the maximum duration for a startup or health probe.
+	// Source: chosen, not measured.
+	ProbeTimeout = 10 * time.Second
 )
+
+// StatusError reports an unexpected HTTP status code from the model endpoint.
+type StatusError struct {
+	Code int
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("model endpoint returned status %d", e.Code)
+}
+
+// TransportError marks an error originating from the HTTP client transport.
+type TransportError struct {
+	Err error
+}
+
+func (e *TransportError) Error() string {
+	return e.Err.Error()
+}
+
+func (e *TransportError) Unwrap() error {
+	return e.Err
+}
+
+// Class categorizes errors from the model endpoint.
+type Class int
+
+const (
+	// ClassOther represents errors other than rejected or unavailable.
+	ClassOther Class = iota
+	// ClassRejected represents client-side or configuration errors rejected by the endpoint.
+	ClassRejected
+	// ClassUnavailable represents transient reachability, timeout, or server-side failures.
+	ClassUnavailable
+)
+
+// Classify categorizes err into a Class.
+func Classify(err error) Class {
+	if err == nil {
+		return ClassOther
+	}
+	var statusErr *StatusError
+	if errors.As(err, &statusErr) {
+		switch {
+		case statusErr.Code == http.StatusRequestTimeout:
+			return ClassUnavailable
+		case statusErr.Code == http.StatusTooManyRequests:
+			return ClassUnavailable
+		case statusErr.Code >= 500 && statusErr.Code <= 599:
+			return ClassUnavailable
+		default:
+			return ClassRejected
+		}
+	}
+	var transportErr *TransportError
+	if errors.As(err, &transportErr) {
+		return ClassUnavailable
+	}
+	return ClassOther
+}
 
 var aliasRegexp = regexp.MustCompile(`^[A-Za-z0-9._:/-]{1,128}$`)
 
@@ -163,8 +225,56 @@ type chatResponse struct {
 	Choices []chatChoice `json:"choices"`
 }
 
+// sendRequest builds the request, sets headers, sends, checks status and reads the limited body.
+func (c *Client) sendRequest(ctx context.Context, timeout time.Duration, reqBody chatRequest) (_ []byte, err error) {
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	endpoint := c.baseURL + "/chat/completions"
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do request: %w", &TransportError{Err: err})
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close response body: %w", closeErr))
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		if _, copyErr := io.Copy(io.Discard, io.LimitReader(resp.Body, int64(MaxResponseBytes+1))); copyErr != nil {
+			return nil, errors.Join(&StatusError{Code: resp.StatusCode}, fmt.Errorf("drain response body: %w", copyErr))
+		}
+		return nil, &StatusError{Code: resp.StatusCode}
+	}
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, int64(MaxResponseBytes+1)))
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
+	}
+	if len(data) > MaxResponseBytes {
+		return nil, fmt.Errorf("response body exceeds max %d bytes", MaxResponseBytes)
+	}
+
+	return data, nil
+}
+
 // Complete sends a prompt to the chat completion endpoint and returns the generated content.
-func (c *Client) Complete(ctx context.Context, system, user string) (_ string, err error) {
+func (c *Client) Complete(ctx context.Context, system, user string) (string, error) {
 	reqBody := chatRequest{
 		Model: c.alias,
 		Messages: []chatMessage{
@@ -175,46 +285,10 @@ func (c *Client) Complete(ctx context.Context, system, user string) (_ string, e
 		Temperature: 0,
 		Stream:      false,
 	}
-	bodyBytes, err := json.Marshal(reqBody)
+	data, err := c.sendRequest(ctx, c.timeout, reqBody)
 	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
+		return "", err
 	}
-
-	reqCtx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
-
-	endpoint := c.baseURL + "/chat/completions"
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if c.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("do request: %w", err)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("close response body: %w", closeErr))
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("model endpoint returned status %d", resp.StatusCode)
-	}
-
-	data, err := io.ReadAll(io.LimitReader(resp.Body, int64(MaxResponseBytes+1)))
-	if err != nil {
-		return "", fmt.Errorf("read response body: %w", err)
-	}
-	if len(data) > MaxResponseBytes {
-		return "", fmt.Errorf("response body exceeds max %d bytes", MaxResponseBytes)
-	}
-
 	return parseChatResponse(data)
 }
 
@@ -231,4 +305,19 @@ func parseChatResponse(data []byte) (string, error) {
 		return "", errors.New("response choice content is empty")
 	}
 	return content, nil
+}
+
+// Probe sends a lightweight probe to the model endpoint to verify routing and reachability.
+func (c *Client) Probe(ctx context.Context) error {
+	reqBody := chatRequest{
+		Model: c.alias,
+		Messages: []chatMessage{
+			{Role: "user", Content: "ping"},
+		},
+		MaxTokens:   1,
+		Temperature: 0,
+		Stream:      false,
+	}
+	_, err := c.sendRequest(ctx, min(ProbeTimeout, c.timeout), reqBody)
+	return err
 }
