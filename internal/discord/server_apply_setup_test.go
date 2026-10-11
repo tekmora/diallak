@@ -293,6 +293,11 @@ func TestApplyServer_Boundary_FirstSetUpAndTheChannelListDate(t *testing.T) {
 						r.Action, r.Object, r.Reason, serverplan.ActionCreateChannel, serverplan.ReasonNotVisible)
 				}
 			}
+			for _, c := range result.Changes {
+				if tc.wantRefused && c.Action == serverplan.ActionCreateChannel {
+					t.Errorf("%s is planned from a list of channels that is not the whole list", c.Object)
+				}
+			}
 			if want := visibleChannels(fx.def); tc.wantRefused && (len(result.Refused) != want || want == len(fx.def.Channels)) {
 				t.Errorf("%d channels refused, want the %d of %d the definition lets the bot see",
 					len(result.Refused), want, len(fx.def.Channels))
