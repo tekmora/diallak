@@ -100,9 +100,9 @@ func granted(def *Definition, roleID, channelID string) map[string]struct{} {
 	everyone := everyoneID(def)
 	result := computeBasePermissions(def, everyone, roleID)
 	if _, isAdmin := result["ADMINISTRATOR"]; isAdmin {
-		all := make(map[string]struct{}, len(vocabulary))
-		for _, p := range vocabulary {
-			all[p] = struct{}{}
+		all := make(map[string]struct{}, len(permissionsTable))
+		for i := range permissionsTable {
+			all[permissionsTable[i].name] = struct{}{}
 		}
 		return all
 	}
