@@ -27,7 +27,7 @@ checked. A value that was not measured says so.
 | User | `65532:65532`, not root | [`Dockerfile`](../Dockerfile) |
 | Contents | The static binary on a distroless base without a shell | [`Dockerfile`](../Dockerfile) |
 | Signature, provenance, SBOM | Signed by the release workflow at its tag, with build provenance; one SBOM per platform on the release page | [README](../README.md), "Verifying a release": tried against 0.1.1 |
-| Visibility | Private until the operator switches the package to public; until then a pull needs a login | Package settings of the organisation |
+| Visibility | Public: a pull needs no login | `crane digest ghcr.io/tekmora/diallak:0.1.1` without credentials returned the digest above on 2026-10-11 |
 <!-- markdownlint-enable MD013 -->
 
 The bot writes no file, so the root filesystem can be read-only and no temporary
