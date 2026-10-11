@@ -265,8 +265,8 @@ For another version, replace `0.1.1` in all three places. A deployment pins the
 image by digest. From 0.1.2 on, the release page of a version names its digest;
 the one of 0.1.1 is in [docs/hosting.md](docs/hosting.md).
 
-The two SBOM files on a release page get build provenance of their own from
-the first release after 0.1.2 on (step `Attest the SBOM files` in
+The two SBOM files on a release page carry build provenance of their own from
+0.2.0 on (step `Attest the SBOM files` in
 [`release-image.yml`](.github/workflows/release-image.yml)). For a downloaded
 file:
 
@@ -275,15 +275,20 @@ gh attestation verify diallak-X.Y.Z-linux-amd64.spdx.json --repo tekmora/diallak
 ```
 
 The command looks the file up by its SHA-256, so a changed file is a file
-without an attestation. That is the case it was tried against: the file of
-0.1.2 is refused with exit code 1 and `HTTP 404`. An accepted file was not
-tried, because no release has been made since the step exists.
+without an attestation. Tried against 0.2.0 on 2026-10-11:
 
-- **0.1.1 and 0.1.2:** the SBOM files carry no signature and no attestation.
-  The only check is the SHA-256 the release page shows.
-- **What the attestation says:** the release workflow of this repository wrote
-  the file in the run of that version's tag. It does not name the image
-  digest.
+- Both files are accepted, also when the command names the workflow and the
+  tag (`--signer-workflow tekmora/diallak/.github/workflows/release-image.yml
+  --source-ref refs/tags/v0.2.0`).
+- A copy with one byte added is refused with exit code 1 and `HTTP 404`.
+- Either file is refused the same way when another repository is named.
+- The files of 0.1.2 are refused the same way.
+
+The attestation says that the release workflow of this repository wrote the
+file in the run of that version's tag. It does not name the image digest.
+
+The SBOM files of 0.1.1 and 0.1.2 carry no signature and no attestation. Their
+only check is the SHA-256 the release page shows.
 
 ## Develop
 
