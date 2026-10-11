@@ -19,6 +19,7 @@ import (
 	"github.com/tekmora/diallak/internal/corpus"
 	"github.com/tekmora/diallak/internal/discord"
 	"github.com/tekmora/diallak/internal/health"
+	"github.com/tekmora/diallak/internal/serverplan"
 )
 
 type failingWriter struct{}
@@ -1100,5 +1101,302 @@ func TestRun_Positive_HealthEndpointReportsTheModelState(t *testing.T) {
 				t.Errorf("/modelz = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func loadFreshServerSnapshot(t *testing.T) *serverplan.Snapshot {
+	t.Helper()
+	data, err := os.ReadFile("../../internal/serverplan/testdata/fresh-server.json")
+	if err != nil {
+		t.Fatalf("read fresh-server.json: %v", err)
+	}
+	s, err := serverplan.LoadSnapshot(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("load fresh-server snapshot: %v", err)
+	}
+	return s
+}
+
+func TestRun_Positive_ServerPlan_ExitZeroAndOutputAndDigest(t *testing.T) {
+	snap := loadFreshServerSnapshot(t)
+	var readCalls int
+	var calledWithToken string
+	var calledWithGuild uint64
+
+	deps := dependencies{
+		readServer: func(_ context.Context, token string, guildID uint64) (*serverplan.Snapshot, error) {
+			readCalls++
+			calledWithToken = token
+			calledWithGuild = guildID
+			return snap, nil
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-server=plan"}, validEnv(t), &out, deps)
+	if err != nil {
+		t.Fatalf("run -server=plan failed: %v", err)
+	}
+	if readCalls != 1 {
+		t.Errorf("readCalls = %d, want 1", readCalls)
+	}
+	if calledWithGuild != 42 {
+		t.Errorf("calledWithGuild = %d, want 42", calledWithGuild)
+	}
+	if calledWithToken != "distinctive-token-xyz" {
+		t.Errorf("calledWithToken = %q, want distinctive-token-xyz", calledWithToken)
+	}
+
+	got := out.String()
+	if !strings.HasPrefix(got, "mode: ") {
+		t.Errorf("output does not start with 'mode: ': %q", got)
+	}
+	if !strings.Contains(got, "changes:") {
+		t.Errorf("output does not contain 'changes:': %q", got)
+	}
+	if !strings.Contains(got, "plan digest: sha256:") {
+		t.Errorf("output does not contain 'plan digest: sha256:': %q", got)
+	}
+	var errOut bytes.Buffer
+	if code := report(err, &errOut); code != 0 {
+		t.Errorf("report exit code = %d, want 0", code)
+	}
+}
+
+func TestRun_Positive_ServerPlan_ExitZeroWithRefusals(t *testing.T) {
+	snap := loadFreshServerSnapshot(t)
+	snap.Caller.Permissions = []string{"VIEW_CHANNEL"}
+
+	var readCalls int
+	deps := dependencies{
+		readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+			readCalls++
+			return snap, nil
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-server=plan"}, validEnv(t), &out, deps)
+	if err != nil {
+		t.Fatalf("run -server=plan failed with refusals: %v", err)
+	}
+	if readCalls != 1 {
+		t.Errorf("readCalls = %d, want 1", readCalls)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "refused:") {
+		t.Errorf("output should contain 'refused:': %q", got)
+	}
+	if !strings.Contains(got, "plan digest: sha256:") {
+		t.Errorf("output should contain 'plan digest: sha256:': %q", got)
+	}
+	var errOut bytes.Buffer
+	if code := report(err, &errOut); code != 0 {
+		t.Errorf("report exit code = %d, want 0", code)
+	}
+}
+
+func TestRun_Positive_ServerCompare_ExitZeroAndDifferences(t *testing.T) {
+	snap := loadFreshServerSnapshot(t)
+	var readCalls int
+	deps := dependencies{
+		readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+			readCalls++
+			return snap, nil
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-server=compare"}, validEnv(t), &out, deps)
+	if err != nil {
+		t.Fatalf("run -server=compare failed: %v", err)
+	}
+	if readCalls != 1 {
+		t.Errorf("readCalls = %d, want 1", readCalls)
+	}
+
+	got := out.String()
+	if !strings.HasPrefix(got, "mode: ") {
+		t.Errorf("output does not start with 'mode: ': %q", got)
+	}
+	if !strings.Contains(got, "differences:") {
+		t.Errorf("output does not contain 'differences:': %q", got)
+	}
+	var errOut bytes.Buffer
+	if code := report(err, &errOut); code != 0 {
+		t.Errorf("report exit code = %d, want 0", code)
+	}
+}
+
+func TestRun_Negative_ServerAndRegisterCommandsMutuallyExclusive(t *testing.T) {
+	var readCalls int
+	var registerCalls int
+	deps := dependencies{
+		readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+			readCalls++
+			return nil, nil
+		},
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error {
+			registerCalls++
+			return nil
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-server=plan", "-register-commands"}, validEnv(t), &out, deps)
+	if err == nil {
+		t.Fatal("run succeeded with mutually exclusive flags, want error")
+	}
+	if readCalls != 0 {
+		t.Errorf("readCalls = %d, want 0", readCalls)
+	}
+	if registerCalls != 0 {
+		t.Errorf("registerCalls = %d, want 0", registerCalls)
+	}
+
+	var errOut bytes.Buffer
+	if code := report(err, &errOut); code != 1 {
+		t.Errorf("report exit code = %d, want 1", code)
+	}
+}
+
+func TestRun_Negative_ServerUnknownModeListsValues(t *testing.T) {
+	var readCalls int
+	deps := dependencies{
+		readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+			readCalls++
+			return nil, nil
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-server=unknown"}, validEnv(t), &out, deps)
+	if err == nil {
+		t.Fatal("run succeeded with unknown server mode, want error")
+	}
+	if readCalls != 0 {
+		t.Errorf("readCalls = %d, want 0", readCalls)
+	}
+	errStr := err.Error()
+	if !strings.Contains(errStr, "plan") || !strings.Contains(errStr, "compare") {
+		t.Errorf("error %q should list both 'plan' and 'compare'", errStr)
+	}
+
+	var errOut bytes.Buffer
+	if code := report(err, &errOut); code != 1 {
+		t.Errorf("report exit code = %d, want 1", code)
+	}
+}
+
+func TestRun_Positive_DefaultDependenciesReadServer(t *testing.T) {
+	deps := defaultDependencies()
+	if deps.readServer == nil {
+		t.Fatal("defaultDependencies().readServer is nil")
+	}
+	_, err := deps.readServer(context.Background(), "", 1001)
+	if err == nil {
+		t.Fatal("expected error with empty token, got nil")
+	}
+	if !strings.Contains(err.Error(), "bot token is required") {
+		t.Errorf("error = %q, want 'bot token is required'", err.Error())
+	}
+}
+
+func TestRun_Boundary_ServerTimeoutSixtySeconds(t *testing.T) {
+	snap := loadFreshServerSnapshot(t)
+	var capturedDeadline time.Time
+	var hasDeadline bool
+
+	deps := dependencies{
+		readServer: func(ctx context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+			capturedDeadline, hasDeadline = ctx.Deadline()
+			return snap, nil
+		},
+	}
+
+	start := time.Now()
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-server=plan"}, validEnv(t), &out, deps)
+	if err != nil {
+		t.Fatalf("run -server=plan failed: %v", err)
+	}
+	if !hasDeadline {
+		t.Fatal("ctx passed to readServer has no deadline")
+	}
+	remaining := time.Until(capturedDeadline)
+	if remaining < 50*time.Second || remaining > 60*time.Second+500*time.Millisecond {
+		t.Errorf("remaining deadline = %v (from start %v), want ~60s", remaining, start)
+	}
+}
+
+func TestRun_Negative_ServerReadErrorWrapped(t *testing.T) {
+	deps := dependencies{
+		readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+			return nil, errors.New("connection failed")
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-server=plan"}, validEnv(t), &out, deps)
+	if err == nil {
+		t.Fatal("run succeeded when readServer failed, want error")
+	}
+	if !strings.Contains(err.Error(), "read server:") {
+		t.Errorf("error %q should wrap with 'read server:'", err.Error())
+	}
+}
+
+func TestRun_Positive_ServerCommandIsolation(t *testing.T) {
+	snap := loadFreshServerSnapshot(t)
+
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer func() {
+		if closeErr := ln.Close(); closeErr != nil {
+			t.Errorf("close listener: %v", closeErr)
+		}
+	}()
+
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:  tokenPath,
+		config.EnvGuildID:    "42",
+		config.EnvCorpusDir:  corpusPath,
+		config.EnvHealthAddr: ln.Addr().String(),
+	}
+
+	var runCalled, registerCalled int
+	deps := dependencies{
+		readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+			return snap, nil
+		},
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error {
+			registerCalled++
+			return nil
+		},
+		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+			runCalled++
+			return nil
+		},
+	}
+
+	for _, mode := range []string{"plan", "compare"} {
+		var out bytes.Buffer
+		err := run(context.Background(), []string{"-server=" + mode}, func(k string) string { return envMap[k] }, &out, deps)
+		if err != nil {
+			t.Fatalf("run -server=%s failed: %v", mode, err)
+		}
+	}
+
+	if runCalled != 0 {
+		t.Errorf("runCalled = %d, want 0", runCalled)
+	}
+	if registerCalled != 0 {
+		t.Errorf("registerCalled = %d, want 0", registerCalled)
 	}
 }
