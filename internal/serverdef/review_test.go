@@ -288,6 +288,63 @@ func TestValidate_Negative_AutomationRecordConditions(t *testing.T) {
 	})
 }
 
+func TestValidate_Positive_ObservedPlatformState(t *testing.T) {
+	def := valid(t)
+	findings := Validate(def)
+	if len(findings) != 0 {
+		t.Fatalf("committed definition has findings: %+v", findings)
+	}
+	auto := automationOf(t, def, "membership-screening")
+	if auto.By != "platform" {
+		t.Errorf("automation[membership-screening].by = %q, want %q", auto.By, "platform")
+	}
+	if auto.State != "observed" {
+		t.Errorf("automation[membership-screening].state = %q, want %q", auto.State, "observed")
+	}
+	if auto.Record != "" {
+		t.Errorf("automation[membership-screening].record = %q, want empty", auto.Record)
+	}
+}
+
+func TestValidate_Negative_ObservedStateConditions(t *testing.T) {
+	runPlanted(t, []plantedCase{
+		{"observed automation by bot", func(t *testing.T, def *Definition) {
+			automationOf(t, def, "membership-screening").By = "bot"
+		}, CodeAutomationRecord, "automation[membership-screening].state", "platform"},
+		{"observed automation by operator", func(t *testing.T, def *Definition) {
+			automationOf(t, def, "membership-screening").By = "operator"
+		}, CodeAutomationRecord, "automation[membership-screening].state", "platform"},
+		{"observed automation by moderator", func(t *testing.T, def *Definition) {
+			automationOf(t, def, "membership-screening").By = "moderator"
+		}, CodeAutomationRecord, "automation[membership-screening].state", "platform"},
+		{"observed automation with record", func(t *testing.T, def *Definition) {
+			automationOf(t, def, "membership-screening").Record = "docs/adr/0005-moderation-and-escalation.md"
+		}, CodeAutomationRecord, "automation[membership-screening].record", "observed"},
+	})
+}
+
+func TestValidate_Boundary_ObservedNeedsNoRecord(t *testing.T) {
+	def := valid(t)
+	auto := automationOf(t, def, "membership-screening")
+	if auto.Record != "" {
+		t.Fatalf("membership-screening has non-empty record: %q", auto.Record)
+	}
+	findings := Validate(def)
+	for _, f := range findings {
+		if strings.HasPrefix(f.Path, "automation[membership-screening]") {
+			t.Errorf("membership-screening has finding: %+v", f)
+		}
+	}
+	runPlanted(t, []plantedCase{
+		{"platform decided automation with empty record is refused", func(t *testing.T, def *Definition) {
+			automationOf(t, def, "spam-filter").Record = ""
+		}, CodeAutomationRecord, "automation[spam-filter].record", "relative path"},
+		{"state observe one letter short", func(t *testing.T, def *Definition) {
+			automationOf(t, def, "membership-screening").State = "observe"
+		}, CodeEnum, "automation[membership-screening].state", "observe"},
+	})
+}
+
 // The role of every member is found by its kind. A definition that gives it another id is read
 // the same way.
 func TestEffective_Positive_EveryoneIsFoundByKind(t *testing.T) {

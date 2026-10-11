@@ -57,7 +57,7 @@ after the definition and a file over one mebibyte are refused
 | `channels` | Every channel with type, purpose, owner and the permissions it changes per role | 16 |
 | `areas` | The rooms that open at a threshold, each with an opening and a closing rule | 8 |
 | `onboarding` | The questions a new member is asked and the role each answer gives | 2 questions |
-| `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 14 |
+| `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 15 |
 <!-- markdownlint-enable MD013 -->
 
 A role or a rule carries `"basis": "decided"` or `"basis": "proposal"`. Decided
@@ -109,7 +109,7 @@ Each finding has a code, a path into the file and a message.
 | `role-order` | A role missing from the order or listed twice; a role the operator assigns that does not stand above the bot's role; a role the bot or onboarding assigns that does not stand below it |
 | `nothing-attaches` | A permission on a recognition, interest or language role |
 | `role-grant` | A role assigned by the wrong party, such as onboarding handing out the moderator role |
-| `automation-record` | Something the bot or the platform does without a decision record, or a planned bot feature not marked as needing one |
+| `automation-record` | Something the bot or the platform does without a decision record, a planned bot feature not marked as needing one, or the state `observed` on anything but the platform or together with a record |
 | `id`, `text`, `enum`, `ref`, `version`, `singleton`, `permission-name`, `access-shape` | Malformed ids, empty texts, unknown values, references to nothing, a wrong version, a missing or doubled base role, unknown or doubled permissions |
 <!-- markdownlint-enable MD013 -->
 
@@ -164,7 +164,8 @@ denied the ticket channel and has no entry on the announcement channel.
 
 ## Who does what
 
-The `automation` part names the party for each task and whether it is built.
+The `automation` part names the party for each task and its state: built,
+decided, planned, or observed on the server.
 
 - **The bot, built:** the `/ask` command.
 - **The bot, decided and not built:** the first answer in the support forum,
@@ -178,6 +179,12 @@ The `automation` part names the party for each task and whether it is built.
 - **The operator:** inviting people and granting the moderator and subject
   guide roles, reading the ticket threads, scheduling events and opening the
   voice room for them.
+- **Observed on the server, decided nowhere:** Discord's Membership
+  Screening, which holds a new member back from every action until they
+  completed the server's form. It was switched on by hand in the server's
+  settings. The definition records that it is on (`"state": "observed"`) so
+  that the file describes the server as it is; no decision record stands
+  behind it, and the validator accepts the state for the platform only.
 - **Applying the definition** is one path with four steps: plan, dry run,
   apply, read-only compare. Every run uses the bot's identity. For the first
   set-up the operator raises the bot's role for the run and lowers it
