@@ -203,5 +203,4 @@ role.
   refused is not refused with it; what the apply step does with a plan that
   holds a refusal is settled when that step is built.
 - Compared today: roles, their order, categories, channels and permission
-  entries. Not compared yet: forum tags, onboarding questions, filter rules and
-  channel topics.
+  entries. Not compared yet: forum tags, filter rules and channel topics.

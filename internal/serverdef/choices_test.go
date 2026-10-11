@@ -86,6 +86,21 @@ func TestValidate_ExactlyOneOptionPerRole(t *testing.T) {
 		}
 	})
 
+	t.Run("language option removed produces 0 choices finding", func(t *testing.T) {
+		def := valid(t)
+		opts := make([]Option, 0, len(def.Choices.Questions[1].Options))
+		for _, opt := range def.Choices.Questions[1].Options {
+			if opt.Role != "lang-es" {
+				opts = append(opts, opt)
+			}
+		}
+		def.Choices.Questions[1].Options = opts
+		findings := Validate(def)
+		if !hasFinding(findings, CodeRoleGrant, "roles[lang-es]", "0 choices") {
+			t.Errorf("missing 0 choices finding for lang-es: %+v", findings)
+		}
+	})
+
 	t.Run("boundary: interest and language roles and questions removed produces no finding", func(t *testing.T) {
 		def := valid(t)
 		def.Choices.Questions = nil

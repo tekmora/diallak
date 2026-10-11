@@ -109,9 +109,9 @@ Each finding has a code, a path into the file and a message.
 | `voice-closed` | A voice channel that members can join between events or use without push-to-talk |
 | `operator-only`, `moderation-only` | Administration rights outside the operator role; moderation rights outside the operator and moderator roles. The bot's role passes for its three rights only |
 | `bot-rights` | A bot role that lacks one of its three rights or holds another; an entry of the bot's role that allows more than its kind of channel needs; a moderators' channel the bot cannot write in; a ticket channel the bot can see |
-| `role-order` | A role missing from the order or listed twice; a role the operator assigns that does not stand above the bot's role; a role the bot or onboarding assigns that does not stand below it |
+| `role-order` | A role missing from the order or listed twice; a role the operator assigns that does not stand above the bot's role; a role the bot assigns, by itself or from a member's choice, that does not stand below it |
 | `nothing-attaches` | A permission on a recognition, interest or language role |
-| `role-grant` | A role assigned by the wrong party, such as onboarding handing out the moderator role |
+| `role-grant` | A role assigned by the wrong party, such as a member's choice handing out the moderator role; an interest or language role that is not the option of exactly one question; an option that gives a role of another kind |
 | `choice-limit` | A question with more than 25 options, or an option title longer than 100 characters |
 | `automation-record` | Something the bot or the platform does without a decision record, a planned bot feature not marked as needing one, or the state `observed` on anything but the platform or together with a record |
 | `id`, `text`, `enum`, `ref`, `version`, `singleton`, `permission-name`, `access-shape` | Malformed ids, empty texts, unknown values, references to nothing, a wrong version, a missing or doubled base role, unknown or doubled permissions |
@@ -173,13 +173,15 @@ decided, planned, or observed on the server.
 
 - **The bot, built:** the `/ask` command.
 - **The bot, decided and not built:** the first answer in the support forum,
-  the bridge from GitHub Discussions, and what a moderator does through the
-  bot together with the trail of it.
+  the bridge from GitHub Discussions, what a moderator does through the bot
+  together with the trail of it, and the `/areas` command, which gives and
+  takes the interest and language roles from the member's own choice
+  ([ADR-0011](adr/0011-area-roles-from-member-choice.md)).
 - **The bot, planned:** opening and closing the areas, the news posts, the
   supporter roles and the Contributor role. Each needs its own decision record
   first; until then the operator opens and closes areas by hand.
 - **The platform:** the spam filter, which writes each flagged case into the
-  moderators' queue channel by itself, and the onboarding questions.
+  moderators' queue channel by itself.
 - **The operator:** inviting people and granting the moderator and subject
   guide roles, reading the ticket threads, scheduling events and opening the
   voice room for them.
@@ -202,8 +204,9 @@ decided, planned, or observed on the server.
 - **Language rooms.** The operator decided that a language room opens at a
   threshold and needs a person who reads the language, and that none exists at
   the start ([server rules](compliance/server-rules.md), rule 2). The numbers
-  of the threshold, and that a member asks for a language through an
-  onboarding answer, are proposals.
+  of the threshold are proposals. That a member asks for a language through
+  the bot's `/areas` command is decided in
+  [ADR-0011](adr/0011-area-roles-from-member-choice.md).
 - **The contributor ladder** is decided: one role, Contributor, after one
   merged contribution, and the subject guide roles above it. There is no third
   step. The bot gives the role; how it learns which member a contribution
@@ -222,12 +225,12 @@ decided, planned, or observed on the server.
   least seven default channels, five of them writable for every member, before
   its onboarding can be switched on. The launch set has six channels every
   member sees and three in which every member can write. The platform's
-  onboarding is therefore not used: the bot will give the interest and
-  language roles from the member's own choice. The function is decided in
-  [ADR-0011](adr/0011-area-roles-from-member-choice.md) and not built. The
-  file still holds the two onboarding questions; the record lists what
-  replaces them ("What changes in the definition").
-- **Onboarding** and the two measurements are described as Discord's
+  onboarding is therefore not used: the bot gives the interest and language
+  roles from the member's own choice, made through its `/areas` command
+  ([ADR-0011](adr/0011-area-roles-from-member-choice.md)). The file holds the
+  two questions under `choices`, and the eight roles carry
+  `"assigned_by": "choice"`. The command is not built yet.
+- **Discord's onboarding** and the two measurements are described as its
   documentation gives them
   ([`discord/discord-api-docs`](https://github.com/discord/discord-api-docs/tree/37148620d2324292b76047541d5f8331f81ea77a)
   at commit `37148620d232`: `developers/resources/guild.mdx`,

@@ -71,3 +71,31 @@ func TestDefinition_Negative_UnknownFieldsRefused(t *testing.T) {
 		t.Errorf("Load with old key error = %v, want error holding %q", err, oldKey)
 	}
 }
+
+func TestDefinition_Positive_AreaChoicesIsTheBotsDecidedAutomation(t *testing.T) {
+	def, err := Definition()
+	if err != nil {
+		t.Fatalf("Definition() error = %v, want nil", err)
+	}
+	found := 0
+	for _, a := range def.Automation {
+		if strings.Contains(a.ID, "boarding") {
+			t.Errorf("automation %q names the platform's former questions", a.ID)
+		}
+		if a.ID != "area-choices" {
+			continue
+		}
+		found++
+		if a.By != "bot" || a.State != "decided" ||
+			a.Record != "docs/adr/0011-area-roles-from-member-choice.md" {
+			t.Errorf("area-choices = %+v, want by bot, decided, record 0011", a)
+		}
+	}
+	if found != 1 {
+		t.Errorf("automation entries with id area-choices = %d, want 1", found)
+	}
+	if def.Choices.By != "bot" || len(def.Choices.Questions) != 2 {
+		t.Errorf("choices = by %q with %d questions, want by bot with 2",
+			def.Choices.By, len(def.Choices.Questions))
+	}
+}

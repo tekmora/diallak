@@ -87,13 +87,14 @@ func (v *validator) checkChoiceLimits() {
 		p := fmt.Sprintf("choices.questions[%s]", q.ID)
 		if len(q.Options) > maxChoiceOptions {
 			v.add(CodeChoiceLimit, p+".options",
-				fmt.Sprintf("question holds %d options; a menu holds at most 25", len(q.Options)))
+				fmt.Sprintf("question holds %d options; a menu holds at most %d", len(q.Options), maxChoiceOptions))
 		}
 		for _, opt := range q.Options {
 			runes := utf8.RuneCountInString(opt.Title)
 			if runes > maxChoiceTitleRunes {
 				v.add(CodeChoiceLimit, fmt.Sprintf("%s.options[%s].title", p, opt.Role),
-					fmt.Sprintf("option title holds %d characters; a menu option holds at most 100", runes))
+					fmt.Sprintf("option title holds %d characters; a menu option holds at most %d",
+						runes, maxChoiceTitleRunes))
 			}
 		}
 	}

@@ -69,6 +69,8 @@ func TestValidate_Negative_EmptyTexts(t *testing.T) {
 		}, CodeText, "areas[games].closing.reasoning", "empty"},
 		{"question title", func(_ *testing.T, def *Definition) { def.Choices.Questions[0].Title = "" },
 			CodeText, "choices.questions[interests].title", "empty"},
+		{"question title of spaces", func(_ *testing.T, def *Definition) { def.Choices.Questions[1].Title = " \t" },
+			CodeText, "choices.questions[languages].title", "empty"},
 		{"option title", func(_ *testing.T, def *Definition) { def.Choices.Questions[0].Options[2].Title = " " },
 			CodeText, "choices.questions[interests].options[interest-games].title", "empty"},
 		{"what an automation does", func(t *testing.T, def *Definition) { automationOf(t, def, "news").What = "" },
