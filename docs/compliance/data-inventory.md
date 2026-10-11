@@ -48,16 +48,24 @@ Nothing. It has no database and writes no file.
 | At start: number of sources and passages, each source with its revision, whether a model is configured, the model alias | `lusoris/SnatchArr@9e70c2e03d22` | No |
 | Name of a command or numeric type of an interaction the bot does not serve, at debug level only | `other` | No |
 | Type of a recovered program fault | `string` | No |
-| Warnings and errors of the Discord library | connection problems | Not expected; not audited line by line |
+| Warnings and errors of the Discord library: the message and listed fields only (counters, durations, flags, status codes, type names, the name of the library part); for an error its Go type names, never its text; the number of fields held back | `rate limit exceeded`, `retry_after`, `error_types`, `dropped_attrs` | No |
 <!-- markdownlint-enable MD013 -->
 
 The logs never hold a question, an answer, a member id, the bot token or the
 text of an error from the model endpoint. The Discord library's own debug
-output, which would include message bodies, is cut off.
+output, which would include message bodies, is cut off. Its warnings and errors
+pass a fixed list of fields; a reply body, a request address, an error text and
+the value of a program fault are held back, also in a fault of the reply call
+and in the one-shot commands. A field a later library version adds stays out
+until it is put on the list
+([`internal/discord/disgo.go`](../../internal/discord/disgo.go),
+`libraryAllowedAttrs`).
 
 Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
-`TestHandleAsk_Positive_SuccessLogsOutcomeWithoutContent` and
-`TestLibraryLogger_Negative_BodiesNeverReachTheLog` in
+`TestHandleAsk_Positive_SuccessLogsOutcomeWithoutContent`,
+`TestLibraryLogger_Negative_BodiesNeverReachTheLog`,
+`TestLibraryLogger_Positive_EndToEndRestUnmarshallingError` and
+`TestNewRestClient_Negative_LibraryRecordsOfOneShotCommandsAreFiltered` in
 [`internal/discord`](../../internal/discord), and
 `TestAsk_Negative_ModelErrorTextIsNeverLogged` in
 [`internal/answer`](../../internal/answer), and

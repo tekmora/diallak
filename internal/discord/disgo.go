@@ -112,7 +112,8 @@ func checkTokenAndGuild(token string, guildID uint64) error {
 }
 
 func newRestClient(token string, restURL string) (*bot.Client, error) {
-	var botOpts []bot.ConfigOpt
+	// Without a logger the library writes to the process default with every attribute it has.
+	botOpts := []bot.ConfigOpt{bot.WithLogger(libraryLogger(slog.Default()))}
 	if restURL != "" {
 		botOpts = append(botOpts, bot.WithRestClientConfigOpts(rest.WithURL(restURL)))
 	}
@@ -281,9 +282,15 @@ const (
 	maxStringBytes = 64
 )
 
-// libraryAllowedAttrs contains the allow-list of attribute keys permitted from the Discord library.
-// Only attributes with keys present in this set and with permitted primitive value types are logged.
+// libraryAllowedAttrs is the allow-list of attribute keys a record of the Discord library may carry:
+// counters, durations, flags, status codes, type names and the name of the library part. A key
+// outside it is dropped with its value, so a key a later library version adds stays out of the log
+// until it is listed here. The key "data" is not listed: one library site writes a whole event under
+// it.
 var libraryAllowedAttrs = map[string]struct{}{
+	"name":               {},
+	"shard_id":           {},
+	"shard_count":        {},
 	"retry_after":        {},
 	"try":                {},
 	"delay":              {},
@@ -293,7 +300,6 @@ var libraryAllowedAttrs = map[string]struct{}{
 	"code":               {},
 	"type":               {},
 	"event_type":         {},
-	"data":               {},
 }
 
 func isAllowedKey(key string) bool {
@@ -326,32 +332,34 @@ func extractError(attr slog.Attr) (error, bool) {
 	if attr.Key != "err" {
 		return nil, false
 	}
-	if e, ok := attr.Value.Any().(error); ok && e != nil {
-		return e, true
-	}
 	if e, ok := attr.Value.Resolve().Any().(error); ok && e != nil {
 		return e, true
 	}
 	return nil, false
 }
 
-func sanitizeValue(key string, val slog.Value) (slog.Attr, bool, bool) {
+// sanitizeValue passes a number, a flag, a duration or a string cut to maxStringBytes, and refuses
+// every other kind: a group, a time or a structured value could carry content under a listed key.
+func sanitizeValue(key string, val slog.Value) (slog.Attr, bool) {
 	switch val.Kind() {
 	case slog.KindInt64, slog.KindUint64, slog.KindFloat64, slog.KindBool, slog.KindDuration:
-		return slog.Attr{Key: key, Value: val}, true, false
+		return slog.Attr{Key: key, Value: val}, true
 	case slog.KindString:
-		return slog.String(key, cutString(val.String())), true, false
+		return slog.String(key, cutString(val.String())), true
 	case slog.KindAny:
 		anyVal := val.Any()
 		if anyVal != nil && reflect.ValueOf(anyVal).Kind() == reflect.String {
-			return slog.String(key, cutString(reflect.ValueOf(anyVal).String())), true, false
+			return slog.String(key, cutString(reflect.ValueOf(anyVal).String())), true
 		}
-		return slog.Attr{}, false, false
+		return slog.Attr{}, false
 	default:
-		return slog.Attr{}, false, false
+		return slog.Attr{}, false
 	}
 }
 
+// filterAttr returns the attribute to log, whether there is one, and whether it replaces the given
+// one. An error under "err" becomes its chain of type names: an error text can quote the value that
+// failed to parse.
 func filterAttr(attr slog.Attr) (slog.Attr, bool, bool) {
 	if attr.Key == "err" {
 		if errVal, ok := extractError(attr); ok {
@@ -362,12 +370,14 @@ func filterAttr(attr slog.Attr) (slog.Attr, bool, bool) {
 	if !isAllowedKey(attr.Key) {
 		return slog.Attr{}, false, false
 	}
-	return sanitizeValue(attr.Key, attr.Value.Resolve())
+	kept, ok := sanitizeValue(attr.Key, attr.Value.Resolve())
+	return kept, ok, false
 }
 
 // libraryLogger returns the logger handed to the Discord library: base, cut off below
 // libraryLogFloor, passing only allow-listed attributes (retry_after, try, delay, last_heartbeat_ago,
-// reconnect, can_resume, code, type, event_type, data) and summarizing err as error_types.
+// reconnect, can_resume, code, type, event_type, data, name, shard_id, shard_count) and summarizing
+// err as error_types.
 func libraryLogger(base *slog.Logger) *slog.Logger {
 	return slog.New(floorHandler{inner: base.Handler()})
 }

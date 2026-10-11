@@ -67,6 +67,12 @@ func TestLibraryLogger_Negative_BodyDropped(t *testing.T) {
 	testDisallowedKeyDropped(t, "body")
 }
 
+// TestLibraryLogger_Negative_DataDropped pins that "data" stays off the allow-list: the library
+// writes a whole event under it at one error site.
+func TestLibraryLogger_Negative_DataDropped(t *testing.T) {
+	testDisallowedKeyDropped(t, "data")
+}
+
 func TestLibraryLogger_Negative_EndpointDropped(t *testing.T) {
 	testDisallowedKeyDropped(t, "endpoint")
 }
@@ -137,22 +143,29 @@ func TestLibraryLogger_Positive_AllowedKeysPassed(t *testing.T) {
 		slog.Bool("can_resume", false),
 		slog.String("code", "200"),
 		slog.String("type", "READY"),
-		slog.String("event_type", "RESUMED"),
-		slog.Any("data", customTypeString("sample-data")),
+		slog.Any("event_type", customTypeString("RESUMED")),
+		slog.String("name", "gateway"),
+		slog.Int("shard_id", 3),
+		slog.Int("shard_count", 4),
 	)
 
 	data := parseJSONLog(t, &buf)
 	if _, ok := data["dropped_attrs"]; ok {
 		t.Fatalf("unexpected dropped_attrs: %v", data["dropped_attrs"])
 	}
-	keys := []string{
-		"retry_after", "try", "delay", "last_heartbeat_ago",
-		"reconnect", "can_resume", "code", "type", "event_type", "data",
+	want := map[string]any{
+		"retry_after": float64(5), "try": float64(2),
+		"delay": float64(100 * time.Millisecond), "last_heartbeat_ago": float64(2 * time.Second),
+		"reconnect": true, "can_resume": false, "code": "200", "type": "READY",
+		"event_type": "RESUMED", "name": "gateway",
+		"shard_id": float64(3), "shard_count": float64(4),
 	}
-	for i := 0; i < len(keys); i++ {
-		k := keys[i]
-		if _, ok := data[k]; !ok {
-			t.Fatalf("missing allowed key %q in log: %s", k, buf.String())
+	if len(want) != len(libraryAllowedAttrs) {
+		t.Fatalf("test covers %d keys, the allow-list holds %d", len(want), len(libraryAllowedAttrs))
+	}
+	for k, v := range want {
+		if got, ok := data[k]; !ok || got != v {
+			t.Fatalf("key %q = %v (present %v), want %v: %s", k, got, ok, v, buf.String())
 		}
 	}
 }
@@ -164,7 +177,7 @@ func TestLibraryLogger_Boundary_StringLengthCut(t *testing.T) {
 	s64 := strings.Repeat("y", 64)
 	logger.Warn("cut test",
 		slog.String("type", s65),
-		slog.String("data", s64),
+		slog.String("event_type", s64),
 		slog.Any("code", customTypeString(strings.Repeat("z", 65))),
 	)
 
@@ -172,8 +185,8 @@ func TestLibraryLogger_Boundary_StringLengthCut(t *testing.T) {
 	if got, ok := data["type"].(string); !ok || got != strings.Repeat("x", 64) {
 		t.Fatalf("type = %q, want 64 x's", got)
 	}
-	if got, ok := data["data"].(string); !ok || got != s64 {
-		t.Fatalf("data = %q, want %q", got, s64)
+	if got, ok := data["event_type"].(string); !ok || got != s64 {
+		t.Fatalf("event_type = %q, want %q", got, s64)
 	}
 	if got, ok := data["code"].(string); !ok || got != strings.Repeat("z", 64) {
 		t.Fatalf("code = %q, want 64 z's", got)
