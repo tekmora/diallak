@@ -1049,7 +1049,9 @@ func TestRegisterCommands_Negative_TransportFailureSetGuildCommands(t *testing.T
 		if r.URL.Path == "/applications/@me" {
 			w.Header().Set("Connection", "close")
 			writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"diallak-app"}`, appID))
-			_ = srv.Listener.Close()
+			if closeErr := srv.Listener.Close(); closeErr != nil {
+				t.Logf("Listener.Close: %v", closeErr)
+			}
 			return
 		}
 		http.NotFound(w, r)

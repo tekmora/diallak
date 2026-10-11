@@ -35,6 +35,9 @@ var errEmptyApplicationID = errors.New("application id is empty")
 // serverCallTimeout is chosen, not measured.
 const serverCallTimeout = 10 * time.Second
 
+// applyCallTimeout is chosen, not measured; it has to cover the library's wait on a 429.
+const applyCallTimeout = 60 * time.Second
+
 // clientOptions are the seams of this package's tests: the address of the platform's REST API, the
 // deadline of the application lookup and the function that opens the gateway. The exported
 // functions pass the zero value, which means the real platform and the defaults.
@@ -45,6 +48,7 @@ type clientOptions struct {
 	maxQuestionChars  int
 	now               func() time.Time
 	serverCallTimeout time.Duration
+	applyCallTimeout  time.Duration
 }
 
 // lookupDeadline is the configured deadline of the application lookup, or the default.
@@ -67,6 +71,13 @@ func (o clientOptions) callTimeout() time.Duration {
 		return o.serverCallTimeout
 	}
 	return serverCallTimeout
+}
+
+func (o clientOptions) getApplyCallTimeout() time.Duration {
+	if o.applyCallTimeout > 0 {
+		return o.applyCallTimeout
+	}
+	return applyCallTimeout
 }
 
 // BotConfig configures the live Discord gateway client and runtime adapter.
