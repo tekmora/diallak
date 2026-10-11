@@ -19,4 +19,5 @@ record that supersedes it.
 | [0008](0008-code-of-conduct-place.md) | 2026-10-10 | Where the code of conduct lives | Accepted |
 | [0009](0009-support-forum-first-answer.md) | 2026-10-11 | First answer in the support forum | Accepted |
 | [0010](0010-bot-rights-and-apply-path.md) | 2026-10-11 | Bot rights from decided functions, and one apply path | Accepted |
+| [0011](0011-area-roles-from-member-choice.md) | 2026-10-11 | The bot gives area roles from the member's own choice | Accepted |
 <!-- markdownlint-enable MD013 -->

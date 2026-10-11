@@ -221,9 +221,10 @@ decided, planned, or observed on the server.
   its onboarding can be switched on. The launch set has six channels every
   member sees and three in which every member can write. The platform's
   onboarding is therefore not used: the bot will give the interest and
-  language roles from the member's own choice. That function needs its own
-  record; until then the file keeps the two onboarding questions (ADR-0010,
-  "Open points").
+  language roles from the member's own choice. The function is decided in
+  [ADR-0011](adr/0011-area-roles-from-member-choice.md) and not built. The
+  file still holds the two onboarding questions; the record lists what
+  replaces them ("What changes in the definition").
 - **Onboarding** and the two measurements are described as Discord's
   documentation gives them
   ([`discord/discord-api-docs`](https://github.com/discord/discord-api-docs/tree/37148620d2324292b76047541d5f8331f81ea77a)
