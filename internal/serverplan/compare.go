@@ -40,6 +40,8 @@ const (
 	KindAccessDiffers = "access-differs"
 	// KindAccessExtra indicates an unexpected permission entry exists on a channel.
 	KindAccessExtra = "access-extra"
+	// KindAccessMember indicates a channel has permission entries naming single members.
+	KindAccessMember = "access-member"
 	// KindRoleExtra indicates a role exists on the server that is not in the definition.
 	KindRoleExtra = "role-extra"
 	// KindCategoryExtra indicates a category exists on the server not in the definition.
@@ -328,6 +330,13 @@ func compareSingleChannel(def *serverdef.Definition, s *Snapshot, ch *serverdef.
 		})
 	}
 	diffs = append(diffs, compareAccessEntries(def, s, ch, sch)...)
+	if sch.MemberEntries > 0 {
+		diffs = append(diffs, Difference{
+			Kind:   KindAccessMember,
+			Object: obj,
+			Detail: fmt.Sprintf("%d entries for single members", sch.MemberEntries),
+		})
+	}
 	return diffs
 }
 
@@ -497,6 +506,13 @@ func compareChannelExtras(def *serverdef.Definition, s *Snapshot) []Difference {
 				Kind:   KindChannelExtra,
 				Object: fmt.Sprintf("server.channels[%s]", sch.Name),
 			})
+			if sch.MemberEntries > 0 {
+				diffs = append(diffs, Difference{
+					Kind:   KindAccessMember,
+					Object: fmt.Sprintf("server.channels[%s]", sch.Name),
+					Detail: fmt.Sprintf("%d entries for single members", sch.MemberEntries),
+				})
+			}
 		}
 	}
 	return diffs

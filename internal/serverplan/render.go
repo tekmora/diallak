@@ -1,6 +1,7 @@
 package serverplan
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"strings"
@@ -69,4 +70,35 @@ func renderRefusals(w io.Writer, refused []Refusal) error {
 		}
 	}
 	return nil
+}
+
+// RenderDifferences writes the formatted difference list to w.
+func RenderDifferences(w io.Writer, raised bool, diffs []Difference) error {
+	mode := "own"
+	if raised {
+		mode = "raised"
+	}
+	if _, err := fmt.Fprintf(w, "mode: %s\ndifferences: %d\n", mode, len(diffs)); err != nil {
+		return fmt.Errorf("render differences header: %w", err)
+	}
+	for _, d := range diffs {
+		line := fmt.Sprintf("  %s %s", d.Kind, d.Object)
+		if d.Detail != "" {
+			line += "; " + d.Detail
+		}
+		line += "\n"
+		if _, err := io.WriteString(w, line); err != nil {
+			return fmt.Errorf("render difference: %w", err)
+		}
+	}
+	return nil
+}
+
+// Digest computes the sha256 checksum of the plan output written by Render.
+func Digest(r Result) (string, error) {
+	h := sha256.New()
+	if err := Render(h, r); err != nil {
+		return "", fmt.Errorf("render for digest: %w", err)
+	}
+	return fmt.Sprintf("sha256:%x", h.Sum(nil)), nil
 }
