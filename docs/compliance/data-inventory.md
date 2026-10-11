@@ -84,7 +84,9 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
 
 - The model endpoint receives no member id and no name.
 - It must not keep or train on what it receives (ADR-0002). The operator runs
-  it.
+  it. What it holds for a time anyway, a cached answer and a log line about a
+  blocked question, is listed in the [privacy notice](privacy-notice.md),
+  "How long data is kept".
 - In excerpt mode the question goes nowhere: the reply holds documentation text,
   not the question.
 
