@@ -425,6 +425,41 @@ func TestPlan_Boundary_UnknownBitsLeaveTheRestAlone(t *testing.T) {
 			t.Error("refusal for an entry whose named permissions are as defined")
 		}
 	})
+
+	// An unnamed bit lifts no other refusal of a role-permission change.
+	t.Run("a role above the caller stays refused", func(t *testing.T) {
+		s := raisedSnapshotOf(t, def)
+		r := roleNamed(t, s, "Operator")
+		r.Permissions, r.UnknownBits = []string{}, []int{47}
+		res, err := Plan(def, s)
+		if err != nil {
+			t.Fatalf("Plan failed: %v", err)
+		}
+		if changeFor(res, ActionSetRolePermissions, "roles[operator]") {
+			t.Error("change planned for a role above the caller")
+		}
+		ref, ok := refusalFor(res, ActionSetRolePermissions, "roles[operator]")
+		if !ok || ref.Reason != ReasonAboveCaller {
+			t.Errorf("refusal = %+v (found %v), want reason %s", ref, ok, ReasonAboveCaller)
+		}
+	})
+
+	t.Run("a bot role that is not raised stays refused", func(t *testing.T) {
+		s := snapshotOf(t, def)
+		r := roleNamed(t, s, "Supporter")
+		r.Permissions, r.UnknownBits = []string{"VIEW_AUDIT_LOG"}, []int{47}
+		res, err := Plan(def, s)
+		if err != nil {
+			t.Fatalf("Plan failed: %v", err)
+		}
+		if changeFor(res, ActionSetRolePermissions, "roles[supporter]") {
+			t.Error("change planned outside the bot's own changes")
+		}
+		ref, ok := refusalFor(res, ActionSetRolePermissions, "roles[supporter]")
+		if !ok || ref.Reason != ReasonOutsideOwnChanges {
+			t.Errorf("refusal = %+v (found %v), want reason %s", ref, ok, ReasonOutsideOwnChanges)
+		}
+	})
 }
 
 func TestRender_Positive_UnknownBitsInPlanAndDigest(t *testing.T) {

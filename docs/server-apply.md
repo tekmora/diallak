@@ -222,17 +222,34 @@ A refused change carries the first reason that holds, in this order.
 | `outside-own-changes` | The bot's role is not raised, and the change is not the entry of an area's role on that area's channel |
 | `missing-feature` | The server lacks the feature the channel type needs |
 | `managed-role` | An integration manages the role |
-| `unknown-permission-bits` | The role, or the entry the change would replace, has a bit set that the table does not name. Both changes send the whole value and would clear it |
+| `unknown-permission-bits` | The permission entry the change would replace has a bit set that the table does not name. The change sends the whole entry and would clear it |
 | `above-caller` | The role stands above the caller's role, or the new order would move or pass a role that does; Discord lets a bot edit and sort only roles below its own |
 | `lacks-right` | The caller does not hold a right the change needs |
 <!-- markdownlint-enable MD013 -->
 
-A bit without a name stops a change only where that change would write over
-it: a role that already has the permissions of the definition is left alone,
-and so is every other entry of the same channel
-(`TestPlan_Boundary_UnknownBitsLeaveTheRestAlone`). Because a plan with a
-refusal is not applied, the run waits until a person has settled the bit on
-the server (`TestApplyServer_Negative_UnknownBitStopsTheRun`).
+A bit without a name is handled in two ways, by where it sits.
+
+- **On a role** it is cleared, and the plan says so. A change of a role's
+  permissions sends the definition's whole value, so the bit goes with the
+  change. The plan line ends with `clears unlisted bits` and the numbers, and
+  the plan digest covers that line: the person who confirms the digest has
+  seen which bits go
+  (`TestPlan_Positive_UnlistedBitsOnAChangedRoleAreClearedAndNamed`,
+  `TestApplyServer_Positive_UnlistedBitOnAChangedRoleIsCleared`). No change is
+  made only to clear a bit: a role that already has the permissions of the
+  definition is left alone, and compare keeps reporting its bit
+  (`TestPlan_Boundary_UnknownBitsLeaveTheRestAlone`). A role an integration
+  manages is never written
+  (`TestPlan_Negative_ManagedRoleWithUnlistedBitsIsNeverWritten`).
+- **On a permission entry of a channel** it still stops the change that would
+  replace that entry; every other entry of the same channel is left alone.
+  Because a plan with a refusal is not applied, the run waits until a person
+  has settled the bit on the server
+  (`TestApplyServer_Negative_UnknownBitOnAnEntryStopsTheRun`).
+
+Discord's permissions reference does not say whether a write that clears such
+a bit takes effect. The compare after the apply shows it: a bit that is still
+set is reported again as `unknown-permission-bits`.
 
 With its three rights the bot may plan one kind of change only: the entry of
 an area's role on that area's channel, which is how an area opens and closes.
