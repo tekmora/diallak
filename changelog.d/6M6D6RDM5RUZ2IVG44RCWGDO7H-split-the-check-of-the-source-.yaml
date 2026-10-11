@@ -1,0 +1,2 @@
+type: changed
+title: Split the check of the source link template into smaller functions
