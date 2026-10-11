@@ -37,10 +37,16 @@ Community bot for the Lusoris Discord hub.
   back to the thread.
 - **Votes and wishes:** community polls whose results feed the projects'
   planning.
-- **Thanks to supporters:** a cosmetic role and a public credit in plain text.
-  Nothing is sold: there is no supporter-only channel and no priority support.
+- **Thanks to supporters:** a cosmetic role, a public credit in plain text and a
+  channel that announces early builds. Nothing is sold: the perks are a
+  thank-you only, and there is no priority support.
 - **Answers from the docs:** a locally run model answers from the projects'
   documentation. Every answer cites its sources and is labelled as AI-generated.
+
+Of this list only the answers from the docs are built. Issue drafts, wishes and
+polls will not be built in this repository: they belong to a shared core the
+projects plan to use from every channel, and the bot will be its Discord
+adapter. That core has no record here yet.
 
 ## What it will not do
 
@@ -56,6 +62,7 @@ Community bot for the Lusoris Discord hub.
 | Language and library | Go with disgo |
 | Server | One hub server; the guild is configuration, not code |
 | Auto-answers, first version | Local-model answers with citations and an AI label |
+| Gate for model answers | The bot refuses a model reply that does not name the deployment's guardrail policy, and a member can ask for a receipt of the guardrails that ran ([ADR-0013](docs/adr/0013-guardrail-policy-and-receipt.md)); the policy check is built, the receipt is not |
 | Discord application | The existing bot application and its token are reused |
 | Community questions | GitHub Discussions for searchable answers, the hub for live chat; the bot links them |
 | Moderation | The bot filters spam and obvious abuse; people decide unclear cases |
