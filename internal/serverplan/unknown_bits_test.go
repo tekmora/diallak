@@ -241,18 +241,6 @@ func TestPlan_Negative_UnknownBitsRefuseTheWrite(t *testing.T) {
 		wantDetail string
 	}{
 		{
-			name:       "role below the caller",
-			mutate:     func(s *Snapshot) { roleNamed(t, s, "Supporter").Permissions = []string{"VIEW_AUDIT_LOG"} },
-			plant:      func(s *Snapshot) { roleNamed(t, s, "Supporter").UnknownBits = []int{47} },
-			wantAction: ActionSetRolePermissions, wantObject: "roles[supporter]", wantDetail: "bits 47",
-		},
-		{
-			name:       "the role every member holds",
-			mutate:     func(s *Snapshot) { roleNamed(t, s, "@everyone").Permissions = []string{"VIEW_CHANNEL"} },
-			plant:      func(s *Snapshot) { roleNamed(t, s, "@everyone").UnknownBits = []int{47, 53} },
-			wantAction: ActionSetRolePermissions, wantObject: "roles[everyone]", wantDetail: "bits 47, 53",
-		},
-		{
 			name:       "entry that differs",
 			mutate:     func(s *Snapshot) { entryOf(t, s, "rules", "@everyone").Deny = []string{"SEND_MESSAGES"} },
 			plant:      func(s *Snapshot) { entryOf(t, s, "rules", "@everyone").UnknownAllow = []int{47} },
@@ -304,6 +292,81 @@ func TestPlan_Negative_UnknownBitsRefuseTheWrite(t *testing.T) {
 	}
 }
 
+func TestPlan_Positive_UnlistedBitsOnAChangedRoleAreClearedAndNamed(t *testing.T) {
+	def := loadDef(t)
+	tests := []struct {
+		name, roleName, wantObject, wantDetail string
+		perms                                  []string
+		bits                                   []int
+	}{
+		{"supporter", "Supporter", "roles[supporter]", "clears unlisted bits 47", []string{"VIEW_AUDIT_LOG"}, []int{47}},
+		{"everyone", "@everyone", "roles[everyone]", "clears unlisted bits 47, 53", []string{"VIEW_CHANNEL"}, []int{47, 53}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			control := raisedSnapshotOf(t, def)
+			roleNamed(t, control, tc.roleName).Permissions = tc.perms
+			resControl, err := Plan(def, control)
+			if err != nil {
+				t.Fatalf("Plan control failed: %v", err)
+			}
+			var controlChanges []Change
+			for _, c := range resControl.Changes {
+				if c.Action == ActionSetRolePermissions && c.Object == tc.wantObject {
+					controlChanges = append(controlChanges, c)
+				}
+			}
+			if len(controlChanges) != 1 || controlChanges[0].Detail != "" {
+				t.Fatalf("control: want 1 change for %s with empty Detail: %+v", tc.wantObject, controlChanges)
+			}
+
+			s := raisedSnapshotOf(t, def)
+			r := roleNamed(t, s, tc.roleName)
+			r.Permissions = tc.perms
+			r.UnknownBits = tc.bits
+			res, err := Plan(def, s)
+			if err != nil {
+				t.Fatalf("Plan failed: %v", err)
+			}
+			var changes []Change
+			for _, c := range res.Changes {
+				if c.Action == ActionSetRolePermissions && c.Object == tc.wantObject {
+					changes = append(changes, c)
+				}
+			}
+			if len(changes) != 1 || changes[0].Detail != tc.wantDetail {
+				t.Fatalf("want 1 change for %s with detail %q, got: %+v", tc.wantObject, tc.wantDetail, changes)
+			}
+			for _, ref := range res.Refused {
+				if ref.Object == tc.wantObject {
+					t.Errorf("res.Refused holds entry for %s: %+v", tc.wantObject, ref)
+				}
+			}
+		})
+	}
+}
+
+func TestPlan_Negative_ManagedRoleWithUnlistedBitsIsNeverWritten(t *testing.T) {
+	def := loadDef(t)
+	s := raisedSnapshotOf(t, def)
+	r := roleNamed(t, s, "Supporter")
+	r.Managed = true
+	r.Permissions = []string{"VIEW_AUDIT_LOG"}
+	r.UnknownBits = []int{47}
+
+	res, err := Plan(def, s)
+	if err != nil {
+		t.Fatalf("Plan failed: %v", err)
+	}
+	if changeFor(res, ActionSetRolePermissions, "roles[supporter]") {
+		t.Fatal("change planned for managed role with unlisted bits, want none")
+	}
+	ref, ok := refusalFor(res, ActionSetRolePermissions, "roles[supporter]")
+	if !ok || ref.Reason != ReasonManagedRole {
+		t.Fatalf("refusal = %+v (found %v), want reason %s", ref, ok, ReasonManagedRole)
+	}
+}
+
 func TestPlan_Boundary_UnknownBitsLeaveTheRestAlone(t *testing.T) {
 	def := loadDef(t)
 
@@ -322,6 +385,15 @@ func TestPlan_Boundary_UnknownBitsLeaveTheRestAlone(t *testing.T) {
 		}
 		if changeFor(res, ActionSetRolePermissions, "roles[supporter]") {
 			t.Error("change planned for a role whose named permissions are as defined")
+		}
+		if changeFor(res, ActionSetRolePermissions, "roles[everyone]") {
+			t.Error("change planned for everyone role whose named permissions are as defined")
+		}
+		if _, ok := refusalFor(res, ActionSetRolePermissions, "roles[supporter]"); ok {
+			t.Error("refusal for roles[supporter] whose named permissions are as defined")
+		}
+		if _, ok := refusalFor(res, ActionSetRolePermissions, "roles[everyone]"); ok {
+			t.Error("refusal for roles[everyone] whose named permissions are as defined")
 		}
 	})
 
@@ -353,48 +425,6 @@ func TestPlan_Boundary_UnknownBitsLeaveTheRestAlone(t *testing.T) {
 			t.Error("refusal for an entry whose named permissions are as defined")
 		}
 	})
-
-	t.Run("managed-role before unknown-permission-bits", func(t *testing.T) {
-		s := raisedSnapshotOf(t, def)
-		r := roleNamed(t, s, "Supporter")
-		r.Managed, r.Permissions, r.UnknownBits = true, []string{"VIEW_AUDIT_LOG"}, []int{47}
-		res, err := Plan(def, s)
-		if err != nil {
-			t.Fatalf("Plan failed: %v", err)
-		}
-		ref, ok := refusalFor(res, ActionSetRolePermissions, "roles[supporter]")
-		if !ok || ref.Reason != ReasonManagedRole {
-			t.Errorf("refusal = %+v (found %v), want reason %s", ref, ok, ReasonManagedRole)
-		}
-	})
-
-	t.Run("unknown-permission-bits before above-caller", func(t *testing.T) {
-		s := raisedSnapshotOf(t, def)
-		r := roleNamed(t, s, "Operator")
-		r.Permissions, r.UnknownBits = []string{}, []int{47}
-		res, err := Plan(def, s)
-		if err != nil {
-			t.Fatalf("Plan failed: %v", err)
-		}
-		ref, ok := refusalFor(res, ActionSetRolePermissions, "roles[operator]")
-		if !ok || ref.Reason != ReasonUnknownBits {
-			t.Errorf("refusal = %+v (found %v), want reason %s", ref, ok, ReasonUnknownBits)
-		}
-	})
-
-	t.Run("outside-own-changes before unknown-permission-bits", func(t *testing.T) {
-		s := snapshotOf(t, def)
-		r := roleNamed(t, s, "Supporter")
-		r.Permissions, r.UnknownBits = []string{"VIEW_AUDIT_LOG"}, []int{47}
-		res, err := Plan(def, s)
-		if err != nil {
-			t.Fatalf("Plan failed: %v", err)
-		}
-		ref, ok := refusalFor(res, ActionSetRolePermissions, "roles[supporter]")
-		if !ok || ref.Reason != ReasonOutsideOwnChanges {
-			t.Errorf("refusal = %+v (found %v), want reason %s", ref, ok, ReasonOutsideOwnChanges)
-		}
-	})
 }
 
 func TestRender_Positive_UnknownBitsInPlanAndDigest(t *testing.T) {
@@ -413,14 +443,35 @@ func TestRender_Positive_UnknownBitsInPlanAndDigest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Plan failed: %v", err)
 	}
-	var buf bytes.Buffer
-	if err := Render(&buf, resPlanted); err != nil {
-		t.Fatalf("Render failed: %v", err)
+	var bufPlanted bytes.Buffer
+	if err := Render(&bufPlanted, resPlanted); err != nil {
+		t.Fatalf("Render planted failed: %v", err)
 	}
-	const line = "  - set-role-permissions roles[supporter]: unknown-permission-bits; bits 47\n"
-	if !strings.Contains(buf.String(), line) {
-		t.Errorf("plan text lacks %q:\n%s", line, buf.String())
+	var bufPlain bytes.Buffer
+	if err := Render(&bufPlain, resPlain); err != nil {
+		t.Fatalf("Render plain failed: %v", err)
 	}
+
+	plantedLines := strings.Split(bufPlanted.String(), "\n")
+	var plantedLine string
+	for _, l := range plantedLines {
+		if strings.Contains(l, ". set-role-permissions roles[supporter] needs ") {
+			plantedLine = l
+			break
+		}
+	}
+	if plantedLine == "" {
+		t.Fatalf("planted plan text lacks line with '. set-role-permissions roles[supporter] needs ':\n%s", bufPlanted.String())
+	}
+	const wantEnding = "; clears unlisted bits 47"
+	if !strings.HasSuffix(plantedLine, wantEnding) {
+		t.Errorf("planted line = %q, want it to end with %q", plantedLine, wantEnding)
+	}
+	plainLine := strings.TrimSuffix(plantedLine, wantEnding)
+	if !strings.Contains(bufPlain.String(), plainLine+"\n") {
+		t.Errorf("plain plan text lacks %q:\n%s", plainLine, bufPlain.String())
+	}
+
 	// A plan agreed on before the bit appeared does not name the same digest.
 	dPlain, err := Digest(resPlain, "sha256:definition")
 	if err != nil {
@@ -438,11 +489,11 @@ func TestRender_Positive_UnknownBitsInPlanAndDigest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compare failed: %v", err)
 	}
-	buf.Reset()
-	if err := RenderDifferences(&buf, true, diffs); err != nil {
+	bufPlanted.Reset()
+	if err := RenderDifferences(&bufPlanted, true, diffs); err != nil {
 		t.Fatalf("RenderDifferences failed: %v", err)
 	}
-	if want := "  unknown-permission-bits server.roles[Supporter]; bits 47\n"; !strings.Contains(buf.String(), want) {
-		t.Errorf("difference text lacks %q:\n%s", want, buf.String())
+	if want := "  unknown-permission-bits server.roles[Supporter]; bits 47\n"; !strings.Contains(bufPlanted.String(), want) {
+		t.Errorf("difference text lacks %q:\n%s", want, bufPlanted.String())
 	}
 }

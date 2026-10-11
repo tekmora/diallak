@@ -3,10 +3,14 @@ package discord
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"testing"
 
+	"github.com/disgoorg/snowflake/v2"
+	"github.com/tekmora/diallak/internal/serverdef"
 	"github.com/tekmora/diallak/internal/serverplan"
 	"github.com/tekmora/diallak/server"
 )
@@ -58,7 +62,7 @@ func applyOnFake(t *testing.T, fake *fakePlatform, guildID, botUserID uint64) (s
 	return res, writes, applyErr
 }
 
-func TestApplyServer_Negative_UnknownBitStopsTheRun(t *testing.T) {
+func TestApplyServer_Positive_UnlistedBitOnAChangedRoleIsCleared(t *testing.T) {
 	const (
 		guildID   uint64 = 1001
 		botUserID uint64 = 2001
@@ -86,34 +90,143 @@ func TestApplyServer_Negative_UnknownBitStopsTheRun(t *testing.T) {
 		fake.createShifts = true
 		fake.roles[0].permissions = everyoneWithBit47
 
+		def, err := server.Definition()
+		if err != nil {
+			t.Fatalf("server.Definition(): %v", err)
+		}
+		var everyoneRole *serverdef.Role
+		for i := range def.Roles {
+			if def.Roles[i].ID == "everyone" {
+				everyoneRole = &def.Roles[i]
+				break
+			}
+		}
+		if everyoneRole == nil {
+			t.Fatal("definition has no everyone role")
+		}
+		mask, err := serverdef.PermissionMask(everyoneRole.Permissions)
+		if err != nil {
+			t.Fatalf("PermissionMask: %v", err)
+		}
+		wantPerms := strconv.FormatUint(mask, 10)
+
 		res, writes, err := applyOnFake(t, fake, guildID, botUserID)
-
-		var found bool
-		for _, refusal := range res.Refused {
-			if refusal.Reason != serverplan.ReasonUnknownBits {
-				continue
+		if err != nil {
+			t.Fatalf("apply failed: %v", err)
+		}
+		if len(res.Refused) != 0 {
+			t.Fatalf("plan holds %d refusals, want 0: %+v", len(res.Refused), res.Refused)
+		}
+		var everyoneChanges []serverplan.Change
+		for _, c := range res.Changes {
+			if c.Action == serverplan.ActionSetRolePermissions && c.Object == "roles[everyone]" {
+				everyoneChanges = append(everyoneChanges, c)
 			}
-			found = true
-			if refusal.Object != "roles[everyone]" || refusal.Detail != "bits 47" {
-				t.Errorf("refusal = %+v, want object roles[everyone] with detail \"bits 47\"", refusal)
-			}
 		}
-		if !found {
-			t.Fatalf("plan holds no %s refusal: %+v", serverplan.ReasonUnknownBits, res.Refused)
+		if len(everyoneChanges) != 1 {
+			t.Fatalf("plan holds %d changes for (set-role-permissions, roles[everyone]), want 1: %+v", len(everyoneChanges), res.Changes)
+		}
+		if everyoneChanges[0].Detail != "clears unlisted bits 47" {
+			t.Errorf("change detail = %q, want %q", everyoneChanges[0].Detail, "clears unlisted bits 47")
 		}
 
-		if err == nil {
-			t.Fatal("apply succeeded on a server role with an unnamed bit, want error")
+		var everyonePatches []recordedCall
+		everyonePath := fmt.Sprintf("/guilds/%d/roles/%d", guildID, guildID)
+		for _, w := range writes {
+			if w.method == http.MethodPatch && w.path == everyonePath {
+				everyonePatches = append(everyonePatches, w)
+			}
 		}
-		want := fmt.Sprintf("the plan holds %d refused changes; a plan with a refusal is not applied", len(res.Refused))
-		if err.Error() != want {
-			t.Errorf("error = %q, want %q", err.Error(), want)
+		if len(everyonePatches) != 1 {
+			t.Fatalf("recorded writes hold %d PATCH calls on the everyone role, want exactly 1: %+v", len(everyonePatches), writes)
 		}
-		if len(writes) != 0 {
-			t.Errorf("apply recorded %d writes, want 0: first %s %s", len(writes), writes[0].method, writes[0].path)
+
+		var reqBody struct {
+			Permissions string `json:"permissions"`
 		}
-		if got := fake.roles[0].permissions; got != everyoneWithBit47 {
-			t.Errorf("everyone role permissions = %q after the run, want %q", got, everyoneWithBit47)
+		if err := json.Unmarshal(everyonePatches[0].body, &reqBody); err != nil {
+			t.Fatalf("unmarshal PATCH body: %v", err)
+		}
+		if reqBody.Permissions != wantPerms {
+			t.Errorf("PATCH body permissions = %q, want %q", reqBody.Permissions, wantPerms)
+		}
+
+		if got := fake.roles[0].permissions; got != wantPerms {
+			t.Errorf("everyone role permissions = %q after the run, want %q", got, wantPerms)
 		}
 	})
+}
+
+func TestApplyServer_Negative_UnknownBitOnAnEntryStopsTheRun(t *testing.T) {
+	const (
+		guildID   uint64 = 1001
+		botUserID uint64 = 2001
+		botRoleID uint64 = 3001
+	)
+	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
+	fake.createShifts = true
+
+	_, guildJSON, _, channelsJSON := buildPlatformFixtureFromDef(t, guildID, botUserID, botRoleID)
+	var apiGuild struct {
+		Roles []fakeRole `json:"roles"`
+	}
+	if err := json.Unmarshal([]byte(guildJSON), &apiGuild); err != nil {
+		t.Fatalf("Unmarshal guild roles: %v", err)
+	}
+	var chs []fakeChannel
+	if err := json.Unmarshal([]byte(channelsJSON), &chs); err != nil {
+		t.Fatalf("Unmarshal channels: %v", err)
+	}
+	fake.roles = apiGuild.Roles
+	for i := range fake.roles {
+		if fake.roles[i].name == "Diallak" {
+			fake.roles[i].permissions = "8"
+		}
+	}
+	fake.channels = chs
+
+	var targetOw *fakeOverwrite
+	for i := range fake.channels {
+		if fake.channels[i].name == "home-lab" {
+			for j := range fake.channels[i].overwrites {
+				if fake.channels[i].overwrites[j].id == snowflake.ID(guildID) {
+					targetOw = &fake.channels[i].overwrites[j]
+					break
+				}
+			}
+			break
+		}
+	}
+	if targetOw == nil {
+		t.Fatal("home-lab channel or @everyone overwrite not found in fixture")
+	}
+	targetOw.allow = everyoneWithBit47
+	targetOw.deny = "0"
+
+	res, writes, err := applyOnFake(t, fake, guildID, botUserID)
+
+	var foundRefusal *serverplan.Refusal
+	for i := range res.Refused {
+		if res.Refused[i].Action == serverplan.ActionSetAccess && res.Refused[i].Object == "channels[home-lab].access[everyone]" {
+			foundRefusal = &res.Refused[i]
+			break
+		}
+	}
+	if foundRefusal == nil {
+		t.Fatalf("plan holds no refusal for (set-access, channels[home-lab].access[everyone]): %+v", res.Refused)
+	}
+	if foundRefusal.Reason != serverplan.ReasonUnknownBits {
+		t.Errorf("refusal reason = %q, want %q", foundRefusal.Reason, serverplan.ReasonUnknownBits)
+	}
+
+	if err == nil {
+		t.Fatal("apply succeeded on a channel entry with an unnamed bit, want error")
+	}
+	want := fmt.Sprintf("the plan holds %d refused changes; a plan with a refusal is not applied", len(res.Refused))
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+	if len(writes) != 0 {
+		t.Errorf("apply recorded %d writes, want 0: first %s %s", len(writes), writes[0].method, writes[0].path)
+	}
 }
