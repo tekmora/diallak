@@ -142,7 +142,7 @@ func checkChannelAllowMentionEveryone(v *validator, p string, access []Access, r
 func checkChannelEffectiveMentionEveryone(v *validator, p, channelID string) {
 	for _, r := range v.def.Roles {
 		if r.Kind != "operator" {
-			eff := Effective(v.def, r.ID, channelID)
+			eff := granted(v.def, r.ID, channelID)
 			if _, ok := eff["MENTION_EVERYONE"]; ok {
 				v.add(CodeMentionEveryone, fmt.Sprintf("%s.access[%s]", p, r.ID),
 					"non-operator role has effective MENTION_EVERYONE in channel")
@@ -162,7 +162,7 @@ func (v *validator) checkOperatorOnly() {
 			if r.Kind == "operator" {
 				continue
 			}
-			eff := Effective(v.def, r.ID, ch.ID)
+			eff := granted(v.def, r.ID, ch.ID)
 			for _, perm := range opPerms {
 				if _, ok := eff[perm]; ok {
 					v.add(CodeOperatorOnly, fmt.Sprintf("%s.access[%s]", p, r.ID),
@@ -184,7 +184,7 @@ func (v *validator) checkModerationOnly() {
 			if r.Kind == "operator" || r.Kind == "moderator" {
 				continue
 			}
-			eff := Effective(v.def, r.ID, ch.ID)
+			eff := granted(v.def, r.ID, ch.ID)
 			for _, perm := range modPerms {
 				if _, ok := eff[perm]; ok {
 					v.add(CodeModerationOnly, fmt.Sprintf("%s.access[%s]", p, r.ID),

@@ -66,6 +66,9 @@ const (
 	// CodeAccessShape flags duplicate roles, duplicate permissions, or overlapping allow and deny.
 	CodeAccessShape = "access-shape"
 
+	// CodeModeratorVisibility flags a channel that a moderator role cannot see.
+	CodeModeratorVisibility = "moderator-visibility"
+
 	// CodeMentionEveryone flags unauthorized permission to mention everyone.
 	CodeMentionEveryone = "mention-everyone"
 

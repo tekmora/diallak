@@ -12,7 +12,7 @@ func (v *validator) checkTicketThreadReader() {
 			if r.Kind == "operator" || r.Kind == "moderator" {
 				continue
 			}
-			eff := Effective(v.def, r.ID, ch.ID)
+			eff := granted(v.def, r.ID, ch.ID)
 			if _, ok := eff["MANAGE_THREADS"]; ok {
 				v.add(CodeTicketThreadReader, fmt.Sprintf("%s.access[%s]", p, r.ID),
 					"non-moderator role has effective MANAGE_THREADS in ticket channel")
@@ -45,8 +45,24 @@ func (v *validator) checkTicketShape() {
 			v.add(CodeTicketShape, p+".access["+everyoneID(v.def)+"]",
 				"everyone must have SEND_MESSAGES_IN_THREADS in tickets")
 		}
-		if _, ok := eff["SEND_MESSAGES"]; ok {
+		if _, ok := granted(v.def, everyoneID(v.def), ch.ID)["SEND_MESSAGES"]; ok {
 			v.add(CodeTicketShape, p+".access["+everyoneID(v.def)+"]", "everyone must not have SEND_MESSAGES in tickets")
+		}
+	}
+}
+
+// checkModeratorVisibility refuses a channel that a moderator role cannot see: moderators own
+// most channels and cannot moderate what they do not see.
+func (v *validator) checkModeratorVisibility() {
+	for _, r := range v.def.Roles {
+		if r.Kind != "moderator" {
+			continue
+		}
+		for _, ch := range v.def.Channels {
+			if _, ok := Effective(v.def, r.ID, ch.ID)["VIEW_CHANNEL"]; !ok {
+				v.add(CodeModeratorVisibility, fmt.Sprintf("channels[%s].access[%s]", ch.ID, r.ID),
+					"a moderator role cannot see the channel")
+			}
 		}
 	}
 }
@@ -131,7 +147,7 @@ func (v *validator) checkVoiceClosed() {
 			continue
 		}
 		p := fmt.Sprintf("channels[%s].access[%s]", ch.ID, everyoneID(v.def))
-		eff := Effective(v.def, everyoneID(v.def), ch.ID)
+		eff := granted(v.def, everyoneID(v.def), ch.ID)
 		if _, ok := eff["CONNECT"]; ok {
 			v.add(CodeVoiceClosed, p, "everyone must not have effective CONNECT in voice channel")
 		}

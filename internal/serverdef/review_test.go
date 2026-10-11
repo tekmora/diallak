@@ -214,6 +214,11 @@ func TestValidate_Negative_VoiceChannelConditions(t *testing.T) {
 			r := roleOf(t, def, "everyone")
 			r.Permissions = append(r.Permissions, "USE_VAD")
 		}, CodeVoiceClosed, everyone, "USE_VAD"},
+		{"the room is hidden from members and still open to them", func(t *testing.T, def *Definition) {
+			acc := accessOf(channelOf(t, def, "events-voice"), "everyone")
+			acc.Deny = []string{"VIEW_CHANNEL"}
+			acc.Allow = []string{"CONNECT"}
+		}, CodeVoiceClosed, everyone, "CONNECT"},
 	})
 }
 
@@ -337,5 +342,58 @@ func TestEffective_Negative_OverwritesApply(t *testing.T) {
 	}
 	if len(Effective(def, "bot", "tickets")) != 0 {
 		t.Errorf("the bot has permissions in the ticket channel: the entry of the role is not applied")
+	}
+}
+
+// A member can hold several roles, and one of them can make a channel visible that another one
+// cannot see. So a rule that refuses a right reads what a role is granted in a channel whether
+// or not that role sees the channel.
+func TestValidate_Negative_RightsInAChannelTheRoleCannotSee(t *testing.T) {
+	inTickets := func(permission string) func(t *testing.T, def *Definition) {
+		return func(t *testing.T, def *Definition) {
+			acc := accessOf(channelOf(t, def, "tickets"), "bot")
+			if len(acc.Deny) != 1 || acc.Deny[0] != "VIEW_CHANNEL" {
+				t.Fatalf("the bot is expected not to see the ticket channel, entry: %+v", acc)
+			}
+			acc.Allow = []string{permission}
+		}
+	}
+	runPlanted(t, []plantedCase{
+		{"the bot may read all ticket threads", inTickets("MANAGE_THREADS"),
+			CodeTicketThreadReader, "channels[tickets].access[bot]", "MANAGE_THREADS"},
+		{"the bot may manage the ticket channel", inTickets("MANAGE_CHANNELS"),
+			CodeOperatorOnly, "channels[tickets].access[bot]", "MANAGE_CHANNELS"},
+		{"the bot may delete messages in the ticket channel", inTickets("MANAGE_MESSAGES"),
+			CodeModerationOnly, "channels[tickets].access[bot]", "MANAGE_MESSAGES"},
+		{"the bot may mention everyone in the ticket channel", inTickets("MENTION_EVERYONE"),
+			CodeMentionEveryone, "channels[tickets].access[bot]", "effective"},
+	})
+}
+
+// Moderators cannot moderate what they cannot see, and they own most channels.
+func TestValidate_Negative_ModeratorCannotSeeAChannel(t *testing.T) {
+	runPlanted(t, []plantedCase{
+		{"an area channel", func(t *testing.T, def *Definition) {
+			ch := channelOf(t, def, "games")
+			kept := make([]Access, 0, len(ch.Access))
+			for _, acc := range ch.Access {
+				if acc.Role != "moderator" {
+					kept = append(kept, acc)
+				}
+			}
+			ch.Access = kept
+		}, CodeModeratorVisibility, "channels[games].access[moderator]", "see"},
+		{"the lounge", func(t *testing.T, def *Definition) {
+			accessOf(channelOf(t, def, "lounge"), "moderator").Deny = []string{"VIEW_CHANNEL"}
+		}, CodeModeratorVisibility, "channels[lounge].access[moderator]", "see"},
+	})
+}
+
+func TestValidate_Positive_ModeratorsSeeEveryChannel(t *testing.T) {
+	def := valid(t)
+	for _, ch := range def.Channels {
+		if _, ok := Effective(def, "moderator", ch.ID)["VIEW_CHANNEL"]; !ok {
+			t.Errorf("a moderator cannot see the channel %s", ch.ID)
+		}
 	}
 }

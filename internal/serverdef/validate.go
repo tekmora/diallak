@@ -40,6 +40,7 @@ func Validate(def *Definition) []Finding {
 	v.checkTicketThreadReader()
 	v.checkTicketShape()
 	v.checkStaffVisibility()
+	v.checkModeratorVisibility()
 	v.checkFirstAnswer()
 	v.checkVoiceClosed()
 	v.checkAreaRules()

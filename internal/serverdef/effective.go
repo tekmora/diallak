@@ -70,12 +70,25 @@ func applyAccessOverwrite(perms map[string]struct{}, acc *Access) {
 	}
 }
 
-// Effective calculates the effective permissions of roleID within channelID for a member who holds
-// only that role. It follows Discord's documented order: the permissions of the role every member
-// holds and of the role itself, then the channel's entry for every member, then the entry for the
-// role, each applied as deny before allow. An administrator has every permission, and a channel
-// that cannot be seen leaves none.
+// Effective calculates what a member who holds only roleID can do in channelID. It is what the
+// role is granted there, and nothing when the role cannot see the channel.
 func Effective(def *Definition, roleID, channelID string) map[string]struct{} {
+	result := granted(def, roleID, channelID)
+	if _, canView := result["VIEW_CHANNEL"]; !canView {
+		return make(map[string]struct{})
+	}
+	return result
+}
+
+// granted calculates the permissions roleID is granted within channelID, whether or not the role
+// can see the channel. It follows Discord's documented order: the permissions of the role every
+// member holds and of the role itself, then the channel's entry for every member, then the entry
+// for the role, each applied as deny before allow. An administrator is granted every permission.
+//
+// The rules that refuse a right read this set and not Effective: a member can hold a second role
+// that makes the channel visible, and such a member can do at most what the roles are granted
+// one by one.
+func granted(def *Definition, roleID, channelID string) map[string]struct{} {
 	if def == nil {
 		return make(map[string]struct{})
 	}
@@ -101,10 +114,6 @@ func Effective(def *Definition, roleID, channelID string) map[string]struct{} {
 	if roleID != everyone {
 		roleAcc := findAccess(ch.Access, roleID)
 		applyAccessOverwrite(result, roleAcc)
-	}
-
-	if _, canView := result["VIEW_CHANNEL"]; !canView {
-		return make(map[string]struct{})
 	}
 	return result
 }

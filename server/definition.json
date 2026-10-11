@@ -308,7 +308,8 @@
       "area": "home-lab",
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
-        {"role": "interest-home-lab", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "interest-home-lab", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -322,7 +323,8 @@
       "area": "media-video",
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
-        {"role": "interest-media", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "interest-media", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -336,7 +338,8 @@
       "area": "games",
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
-        {"role": "interest-games", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "interest-games", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -350,7 +353,8 @@
       "area": "ai-news-tools",
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
-        {"role": "interest-ai", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "interest-ai", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -364,7 +368,8 @@
       "area": "room-es",
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
-        {"role": "lang-es", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "lang-es", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -378,7 +383,8 @@
       "area": "room-fr",
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
-        {"role": "lang-fr", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "lang-fr", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -392,7 +398,8 @@
       "area": "room-de",
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
-        {"role": "lang-de", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "lang-de", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -406,7 +413,8 @@
       "area": "room-it",
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
-        {"role": "lang-it", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "lang-it", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
