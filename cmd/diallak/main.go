@@ -21,6 +21,7 @@ import (
 	"github.com/tekmora/diallak/internal/config"
 	"github.com/tekmora/diallak/internal/discord"
 	"github.com/tekmora/diallak/internal/health"
+	"github.com/tekmora/diallak/internal/model"
 )
 
 const (
@@ -134,22 +135,35 @@ func executeBotRun(
 		}
 	}()
 
+	if err := probeModel(ctx, assembly.Model); err != nil {
+		return err
+	}
+
 	if err := reportAssemblyStatus(out, assembly); err != nil {
 		return err
 	}
+
+	hh.attachModel(assembly.Model)
 
 	botCfg, err := buildDiscordConfig(cfg, assembly)
 	if err != nil {
 		return err
 	}
 
-	var ln net.Listener
-	if hh != nil {
-		ln = hh.ln
-		hh.ln = nil
-	}
+	return runDiscordWithHealth(ctx, hh, hh.takeListener(), botCfg, runDiscord)
+}
 
-	return runDiscordWithHealth(ctx, hh, ln, botCfg, runDiscord)
+func probeModel(ctx context.Context, gate *model.Gate) error {
+	if gate == nil {
+		return nil
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, startTimeout)
+	defer cancel()
+	if err := gate.Start(probeCtx); err != nil {
+		return fmt.Errorf("%w; check %s, %s and %s", err,
+			config.EnvModelBaseURL, config.EnvModelAlias, config.EnvModelKeyFile)
+	}
+	return nil
 }
 
 func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotConfig, error) {
@@ -195,10 +209,25 @@ func initHealth(ctx context.Context, addr string) (*healthHarness, error) {
 	}, nil
 }
 
+func (h *healthHarness) attachModel(gate *model.Gate) {
+	if h != nil && gate != nil {
+		h.state.SetModelState(gate.State)
+	}
+}
+
+func (h *healthHarness) takeListener() net.Listener {
+	if h == nil {
+		return nil
+	}
+	ln := h.ln
+	h.ln = nil
+	return ln
+}
+
 func reportAssemblyStatus(out io.Writer, assembly *app.Assembly) error {
 	modelStatus := "not configured"
-	if assembly.HasModel {
-		modelStatus = "configured"
+	if assembly.Model != nil {
+		modelStatus = assembly.Model.State()
 	}
 	if _, writeErr := fmt.Fprintf(out, "ready: %d sources, %d chunks, model %s\n",
 		len(assembly.Sources), assembly.Chunks, modelStatus); writeErr != nil {

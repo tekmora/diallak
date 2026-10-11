@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,7 +120,7 @@ func TestRun_Positive_ReadyWithModel(t *testing.T) {
 		t.Fatalf("run = %v, want nil", err)
 	}
 	got := out.String()
-	want := "ready: 1 sources, 1 chunks, model configured\n"
+	want := "ready: 1 sources, 1 chunks, model not ready\n"
 	if got != want {
 		t.Errorf("output = %q, want %q", got, want)
 	}
@@ -782,5 +783,322 @@ func TestRunDiscordWithHealth_Negative_FailingListenerStopsTheBotAndIsReported(t
 	}
 	if err == nil || !strings.Contains(err.Error(), "health server") || !strings.Contains(err.Error(), "accept refused by the test") {
 		t.Fatalf("err = %v, want the health server's accept error", err)
+	}
+}
+
+func TestRun_Negative_UnknownAliasStopsTheStart(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:    tokenPath,
+		config.EnvGuildID:      "42",
+		config.EnvCorpusDir:    corpusPath,
+		config.EnvModelBaseURL: server.URL,
+		config.EnvModelAlias:   "test-alias",
+	}
+
+	var out bytes.Buffer
+	var discordCalls int
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
+		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+			discordCalls++
+			return nil
+		},
+	}
+
+	err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps)
+	if err == nil {
+		t.Fatal("run expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "model start probe") {
+		t.Errorf("error %q should contain 'model start probe'", err.Error())
+	}
+	if !strings.Contains(err.Error(), "status 404") {
+		t.Errorf("error %q should contain 'status 404'", err.Error())
+	}
+	want := "model start probe: model endpoint returned status 404; check " +
+		config.EnvModelBaseURL + ", " + config.EnvModelAlias + " and " + config.EnvModelKeyFile
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+	if discordCalls != 0 {
+		t.Errorf("discordCalls = %d, want 0", discordCalls)
+	}
+	if strings.Contains(out.String(), "ready:") {
+		t.Errorf("output should not contain ready line, got: %q", out.String())
+	}
+}
+
+func TestRun_Negative_RejectedProbeStopsTheStart(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusBadRequest} {
+		t.Run(fmt.Sprintf("status_%d", status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+			}))
+			defer server.Close()
+
+			tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+			corpusPath := setupTestCorpus(t)
+			envMap := map[string]string{
+				config.EnvTokenFile:    tokenPath,
+				config.EnvGuildID:      "42",
+				config.EnvCorpusDir:    corpusPath,
+				config.EnvModelBaseURL: server.URL,
+				config.EnvModelAlias:   "test-alias",
+			}
+
+			var out bytes.Buffer
+			var discordCalls int
+			deps := dependencies{
+				registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
+				runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+					discordCalls++
+					return nil
+				},
+			}
+
+			err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps)
+			if err == nil {
+				t.Fatal("run expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), "model start probe") {
+				t.Errorf("error %q should contain 'model start probe'", err.Error())
+			}
+			if !strings.Contains(err.Error(), fmt.Sprintf("status %d", status)) {
+				t.Errorf("error %q should contain 'status %d'", err.Error(), status)
+			}
+			if discordCalls != 0 {
+				t.Errorf("discordCalls = %d, want 0", discordCalls)
+			}
+			if strings.Contains(out.String(), "ready:") {
+				t.Errorf("output should not contain ready line, got: %q", out.String())
+			}
+		})
+	}
+}
+
+func TestRun_Positive_ProbeUnavailableAllowsStart(t *testing.T) {
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+
+	for _, tc := range []struct {
+		name    string
+		baseURL string
+	}{
+		{name: "503", baseURL: ""},
+		{name: "closed_port", baseURL: "http://127.0.0.1:1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			baseURL := tc.baseURL
+			if baseURL == "" {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(http.StatusServiceUnavailable)
+				}))
+				defer server.Close()
+				baseURL = server.URL
+			}
+
+			envMap := map[string]string{
+				config.EnvTokenFile:    tokenPath,
+				config.EnvGuildID:      "42",
+				config.EnvCorpusDir:    corpusPath,
+				config.EnvModelBaseURL: baseURL,
+				config.EnvModelAlias:   "test-alias",
+			}
+
+			var out bytes.Buffer
+			var discordCalls int
+			deps := dependencies{
+				registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
+				runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+					discordCalls++
+					return nil
+				},
+			}
+
+			if err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps); err != nil {
+				t.Fatalf("run failed: %v", err)
+			}
+			if discordCalls != 1 {
+				t.Errorf("discordCalls = %d, want 1", discordCalls)
+			}
+			if !strings.HasSuffix(out.String(), "model not ready\n") {
+				t.Errorf("output %q should end with 'model not ready\\n'", out.String())
+			}
+		})
+	}
+}
+
+func TestRun_Positive_ProbeReady(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:    tokenPath,
+		config.EnvGuildID:      "42",
+		config.EnvCorpusDir:    corpusPath,
+		config.EnvModelBaseURL: server.URL,
+		config.EnvModelAlias:   "test-alias",
+	}
+
+	var out bytes.Buffer
+	var discordCalls int
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
+		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+			discordCalls++
+			return nil
+		},
+	}
+
+	if err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+	if discordCalls != 1 {
+		t.Errorf("discordCalls = %d, want 1", discordCalls)
+	}
+	if !strings.HasSuffix(out.String(), "model ready\n") {
+		t.Errorf("output %q should end with 'model ready\\n'", out.String())
+	}
+}
+
+func TestRun_Positive_NoModelVariables(t *testing.T) {
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile: tokenPath,
+		config.EnvGuildID:   "42",
+		config.EnvCorpusDir: corpusPath,
+	}
+
+	var out bytes.Buffer
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
+		runDiscord:       func(_ context.Context, _ discord.BotConfig) error { return nil },
+	}
+
+	if err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+	if !strings.HasSuffix(out.String(), "model not configured\n") {
+		t.Errorf("output %q should end with 'model not configured\\n'", out.String())
+	}
+}
+
+func TestRun_Positive_RegisterCommandsSendsNoProbe(t *testing.T) {
+	var probeCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		probeCalls++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:    tokenPath,
+		config.EnvGuildID:      "42",
+		config.EnvCorpusDir:    corpusPath,
+		config.EnvModelBaseURL: server.URL,
+		config.EnvModelAlias:   "test-alias",
+	}
+
+	var out bytes.Buffer
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
+		runDiscord:       func(_ context.Context, _ discord.BotConfig) error { return nil },
+	}
+
+	args := []string{"-register-commands"}
+	if err := run(context.Background(), args, func(k string) string { return envMap[k] }, &out, deps); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+	if probeCalls != 0 {
+		t.Errorf("probeCalls = %d, want 0", probeCalls)
+	}
+}
+
+func fetchModelz(ctx context.Context, addr string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/modelz", nil)
+	if err != nil {
+		return "", fmt.Errorf("new /modelz request: %w", err)
+	}
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("get /modelz: %w", err)
+	}
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	if closeErr := resp.Body.Close(); closeErr != nil {
+		return "", fmt.Errorf("close /modelz body: %w", closeErr)
+	}
+	if readErr != nil {
+		return "", fmt.Errorf("read /modelz body: %w", readErr)
+	}
+	return fmt.Sprintf("%d %s", resp.StatusCode, body), nil
+}
+
+func TestRun_Positive_HealthEndpointReportsTheModelState(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		want   string
+	}{
+		{name: "probe passes", status: http.StatusOK, want: "200 model: ready\n"},
+		{name: "probe meets a server error", status: http.StatusServiceUnavailable, want: "200 model: not ready\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+			}))
+			defer server.Close()
+
+			var lc net.ListenConfig
+			probeLn, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatalf("listen: %v", err)
+			}
+			addr := probeLn.Addr().String()
+			if closeErr := probeLn.Close(); closeErr != nil {
+				t.Fatalf("close probe listener: %v", closeErr)
+			}
+
+			envMap := map[string]string{
+				config.EnvTokenFile:    writeSecret(t, "token", "distinctive-token-xyz"),
+				config.EnvGuildID:      "42",
+				config.EnvCorpusDir:    setupTestCorpus(t),
+				config.EnvHealthAddr:   addr,
+				config.EnvModelBaseURL: server.URL,
+				config.EnvModelAlias:   "test-alias",
+			}
+			var got string
+			deps := dependencies{
+				registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
+				runDiscord: func(ctx context.Context, _ discord.BotConfig) error {
+					var fetchErr error
+					got, fetchErr = fetchModelz(ctx, addr)
+					return fetchErr
+				},
+			}
+
+			var out bytes.Buffer
+			if err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps); err != nil {
+				t.Fatalf("run = %v, want nil", err)
+			}
+			if got != tc.want {
+				t.Errorf("/modelz = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

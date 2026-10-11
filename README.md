@@ -99,6 +99,17 @@ that no model wrote them. In the live server that is the only mode for now: no
 deployment sets the two variables until the gates of
 [ADR-0006](docs/adr/0006-ai-act-role.md) are passed.
 
+With both variables set the bot sends the endpoint one small request at start
+([ADR-0012](docs/adr/0012-model-state.md)):
+
+- **The endpoint refuses it**, for example with status 401 or 404 for a wrong
+  key or an unknown alias: the bot ends with exit code 1 and names the three
+  model variables.
+- **The endpoint is away**, with a server error, status 408 or 429, or no reply
+  within 10 seconds: the bot starts and answers with excerpts. It sends a
+  member's question to the endpoint again at most once every 30 seconds until
+  one succeeds.
+
 ### Optional settings
 
 Each of these has a built-in default. A value outside its range stops the start
@@ -169,9 +180,13 @@ deployment health and readiness probes ([`internal/health`](internal/health),
 - `GET /readyz` reports readiness. It answers `503 not ready` until the Discord
   gateway connection opens, then `200 ready`, and `503 not ready` again once
   shutdown begins.
+- `GET /modelz` reports the model's state and always answers 200: `model: not
+  configured`, `model: ready` or `model: not ready`
+  ([ADR-0012](docs/adr/0012-model-state.md)).
 
 Readiness means the gateway opened and the bot is not shutting down; it does
-not follow later reconnects.
+not follow later reconnects and it does not follow the model: a bot whose model
+is not ready still answers with excerpts.
 
 ### Commands are registered by hand
 

@@ -43,6 +43,7 @@ Nothing. It has no database and writes no file.
 | Outcome of a request | `answer`, `excerpts`, `refusal`, `failure` | No |
 | Reason | `no_source`, `model_unavailable` | No |
 | Error class | `timeout`, `error` | No |
+| A change of the model's state, with the class of the failure and the status code when there is one | `model not ready`, `status`, `503` | No |
 | Duration | `1.2s` | No |
 | At start: number of sources and passages, each source with its revision, whether a model is configured, the model alias | `lusoris/SnatchArr@9e70c2e03d22` | No |
 | Name of a command or numeric type of an interaction the bot does not serve, at debug level only | `other` | No |
@@ -59,7 +60,9 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
 `TestLibraryLogger_Negative_BodiesNeverReachTheLog` in
 [`internal/discord`](../../internal/discord), and
 `TestAsk_Negative_ModelErrorTextIsNeverLogged` in
-[`internal/answer`](../../internal/answer).
+[`internal/answer`](../../internal/answer), and
+`TestGate_Negative_ErrorTextNeverReachesTheLog` in
+[`internal/model`](../../internal/model/gate_test.go).
 
 ## What the bot passes on
 
@@ -68,6 +71,7 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
 | :--- | :--- | :--- |
 | Discord | The reply, visible only to the member who asked | Every request |
 | The model endpoint the operator configures | The question and the retrieved documentation passages | Model mode only |
+| The model endpoint the operator configures | One fixed word, to learn whether the endpoint answers | Model mode only, once at start |
 <!-- markdownlint-enable MD013 -->
 
 - The model endpoint receives no member id and no name.
@@ -79,7 +83,8 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
 Check: the request body is built in
 [`internal/model`](../../internal/model/model.go) from the prompt alone; the
 prompt is built in `buildUserPrompt` in
-[`internal/answer`](../../internal/answer/answer.go).
+[`internal/answer`](../../internal/answer/answer.go). The request at start is
+built in `Probe` in the same package (`TestProbe_Positive_RequestShape`).
 
 ## What Discord holds
 

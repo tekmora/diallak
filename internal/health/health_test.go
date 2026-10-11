@@ -359,3 +359,133 @@ func TestNewServer_Boundary_EveryTimeoutAndTheHeaderLimitAreSet(t *testing.T) {
 		t.Errorf("ShutdownDeadline = %v, want a positive limit", ShutdownDeadline)
 	}
 }
+
+func TestHandler_Positive_Modelz(t *testing.T) {
+	state := &State{}
+	handler := NewHandler(state)
+	ctx := context.Background()
+
+	// GET /modelz without report -> 200 "model: not configured\n"
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/modelz", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET /modelz (not configured) code = %d, want 200", rec.Code)
+	}
+	if rec.Body.String() != "model: not configured\n" {
+		t.Errorf("GET /modelz body = %q, want 'model: not configured\\n'", rec.Body.String())
+	}
+
+	// HEAD /modelz without report -> 200, empty body
+	req = httptest.NewRequestWithContext(ctx, http.MethodHead, "/modelz", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("HEAD /modelz code = %d, want 200", rec.Code)
+	}
+	if rec.Body.Len() != 0 {
+		t.Errorf("HEAD /modelz body len = %d, want 0", rec.Body.Len())
+	}
+
+	// Set report function -> "ready"
+	val := "ready"
+	state.SetModelState(func() string { return val })
+
+	req = httptest.NewRequestWithContext(ctx, http.MethodGet, "/modelz", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET /modelz (ready) code = %d, want 200", rec.Code)
+	}
+	if rec.Body.String() != "model: ready\n" {
+		t.Errorf("GET /modelz body = %q, want 'model: ready\\n'", rec.Body.String())
+	}
+
+	// Update report function -> "not ready"
+	val = "not ready"
+	req = httptest.NewRequestWithContext(ctx, http.MethodGet, "/modelz", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET /modelz (not ready) code = %d, want 200", rec.Code)
+	}
+	if rec.Body.String() != "model: not ready\n" {
+		t.Errorf("GET /modelz body = %q, want 'model: not ready\\n'", rec.Body.String())
+	}
+}
+
+func TestHandler_Negative_ModelzMethodNotAllowed(t *testing.T) {
+	state := &State{}
+	handler := NewHandler(state)
+	ctx := context.Background()
+
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
+		t.Run(method, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(ctx, method, "/modelz", nil)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Errorf("%s /modelz code = %d, want 405", method, rec.Code)
+			}
+			if got := rec.Header().Get("Allow"); got != "GET, HEAD" {
+				t.Errorf("%s /modelz Allow = %q, want 'GET, HEAD'", method, got)
+			}
+			if got := rec.Body.String(); got != "method not allowed\n" {
+				t.Errorf("%s /modelz body = %q, want only the refusal", method, got)
+			}
+		})
+	}
+}
+
+func TestHandler_Positive_IndependenceOfReadyzAndModelz(t *testing.T) {
+	state := &State{}
+	handler := NewHandler(state)
+	ctx := context.Background()
+
+	// Case 1: readyz 503, modelz ready
+	state.SetReady(false)
+	state.SetModelState(func() string { return "ready" })
+
+	recReadyz := httptest.NewRecorder()
+	handler.ServeHTTP(recReadyz, httptest.NewRequestWithContext(ctx, http.MethodGet, "/readyz", nil))
+	if recReadyz.Code != http.StatusServiceUnavailable {
+		t.Errorf("readyz code = %d, want 503", recReadyz.Code)
+	}
+
+	recModelz := httptest.NewRecorder()
+	handler.ServeHTTP(recModelz, httptest.NewRequestWithContext(ctx, http.MethodGet, "/modelz", nil))
+	if recModelz.Code != http.StatusOK || recModelz.Body.String() != "model: ready\n" {
+		t.Errorf("modelz = (%d, %q), want (200, 'model: ready\\n')", recModelz.Code, recModelz.Body.String())
+	}
+
+	// Case 2: readyz 200, modelz not ready
+	state.SetReady(true)
+	state.SetModelState(func() string { return "not ready" })
+
+	recReadyz = httptest.NewRecorder()
+	handler.ServeHTTP(recReadyz, httptest.NewRequestWithContext(ctx, http.MethodGet, "/readyz", nil))
+	if recReadyz.Code != http.StatusOK {
+		t.Errorf("readyz code = %d, want 200", recReadyz.Code)
+	}
+
+	recModelz = httptest.NewRecorder()
+	handler.ServeHTTP(recModelz, httptest.NewRequestWithContext(ctx, http.MethodGet, "/modelz", nil))
+	if recModelz.Code != http.StatusOK || recModelz.Body.String() != "model: not ready\n" {
+		t.Errorf("modelz = (%d, %q), want (200, 'model: not ready\\n')", recModelz.Code, recModelz.Body.String())
+	}
+}
+
+func TestState_Positive_SetModelStateNilSafe(t *testing.T) {
+	var s *State
+	s.SetModelState(func() string { return "ready" })
+	s.SetModelState(nil)
+}
+
+func TestHandler_Boundary_ModelzWithoutState(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/modelz", nil)
+	NewHandler(nil).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "model: not configured\n" {
+		t.Errorf("/modelz without a state = %d %q, want 200 %q", rec.Code, rec.Body.String(), "model: not configured\n")
+	}
+}

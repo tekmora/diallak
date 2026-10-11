@@ -52,11 +52,15 @@ is missing or out of range stops the start with a message that names it.
 
 ## Start, stop and replace
 
-- **Start.** The entry point is the bot itself. It prints one line, `ready: <n>
+- **Start.** The entry point is the bot itself. In model mode it first sends
+  the endpoint one request; a refusal such as status 401 or 404 ends the start
+  with exit code 1, an endpoint that is away does not
+  ([ADR-0012](adr/0012-model-state.md)). It prints one line, `ready: <n>
   sources, <n> chunks, model <state>`, on standard output and then connects to
-  Discord. Logs are JSON lines on standard error and hold no question, no answer
-  and no member id ([data inventory](compliance/data-inventory.md), "What the
-  bot logs"). The deployment keeps them for 30 days, the period the
+  Discord. The state is `not configured`, `ready` or `not ready`. Logs are
+  JSON lines on standard error and hold no question, no answer and no member
+  id ([data inventory](compliance/data-inventory.md), "What the bot logs").
+  The deployment keeps them for 30 days, the period the
   [privacy notice](compliance/privacy-notice.md) names.
 - **Exit codes.** 0 after a clean stop, 1 with the reason on standard error
   ([`cmd/diallak`](../cmd/diallak/main.go), `report`).
@@ -103,6 +107,7 @@ platform's probes; a deployment does not publish the port.
 | :--- | :--- | :--- |
 | Liveness | `GET /healthz` | the process serves requests |
 | Readiness | `GET /readyz` | the gateway has been opened and shutdown has not begun |
+| None: information only | `GET /modelz` | always. The body is `model: not configured`, `model: ready` or `model: not ready` |
 <!-- markdownlint-enable MD013 -->
 
 - **A stopped bot fails its probe.** The listener closes with the bot, so a
@@ -113,8 +118,14 @@ platform's probes; a deployment does not publish the port.
 - **The address is bound first and answered after the documentation is loaded.**
   A bind failure stops the start ([`cmd/diallak`](../cmd/diallak/main.go),
   `executeBotRun`).
-- **The listener says nothing about the bot.** It reads no request body, writes
-  no log line per request and answers with a fixed word.
+- **The listener says little about the bot.** It reads no request body, writes
+  no log line per request and answers with a fixed word. `/modelz` answers with
+  one of three fixed lines, which tells whether a model is configured; it gives
+  no alias and no address.
+- **The model does not move readiness.** A bot whose model is not ready
+  answers with excerpts and stays in service
+  (`TestHandler_Positive_IndependenceOfReadyzAndModelz` in
+  [`internal/health`](../internal/health/health_test.go)).
 
 ## Network
 

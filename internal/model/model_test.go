@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -648,5 +649,275 @@ func TestComplete_Positive_ConfiguredTimeoutSeenByServer(t *testing.T) {
 	duration := observedDeadline.Sub(start)
 	if duration < 4*time.Second || duration > 6*time.Second {
 		t.Errorf("observed deadline duration = %v, want approx %v", duration, configuredTimeout)
+	}
+}
+
+func TestClassify_Boundary_Table(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want Class
+	}{
+		{name: "nil", err: nil, want: ClassOther},
+		{name: "status 399", err: &StatusError{Code: 399}, want: ClassRejected},
+		{name: "status 400", err: &StatusError{Code: 400}, want: ClassRejected},
+		{name: "status 407", err: &StatusError{Code: 407}, want: ClassRejected},
+		{name: "status 408", err: &StatusError{Code: 408}, want: ClassUnavailable},
+		{name: "status 409", err: &StatusError{Code: 409}, want: ClassRejected},
+		{name: "status 428", err: &StatusError{Code: 428}, want: ClassRejected},
+		{name: "status 429", err: &StatusError{Code: 429}, want: ClassUnavailable},
+		{name: "status 430", err: &StatusError{Code: 430}, want: ClassRejected},
+		{name: "status 499", err: &StatusError{Code: 499}, want: ClassRejected},
+		{name: "status 500", err: &StatusError{Code: 500}, want: ClassUnavailable},
+		{name: "status 599", err: &StatusError{Code: 599}, want: ClassUnavailable},
+		{name: "status 600", err: &StatusError{Code: 600}, want: ClassRejected},
+		{name: "status 200", err: &StatusError{Code: 200}, want: ClassRejected},
+		{name: "status 201", err: &StatusError{Code: 201}, want: ClassRejected},
+		{name: "status 302", err: &StatusError{Code: 302}, want: ClassRejected},
+		{name: "transport connection refused", err: &TransportError{Err: errors.New("connection refused")}, want: ClassUnavailable},
+		{name: "transport deadline exceeded", err: &TransportError{Err: context.DeadlineExceeded}, want: ClassUnavailable},
+		{name: "wrapped transport", err: fmt.Errorf("do request: %w", &TransportError{Err: errors.New("reset")}), want: ClassUnavailable},
+		{name: "decode error", err: fmt.Errorf("decode response json: %w", errors.New("syntax error")), want: ClassOther},
+		{name: "generic error", err: errors.New("other failure"), want: ClassOther},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Classify(tc.err)
+			if got != tc.want {
+				t.Errorf("Classify(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestProbe_Positive_RequestShape(t *testing.T) {
+	for _, withKey := range []bool{true, false} {
+		name := "without key"
+		key := ""
+		if withKey {
+			name = "with key"
+			key = "test-key"
+		}
+		t.Run(name, func(t *testing.T) {
+			var capturedPath, capturedMethod, capturedAuth, capturedContentType string
+			var capturedReq chatRequest
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedPath = r.URL.Path
+				capturedMethod = r.Method
+				capturedAuth = r.Header.Get("Authorization")
+				capturedContentType = r.Header.Get("Content-Type")
+
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					http.Error(w, "read error", http.StatusInternalServerError)
+					return
+				}
+				if err := json.Unmarshal(body, &capturedReq); err != nil {
+					http.Error(w, "unmarshal error", http.StatusBadRequest)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+				if _, writeErr := w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"pong"}}]}`)); writeErr != nil {
+					t.Errorf("write response: %v", writeErr)
+				}
+			}))
+			defer server.Close()
+
+			c, err := New(Config{
+				BaseURL: server.URL,
+				Alias:   "test-alias",
+				APIKey:  key,
+			}, server.Client())
+			if err != nil {
+				t.Fatalf("New() failed: %v", err)
+			}
+
+			if err := c.Probe(context.Background()); err != nil {
+				t.Fatalf("Probe() unexpected error: %v", err)
+			}
+
+			if capturedPath != "/chat/completions" || capturedMethod != http.MethodPost {
+				t.Errorf("path/method = %s %s, want POST /chat/completions", capturedMethod, capturedPath)
+			}
+			if capturedContentType != "application/json" {
+				t.Errorf("Content-Type = %q, want application/json", capturedContentType)
+			}
+			if withKey && capturedAuth != "Bearer test-key" {
+				t.Errorf("Authorization = %q, want Bearer test-key", capturedAuth)
+			}
+			if !withKey && capturedAuth != "" {
+				t.Errorf("Authorization = %q, want empty", capturedAuth)
+			}
+			if capturedReq.Model != "test-alias" || capturedReq.MaxTokens != 1 || capturedReq.Stream {
+				t.Errorf("req = %+v, unexpected fields", capturedReq)
+			}
+			if len(capturedReq.Messages) != 1 || capturedReq.Messages[0].Role != "user" || capturedReq.Messages[0].Content != "ping" {
+				t.Errorf("messages = %+v, want single user ping message", capturedReq.Messages)
+			}
+		})
+	}
+}
+
+func TestProbe_Positive_Status200WithNonJSONBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if _, writeErr := w.Write([]byte("x")); writeErr != nil {
+			t.Errorf("write response: %v", writeErr)
+		}
+	}))
+	defer server.Close()
+
+	c, err := New(Config{BaseURL: server.URL, Alias: "test-alias"}, server.Client())
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	if err := c.Probe(context.Background()); err != nil {
+		t.Fatalf("Probe() with non-json body returned error: %v, want nil", err)
+	}
+}
+
+func TestProbe_Boundary_DeadlineDerivedFromContext(t *testing.T) {
+	done := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-done:
+		}
+	}))
+	defer server.Close()
+	defer close(done)
+
+	c, err := New(Config{
+		BaseURL: server.URL,
+		Alias:   "test-alias",
+		Timeout: 50 * time.Millisecond,
+	}, server.Client())
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	start := time.Now()
+	err = c.Probe(context.Background())
+	duration := time.Since(start)
+
+	if err == nil {
+		t.Fatal("Probe() on hanging server want error, got nil")
+	}
+	if duration > 1*time.Second {
+		t.Errorf("Probe took %v, want inside 1s", duration)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) && !strings.Contains(err.Error(), "deadline") {
+		t.Errorf("error %v should wrap or describe deadline exceeded", err)
+	}
+}
+
+func TestClient_Negative_KeyAbsentFromEveryErrorText(t *testing.T) {
+	const secretKey = "test-secret-key-probe-401"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		if _, writeErr := w.Write([]byte("unauthorized: Bearer test-secret-key-probe-401 echoed back")); writeErr != nil {
+			t.Errorf("write response: %v", writeErr)
+		}
+	}))
+	defer server.Close()
+
+	c, err := New(Config{
+		BaseURL: server.URL,
+		Alias:   "test-alias",
+		APIKey:  secretKey,
+	}, server.Client())
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	probeErr := c.Probe(context.Background())
+	if probeErr == nil {
+		t.Fatal("Probe() want error on 401, got nil")
+	}
+	if strings.Contains(probeErr.Error(), secretKey) {
+		t.Fatalf("Probe error leaked APIKey: %s", probeErr.Error())
+	}
+
+	_, completeErr := c.Complete(context.Background(), "sys", "usr")
+	if completeErr == nil {
+		t.Fatal("Complete() want error on 401, got nil")
+	}
+	if strings.Contains(completeErr.Error(), secretKey) {
+		t.Fatalf("Complete error leaked APIKey: %s", completeErr.Error())
+	}
+}
+
+func TestClient_Boundary_BodySlowerThanTimeoutIsUnavailable(t *testing.T) {
+	done := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		select {
+		case <-r.Context().Done():
+		case <-done:
+		}
+	}))
+	defer server.Close()
+	defer close(done)
+
+	client, err := New(Config{
+		BaseURL: server.URL,
+		Alias:   "router/test",
+		Timeout: 50 * time.Millisecond,
+	}, server.Client())
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	probeErr := client.Probe(context.Background())
+	if probeErr == nil {
+		t.Fatal("Probe() want an error for a body that never ends, got nil")
+	}
+	if got := Classify(probeErr); got != ClassUnavailable {
+		t.Errorf("Classify(Probe error %v) = %v, want ClassUnavailable", probeErr, got)
+	}
+
+	_, completeErr := client.Complete(context.Background(), "sys", "usr")
+	if completeErr == nil {
+		t.Fatal("Complete() want an error for a body that never ends, got nil")
+	}
+	if got := Classify(completeErr); got != ClassUnavailable {
+		t.Errorf("Classify(Complete error %v) = %v, want ClassUnavailable", completeErr, got)
+	}
+}
+
+func TestProbe_Boundary_DeadlineNeverAboveProbeTimeout(t *testing.T) {
+	var left time.Duration
+	httpClient := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		deadline, ok := r.Context().Deadline()
+		if !ok {
+			return nil, errors.New("request carries no deadline")
+		}
+		left = time.Until(deadline)
+		return nil, errors.New("stop after reading the deadline")
+	})}
+
+	c, err := New(Config{
+		BaseURL: "http://127.0.0.1:1",
+		Alias:   "test-alias",
+		Timeout: MaxTimeout,
+	}, httpClient)
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+	if MaxTimeout <= ProbeTimeout {
+		t.Fatalf("MaxTimeout %v must be above ProbeTimeout %v for this case", MaxTimeout, ProbeTimeout)
+	}
+
+	if probeErr := c.Probe(context.Background()); probeErr == nil {
+		t.Fatal("Probe() want the transport error, got nil")
+	}
+	if left <= 0 || left > ProbeTimeout {
+		t.Errorf("probe deadline lies %v ahead, want above 0 and at most %v", left, ProbeTimeout)
 	}
 }

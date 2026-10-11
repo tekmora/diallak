@@ -38,10 +38,15 @@ const (
 	ShutdownDeadline = 5 * time.Second
 )
 
+type modelReport struct {
+	fn func() string
+}
+
 // State holds the atomic readiness state of the application.
 // The zero value represents not ready.
 type State struct {
-	ready atomic.Bool
+	ready       atomic.Bool
+	modelReport atomic.Pointer[modelReport]
 }
 
 // Ready reports whether the application is ready to serve.
@@ -60,6 +65,30 @@ func (s *State) SetReady(ready bool) {
 	s.ready.Store(ready)
 }
 
+// SetModelState sets the callback reporting the model readiness state.
+func (s *State) SetModelState(report func() string) {
+	if s == nil {
+		return
+	}
+	if report == nil {
+		s.modelReport.Store(nil)
+		return
+	}
+	s.modelReport.Store(&modelReport{fn: report})
+}
+
+// ModelState reports the current model state or "not configured".
+func (s *State) ModelState() string {
+	if s == nil {
+		return "not configured"
+	}
+	rep := s.modelReport.Load()
+	if rep == nil || rep.fn == nil {
+		return "not configured"
+	}
+	return rep.fn()
+}
+
 // Handler serves HTTP liveness (/healthz) and readiness (/readyz) probes.
 type Handler struct {
 	state *State
@@ -70,7 +99,7 @@ func NewHandler(state *State) *Handler {
 	return &Handler{state: state}
 }
 
-// ServeHTTP handles /healthz, /readyz, and returns 404 for any other path.
+// ServeHTTP handles /healthz, /readyz, /modelz, and returns 404 for any other path.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -80,6 +109,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleHealthz(w, r)
 	case "/readyz":
 		h.handleReadyz(w, r)
+	case "/modelz":
+		h.handleModelz(w, r)
 	default:
 		writeResponse(w, r, http.StatusNotFound, "not found\n")
 	}
@@ -105,6 +136,15 @@ func (h *Handler) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeResponse(w, r, http.StatusServiceUnavailable, "not ready\n")
+}
+
+func (h *Handler) handleModelz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		writeResponse(w, r, http.StatusMethodNotAllowed, "method not allowed\n")
+		return
+	}
+	writeResponse(w, r, http.StatusOK, fmt.Sprintf("model: %s\n", h.state.ModelState()))
 }
 
 func writeResponse(w http.ResponseWriter, r *http.Request, statusCode int, body string) {
