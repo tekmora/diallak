@@ -22,22 +22,27 @@ import (
 	"github.com/tekmora/diallak/internal/discord"
 	"github.com/tekmora/diallak/internal/health"
 	"github.com/tekmora/diallak/internal/model"
+	"github.com/tekmora/diallak/internal/serverplan"
+	"github.com/tekmora/diallak/server"
 )
 
 const (
 	startTimeout    = 30 * time.Second
 	registerTimeout = 30 * time.Second
+	serverTimeout   = 60 * time.Second
 )
 
 type dependencies struct {
 	registerCommands func(ctx context.Context, token string, guildID uint64, maxQuestionChars int) error
 	runDiscord       func(ctx context.Context, cfg discord.BotConfig) error
+	readServer       func(ctx context.Context, token string, guildID uint64) (*serverplan.Snapshot, error)
 }
 
 func defaultDependencies() dependencies {
 	return dependencies{
 		registerCommands: discord.RegisterCommands,
 		runDiscord:       discord.Run,
+		readServer:       discord.ReadServer,
 	}
 }
 
@@ -63,13 +68,21 @@ func report(err error, errOut io.Writer) int {
 	return 1
 }
 
-// run parses arguments, loads configuration, and executes either command registration or the bot runtime.
+// run parses arguments, loads configuration, and executes either command registration, server inspection, or the bot runtime.
 func run(ctx context.Context, args []string, getenv func(string) string, out io.Writer, deps dependencies) (err error) {
 	fs := flag.NewFlagSet("diallak", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	registerCmds := fs.Bool("register-commands", false, "register guild commands and exit")
+	serverMode := fs.String("server", "", "plan or compare Discord server configuration")
 	if parseErr := fs.Parse(args); parseErr != nil {
 		return fmt.Errorf("parse flags: %w", parseErr)
+	}
+
+	if *serverMode != "" && *registerCmds {
+		return errors.New("-server and -register-commands cannot be used together")
+	}
+	if *serverMode != "" && *serverMode != "plan" && *serverMode != "compare" {
+		return fmt.Errorf("invalid -server mode %q: must be plan or compare", *serverMode)
 	}
 
 	cfg, err := config.Load(getenv)
@@ -80,7 +93,59 @@ func run(ctx context.Context, args []string, getenv func(string) string, out io.
 	if *registerCmds {
 		return executeRegisterCommands(ctx, cfg, out, deps.registerCommands)
 	}
+	if *serverMode != "" {
+		return executeServerCommand(ctx, cfg, *serverMode, out, deps.readServer)
+	}
 	return executeBotRun(ctx, cfg, out, deps.runDiscord)
+}
+
+func executeServerCommand(
+	ctx context.Context,
+	cfg config.Config,
+	mode string,
+	out io.Writer,
+	readServer func(ctx context.Context, token string, guildID uint64) (*serverplan.Snapshot, error),
+) error {
+	srvCtx, cancel := context.WithTimeout(ctx, serverTimeout)
+	defer cancel()
+
+	def, err := server.Definition()
+	if err != nil {
+		return fmt.Errorf("load definition: %w", err)
+	}
+
+	snap, err := readServer(srvCtx, cfg.Token, cfg.GuildID)
+	if err != nil {
+		return fmt.Errorf("read server: %w", err)
+	}
+
+	if mode == "plan" {
+		res, err := serverplan.Plan(def, snap)
+		if err != nil {
+			return fmt.Errorf("plan: %w", err)
+		}
+		if err := serverplan.Render(out, res); err != nil {
+			return fmt.Errorf("render plan: %w", err)
+		}
+		digest, err := serverplan.Digest(res)
+		if err != nil {
+			return fmt.Errorf("digest plan: %w", err)
+		}
+		if _, writeErr := fmt.Fprintf(out, "plan digest: %s\n", digest); writeErr != nil {
+			return fmt.Errorf("write plan digest: %w", writeErr)
+		}
+		return nil
+	}
+
+	diffs, err := serverplan.Compare(def, snap)
+	if err != nil {
+		return fmt.Errorf("compare: %w", err)
+	}
+	raised := serverplan.Raised(def, snap)
+	if err := serverplan.RenderDifferences(out, raised, diffs); err != nil {
+		return fmt.Errorf("render differences: %w", err)
+	}
+	return nil
 }
 
 func executeRegisterCommands(

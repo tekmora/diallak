@@ -41,10 +41,11 @@ type Category struct {
 
 // Channel represents an observed channel, its type, parent category, and permission overwrites.
 type Channel struct {
-	Name     string   `json:"name"`
-	Type     string   `json:"type"`
-	Category string   `json:"category"`
-	Access   []Access `json:"access"`
+	Name          string   `json:"name"`
+	Type          string   `json:"type"`
+	Category      string   `json:"category"`
+	Access        []Access `json:"access"`
+	MemberEntries int      `json:"member_entries"`
 }
 
 // Access describes the permissions granted or denied to a role in a channel.
@@ -152,6 +153,9 @@ func checkNamesAndTypes(s *Snapshot) []error {
 		}
 		if _, ok := allowedChannelTypes[s.Channels[i].Type]; !ok {
 			errs = append(errs, fmt.Errorf("unknown channel type %q in channel %q", s.Channels[i].Type, s.Channels[i].Name))
+		}
+		if s.Channels[i].MemberEntries < 0 {
+			errs = append(errs, fmt.Errorf("channel %q has negative member entries %d", s.Channels[i].Name, s.Channels[i].MemberEntries))
 		}
 	}
 	for i := range s.Features {

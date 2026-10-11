@@ -264,44 +264,112 @@ var botRights = [...]string{
 	"MODERATE_MEMBERS",
 }
 
-var vocabulary = [...]string{
-	"VIEW_CHANNEL",
-	"SEND_MESSAGES",
-	"SEND_MESSAGES_IN_THREADS",
-	"CREATE_PUBLIC_THREADS",
-	"CREATE_PRIVATE_THREADS",
-	"READ_MESSAGE_HISTORY",
-	"ADD_REACTIONS",
-	"EMBED_LINKS",
-	"ATTACH_FILES",
-	"USE_APPLICATION_COMMANDS",
-	"MENTION_EVERYONE",
-	"MANAGE_MESSAGES",
-	"MANAGE_THREADS",
-	"MODERATE_MEMBERS",
-	"MANAGE_CHANNELS",
-	"MANAGE_ROLES",
-	"MANAGE_GUILD",
-	"MANAGE_WEBHOOKS",
-	"KICK_MEMBERS",
-	"BAN_MEMBERS",
-	"ADMINISTRATOR",
-	"VIEW_AUDIT_LOG",
-	"CONNECT",
-	"SPEAK",
-	"USE_VAD",
-	"MUTE_MEMBERS",
-	"MOVE_MEMBERS",
-	"CREATE_EVENTS",
-	"MANAGE_EVENTS",
-	"SEND_POLLS",
+type permDef struct {
+	name string
+	bit  uint8
 }
 
-// Permissions returns a fresh slice containing the fixed vocabulary of Discord permissions.
+var permissionsTable = [...]permDef{
+	{"CREATE_INSTANT_INVITE", 0},
+	{"KICK_MEMBERS", 1},
+	{"BAN_MEMBERS", 2},
+	{"ADMINISTRATOR", 3},
+	{"MANAGE_CHANNELS", 4},
+	{"MANAGE_GUILD", 5},
+	{"ADD_REACTIONS", 6},
+	{"VIEW_AUDIT_LOG", 7},
+	{"PRIORITY_SPEAKER", 8},
+	{"STREAM", 9},
+	{"VIEW_CHANNEL", 10},
+	{"SEND_MESSAGES", 11},
+	{"SEND_TTS_MESSAGES", 12},
+	{"MANAGE_MESSAGES", 13},
+	{"EMBED_LINKS", 14},
+	{"ATTACH_FILES", 15},
+	{"READ_MESSAGE_HISTORY", 16},
+	{"MENTION_EVERYONE", 17},
+	{"USE_EXTERNAL_EMOJIS", 18},
+	{"VIEW_GUILD_INSIGHTS", 19},
+	{"CONNECT", 20},
+	{"SPEAK", 21},
+	{"MUTE_MEMBERS", 22},
+	{"DEAFEN_MEMBERS", 23},
+	{"MOVE_MEMBERS", 24},
+	{"USE_VAD", 25},
+	{"CHANGE_NICKNAME", 26},
+	{"MANAGE_NICKNAMES", 27},
+	{"MANAGE_ROLES", 28},
+	{"MANAGE_WEBHOOKS", 29},
+	{"MANAGE_GUILD_EXPRESSIONS", 30},
+	{"USE_APPLICATION_COMMANDS", 31},
+	{"REQUEST_TO_SPEAK", 32},
+	{"MANAGE_EVENTS", 33},
+	{"MANAGE_THREADS", 34},
+	{"CREATE_PUBLIC_THREADS", 35},
+	{"CREATE_PRIVATE_THREADS", 36},
+	{"USE_EXTERNAL_STICKERS", 37},
+	{"SEND_MESSAGES_IN_THREADS", 38},
+	{"USE_EMBEDDED_ACTIVITIES", 39},
+	{"MODERATE_MEMBERS", 40},
+	{"VIEW_CREATOR_MONETIZATION_ANALYTICS", 41},
+	{"USE_SOUNDBOARD", 42},
+	{"CREATE_GUILD_EXPRESSIONS", 43},
+	{"CREATE_EVENTS", 44},
+	{"USE_EXTERNAL_SOUNDS", 45},
+	{"SEND_VOICE_MESSAGES", 46},
+	{"SET_VOICE_CHANNEL_STATUS", 48},
+	{"SEND_POLLS", 49},
+	{"USE_EXTERNAL_APPS", 50},
+	{"PIN_MESSAGES", 51},
+	{"BYPASS_SLOWMODE", 52},
+}
+
+// Permissions returns a fresh slice containing the fixed vocabulary of Discord permissions in bit order.
 func Permissions() []string {
-	res := make([]string, len(vocabulary))
-	copy(res, vocabulary[:])
+	res := make([]string, len(permissionsTable))
+	for i := range permissionsTable {
+		res[i] = permissionsTable[i].name
+	}
 	return res
+}
+
+func findPermBit(name string) (uint8, bool) {
+	for i := range permissionsTable {
+		if permissionsTable[i].name == name {
+			return permissionsTable[i].bit, true
+		}
+	}
+	return 0, false
+}
+
+// PermissionMask computes the bitwise mask for the given permission names.
+// It returns an error naming any unknown permission name.
+func PermissionMask(names []string) (uint64, error) {
+	var mask uint64
+	for _, name := range names {
+		bit, found := findPermBit(name)
+		if !found {
+			return 0, fmt.Errorf("unknown permission %q", name)
+		}
+		mask |= uint64(1) << bit
+	}
+	return mask, nil
+}
+
+// PermissionNames returns the permission names in bit order for the set bits in mask,
+// along with any bits in mask that do not correspond to any known permission.
+func PermissionNames(mask uint64) (names []string, unknown uint64) {
+	names = make([]string, 0)
+	var knownMask uint64
+	for i := range permissionsTable {
+		bitMask := uint64(1) << permissionsTable[i].bit
+		if mask&bitMask != 0 {
+			names = append(names, permissionsTable[i].name)
+			knownMask |= bitMask
+		}
+	}
+	unknown = mask &^ knownMask
+	return names, unknown
 }
 
 type jsonFrame struct {

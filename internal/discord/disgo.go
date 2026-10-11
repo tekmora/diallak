@@ -32,14 +32,19 @@ const (
 
 var errEmptyApplicationID = errors.New("application id is empty")
 
+// serverCallTimeout is chosen, not measured.
+const serverCallTimeout = 10 * time.Second
+
 // clientOptions are the seams of this package's tests: the address of the platform's REST API, the
 // deadline of the application lookup and the function that opens the gateway. The exported
 // functions pass the zero value, which means the real platform and the defaults.
 type clientOptions struct {
-	restURL          string
-	lookupTimeout    time.Duration
-	openGateway      func(ctx context.Context, client *bot.Client, token string) error
-	maxQuestionChars int
+	restURL           string
+	lookupTimeout     time.Duration
+	openGateway       func(ctx context.Context, client *bot.Client, token string) error
+	maxQuestionChars  int
+	now               func() time.Time
+	serverCallTimeout time.Duration
 }
 
 // lookupDeadline is the configured deadline of the application lookup, or the default.
@@ -48,6 +53,20 @@ func (o clientOptions) lookupDeadline() time.Duration {
 		return o.lookupTimeout
 	}
 	return applicationLookupTimeout
+}
+
+func (o clientOptions) getNow() time.Time {
+	if o.now != nil {
+		return o.now()
+	}
+	return time.Now()
+}
+
+func (o clientOptions) callTimeout() time.Duration {
+	if o.serverCallTimeout > 0 {
+		return o.serverCallTimeout
+	}
+	return serverCallTimeout
 }
 
 // BotConfig configures the live Discord gateway client and runtime adapter.
@@ -70,26 +89,40 @@ func RegisterCommands(ctx context.Context, token string, guildID uint64, maxQues
 	return registerCommandsWithOptions(ctx, token, guildID, clientOptions{maxQuestionChars: maxQuestionChars})
 }
 
-func registerCommandsWithOptions(ctx context.Context, token string, guildID uint64, opts clientOptions) error {
+func checkTokenAndGuild(token string, guildID uint64) error {
 	if token == "" {
 		return errors.New("bot token is required")
 	}
 	if guildID == 0 {
 		return errors.New("guild ID must not be zero")
 	}
+	return nil
+}
+
+func newRestClient(token string, restURL string) (*bot.Client, error) {
+	var botOpts []bot.ConfigOpt
+	if restURL != "" {
+		botOpts = append(botOpts, bot.WithRestClientConfigOpts(rest.WithURL(restURL)))
+	}
+	client, err := disgo.New(token, botOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("create discord client: %w", sanitizeToken(err, token))
+	}
+	return client, nil
+}
+
+func registerCommandsWithOptions(ctx context.Context, token string, guildID uint64, opts clientOptions) error {
+	if err := checkTokenAndGuild(token, guildID); err != nil {
+		return err
+	}
 	maxQuestionChars, err := validateQuestionMaxChars(opts.maxQuestionChars)
 	if err != nil {
 		return err
 	}
 
-	var botOpts []bot.ConfigOpt
-	if opts.restURL != "" {
-		botOpts = append(botOpts, bot.WithRestClientConfigOpts(rest.WithURL(opts.restURL)))
-	}
-
-	client, err := disgo.New(token, botOpts...)
+	client, err := newRestClient(token, opts.restURL)
 	if err != nil {
-		return fmt.Errorf("create discord client: %w", sanitizeToken(err, token))
+		return err
 	}
 	defer client.Close(ctx)
 

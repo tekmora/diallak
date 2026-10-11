@@ -3,9 +3,9 @@ package serverdef
 import "fmt"
 
 func (v *validator) checkPermissions() {
-	vocabMap := make(map[string]struct{}, len(vocabulary))
-	for _, p := range vocabulary {
-		vocabMap[p] = struct{}{}
+	vocabMap := make(map[string]struct{}, len(permissionsTable))
+	for i := range permissionsTable {
+		vocabMap[permissionsTable[i].name] = struct{}{}
 	}
 	v.checkRolePermissionNames(vocabMap)
 	v.checkChannelPermissionNames(vocabMap)

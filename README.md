@@ -64,8 +64,9 @@ Community bot for the Lusoris Discord hub.
 
 The target state of the server itself, its roles, channels and permissions, is
 data with a validator: [docs/server-definition.md](docs/server-definition.md).
-Nothing applies it to a server yet; the steps that compare and plan are
-described in [docs/server-apply.md](docs/server-apply.md).
+Nothing applies it to a server yet; the commands that read the server, compare
+it and plan the changes are described in
+[docs/server-apply.md](docs/server-apply.md).
 
 ## The name
 

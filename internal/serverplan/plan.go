@@ -137,7 +137,8 @@ type planContext struct {
 	refused       []Refusal
 }
 
-func isCallerRaised(def *serverdef.Definition, s *Snapshot) bool {
+// Raised reports whether the caller has more permissions than the definition grants the bot role.
+func Raised(def *serverdef.Definition, s *Snapshot) bool {
 	var botRole *serverdef.Role
 	for i := range def.Roles {
 		if def.Roles[i].Kind == "bot" {
@@ -209,7 +210,7 @@ func newPlanContext(def *serverdef.Definition, s *Snapshot, diffs []Difference) 
 	return &planContext{
 		def:         def,
 		snap:        s,
-		raised:      isCallerRaised(def, s),
+		raised:      Raised(def, s),
 		botRoleID:   botID,
 		callerIdx:   callerIdx,
 		callerPerms: callerPerms,
