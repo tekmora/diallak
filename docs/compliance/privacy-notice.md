@@ -163,9 +163,11 @@ question. The bot does not need them to answer.
 ## Changes to this notice
 
 Features that are planned will process more data: support tickets, the
-moderation trail, GitHub Discussions and supporter roles
-([data inventory](data-inventory.md), "Not yet built"). This notice gains the
-matching entries before such a feature goes live. Two periods are decided
+moderation trail, GitHub Discussions, supporter roles and a first answer in the
+support forum ([data inventory](data-inventory.md), "Not yet built"). This
+notice gains the matching entries before such a feature goes live. The entries
+for the support forum are drafted in
+[Support forum answer](support-forum-answer.md). Two periods are decided
 already: a support ticket is kept 30 days after it is closed, and the
 moderation trail 90 days.
 
