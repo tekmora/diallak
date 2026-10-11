@@ -1,0 +1,2 @@
+type: security
+title: 'Release: the SBOM files on the release page get build provenance, so a downloaded file can be checked with gh attestation verify'
