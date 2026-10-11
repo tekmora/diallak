@@ -5,8 +5,9 @@ server as data: its roles, channels and permissions, the rooms that open later
 and who does what. A validator checks the file with every test run.
 
 **Nothing applies the file to a server.** It says so itself (`"applied":
-false`), and the validator refuses a file that claims otherwise. Applying it is
-a later unit together with the operator.
+false`), and the validator refuses a file that claims otherwise. The path that
+will apply it is decided and not built
+([ADR-0010](adr/0010-bot-rights-and-apply-path.md), "One apply path").
 
 ## In short
 
@@ -24,6 +25,10 @@ a later unit together with the operator.
   moderator.
 - **Thresholds are proposals.** Each one names what is measured, over which
   window and why, and none is measured yet.
+- **The bot holds three rights, each for a decided function:** managing
+  roles, deleting messages and timing members out. The order of roles keeps
+  the first of them away from the staff roles
+  ([ADR-0010](adr/0010-bot-rights-and-apply-path.md)).
 
 ## Check the file
 
@@ -47,11 +52,12 @@ after the definition and a file over one mebibyte are refused
 | :--- | :--- | :--- |
 | `metrics` | What a threshold rule may measure, and from which data | 2 |
 | `roles` | Every role with its kind, who assigns it and its server-wide permissions | 17 |
+| `role_order` | The roles from the highest to the lowest, without the role every member holds | 16 |
 | `categories` | The groups channels are shown in | 6 |
 | `channels` | Every channel with type, purpose, owner and the permissions it changes per role | 16 |
 | `areas` | The rooms that open at a threshold, each with an opening and a closing rule | 8 |
 | `onboarding` | The questions a new member is asked and the role each answer gives | 2 questions |
-| `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 13 |
+| `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 14 |
 <!-- markdownlint-enable MD013 -->
 
 A role or a rule carries `"basis": "decided"` or `"basis": "proposal"`. Decided
@@ -92,13 +98,15 @@ Each finding has a code, a path into the file and a message.
 | `ticket-shape` | A ticket channel in which a member cannot open a private thread or write in it, or can write in the channel itself |
 | `area-opening-rule`, `area-closing-rule` | A threshold area without its opening or its closing rule |
 | `rule-shape` | A rule with a value below 1, a window outside 1 to 365 days, or a subject that does not exist |
-| `area-channel` | An area without a channel, an area channel that every member sees, or one its own role does not see |
+| `area-channel` | An area without a channel, an area channel that every member sees, or one its own role or the bot does not see |
 | `area-condition` | A language room without the condition that someone who reads the language watches it |
 | `first-answer` | A support forum without exactly one opt-out tag that every member can set, or in which the bot cannot read and reply |
 | `staff-visibility` | A moderators' channel that a role other than operator, moderator or bot can see |
 | `moderator-visibility` | A channel that a moderator cannot see |
 | `voice-closed` | A voice channel that members can join between events or use without push-to-talk |
-| `operator-only`, `moderation-only` | Administration rights outside the operator role; moderation rights outside the operator and moderator roles |
+| `operator-only`, `moderation-only` | Administration rights outside the operator role; moderation rights outside the operator and moderator roles. The bot's role passes for its three rights only |
+| `bot-rights` | A bot role that lacks one of its three rights or holds another; an entry of the bot's role that allows more than its kind of channel needs; a moderators' channel the bot cannot write in; a ticket channel the bot can see |
+| `role-order` | A role missing from the order or listed twice; a role the operator assigns that does not stand above the bot's role; a role the bot or onboarding assigns that does not stand below it |
 | `nothing-attaches` | A permission on a recognition, interest or language role |
 | `role-grant` | A role assigned by the wrong party, such as onboarding handing out the moderator role |
 | `automation-record` | Something the bot or the platform does without a decision record, or a planned bot feature not marked as needing one |
@@ -108,6 +116,28 @@ Each finding has a code, a path into the file and a message.
 Every condition of every rule has a test that plants exactly that defect
 (`review_test.go` and `review_shape_test.go` in
 [`internal/serverdef`](../internal/serverdef)).
+
+## What the bot may do
+
+[ADR-0010](adr/0010-bot-rights-and-apply-path.md) ties each right to a function
+and to the line of Discord's documentation that asks for it.
+
+<!-- markdownlint-disable MD013 -->
+| Right of the bot's role | For |
+| :--- | :--- |
+| `MANAGE_ROLES` | Giving and taking the Supporter roles and the Contributor role; opening and closing an area by the entry of its role on its channel |
+| `MANAGE_MESSAGES` | Deleting a message when a moderator acts through the bot |
+| `MODERATE_MEMBERS` | Timing a member out when a moderator acts through the bot |
+<!-- markdownlint-enable MD013 -->
+
+`role_order` puts the Operator, the Moderator and the subject guide roles above
+the bot's role and every other role below it. Discord lets a bot give and edit
+only roles below its own, so the bot cannot hand out a staff role. Nothing
+attaches to the roles below it.
+
+In channels the bot's role has an entry only where a function needs one: the
+support forum, the two moderators' channels and the eight area channels. It is
+denied the ticket channel and has no entry on the announcement channel.
 
 ## Thresholds
 
@@ -138,14 +168,21 @@ The `automation` part names the party for each task and whether it is built.
 
 - **The bot, built:** the `/ask` command.
 - **The bot, decided and not built:** the first answer in the support forum,
-  the bridge from GitHub Discussions, the moderators' queue and trail.
-- **The bot, planned:** opening and closing the areas, the news posts and the
-  supporter roles. Each needs its own decision record first; until then the
-  operator opens and closes areas by hand.
-- **The platform:** the spam filter and the onboarding questions.
-- **The operator:** inviting people and granting the moderator, subject guide
-  and contributor roles, reading the ticket threads, scheduling events and
-  opening the voice room for them, and applying this definition.
+  the bridge from GitHub Discussions, and what a moderator does through the
+  bot together with the trail of it.
+- **The bot, planned:** opening and closing the areas, the news posts, the
+  supporter roles and the Contributor role. Each needs its own decision record
+  first; until then the operator opens and closes areas by hand.
+- **The platform:** the spam filter, which writes each flagged case into the
+  moderators' queue channel by itself, and the onboarding questions.
+- **The operator:** inviting people and granting the moderator and subject
+  guide roles, reading the ticket threads, scheduling events and opening the
+  voice room for them.
+- **Applying the definition** is one path with four steps: plan, dry run,
+  apply, read-only compare. Every run uses the bot's identity. For the first
+  set-up the operator raises the bot's role for the run and lowers it
+  afterwards; with its three rights the bot runs the same path for its own
+  changes. It is decided in ADR-0010 and not built.
 
 ## Not decided and not verified
 
@@ -156,16 +193,26 @@ The `automation` part names the party for each task and whether it is built.
   onboarding answer, are proposals.
 - **The contributor ladder** is decided: one role, Contributor, after one
   merged contribution, and the subject guide roles above it. There is no third
-  step.
+  step. The bot gives the role; how it learns which member a contribution
+  belongs to is not decided and gets its own record.
 - **Supporter roles** are decided: one role for supporters and one cosmetic
   role after a year of support. Nothing attaches to either.
 - **The boost level of the server.** The definition sets no banner, no role
   icon, no audio bitrate and no vanity address; Discord's documentation ties
   each of these to a server feature or a boost level. By that documentation
-  the announcement channel needs the server feature `NEWS`. Before anything is
-  applied, the apply step reads the server's boost level and feature list from
-  the platform and stops when the definition needs something the server does
-  not have; no list of perks is taken from memory.
+  the announcement channel needs the server feature `NEWS`. Both were read
+  from the platform on 2026-10-11: the feature list holds `NEWS` and
+  `COMMUNITY`, and the level was 1 (ADR-0010, "What was read from the
+  server"). The plan step reads them again on every run and refuses a change
+  the server lacks the feature for; no list of perks is taken from memory.
+- **How members choose their interests.** Discord's documentation asks for at
+  least seven default channels, five of them writable for every member, before
+  its onboarding can be switched on. The launch set has six channels every
+  member sees and three in which every member can write. The platform's
+  onboarding is therefore not used: the bot will give the interest and
+  language roles from the member's own choice. That function needs its own
+  record; until then the file keeps the two onboarding questions (ADR-0010,
+  "Open points").
 - **Onboarding** and the two measurements are described as Discord's
   documentation gives them
   ([`discord/discord-api-docs`](https://github.com/discord/discord-api-docs/tree/37148620d2324292b76047541d5f8331f81ea77a)

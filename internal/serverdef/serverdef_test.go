@@ -25,6 +25,20 @@ func TestLoad_Positive_ValidFileAccepted(t *testing.T) {
 	}
 }
 
+func TestLoad_Positive_RoleOrderKeyAccepted(t *testing.T) {
+	data, err := os.ReadFile("../../server/definition.json")
+	if err != nil {
+		t.Fatalf("read definition fixture: %v", err)
+	}
+	def, err := Load(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("Load valid definition with role_order: %v", err)
+	}
+	if len(def.RoleOrder) != 16 {
+		t.Errorf("len(RoleOrder) = %d, want 16", len(def.RoleOrder))
+	}
+}
+
 func TestLoad_Negative_UnknownFieldRefused(t *testing.T) {
 	input := `{"version": 1, "applied": false, "unknown_field": "disallowed"}`
 	_, err := Load(strings.NewReader(input))

@@ -151,24 +151,46 @@ func checkChannelEffectiveMentionEveryone(v *validator, p, channelID string) {
 	}
 }
 
+func (v *validator) checkChannelOperatorOnly(ch Channel, r Role, opPerms []string) {
+	if r.Kind == "operator" {
+		return
+	}
+	p := fmt.Sprintf("channels[%s].access[%s]", ch.ID, r.ID)
+	eff := granted(v.def, r.ID, ch.ID)
+	for _, perm := range opPerms {
+		if r.Kind == "bot" && inSet(perm, botRights[:]) {
+			continue
+		}
+		if _, ok := eff[perm]; ok {
+			v.add(CodeOperatorOnly, p, fmt.Sprintf("operator-only permission %s effective for role %s", perm, r.ID))
+		}
+	}
+}
+
 func (v *validator) checkOperatorOnly() {
 	opPerms := []string{
 		"ADMINISTRATOR", "MANAGE_GUILD", "MANAGE_ROLES", "MANAGE_CHANNELS",
 		"MANAGE_WEBHOOKS", "BAN_MEMBERS", "KICK_MEMBERS",
 	}
 	for _, ch := range v.def.Channels {
-		p := fmt.Sprintf("channels[%s]", ch.ID)
 		for _, r := range v.def.Roles {
-			if r.Kind == "operator" {
-				continue
-			}
-			eff := granted(v.def, r.ID, ch.ID)
-			for _, perm := range opPerms {
-				if _, ok := eff[perm]; ok {
-					v.add(CodeOperatorOnly, fmt.Sprintf("%s.access[%s]", p, r.ID),
-						fmt.Sprintf("operator-only permission %s effective for role %s", perm, r.ID))
-				}
-			}
+			v.checkChannelOperatorOnly(ch, r, opPerms)
+		}
+	}
+}
+
+func (v *validator) checkChannelModerationOnly(ch Channel, r Role, modPerms []string) {
+	if r.Kind == "operator" || r.Kind == "moderator" {
+		return
+	}
+	p := fmt.Sprintf("channels[%s].access[%s]", ch.ID, r.ID)
+	eff := granted(v.def, r.ID, ch.ID)
+	for _, perm := range modPerms {
+		if r.Kind == "bot" && inSet(perm, botRights[:]) {
+			continue
+		}
+		if _, ok := eff[perm]; ok {
+			v.add(CodeModerationOnly, p, fmt.Sprintf("moderation-only permission %s effective for role %s", perm, r.ID))
 		}
 	}
 }
@@ -179,18 +201,8 @@ func (v *validator) checkModerationOnly() {
 		"MUTE_MEMBERS", "MOVE_MEMBERS", "VIEW_AUDIT_LOG",
 	}
 	for _, ch := range v.def.Channels {
-		p := fmt.Sprintf("channels[%s]", ch.ID)
 		for _, r := range v.def.Roles {
-			if r.Kind == "operator" || r.Kind == "moderator" {
-				continue
-			}
-			eff := granted(v.def, r.ID, ch.ID)
-			for _, perm := range modPerms {
-				if _, ok := eff[perm]; ok {
-					v.add(CodeModerationOnly, fmt.Sprintf("%s.access[%s]", p, r.ID),
-						fmt.Sprintf("moderation-only permission %s effective for role %s", perm, r.ID))
-				}
-			}
+			v.checkChannelModerationOnly(ch, r, modPerms)
 		}
 	}
 }
