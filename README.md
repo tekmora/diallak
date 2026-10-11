@@ -101,7 +101,8 @@ that no model wrote them. In the live server that is the only mode for now: no
 deployment sets the variables until the gates of
 [ADR-0013](docs/adr/0013-guardrail-policy-and-receipt.md) are passed: every
 reply of the model has to name the deployment's guardrail policy, and the
-member can ask for a receipt of the guardrails that ran. Neither is built yet.
+member can ask for a receipt of the guardrails that ran. The first is built;
+the receipt is not yet.
 
 With the model variables set the bot sends the endpoint one small request at start
 ([ADR-0012](docs/adr/0012-model-state.md)):
@@ -109,10 +110,19 @@ With the model variables set the bot sends the endpoint one small request at sta
 - **The endpoint refuses it**, for example with status 401 or 404 for a wrong
   key or an unknown alias: the bot ends with exit code 1 and names the four
   model variables.
+- **The reply does not name the policy** of `DIALLAK_MODEL_POLICY` in its
+  header `x-litellm-applied-policies`: the bot ends with exit code 1, as for a
+  refused key.
 - **The endpoint is away**, with a server error, status 408 or 429, or no reply
   within 10 seconds: the bot starts and answers with excerpts. It sends a
   member's question to the endpoint again at most once every 30 seconds until
   one succeeds.
+
+The same check runs on every later reply. A reply that does not name the
+policy is discarded, the member gets the excerpts, and the bot sends no
+further question to the endpoint until it is restarted
+(`TestAsk_Negative_ReplyWithoutThePolicyEndsInExcerpts`). The name is compared exactly, among at
+most 64 entries of the header.
 
 ### Optional settings
 

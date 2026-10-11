@@ -549,7 +549,7 @@ func TestGate_Negative_ErrorTextNeverReachesTheLog(t *testing.T) {
 	}
 }
 
-func TestGate_Start_Negative_PolicyError(t *testing.T) {
+func TestGate_Negative_StartPolicyError(t *testing.T) {
 	ep := &fakeEndpoint{probeErr: &PolicyError{Applied: []string{"other"}}}
 	g, err := NewGate(GateConfig{Endpoint: ep})
 	if err != nil {
@@ -564,7 +564,7 @@ func TestGate_Start_Negative_PolicyError(t *testing.T) {
 	}
 }
 
-func TestGate_Complete_Negative_PolicyLatches(t *testing.T) {
+func TestGate_Negative_PolicyLatches(t *testing.T) {
 	var logged bytes.Buffer
 	clock := newClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	ep := &fakeEndpoint{completeRes: "ok"}
@@ -611,7 +611,7 @@ func TestGate_Complete_Negative_PolicyLatches(t *testing.T) {
 	}
 }
 
-func TestGate_Reason_UnavailableRemainsEmpty(t *testing.T) {
+func TestGate_Boundary_ReasonEmptyWhenUnavailable(t *testing.T) {
 	ep := &fakeEndpoint{probeErr: &StatusError{Code: 503}}
 	g, err := NewGate(GateConfig{Endpoint: ep})
 	if err != nil {
@@ -625,7 +625,7 @@ func TestGate_Reason_UnavailableRemainsEmpty(t *testing.T) {
 	}
 }
 
-func TestGate_Complete_Negative_TrialPathPolicyLatches(t *testing.T) {
+func TestGate_Negative_TrialPathPolicyLatches(t *testing.T) {
 	clock := newClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	ep := &fakeEndpoint{probeErr: &StatusError{Code: 503}}
 	g, err := NewGate(GateConfig{Endpoint: ep, RetryInterval: 30 * time.Second, Now: clock.Now})
@@ -654,7 +654,7 @@ func TestGate_Complete_Negative_TrialPathPolicyLatches(t *testing.T) {
 	}
 }
 
-func TestGate_Complete_Concurrent_PolicyLatchRace(t *testing.T) {
+func TestGate_Boundary_ConcurrentPolicyLatch(t *testing.T) {
 	ep := &fakeEndpoint{completeErr: &PolicyError{Applied: []string{"bad"}}}
 	g, err := NewGate(GateConfig{Endpoint: ep})
 	if err != nil {

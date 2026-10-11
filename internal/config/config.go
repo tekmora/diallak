@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -278,8 +277,6 @@ func parseCorpusDir(raw string) (string, error) {
 	return raw, nil
 }
 
-var policyRegexp = regexp.MustCompile(`^[A-Za-z0-9._:/-]{1,128}$`)
-
 func parseModelConfig(getenv func(string) string) (string, string, string, string, error) {
 	baseURL := getenv(EnvModelBaseURL)
 	alias := getenv(EnvModelAlias)
@@ -304,7 +301,7 @@ func parseModelConfig(getenv func(string) string) (string, string, string, strin
 	if policy == "" {
 		return "", "", "", "", fmt.Errorf("%s is not set", EnvModelPolicy)
 	}
-	if !policyRegexp.MatchString(policy) {
+	if !model.ValidPolicyName(policy) {
 		return "", "", "", "", fmt.Errorf("%s must match ^[A-Za-z0-9._:/-]{1,128}$", EnvModelPolicy)
 	}
 

@@ -128,19 +128,15 @@ func (g *Gate) completeReady(ctx context.Context, system, user string) (string, 
 	if err == nil {
 		return res, nil
 	}
-	if ctx.Err() != nil {
-		return "", err
-	}
+	// A reply without the policy is a fact about the endpoint, whatever
+	// became of the caller's context while its body was discarded.
 	if Classify(err) == ClassPolicy {
 		g.mu.Lock()
-		wasLatched := g.policyLatched
-		g.policyLatched = true
-		g.ready = false
-		g.mu.Unlock()
-		if !wasLatched {
-			g.logPolicyMissing(err)
-		}
-		return "", fmt.Errorf("%w: %w", ErrPolicyMissing, err)
+		defer g.mu.Unlock()
+		return "", g.latchLocked(err)
+	}
+	if ctx.Err() != nil {
+		return "", err
 	}
 	if Classify(err) == ClassUnavailable {
 		g.mu.Lock()
@@ -175,26 +171,20 @@ func (g *Gate) completeNotReady(ctx context.Context, system, user string) (strin
 	g.trialInFlight = false
 
 	if err == nil {
-		wasReady := g.ready
-		g.ready = true
-		if !wasReady {
+		// A trial that began before the latch closed does not open the gate again.
+		if !g.ready && !g.policyLatched {
+			g.ready = true
 			g.logger.Info("model ready")
 		}
 		return res, nil
 	}
 
-	if ctx.Err() != nil {
-		return "", err
+	if Classify(err) == ClassPolicy {
+		return "", g.latchLocked(err)
 	}
 
-	if Classify(err) == ClassPolicy {
-		wasLatched := g.policyLatched
-		g.policyLatched = true
-		g.ready = false
-		if !wasLatched {
-			g.logPolicyMissing(err)
-		}
-		return "", fmt.Errorf("%w: %w", ErrPolicyMissing, err)
+	if ctx.Err() != nil {
+		return "", err
 	}
 
 	g.nextTrial = g.now().Add(g.retryInterval)
@@ -209,6 +199,18 @@ func (g *Gate) State() string {
 		return StateReady
 	}
 	return StateNotReady
+}
+
+// latchLocked closes the gate for good after a reply without the policy and
+// returns the error for the call that met it. The caller holds g.mu.
+func (g *Gate) latchLocked(err error) error {
+	wasLatched := g.policyLatched
+	g.policyLatched = true
+	g.ready = false
+	if !wasLatched {
+		g.logPolicyMissing(err)
+	}
+	return fmt.Errorf("%w: %w", ErrPolicyMissing, err)
 }
 
 // Reason reports why the gate is not ready. It returns "" when ready or when not ready for an absence,

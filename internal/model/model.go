@@ -115,6 +115,12 @@ var (
 	policyRegexp = regexp.MustCompile(`^[A-Za-z0-9._:/-]{1,128}$`)
 )
 
+// ValidPolicyName reports whether name may be configured as the policy a
+// reply must name: 1 to 128 characters of letters, digits and "._:/-".
+func ValidPolicyName(name string) bool {
+	return policyRegexp.MatchString(name)
+}
+
 // Config holds configuration parameters for the model client.
 type Config struct {
 	BaseURL         string
@@ -153,8 +159,8 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	if !aliasRegexp.MatchString(cfg.Alias) {
 		return nil, fmt.Errorf("invalid model alias %q", cfg.Alias)
 	}
-	if !policyRegexp.MatchString(cfg.Policy) {
-		return nil, fmt.Errorf("invalid model policy %q", cfg.Policy)
+	if !ValidPolicyName(cfg.Policy) {
+		return nil, errors.New("invalid model policy: 1 to 128 characters of letters, digits and \"._:/-\"")
 	}
 
 	timeout, err := validateTimeout(cfg.Timeout)
@@ -290,8 +296,8 @@ func (c *Client) sendRequest(ctx context.Context, timeout time.Duration, reqBody
 		return nil, &StatusError{Code: resp.StatusCode}
 	}
 
-	applied := parseAppliedPolicies(resp.Header)
-	if !containsPolicy(applied, c.policy) {
+	applied, named := readAppliedPolicies(resp.Header, c.policy)
+	if !named {
 		slices.Sort(applied)
 		policyErr := &PolicyError{Applied: applied}
 		if _, copyErr := io.Copy(io.Discard, io.LimitReader(resp.Body, int64(MaxResponseBytes+1))); copyErr != nil {
@@ -316,15 +322,26 @@ const (
 	maxPolicyNameBytes = 128
 )
 
-func parseAppliedPolicies(header http.Header) []string {
+// readAppliedPolicies reads the names in the policy header and reports whether
+// want is one of them. It reads at most maxAppliedPolicies entries over all
+// header lines, empty ones included, so a long header costs no more than that.
+// want is compared with the whole name; only the returned names are cut to
+// maxPolicyNameBytes.
+func readAppliedPolicies(header http.Header, want string) ([]string, bool) {
 	var applied []string
+	named := false
+	read := 0
 	values := header.Values(PolicyHeader)
-	for i := 0; i < len(values) && len(applied) < maxAppliedPolicies; i++ {
-		parts := strings.Split(values[i], ",")
-		for j := 0; j < len(parts) && len(applied) < maxAppliedPolicies; j++ {
+	for i := 0; i < len(values) && read < maxAppliedPolicies; i++ {
+		parts := strings.SplitN(values[i], ",", maxAppliedPolicies-read+1)
+		for j := 0; j < len(parts) && read < maxAppliedPolicies; j++ {
+			read++
 			name := strings.TrimSpace(parts[j])
 			if name == "" {
 				continue
+			}
+			if name == want {
+				named = true
 			}
 			if len(name) > maxPolicyNameBytes {
 				name = name[:maxPolicyNameBytes]
@@ -332,16 +349,7 @@ func parseAppliedPolicies(header http.Header) []string {
 			applied = append(applied, name)
 		}
 	}
-	return applied
-}
-
-func containsPolicy(applied []string, target string) bool {
-	for i := 0; i < len(applied); i++ {
-		if applied[i] == target {
-			return true
-		}
-	}
-	return false
+	return applied, named
 }
 
 // Complete sends a prompt to the chat completion endpoint and returns the generated content.
