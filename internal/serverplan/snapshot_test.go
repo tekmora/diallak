@@ -96,17 +96,18 @@ func TestCheck_Negative_Conditions(t *testing.T) {
 					{Name: "Bot", Everyone: false, Permissions: []string{"VIEW_CHANNEL"}},
 				}
 			},
-			wantErr: "everyone",
+			wantErr: "exactly one role with everyone=true, found 0",
 		},
 		{
 			name: "two everyone roles",
 			mutate: func(s *Snapshot) {
 				s.Roles = []Role{
-					{Name: "Bot", Everyone: true, Permissions: []string{"VIEW_CHANNEL"}},
+					{Name: "Bot", Everyone: false, Permissions: []string{"VIEW_CHANNEL"}},
+					{Name: "Second", Everyone: true, Permissions: []string{"VIEW_CHANNEL"}},
 					{Name: "@everyone", Everyone: true, Permissions: []string{"VIEW_CHANNEL"}},
 				}
 			},
-			wantErr: "everyone",
+			wantErr: "exactly one role with everyone=true, found 2",
 		},
 		{
 			name: "everyone not last",

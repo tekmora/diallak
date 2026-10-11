@@ -118,7 +118,6 @@ type candidate struct {
 	roleID       string
 	channelID    string
 	isNotVisible bool
-	isAmbiguous  bool
 }
 
 type planContext struct {
@@ -130,6 +129,7 @@ type planContext struct {
 	callerPerms   map[string]struct{}
 	hasAdmin      bool
 	diffs         []Difference
+	ambiguous     map[string]struct{}
 	acceptedRoles []string
 	pOrder        []string
 	qOrder        []string
@@ -197,6 +197,13 @@ func newPlanContext(def *serverdef.Definition, s *Snapshot, diffs []Difference) 
 	}
 	_, hasAdmin := callerPerms["ADMINISTRATOR"]
 
+	ambiguous := make(map[string]struct{}, len(diffs))
+	for _, d := range diffs {
+		if d.Kind == KindRoleAmbiguous || d.Kind == KindCategoryAmbiguous || d.Kind == KindChannelAmbiguous {
+			ambiguous[d.Object] = struct{}{}
+		}
+	}
+
 	p, q := computeRoleOrderPQ(def, s, botID)
 
 	return &planContext{
@@ -208,6 +215,7 @@ func newPlanContext(def *serverdef.Definition, s *Snapshot, diffs []Difference) 
 		callerPerms: callerPerms,
 		hasAdmin:    hasAdmin,
 		diffs:       diffs,
+		ambiguous:   ambiguous,
 		pOrder:      p,
 		qOrder:      q,
 	}
@@ -277,7 +285,7 @@ func (ctx *planContext) evaluateCandidate(c candidate) {
 }
 
 func (ctx *planContext) checkRefusal(c candidate) (string, string) {
-	if c.isAmbiguous || c.action == ActionResolveName {
+	if c.action == ActionResolveName || ctx.namesAmbiguous(c) {
 		return ReasonAmbiguousName, ""
 	}
 	if c.action == ActionConvertChannel {
@@ -304,17 +312,57 @@ func (ctx *planContext) checkRefusal(c candidate) (string, string) {
 	return "", ""
 }
 
+func (ctx *planContext) defChannel(id string) *serverdef.Channel {
+	for i := range ctx.def.Channels {
+		if ctx.def.Channels[i].ID == id {
+			return &ctx.def.Channels[i]
+		}
+	}
+	return nil
+}
+
+func (ctx *planContext) isAmbiguous(object string) bool {
+	_, ok := ctx.ambiguous[object]
+	return ok
+}
+
+// namesAmbiguous reports whether a candidate rests on a name the server holds
+// more than once: its own role or channel, the category a channel is created in
+// or moved to, or a role named by an entry of a channel that is created.
+func (ctx *planContext) namesAmbiguous(c candidate) bool {
+	if c.roleID != "" && ctx.isAmbiguous(fmt.Sprintf("roles[%s]", c.roleID)) {
+		return true
+	}
+	ch := ctx.defChannel(c.channelID)
+	if ch == nil {
+		return false
+	}
+	if ctx.isAmbiguous(fmt.Sprintf("channels[%s]", ch.ID)) {
+		return true
+	}
+	if c.action != ActionCreateChannel && c.action != ActionMoveChannel {
+		return false
+	}
+	if ctx.isAmbiguous(fmt.Sprintf("categories[%s]", ch.Category)) {
+		return true
+	}
+	return c.action == ActionCreateChannel && ctx.entryRoleAmbiguous(ch)
+}
+
+func (ctx *planContext) entryRoleAmbiguous(ch *serverdef.Channel) bool {
+	for i := range ch.Access {
+		if ctx.isAmbiguous(fmt.Sprintf("roles[%s]", ch.Access[i].Role)) {
+			return true
+		}
+	}
+	return false
+}
+
 func (ctx *planContext) isAllowedInOwnMode(c candidate) bool {
 	if c.action != ActionSetAccess {
 		return false
 	}
-	var ch *serverdef.Channel
-	for i := range ctx.def.Channels {
-		if ctx.def.Channels[i].ID == c.channelID {
-			ch = &ctx.def.Channels[i]
-			break
-		}
-	}
+	ch := ctx.defChannel(c.channelID)
 	if ch == nil || ch.Area == "" {
 		return false
 	}
@@ -330,13 +378,7 @@ func (ctx *planContext) checkMissingFeature(c candidate) (string, string) {
 	if c.action != ActionCreateChannel {
 		return "", ""
 	}
-	var ch *serverdef.Channel
-	for i := range ctx.def.Channels {
-		if ctx.def.Channels[i].ID == c.channelID {
-			ch = &ctx.def.Channels[i]
-			break
-		}
-	}
+	ch := ctx.defChannel(c.channelID)
 	if ch != nil && ch.Type == "announcement" {
 		hasNews := false
 		for _, f := range ctx.snap.Features {
@@ -412,8 +454,11 @@ func checkRoleOrderAboveCaller(ctx *planContext) (string, string) {
 			pAbove = append(pAbove, id)
 		}
 	}
+	// The order the change would set, created roles included: a created role
+	// cannot be placed above a role that stands above the caller.
+	target := ctx.buildRoleOrderDetail()
 	k := len(pAbove)
-	if len(ctx.qOrder) < k || !slices.Equal(ctx.qOrder[:k], pAbove) {
+	if len(target) < k || !slices.Equal(target[:k], pAbove) {
 		return ReasonAboveCaller, ""
 	}
 	return "", ""
@@ -574,13 +619,7 @@ func (ctx *planContext) addChannelCandidates() {
 	for _, d := range ctx.diffs {
 		if d.Kind == KindChannelMissing || (d.Kind == KindChannelNotVisible && d.Detail == "missing or hidden") {
 			chID := extractBracketID(d.Object)
-			var ch *serverdef.Channel
-			for i := range ctx.def.Channels {
-				if ctx.def.Channels[i].ID == chID {
-					ch = &ctx.def.Channels[i]
-					break
-				}
-			}
+			ch := ctx.defChannel(chID)
 			allPerms := []string{"MANAGE_CHANNELS"}
 			for _, acc := range ch.Access {
 				allPerms = append(allPerms, acc.Allow...)
@@ -663,9 +702,8 @@ func (ctx *planContext) addConvertAndResolveCandidates() {
 		}
 		if d.Kind == KindRoleAmbiguous || d.Kind == KindCategoryAmbiguous || d.Kind == KindChannelAmbiguous {
 			ctx.evaluateCandidate(candidate{
-				action:      ActionResolveName,
-				object:      d.Object,
-				isAmbiguous: true,
+				action: ActionResolveName,
+				object: d.Object,
 			})
 		}
 	}

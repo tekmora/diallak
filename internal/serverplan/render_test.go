@@ -119,3 +119,47 @@ func TestRender_Boundary_EmptyPlan(t *testing.T) {
 		t.Errorf("Render mismatch:\n--- got ---\n%s\n--- want ---\n%s", buf.String(), want)
 	}
 }
+
+// TestRender_Boundary_DetailAndRaised renders a hand-built plan so that every
+// part of a line is pinned: the mode of a raised caller, a change with and
+// without detail, and a refusal with and without detail.
+func TestRender_Boundary_DetailAndRaised(t *testing.T) {
+	r := Result{
+		Raised: true,
+		Changes: []Change{
+			{Step: 1, Action: ActionCreateRole, Object: "roles[contributor]", Needs: []string{"MANAGE_ROLES"}},
+			{
+				Step: 2, Action: ActionSetRoleOrder, Object: "role_order",
+				Needs: []string{"MANAGE_ROLES"}, Detail: "operator, bot, contributor",
+			},
+		},
+		Refused: []Refusal{
+			{
+				Action: ActionCreateChannel, Object: "channels[announcements]",
+				Needs: []string{"MANAGE_CHANNELS"}, Reason: ReasonMissingFeature, Detail: "NEWS",
+			},
+			{
+				Action: ActionSetAccess, Object: "channels[rules].access[everyone]",
+				Needs: []string{"MANAGE_ROLES"}, Reason: ReasonLacksRight,
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := Render(&buf, r); err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+
+	want := "mode: raised\n" +
+		"rights needed: MANAGE_CHANNELS, MANAGE_ROLES\n" +
+		"changes: 2\n" +
+		"  1. " + ActionCreateRole + " roles[contributor] needs MANAGE_ROLES\n" +
+		"  2. " + ActionSetRoleOrder + " role_order needs MANAGE_ROLES; operator, bot, contributor\n" +
+		"refused: 2\n" +
+		"  - " + ActionCreateChannel + " channels[announcements]: " + ReasonMissingFeature + "; NEWS\n" +
+		"  - " + ActionSetAccess + " channels[rules].access[everyone]: " + ReasonLacksRight + "\n"
+
+	if buf.String() != want {
+		t.Errorf("Render mismatch:\n--- got ---\n%s\n--- want ---\n%s", buf.String(), want)
+	}
+}
