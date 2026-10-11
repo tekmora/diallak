@@ -23,6 +23,7 @@ type Assembly struct {
 	Chunks        int
 	Sources       []corpus.ManifestSource
 	HasModel      bool
+	Model         *model.Gate
 	RenderOptions answer.RenderOptions
 }
 
@@ -61,7 +62,7 @@ func Build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Assemb
 		return nil, nil, closeOnError(cleanup, fmt.Errorf("build retrieval index: %w", err))
 	}
 
-	pipeline, err := buildPipeline(cfg, index, logger)
+	pipeline, gate, err := buildPipeline(cfg, index, logger)
 	if err != nil {
 		return nil, nil, closeOnError(cleanup, err)
 	}
@@ -72,7 +73,8 @@ func Build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Assemb
 		Pipeline: pipeline,
 		Chunks:   len(chunks),
 		Sources:  manifest.Sources,
-		HasModel: cfg.HasModel(),
+		HasModel: gate != nil,
+		Model:    gate,
 		RenderOptions: answer.RenderOptions{
 			Place:    cfg.SupportChannel,
 			MaxRunes: cfg.ReplyMaxChars,
@@ -95,8 +97,9 @@ func loadCorpusFromRoot(ctx context.Context, root *os.Root) (corpus.Manifest, []
 	return manifest, chunks, nil
 }
 
-func buildPipeline(cfg config.Config, index *retrieval.Index, logger *slog.Logger) (*answer.Pipeline, error) {
+func buildPipeline(cfg config.Config, index *retrieval.Index, logger *slog.Logger) (*answer.Pipeline, *model.Gate, error) {
 	var generator answer.Generator
+	var gate *model.Gate
 	if cfg.HasModel() {
 		mCfg := model.Config{
 			BaseURL: cfg.ModelBaseURL,
@@ -106,9 +109,16 @@ func buildPipeline(cfg config.Config, index *retrieval.Index, logger *slog.Logge
 		}
 		mClient, err := model.New(mCfg, nil)
 		if err != nil {
-			return nil, fmt.Errorf("create model client: %w", err)
+			return nil, nil, fmt.Errorf("create model client: %w", err)
 		}
-		generator = mClient
+		gate, err = model.NewGate(model.GateConfig{
+			Endpoint: mClient,
+			Logger:   logger,
+		})
+		if err != nil {
+			return nil, nil, fmt.Errorf("create model gate: %w", err)
+		}
+		generator = gate
 	}
 
 	opts := retrieval.DefaultOptions()
@@ -130,9 +140,9 @@ func buildPipeline(cfg config.Config, index *retrieval.Index, logger *slog.Logge
 	}
 	pipeline, err := answer.New(ansCfg)
 	if err != nil {
-		return nil, fmt.Errorf("create answer pipeline: %w", err)
+		return nil, nil, fmt.Errorf("create answer pipeline: %w", err)
 	}
-	return pipeline, nil
+	return pipeline, gate, nil
 }
 
 // logAssemblyReady writes the one line that says what the process will answer from. The sources

@@ -383,3 +383,104 @@ func TestBuild_Positive_ConfiguredLimitsThreaded(t *testing.T) {
 		t.Errorf("rendered reply missing support place: %q", rendered)
 	}
 }
+
+func TestBuild_Positive_ModelNilWithoutModelVariables(t *testing.T) {
+	corpusDir := setupTestCorpus(t)
+	cfg := config.Config{CorpusDir: corpusDir}
+
+	assembly, cleanup, err := Build(context.Background(), cfg, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer func() {
+		if closeErr := cleanup(); closeErr != nil {
+			t.Errorf("cleanup: %v", closeErr)
+		}
+	}()
+
+	if assembly.Model != nil {
+		t.Errorf("assembly.Model = %v, want nil", assembly.Model)
+	}
+	if assembly.HasModel {
+		t.Errorf("assembly.HasModel = true, want false")
+	}
+}
+
+func TestBuild_Boundary_ClosedPortDoesNotBlockBuild(t *testing.T) {
+	corpusDir := setupTestCorpus(t)
+	cfg := config.Config{
+		CorpusDir:    corpusDir,
+		ModelBaseURL: "http://127.0.0.1:1", // closed port
+		ModelAlias:   "test-alias",
+	}
+
+	assembly, cleanup, err := Build(context.Background(), cfg, nil)
+	if err != nil {
+		t.Fatalf("Build failed on closed port: %v", err)
+	}
+	defer func() {
+		if closeErr := cleanup(); closeErr != nil {
+			t.Errorf("cleanup: %v", closeErr)
+		}
+	}()
+
+	if assembly.Model == nil {
+		t.Fatalf("assembly.Model is nil, want non-nil Gate")
+	}
+	if !assembly.HasModel {
+		t.Errorf("assembly.HasModel = false, want true")
+	}
+}
+
+func TestBuild_Positive_PipelineWithGateNotReadyAnswersExcerpts(t *testing.T) {
+	corpusDir := setupTestCorpus(t)
+	var reqCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reqCount++
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	cfg := config.Config{
+		CorpusDir:    corpusDir,
+		ModelBaseURL: server.URL,
+		ModelAlias:   "test-alias",
+	}
+
+	assembly, cleanup, err := Build(context.Background(), cfg, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer func() {
+		if closeErr := cleanup(); closeErr != nil {
+			t.Errorf("cleanup: %v", closeErr)
+		}
+	}()
+
+	if assembly.Model == nil {
+		t.Fatalf("assembly.Model is nil")
+	}
+
+	// Start against 503 server -> leaves gate in "not ready" state
+	if startErr := assembly.Model.Start(context.Background()); startErr != nil {
+		t.Fatalf("Start unexpected error: %v", startErr)
+	}
+	if reqCount != 1 {
+		t.Fatalf("server count after start = %d, want 1", reqCount)
+	}
+
+	// Ask question through pipeline with gate not ready
+	ans, err := assembly.Pipeline.Ask(context.Background(), "where are tokens stored in secret files?")
+	if err != nil {
+		t.Fatalf("Ask unexpected error: %v", err)
+	}
+	if ans.Kind != answer.KindExcerpts {
+		t.Errorf("ans.Kind = %q, want excerpts", ans.Kind)
+	}
+	if ans.Reason != answer.ReasonModelUnavailable {
+		t.Errorf("ans.Reason = %q, want model_unavailable", ans.Reason)
+	}
+	if reqCount != 1 {
+		t.Errorf("server request count = %d, want 1 (probe only)", reqCount)
+	}
+}
