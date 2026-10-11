@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 
+## [0.1.2] - 2026-10-11
+
+### Added
+
+- Name the image digest on the release page
+
+### Changed
+
+- Describe how to verify a release and name the first image
+- Update BuildKit in the release workflow to v0.34.0
+- Say what each release verification command needs
+
+
 ## [0.1.1] - 2026-10-10
 
 ### Added
