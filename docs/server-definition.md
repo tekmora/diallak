@@ -57,7 +57,7 @@ after the definition and a file over one mebibyte are refused
 | `channels` | Every channel with type, purpose, owner and the permissions it changes per role | 16 |
 | `areas` | The rooms that open at a threshold, each with an opening and a closing rule | 8 |
 | `onboarding` | The questions a new member is asked and the role each answer gives | 2 questions |
-| `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 14 |
+| `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 15 |
 <!-- markdownlint-enable MD013 -->
 
 A role or a rule carries `"basis": "decided"` or `"basis": "proposal"`. Decided

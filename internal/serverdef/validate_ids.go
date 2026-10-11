@@ -233,7 +233,7 @@ func (v *validator) checkRuleEnums(path string, rule *Rule) {
 
 func (v *validator) checkAutomationEnums() {
 	autoBy := []string{"bot", "platform", "operator", "moderator"}
-	autoState := []string{"built", "decided", "planned"}
+	autoState := []string{"built", "decided", "planned", "observed"}
 	for _, auto := range v.def.Automation {
 		p := fmt.Sprintf("automation[%s]", auto.ID)
 		if !inSet(auto.By, autoBy) {

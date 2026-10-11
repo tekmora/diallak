@@ -802,6 +802,12 @@
       "by": "operator",
       "state": "decided",
       "record": "docs/adr/0010-bot-rights-and-apply-path.md"
+    },
+    {
+      "id": "membership-screening",
+      "what": "Holds a new member back from every action on the server until they completed the server's screening form (Discord's Membership Screening). It is switched on by hand in the server's settings. Observed on 2026-10-11 as the server feature MEMBER_VERIFICATION_GATE_ENABLED; what the form asks was not read.",
+      "by": "platform",
+      "state": "observed"
     }
   ]
 }
