@@ -47,8 +47,9 @@ const (
 	ReasonAboveCaller = "above-caller"
 	// ReasonLacksRight indicates the caller lacks permissions required for the change.
 	ReasonLacksRight = "lacks-right"
-	// ReasonUnknownBits indicates the role or entry has bits set that the
-	// permission table does not name; the change would clear them.
+	// ReasonUnknownBits indicates an entry has bits set that the permission
+	// table does not name (entries only; a role-permission change clears such
+	// bits and names them).
 	ReasonUnknownBits = "unknown-permission-bits"
 )
 
@@ -414,21 +415,14 @@ func (ctx *planContext) checkManagedRole(c candidate) (string, string) {
 	return "", ""
 }
 
-// checkUnknownBits refuses a change of permissions on a role or an entry that
-// has bits set the permission table does not name. Both changes send the whole
-// value, so they would clear a bit whose meaning is not known here.
+// checkUnknownBits refuses an entry change that has bits set the permission table
+// does not name (entries only; a role-permission change clears such bits and names them).
 func (ctx *planContext) checkUnknownBits(c candidate) (string, string) {
-	if c.roleID == "" || (c.action != ActionSetRolePermissions && c.action != ActionSetAccess) {
+	if c.action != ActionSetAccess || c.roleID == "" {
 		return "", ""
 	}
 	sr := ctx.snapRole(c.roleID)
 	if sr == nil {
-		return "", ""
-	}
-	if c.action == ActionSetRolePermissions {
-		if len(sr.UnknownBits) > 0 {
-			return ReasonUnknownBits, "bits " + bitList(sr.UnknownBits)
-		}
 		return "", ""
 	}
 	ch := ctx.defChannel(c.channelID)
@@ -439,6 +433,17 @@ func (ctx *planContext) checkUnknownBits(c candidate) (string, string) {
 		return ReasonUnknownBits, detail
 	}
 	return "", ""
+}
+
+// roleClearsUnlistedBitsDetail returns a detail note when the matched server role
+// has unlisted bits. The change sends the definition's whole value; the plan text
+// and so the plan digest name what is cleared.
+func (ctx *planContext) roleClearsUnlistedBitsDetail(roleID string) string {
+	sr := ctx.snapRole(roleID)
+	if sr != nil && len(sr.UnknownBits) > 0 {
+		return "clears unlisted bits " + bitList(sr.UnknownBits)
+	}
+	return ""
 }
 
 // entryBitsDetail returns the unknown bits of the first entry for the named
@@ -615,6 +620,7 @@ func (ctx *planContext) addRolePermissionsCandidates() {
 				action: ActionSetRolePermissions,
 				object: d.Object,
 				needs:  needs,
+				detail: ctx.roleClearsUnlistedBitsDetail(id),
 				roleID: id,
 			})
 		}
