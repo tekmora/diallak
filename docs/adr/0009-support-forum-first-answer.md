@@ -1,6 +1,6 @@
 # ADR-0009: First answer in the support forum
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-11
 - **Authors**: Maintainers
 
@@ -29,8 +29,9 @@ such right, and accepted the cost: a privileged right, more member data and new
 entries in the privacy documents.
 
 This record is that feature's own record. It fixes how little the bot reads,
-what it keeps, what the reply looks like and which cases the implementation has
-to pass. Nothing of it is built yet.
+what it keeps, what the reply looks like, how a member keeps the bot away from
+a post and which cases the implementation has to pass. Nothing of it is built
+yet.
 
 ## Decision
 
@@ -48,6 +49,21 @@ These limits follow the rule that only the data a purpose needs is processed
 (Articles 5(1)(c) and 25(2) of the GDPR). That is the project's reading, not
 legal advice.
 
+### A member can keep the bot away from a post
+
+A post that carries the opt-out tag is neither read nor answered. The bot does
+not request its first message and does not use the title that came with the
+event.
+
+- A second setting names the tag. The operator creates the tag in the forum
+  and leaves it free for every member to set; the proposed name is "No
+  automated reply". The tag id never enters the tree.
+- With the forum configured and no tag configured, the start stops. The
+  feature does not run without the way to opt out.
+- The tag counts when the post is created, because the bot reads once, at that
+  moment. A tag that is added later does not take a reply back, and a tag that
+  is removed later does not make the bot read the post.
+
 ### How the text reaches the bot
 
 The bot does not subscribe to message events for this.
@@ -57,7 +73,8 @@ The bot does not subscribe to message events for this.
    message event of any channel reaches the process.
 2. A thread event tells the bot that a post was created. The bot acts only when
    the event carries the mark of a newly created thread, the thread is a public
-   thread and its parent is the configured forum.
+   thread, its parent is the configured forum and it does not carry the
+   opt-out tag.
 3. For such a post the bot asks the platform for the first message through the
    HTTP API: one request for one message.
 
@@ -69,8 +86,8 @@ Restrictions").
 The standard intent also brings events about channels, roles and threads of
 the whole server. A thread event holds the title of the thread and the id of
 its creator. The bot drops every event that is not a new post in the
-configured forum, after it has compared the parent id and the type and nothing
-else.
+configured forum, after it has compared the parent id, the type and the tags
+and nothing else.
 
 ### What is read
 
@@ -80,8 +97,9 @@ else.
 | Title of the post | Yes | Finding documentation passages |
 | Text of the first message | Yes, up to a fixed length; the rest is cut | Finding documentation passages |
 | Whether the author is an application | Yes | A post that an application wrote gets no reply |
+| Tags of the post | Only whether the opt-out tag is among them | Leaving a tagged post unread |
 | Author id, name, roles | No | |
-| Attachments, embeds, polls, components, tags | No | |
+| Attachments, embeds, polls, components | No | |
 <!-- markdownlint-enable MD013 -->
 
 ### What is kept, and for how long
@@ -129,7 +147,7 @@ The wording follows the rules of the
 <!-- markdownlint-disable MD013 -->
 | Place | Text |
 | :--- | :--- |
-| Guidelines of the forum, shown before a member posts | "The automated assistant reads the first message of a new post and may reply first with excerpts from the documentation. It reads nothing else here. How to object is in the privacy notice." |
+| Guidelines of the forum, shown before a member posts | "The automated assistant reads the first message of a new post and may reply first with excerpts from the documentation. It reads nothing else here. To keep it away from a post, add the tag 'No automated reply' when you create it. More is in the privacy notice." |
 | First line of the reply | "Automated excerpts from the documentation. No AI model wrote this reply." (unchanged) |
 | Last line of the reply | "Automated first reply. A person can help here in this post." |
 <!-- markdownlint-enable MD013 -->
@@ -169,6 +187,9 @@ it is trusted.
 | 14 | A text longer than the fixed length | It is cut, and the reply is built from the part that is left |
 | 15 | More new posts at once than the bound on concurrent work | The posts over the bound get no reply; nothing is queued without a bound |
 | 16 | The bot starts while the forum already holds posts | No request for any of them |
+| 17 | A new post in the forum that carries the opt-out tag | No request for its message, no reply; its title is not used |
+| 18 | The forum is configured and the opt-out tag is not | The start stops with a message that says so |
+| 19 | The opt-out tag is added to a post, or removed from it, after its creation | No request, no second reply; a reply that was sent stays |
 <!-- markdownlint-enable MD013 -->
 
 ## Consequences
@@ -212,20 +233,20 @@ For the support forum only; everything else in the three records stands.
 
 ## Open points
 
-- **A way to opt out per post.** A forum tag such as "No automated reply" would
-  let a member keep the bot from reading a post: tags arrive with the thread
-  event. Recommended; the operator decides.
-- **Model-written replies in the forum.** Not part of this record.
-- **Legal review**, with the other points of the
-  [privacy notice](../compliance/privacy-notice.md): whether legitimate
-  interests carries the reading of text that was not addressed to the bot;
-  whether the guidelines text and the privacy notice inform a member in time
-  (Articles 13 and 21(4) of the GDPR); what follows when a post holds data of
-  the kinds Article 9(1) lists.
-- **Private threads.** The server rules and the privacy notice name "a private
-  thread in the support forum" as a way to reach the operator. Discord's
-  documentation says that private threads can only be created in text
-  channels. The texts need another place for that path.
+- **Model-written replies in the forum.** Not part of this record. They would
+  be a separate, later record.
+- **Legal review.** Three points go into the legal research before launch and
+  are launch gates of the feature
+  ([Support forum answer](../compliance/support-forum-answer.md), "Before
+  launch"): whether legitimate interests carries the reading of text that was
+  not addressed to the bot; whether the guidelines text and the privacy notice
+  inform a member in time (Articles 13 and 21(4) of the GDPR); what follows
+  when a post holds data of the kinds Article 9(1) lists.
+- **Private threads.** The server rules and the privacy notice named "a
+  private thread in the support forum" as a way to reach the operator.
+  Discord's documentation says that private threads can only be created in
+  text channels. The operator decided that this path moves to a ticket
+  channel; the two texts change with that decision.
 - **Not tried.** That the HTTP API returns the text while the gateway session
   passes no content intent, and that the first message can be requested at once
   after the thread event, are read from the documentation. The live test
@@ -239,7 +260,9 @@ only for new posts in that forum, that the reply is public and labelled as
 automated, that `/ask` keeps its private reply, that the accepted records are
 superseded by a new record, that the privacy documents get their entries before
 launch, and that switching the right on in the developer portal is the
-operator's own act.
+operator's own act. The operator accepted this record on 2026-10-11 and added
+that a member can put a tag on a post so that the bot neither reads nor answers
+it.
 
 The choices below were made here and are accepted with this record:
 
@@ -252,6 +275,8 @@ The choices below were made here and are accepted with this record:
   the model endpoint.
 - The bot stays silent when it finds nothing, when the attempt fails and when
   the text is empty, and it refuses to start without the right.
+- The opt-out tag is named by a setting, counts at creation only, and the
+  feature does not start without it.
 - The wording of the label and the list of cases.
 
 ## References
@@ -259,13 +284,17 @@ The choices below were made here and are accepted with this record:
 - Operator decision of 2026-10-11 on how the bot answers first in the support
   forum (paraphrased): read the full text of the post, chosen over an answer
   from the title, with the costs named above.
+- Operator decision of 2026-10-11 on this record (paraphrased): accepted as
+  written, with a tag that a member can put on a post so that the bot neither
+  reads nor answers it.
 - Discord developer documentation, repository `discord/discord-api-docs` at
   commit `37148620d232` of 2026-10-09: `developers/events/gateway.mdx`
   ("Privileged Intents", "HTTP Restrictions", "Message Content Intent", the
   list of intents), `developers/events/gateway-events.mdx` ("Thread Create"),
   `developers/topics/threads.mdx` ("Forums", private threads),
-  `developers/resources/channel.mdx` (channel types, "Start Thread in Forum or
-  Media Channel"), `developers/resources/message.mdx` ("Get Channel Message"),
+  `developers/resources/channel.mdx` (channel types, forum tags, "Start Thread
+  in Forum or Media Channel"), `developers/resources/message.mdx` ("Get Channel
+  Message"),
   `developers/resources/application.mdx` (application flags):
   <https://github.com/discord/discord-api-docs/tree/37148620d2324292b76047541d5f8331f81ea77a>
 - Regulation (EU) 2016/679, Articles 5(1)(c), 6(1)(f), 9(1), 13, 21(4) and

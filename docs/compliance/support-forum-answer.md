@@ -1,9 +1,9 @@
 # Support forum answer: entries for launch
 
-Draft, and not in force. The feature it describes is not built:
-[ADR-0009](../adr/0009-support-forum-first-answer.md) is a proposed record. The
-other documents in this directory describe the code on `main` and say nothing
-of the forum yet.
+Draft, and not in force. The feature it describes is not built;
+[ADR-0009](../adr/0009-support-forum-first-answer.md) is its accepted record.
+The other documents in this directory describe the code on `main` and say
+nothing of the forum yet.
 
 This page holds the entries those documents gain when the feature is built.
 The pull request that builds it moves each entry to its place and removes this
@@ -15,6 +15,7 @@ rest of the [privacy notice](privacy-notice.md).
 - In the support forum the bot reads the title and the first message of a new
   post, once, and may reply first with excerpts from the documentation.
 - It reads no other message, in the forum or anywhere else.
+- A post that carries the opt-out tag is neither read nor answered.
 - It keeps the text in memory until the reply is sent, stores nothing and logs
   no text and no id.
 - The text is sent to nobody. No model writes the reply.
@@ -27,6 +28,8 @@ rest of the [privacy notice](privacy-notice.md).
   post, once, to find documentation that answers it. It reads no other message.
 - Its reply there is public, like the post, and holds documentation text, not
   your text.
+- To keep the bot away from a post, add the tag "No automated reply" when you
+  create it.
 
 ### "What is processed, for what purpose and on what basis", new rows
 
@@ -35,6 +38,7 @@ rest of the [privacy notice](privacy-notice.md).
 | :--- | :--- | :--- |
 | Title and first message of a new post in the support forum | Finding documentation passages for a first reply in that post | Legitimate interests, Article 6(1)(f) |
 | Whether a post was written by an application | Leaving such a post without a reply | Legitimate interests, Article 6(1)(f) |
+| Whether a post carries the tag "No automated reply" | Leaving such a post unread | Legitimate interests, Article 6(1)(f) |
 | Other fields Discord sends with a post or with events about channels, roles and threads, such as the id of the member who created a thread | None: the bot compares the channel and the kind of thread and reads nothing else | Not used |
 <!-- markdownlint-enable MD013 -->
 
@@ -44,9 +48,10 @@ the forum's guidelines say that it reads the first message before you post.
 
 ### "Your right to object", one more paragraph
 
-In the support forum you can object for a single post before you write it. How
-is not decided yet: a tag on the post that keeps the bot away is proposed
-(ADR-0009, "Open points").
+In the support forum you can keep the bot away from a single post: add the tag
+"No automated reply" when you create the post. The bot then does not read the
+post and does not reply. A tag you add later does not take a reply back,
+because the bot reads a post once, when it is created.
 
 ### "Who receives your data", changed points
 
@@ -80,6 +85,7 @@ message.
 | Title of a new post in the support forum | Discord, with the thread event | Finding passages | In memory until the reply is sent or the attempt ends |
 | Text of the first message of that post, up to a fixed length | Discord, on the bot's request for that one message | Finding passages | In memory until the reply is sent or the attempt ends |
 | Whether the author of that message is an application | Discord, with the message | Leaving such a post without a reply | Not kept |
+| Whether a new post carries the opt-out tag | Discord, with the thread event | Leaving a tagged post unread: its first message is not requested | Not kept |
 | Events about channels, roles and threads of the server, with the title of each new thread and the id of its creator | Discord, with the standard intent that carries thread events | Nothing, except telling a new post in the configured forum from everything else by the id of the parent channel and the kind of thread | Not kept |
 | Other fields of the first message: author id and name, attachments, embeds, polls, components | Discord, with the message | Nothing: the bot reads none of them | Not kept |
 <!-- markdownlint-enable MD013 -->
@@ -129,14 +135,14 @@ changes with the build.
 
 ## AI disclosure
 
-New rows for "Where the notice appears". The texts are proposed with ADR-0009.
+New rows for "Where the notice appears". The texts are accepted with ADR-0009.
 
 <!-- markdownlint-disable MD013 -->
 | Place | Text | State |
 | :--- | :--- | :--- |
-| Guidelines of the support forum, shown before a member posts | "The automated assistant reads the first message of a new post and may reply first with excerpts from the documentation. It reads nothing else here. How to object is in the privacy notice." | Proposed, set by the operator |
+| Guidelines of the support forum, shown before a member posts | "The automated assistant reads the first message of a new post and may reply first with excerpts from the documentation. It reads nothing else here. To keep it away from a post, add the tag 'No automated reply' when you create it. More is in the privacy notice." | Accepted with ADR-0009, set by the operator |
 | First line of a reply in the support forum | "Automated excerpts from the documentation. No AI model wrote this reply." | In the code, used by `/ask` today |
-| Last line of a reply in the support forum | "Automated first reply. A person can help here in this post." | Proposed |
+| Last line of a reply in the support forum | "Automated first reply. A person can help here in this post." | Accepted with ADR-0009, not in the code |
 <!-- markdownlint-enable MD013 -->
 
 ## Server rules
@@ -144,14 +150,21 @@ New rows for "Where the notice appears". The texts are proposed with ADR-0009.
 Rule 5 gains one sentence after "check the sources it cites":
 
 > In the support forum it reads the first message of a new post and may reply
-> first.
+> first, unless the post carries the tag "No automated reply".
 
 ## Before launch
 
-- ADR-0009 is accepted, and its open points for the operator are decided.
+- The legal research has judged three points, with the other points of the
+  privacy notice:
+  - whether legitimate interests carries the reading of text that was not
+    addressed to the bot;
+  - whether the guidelines text and the privacy notice inform a member in time
+    (Articles 13 and 21(4) of the GDPR);
+  - what follows when a post holds data of the kinds Article 9(1) lists.
 - The entries above are in their documents, and the privacy notice is
   published ([compliance](README.md), "Gates for the public launch").
 - The implementation passes the cases of ADR-0009.
-- The operator has set the guidelines text of the forum and has switched the
-  right to message content on in Discord's developer portal.
+- The operator has created the opt-out tag, has set the guidelines text of the
+  forum and has switched the right to message content on in Discord's
+  developer portal.
 - The live test has shown the two points ADR-0009 lists as not tried.
