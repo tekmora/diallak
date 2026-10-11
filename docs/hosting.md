@@ -45,8 +45,10 @@ is missing or out of range stops the start with a message that names it.
   user `65532` can read ([`internal/config`](../internal/config/config.go)).
   They are read once at start.
 - **The guild id is configuration.** It never appears in this repository.
-- **Model mode is off unless both model variables are set.** In the live server
-  they stay unset until the gates of
+- **Model mode is off unless the model variables are set.**
+  `DIALLAK_MODEL_BASE_URL`, `DIALLAK_MODEL_ALIAS` and `DIALLAK_MODEL_POLICY`
+  (for example `example-policy`) configure the endpoint, the routing alias and
+  the gateway policy. In the live server they stay unset until the gates of
   [ADR-0013](adr/0013-guardrail-policy-and-receipt.md) are passed
   ([compliance](compliance/README.md), "Gates for model-written answers").
 

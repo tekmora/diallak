@@ -548,3 +548,133 @@ func TestGate_Negative_ErrorTextNeverReachesTheLog(t *testing.T) {
 		t.Errorf("the log holds the text of the error:\n%s", out)
 	}
 }
+
+func TestGate_Start_Negative_PolicyError(t *testing.T) {
+	ep := &fakeEndpoint{probeErr: &PolicyError{Applied: []string{"other"}}}
+	g, err := NewGate(GateConfig{Endpoint: ep})
+	if err != nil {
+		t.Fatalf("NewGate: %v", err)
+	}
+	err = g.Start(context.Background())
+	if err == nil {
+		t.Fatal("Start want error on PolicyError, got nil")
+	}
+	if g.State() != StateNotReady || g.Reason() != "" {
+		t.Errorf("state=%q, reason=%q", g.State(), g.Reason())
+	}
+}
+
+func TestGate_Complete_Negative_PolicyLatches(t *testing.T) {
+	var logged bytes.Buffer
+	clock := newClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	ep := &fakeEndpoint{completeRes: "ok"}
+	g, err := NewGate(GateConfig{
+		Endpoint:      ep,
+		RetryInterval: 30 * time.Second,
+		Now:           clock.Now,
+		Logger:        slog.New(slog.NewTextHandler(&logged, nil)),
+	})
+	if err != nil {
+		t.Fatalf("NewGate: %v", err)
+	}
+	if err := g.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	ep.completeErr = &PolicyError{Applied: []string{"unwanted1", "unwanted2"}}
+	res, err := g.Complete(context.Background(), "s", "u")
+	if res != "" || !errors.Is(err, ErrPolicyMissing) {
+		t.Fatalf("Complete: res=%q, err=%v", res, err)
+	}
+	if g.State() != StateNotReady || g.Reason() != "policy" {
+		t.Fatalf("state=%q, reason=%q", g.State(), g.Reason())
+	}
+	for range 3 {
+		res, err = g.Complete(context.Background(), "s", "u")
+		if res != "" || !errors.Is(err, ErrPolicyMissing) {
+			t.Fatalf("latched Complete: res=%q, err=%v", res, err)
+		}
+	}
+	clock.Advance(time.Hour)
+	res, err = g.Complete(context.Background(), "s", "u")
+	if res != "" || !errors.Is(err, ErrPolicyMissing) {
+		t.Fatalf("after retry interval: res=%q, err=%v", res, err)
+	}
+	if ep.completeCalls.Load() != 1 {
+		t.Errorf("completeCalls = %d, want 1", ep.completeCalls.Load())
+	}
+	out := logged.String()
+	if strings.Count(out, "model not ready") != 1 || !strings.Contains(out, "error_class=policy") || !strings.Contains(out, "applied=2") {
+		t.Errorf("log output unexpected: %s", out)
+	}
+	if strings.Contains(out, "unwanted1") || strings.Contains(out, "unwanted2") {
+		t.Errorf("log leaked policy name: %s", out)
+	}
+}
+
+func TestGate_Reason_UnavailableRemainsEmpty(t *testing.T) {
+	ep := &fakeEndpoint{probeErr: &StatusError{Code: 503}}
+	g, err := NewGate(GateConfig{Endpoint: ep})
+	if err != nil {
+		t.Fatalf("NewGate: %v", err)
+	}
+	if err := g.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if g.State() != StateNotReady || g.Reason() != "" {
+		t.Errorf("state=%q, reason=%q", g.State(), g.Reason())
+	}
+}
+
+func TestGate_Complete_Negative_TrialPathPolicyLatches(t *testing.T) {
+	clock := newClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	ep := &fakeEndpoint{probeErr: &StatusError{Code: 503}}
+	g, err := NewGate(GateConfig{Endpoint: ep, RetryInterval: 30 * time.Second, Now: clock.Now})
+	if err != nil {
+		t.Fatalf("NewGate: %v", err)
+	}
+	if err := g.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	clock.Advance(30 * time.Second)
+	ep.completeErr = &PolicyError{Applied: []string{"bad"}}
+	res, err := g.Complete(context.Background(), "s", "u")
+	if res != "" || !errors.Is(err, ErrPolicyMissing) {
+		t.Fatalf("trial Complete: res=%q, err=%v", res, err)
+	}
+	if g.State() != StateNotReady || g.Reason() != "policy" {
+		t.Fatalf("state=%q, reason=%q", g.State(), g.Reason())
+	}
+	clock.Advance(time.Hour)
+	res, err = g.Complete(context.Background(), "s", "u")
+	if res != "" || !errors.Is(err, ErrPolicyMissing) {
+		t.Fatalf("latched trial Complete: res=%q, err=%v", res, err)
+	}
+	if ep.completeCalls.Load() != 1 {
+		t.Errorf("completeCalls = %d, want 1", ep.completeCalls.Load())
+	}
+}
+
+func TestGate_Complete_Concurrent_PolicyLatchRace(t *testing.T) {
+	ep := &fakeEndpoint{completeErr: &PolicyError{Applied: []string{"bad"}}}
+	g, err := NewGate(GateConfig{Endpoint: ep})
+	if err != nil {
+		t.Fatalf("NewGate: %v", err)
+	}
+	if err := g.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	var wg sync.WaitGroup
+	for range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 10 {
+				res, err := g.Complete(context.Background(), "s", "u")
+				if res != "" || !errors.Is(err, ErrPolicyMissing) {
+					t.Errorf("concurrent Complete: res=%q, err=%v", res, err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}

@@ -131,6 +131,7 @@ func TestBuild_Positive_WithModelAnswersQuestion(t *testing.T) {
 				},
 			},
 		}
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		if encErr := json.NewEncoder(w).Encode(resp); encErr != nil {
 			http.Error(w, encErr.Error(), http.StatusInternalServerError)
 			return
@@ -142,6 +143,7 @@ func TestBuild_Positive_WithModelAnswersQuestion(t *testing.T) {
 		CorpusDir:    corpusDir,
 		ModelBaseURL: server.URL,
 		ModelAlias:   "router/test",
+		ModelPolicy:  "example-policy",
 	}
 
 	assembly, cleanup, err := Build(context.Background(), cfg, nil)
@@ -285,6 +287,7 @@ func TestBuild_Negative_ModelEndpointDownFallsBackToExcerpts(t *testing.T) {
 		CorpusDir:    corpusDir,
 		ModelBaseURL: serverURL,
 		ModelAlias:   "router/test",
+		ModelPolicy:  "example-policy",
 	}
 
 	assembly, cleanup, err := Build(context.Background(), cfg, nil)
@@ -412,6 +415,7 @@ func TestBuild_Boundary_ClosedPortDoesNotBlockBuild(t *testing.T) {
 		CorpusDir:    corpusDir,
 		ModelBaseURL: "http://127.0.0.1:1", // closed port
 		ModelAlias:   "test-alias",
+		ModelPolicy:  "example-policy",
 	}
 
 	assembly, cleanup, err := Build(context.Background(), cfg, nil)
@@ -445,6 +449,7 @@ func TestBuild_Positive_PipelineWithGateNotReadyAnswersExcerpts(t *testing.T) {
 		CorpusDir:    corpusDir,
 		ModelBaseURL: server.URL,
 		ModelAlias:   "test-alias",
+		ModelPolicy:  "example-policy",
 	}
 
 	assembly, cleanup, err := Build(context.Background(), cfg, nil)

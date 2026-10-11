@@ -90,23 +90,24 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 | `DIALLAK_CORPUS_DIR` | yes | Absolute path of the documentation directory |
 | `DIALLAK_MODEL_BASE_URL` | with the alias | Base URL of an OpenAI-compatible endpoint |
 | `DIALLAK_MODEL_ALIAS` | with the base URL | Name the endpoint routes on, never a model name |
+| `DIALLAK_MODEL_POLICY` | with the model endpoint | Name of the gateway policy every chat reply must name |
 | `DIALLAK_MODEL_KEY_FILE` | no | Path of the file that holds the endpoint's credential |
 | `DIALLAK_SUPPORT_CHANNEL` | no | Wording for where a person helps, put into every reply; default "the support channel" |
 | `DIALLAK_HEALTH_ADDR` | no | Listen address "host:port" for health probes; off by default |
 <!-- markdownlint-enable MD013 -->
 
-Without the two model variables the bot replies with cited excerpts and says
+Without the model variables the bot replies with cited excerpts and says
 that no model wrote them. In the live server that is the only mode for now: no
-deployment sets the two variables until the gates of
+deployment sets the variables until the gates of
 [ADR-0013](docs/adr/0013-guardrail-policy-and-receipt.md) are passed: every
 reply of the model has to name the deployment's guardrail policy, and the
 member can ask for a receipt of the guardrails that ran. Neither is built yet.
 
-With both variables set the bot sends the endpoint one small request at start
+With the model variables set the bot sends the endpoint one small request at start
 ([ADR-0012](docs/adr/0012-model-state.md)):
 
 - **The endpoint refuses it**, for example with status 401 or 404 for a wrong
-  key or an unknown alias: the bot ends with exit code 1 and names the three
+  key or an unknown alias: the bot ends with exit code 1 and names the four
   model variables.
 - **The endpoint is away**, with a server error, status 408 or 429, or no reply
   within 10 seconds: the bot starts and answers with excerpts. It sends a
