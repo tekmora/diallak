@@ -1,7 +1,7 @@
 {
   "version": 1,
   "applied": false,
-  "summary": "Target state of the community server as data. Nothing here is applied to a server; applying it is a later unit with the operator.",
+  "summary": "Target state of the community server as data. Nothing here is applied to a server; the path that applies it is decided in docs/adr/0010-bot-rights-and-apply-path.md and not built.",
   "metrics": [
     {
       "id": "members-with-role",
@@ -59,10 +59,10 @@
       "id": "bot",
       "name": "Diallak",
       "kind": "bot",
-      "purpose": "The role of the bot's application.",
+      "purpose": "The role of the bot's application. Holds the three rights its decided functions need and nothing beyond.",
       "assigned_by": "platform",
       "basis": "decided",
-      "permissions": []
+      "permissions": ["MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS"]
     },
     {
       "id": "guide-coding",
@@ -87,7 +87,7 @@
       "name": "Contributor",
       "kind": "recognition",
       "purpose": "The one role of the contributor ladder: a contribution of this member was merged. Credited in releases. The subject guide roles stand above it; there is no third step.",
-      "assigned_by": "operator",
+      "assigned_by": "bot",
       "basis": "decided",
       "permissions": []
     },
@@ -181,6 +181,24 @@
       "basis": "proposal",
       "permissions": []
     }
+  ],
+  "role_order": [
+    "operator",
+    "moderator",
+    "guide-coding",
+    "guide-video",
+    "bot",
+    "contributor",
+    "supporter",
+    "supporter-12-months",
+    "interest-home-lab",
+    "interest-media",
+    "interest-games",
+    "interest-ai",
+    "lang-es",
+    "lang-fr",
+    "lang-de",
+    "lang-it"
   ],
   "categories": [
     {"id": "start", "name": "Start", "purpose": "What a member reads first."},
@@ -291,7 +309,8 @@
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
         {"role": "interest-home-lab", "allow": ["VIEW_CHANNEL"], "deny": []},
-        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "bot", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -306,7 +325,8 @@
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
         {"role": "interest-media", "allow": ["VIEW_CHANNEL"], "deny": []},
-        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "bot", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -321,7 +341,8 @@
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
         {"role": "interest-games", "allow": ["VIEW_CHANNEL"], "deny": []},
-        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "bot", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -336,7 +357,8 @@
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
         {"role": "interest-ai", "allow": ["VIEW_CHANNEL"], "deny": []},
-        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "bot", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -351,7 +373,8 @@
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
         {"role": "lang-es", "allow": ["VIEW_CHANNEL"], "deny": []},
-        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "bot", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -366,7 +389,8 @@
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
         {"role": "lang-fr", "allow": ["VIEW_CHANNEL"], "deny": []},
-        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "bot", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -381,7 +405,8 @@
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
         {"role": "lang-de", "allow": ["VIEW_CHANNEL"], "deny": []},
-        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "bot", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -396,7 +421,8 @@
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
         {"role": "lang-it", "allow": ["VIEW_CHANNEL"], "deny": []},
-        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "bot", "allow": ["VIEW_CHANNEL"], "deny": []}
       ]
     },
     {
@@ -705,7 +731,7 @@
     },
     {
       "id": "moderation-queue",
-      "what": "Puts flagged cases in front of the moderators and writes the trail of their actions.",
+      "what": "Carries out what a moderator does through it, deleting a message or timing a member out, and writes the trail of those actions.",
       "by": "bot",
       "state": "decided",
       "record": "docs/adr/0005-moderation-and-escalation.md"
@@ -732,8 +758,15 @@
       "needs_record": true
     },
     {
+      "id": "contributor-role",
+      "what": "Gives the Contributor role to a member whose contribution was merged. Needs a link between a member and a forge account, which is its own record.",
+      "by": "bot",
+      "state": "planned",
+      "needs_record": true
+    },
+    {
       "id": "spam-filter",
-      "what": "Filters spam and obvious abuse before a person sees it.",
+      "what": "Filters spam and obvious abuse before a person sees it, and writes each flagged case into the moderators' queue channel.",
       "by": "platform",
       "state": "decided",
       "record": "docs/adr/0005-moderation-and-escalation.md"
@@ -746,7 +779,7 @@
     },
     {
       "id": "role-grants",
-      "what": "Invites people and grants the moderator, subject guide and contributor roles. The bot grants none of them.",
+      "what": "Invites people and grants the moderator and subject guide roles. The bot grants neither.",
       "by": "operator",
       "state": "decided",
       "record": "docs/adr/0005-moderation-and-escalation.md"
@@ -765,9 +798,10 @@
     },
     {
       "id": "apply-definition",
-      "what": "Applies this definition to the server. A later unit with the operator.",
+      "what": "Applies this definition to the server on one path: plan, dry run, apply, read-only compare. The operator runs it for the first set-up; the bot runs the same path for its own changes. Not built.",
       "by": "operator",
-      "state": "planned"
+      "state": "decided",
+      "record": "docs/adr/0010-bot-rights-and-apply-path.md"
     }
   ]
 }
