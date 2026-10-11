@@ -232,13 +232,21 @@ func TestValidate_Negative_RightsOfTheOperatorAndOfModerators(t *testing.T) {
 		})
 	}
 	for _, permission := range []string{
-		"MANAGE_MESSAGES", "MANAGE_THREADS", "MODERATE_MEMBERS", "MUTE_MEMBERS", "MOVE_MEMBERS", "VIEW_AUDIT_LOG",
+		"MANAGE_THREADS", "MUTE_MEMBERS", "MOVE_MEMBERS", "VIEW_AUDIT_LOG",
 	} {
 		cases = append(cases, plantedCase{
 			"the bot holds " + permission, grant("bot", permission),
 			CodeModerationOnly, "channels[lounge].access[bot]", "permission " + permission + " ",
 		})
 	}
+	cases = append(cases, plantedCase{
+		"a contributor deletes messages", grant("contributor", "MANAGE_MESSAGES"),
+		CodeModerationOnly, "channels[lounge].access[contributor]", "MANAGE_MESSAGES",
+	})
+	cases = append(cases, plantedCase{
+		"a subject guide times members out", grant("guide-coding", "MODERATE_MEMBERS"),
+		CodeModerationOnly, "channels[lounge].access[guide-coding]", "MODERATE_MEMBERS",
+	})
 	cases = append(cases, plantedCase{
 		"a subject guide deletes messages", grant("guide-video", "MANAGE_MESSAGES"),
 		CodeModerationOnly, "channels[lounge].access[guide-video]", "MANAGE_MESSAGES",

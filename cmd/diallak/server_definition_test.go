@@ -85,6 +85,7 @@ func TestServerDefinitionDoc_Negative_NamesEveryCodeAndCount(t *testing.T) {
 	}{
 		{"metrics", strconv.Itoa(len(def.Metrics))},
 		{"roles", strconv.Itoa(len(def.Roles))},
+		{"role_order", strconv.Itoa(len(def.RoleOrder))},
 		{"categories", strconv.Itoa(len(def.Categories))},
 		{"channels", strconv.Itoa(len(def.Channels))},
 		{"areas", strconv.Itoa(len(def.Areas))},

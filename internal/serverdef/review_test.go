@@ -363,8 +363,8 @@ func TestValidate_Negative_RightsInAChannelTheRoleCannotSee(t *testing.T) {
 			CodeTicketThreadReader, "channels[tickets].access[bot]", "MANAGE_THREADS"},
 		{"the bot may manage the ticket channel", inTickets("MANAGE_CHANNELS"),
 			CodeOperatorOnly, "channels[tickets].access[bot]", "MANAGE_CHANNELS"},
-		{"the bot may delete messages in the ticket channel", inTickets("MANAGE_MESSAGES"),
-			CodeModerationOnly, "channels[tickets].access[bot]", "MANAGE_MESSAGES"},
+		{"the bot may view the audit log in the ticket channel", inTickets("VIEW_AUDIT_LOG"),
+			CodeModerationOnly, "channels[tickets].access[bot]", "VIEW_AUDIT_LOG"},
 		{"the bot may mention everyone in the ticket channel", inTickets("MENTION_EVERYONE"),
 			CodeMentionEveryone, "channels[tickets].access[bot]", "effective"},
 	})

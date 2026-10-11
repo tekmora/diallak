@@ -91,6 +91,14 @@ func (v *validator) checkAreaChannelDetails(a Area, ch Channel) {
 		v.add(CodeAreaChannel, fmt.Sprintf("%s.access[%s]", chPath, a.Role),
 			"area role must have effective VIEW_CHANNEL in area channel")
 	}
+	botRole := findRoleByKind(v.def.Roles, "bot")
+	if botRole != nil {
+		effBot := Effective(v.def, botRole.ID, ch.ID)
+		if _, ok := effBot["VIEW_CHANNEL"]; !ok {
+			v.add(CodeAreaChannel, fmt.Sprintf("%s.access[%s]", chPath, botRole.ID),
+				fmt.Sprintf("bot role %s must have effective VIEW_CHANNEL in area channel", botRole.ID))
+		}
+	}
 }
 
 func (v *validator) checkAreaConditions() {

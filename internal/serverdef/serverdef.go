@@ -116,6 +116,12 @@ const (
 
 	// CodeAutomationRecord flags an automation entry with an invalid or missing record path.
 	CodeAutomationRecord = "automation-record"
+
+	// CodeBotRights flags a bot role or bot channel entry violating the bot rights specification.
+	CodeBotRights = "bot-rights"
+
+	// CodeRoleOrder flags a role order definition that is incomplete, duplicated, or misordered.
+	CodeRoleOrder = "role-order"
 )
 
 // Finding represents one declarative rule infraction in a server definition.
@@ -127,11 +133,13 @@ type Finding struct {
 
 // Definition represents the declarative target state of the community server.
 type Definition struct {
-	Version    int          `json:"version"`
-	Applied    bool         `json:"applied"`
-	Summary    string       `json:"summary"`
-	Metrics    []Metric     `json:"metrics"`
-	Roles      []Role       `json:"roles"`
+	Version int      `json:"version"`
+	Applied bool     `json:"applied"`
+	Summary string   `json:"summary"`
+	Metrics []Metric `json:"metrics"`
+	Roles   []Role   `json:"roles"`
+	// RoleOrder lists the roles from highest to lowest, without the role every member holds.
+	RoleOrder  []string     `json:"role_order"`
 	Categories []Category   `json:"categories"`
 	Channels   []Channel    `json:"channels"`
 	Areas      []Area       `json:"areas"`
@@ -248,6 +256,12 @@ type Automation struct {
 	State       string `json:"state"`
 	Record      string `json:"record,omitempty"`
 	NeedsRecord bool   `json:"needs_record,omitempty"`
+}
+
+var botRights = [...]string{
+	"MANAGE_ROLES",
+	"MANAGE_MESSAGES",
+	"MODERATE_MEMBERS",
 }
 
 var vocabulary = [...]string{
