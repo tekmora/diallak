@@ -136,7 +136,7 @@ func registerCommandsWithOptions(ctx context.Context, token string, guildID uint
 
 	_, err = client.Rest.SetGuildCommands(appID, snowflake.ID(guildID), commands, rest.WithCtx(ctx))
 	if err != nil {
-		return fmt.Errorf("set guild commands: %w", sanitizeToken(err, token))
+		return callError("set guild commands", err, token)
 	}
 	return nil
 }
@@ -155,7 +155,7 @@ func lookupApplicationID(
 
 	app, err := restClient.GetCurrentApplication(rest.WithCtx(lookupCtx))
 	if err != nil {
-		return 0, fmt.Errorf("lookup current application: %w", sanitizeToken(err, token))
+		return 0, callError("lookup current application", err, token)
 	}
 	if app == nil || app.ID == 0 {
 		return 0, fmt.Errorf("lookup current application: %w", errEmptyApplicationID)
