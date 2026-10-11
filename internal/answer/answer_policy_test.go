@@ -26,7 +26,10 @@ func askThroughGate(t *testing.T, named bool, replyText string) ([]Answer, int32
 		if calls.Add(1) == 1 || named {
 			w.Header().Set(model.PolicyHeader, policy)
 		}
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"` + replyText + `"}}]}`))
+		body := `{"choices":[{"message":{"content":"` + replyText + `"}}]}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			http.Error(w, "write error", http.StatusInternalServerError)
+		}
 	}))
 	defer srv.Close()
 

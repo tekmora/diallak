@@ -121,8 +121,8 @@ With the model variables set the bot sends the endpoint one small request at sta
 The same check runs on every later reply. A reply that does not name the
 policy is discarded, the member gets the excerpts, and the bot sends no
 further question to the endpoint until it is restarted
-(`TestAsk_Negative_ReplyWithoutThePolicyEndsInExcerpts`). The name is compared exactly, among at
-most 64 entries of the header.
+(`TestAsk_Negative_ReplyWithoutThePolicyEndsInExcerpts`). The name is compared
+exactly, among at most 64 entries of the header.
 
 ### Optional settings
 

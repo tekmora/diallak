@@ -1085,7 +1085,9 @@ func TestRun_Negative_ModelVariablesWithoutPolicyStopsStart(t *testing.T) {
 func TestRun_Negative_ProbeWithoutPolicyHeaderStopsStart(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			http.Error(w, "write error", http.StatusInternalServerError)
+		}
 	}))
 	defer server.Close()
 
@@ -1116,7 +1118,9 @@ func TestRun_Positive_ProbeWithPolicyHeaderStarts(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("x-litellm-applied-policies", "example-policy")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			http.Error(w, "write error", http.StatusInternalServerError)
+		}
 	}))
 	defer server.Close()
 

@@ -1001,7 +1001,9 @@ func runPolicyServer(headers http.Header, status int, body string) *httptest.Ser
 			}
 		}
 		w.WriteHeader(status)
-		_, _ = w.Write([]byte(body))
+		if _, err := w.Write([]byte(body)); err != nil {
+			http.Error(w, "write error", http.StatusInternalServerError)
+		}
 	}))
 }
 
