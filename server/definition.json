@@ -1,0 +1,791 @@
+{
+  "version": 1,
+  "applied": false,
+  "summary": "Target state of the community server as data. Nothing here is applied to a server; applying it is a later unit with the operator.",
+  "metrics": [
+    {
+      "id": "members-with-role",
+      "measures": "How many members hold one role.",
+      "source": "The platform's count of members per role. No message is read and no member id is kept.",
+      "verified": false
+    },
+    {
+      "id": "days-without-message",
+      "measures": "How many days have passed since the last message in one channel.",
+      "source": "The time carried by the id of the channel's last message. No message is read and no member id is kept.",
+      "verified": false
+    }
+  ],
+  "roles": [
+    {
+      "id": "everyone",
+      "name": "@everyone",
+      "kind": "everyone",
+      "purpose": "Every member. The base of all permissions.",
+      "assigned_by": "platform",
+      "basis": "decided",
+      "permissions": [
+        "VIEW_CHANNEL",
+        "SEND_MESSAGES",
+        "SEND_MESSAGES_IN_THREADS",
+        "CREATE_PUBLIC_THREADS",
+        "READ_MESSAGE_HISTORY",
+        "ADD_REACTIONS",
+        "EMBED_LINKS",
+        "ATTACH_FILES",
+        "USE_APPLICATION_COMMANDS",
+        "SPEAK"
+      ]
+    },
+    {
+      "id": "operator",
+      "name": "Operator",
+      "kind": "operator",
+      "purpose": "Runs the server and is the last instance for every decision.",
+      "assigned_by": "operator",
+      "basis": "decided",
+      "permissions": ["ADMINISTRATOR"]
+    },
+    {
+      "id": "moderator",
+      "name": "Moderator",
+      "kind": "moderator",
+      "purpose": "Removes content and times members out. Decides unclear cases before the operator.",
+      "assigned_by": "operator",
+      "basis": "decided",
+      "permissions": ["MANAGE_MESSAGES", "MODERATE_MEMBERS"]
+    },
+    {
+      "id": "bot",
+      "name": "Diallak",
+      "kind": "bot",
+      "purpose": "The role of the bot's application.",
+      "assigned_by": "platform",
+      "basis": "decided",
+      "permissions": []
+    },
+    {
+      "id": "guide-coding",
+      "name": "Subject guide: coding",
+      "kind": "recognition",
+      "purpose": "The visible helper for coding questions. Carries no moderation right.",
+      "assigned_by": "operator",
+      "basis": "decided",
+      "permissions": []
+    },
+    {
+      "id": "guide-video",
+      "name": "Subject guide: video",
+      "kind": "recognition",
+      "purpose": "The visible helper for video questions. Carries no moderation right.",
+      "assigned_by": "operator",
+      "basis": "decided",
+      "permissions": []
+    },
+    {
+      "id": "contributor",
+      "name": "Contributor",
+      "kind": "recognition",
+      "purpose": "First step of the contributor ladder: a contribution of this member was merged. Credited in releases.",
+      "assigned_by": "operator",
+      "basis": "proposal",
+      "permissions": []
+    },
+    {
+      "id": "supporter",
+      "name": "Supporter",
+      "kind": "recognition",
+      "purpose": "A thank-you for financial support. Nothing attaches to it.",
+      "assigned_by": "bot",
+      "basis": "decided",
+      "permissions": []
+    },
+    {
+      "id": "supporter-3-months",
+      "name": "Supporter for 3 months",
+      "kind": "recognition",
+      "purpose": "A thank-you for support over time. Nothing attaches to it. The step of three months is a proposal.",
+      "assigned_by": "bot",
+      "basis": "proposal",
+      "permissions": []
+    },
+    {
+      "id": "supporter-6-months",
+      "name": "Supporter for 6 months",
+      "kind": "recognition",
+      "purpose": "A thank-you for support over time. Nothing attaches to it. The step of six months is a proposal.",
+      "assigned_by": "bot",
+      "basis": "proposal",
+      "permissions": []
+    },
+    {
+      "id": "supporter-12-months",
+      "name": "Supporter for a year",
+      "kind": "recognition",
+      "purpose": "A thank-you for support over time. Nothing attaches to it. The step of twelve months is a proposal.",
+      "assigned_by": "bot",
+      "basis": "proposal",
+      "permissions": []
+    },
+    {
+      "id": "interest-home-lab",
+      "name": "Interest: home lab and self-hosting",
+      "kind": "interest",
+      "purpose": "The member chose this topic. Counts towards opening the area and shows it once it is open.",
+      "assigned_by": "onboarding",
+      "basis": "proposal",
+      "permissions": []
+    },
+    {
+      "id": "interest-media",
+      "name": "Interest: media and video",
+      "kind": "interest",
+      "purpose": "The member chose this topic. Counts towards opening the area and shows it once it is open.",
+      "assigned_by": "onboarding",
+      "basis": "proposal",
+      "permissions": []
+    },
+    {
+      "id": "interest-games",
+      "name": "Interest: games",
+      "kind": "interest",
+      "purpose": "The member chose this topic. Counts towards opening the area and shows it once it is open.",
+      "assigned_by": "onboarding",
+      "basis": "proposal",
+      "permissions": []
+    },
+    {
+      "id": "interest-ai",
+      "name": "Interest: AI news and tools",
+      "kind": "interest",
+      "purpose": "The member chose this topic. Counts towards opening the area and shows it once it is open.",
+      "assigned_by": "onboarding",
+      "basis": "proposal",
+      "permissions": []
+    },
+    {
+      "id": "lang-es",
+      "name": "Language: Español",
+      "kind": "language",
+      "purpose": "The member wants the Spanish social room. Counts towards opening it and shows it once it is open.",
+      "assigned_by": "onboarding",
+      "basis": "proposal",
+      "permissions": []
+    },
+    {
+      "id": "lang-fr",
+      "name": "Language: Français",
+      "kind": "language",
+      "purpose": "The member wants the French social room. Counts towards opening it and shows it once it is open.",
+      "assigned_by": "onboarding",
+      "basis": "proposal",
+      "permissions": []
+    },
+    {
+      "id": "lang-de",
+      "name": "Language: Deutsch",
+      "kind": "language",
+      "purpose": "The member wants the German social room. Counts towards opening it and shows it once it is open.",
+      "assigned_by": "onboarding",
+      "basis": "proposal",
+      "permissions": []
+    },
+    {
+      "id": "lang-it",
+      "name": "Language: Italiano",
+      "kind": "language",
+      "purpose": "The member wants the Italian social room. Counts towards opening it and shows it once it is open.",
+      "assigned_by": "onboarding",
+      "basis": "proposal",
+      "permissions": []
+    }
+  ],
+  "categories": [
+    {"id": "start", "name": "Start", "purpose": "What a member reads first."},
+    {"id": "community", "name": "Community", "purpose": "Talk, help and the private path to the operator."},
+    {"id": "areas", "name": "Areas", "purpose": "Topic rooms that open at a threshold and close when they stay empty."},
+    {"id": "languages", "name": "Languages", "purpose": "One social room per language, opened at a threshold."},
+    {"id": "events", "name": "Events", "purpose": "Voice for scheduled events only."},
+    {"id": "staff", "name": "Staff", "purpose": "The moderators' queue and trail."}
+  ],
+  "channels": [
+    {
+      "id": "rules",
+      "name": "rules",
+      "category": "start",
+      "type": "text",
+      "purpose": "The server rules with links to the code of conduct, the privacy notice and the imprint. Read-only.",
+      "owner": "operator",
+      "opens": "start",
+      "access": [
+        {
+          "role": "everyone",
+          "allow": [],
+          "deny": ["SEND_MESSAGES", "SEND_MESSAGES_IN_THREADS", "CREATE_PUBLIC_THREADS", "ADD_REACTIONS"]
+        }
+      ]
+    },
+    {
+      "id": "announcements",
+      "name": "announcements",
+      "category": "start",
+      "type": "announcement",
+      "purpose": "Own releases and security advisories, as they happen. Read-only.",
+      "owner": "operator",
+      "opens": "start",
+      "access": [
+        {
+          "role": "everyone",
+          "allow": [],
+          "deny": ["SEND_MESSAGES", "SEND_MESSAGES_IN_THREADS", "CREATE_PUBLIC_THREADS"]
+        }
+      ]
+    },
+    {
+      "id": "lounge",
+      "name": "lounge",
+      "category": "community",
+      "type": "text",
+      "purpose": "One relaxed room for everything around the projects.",
+      "owner": "moderator",
+      "opens": "start",
+      "access": []
+    },
+    {
+      "id": "support",
+      "name": "support",
+      "category": "community",
+      "type": "forum",
+      "purpose": "Questions, one post each. The bot answers a new post first with excerpts from the documentation; people answer after it.",
+      "owner": "moderator",
+      "opens": "start",
+      "first_answer": true,
+      "tags": [
+        {"name": "No automated reply", "opt_out": true, "moderated": false},
+        {"name": "Español", "opt_out": false, "moderated": false},
+        {"name": "Français", "opt_out": false, "moderated": false},
+        {"name": "Deutsch", "opt_out": false, "moderated": false},
+        {"name": "Italiano", "opt_out": false, "moderated": false}
+      ],
+      "access": [
+        {
+          "role": "bot",
+          "allow": ["VIEW_CHANNEL", "READ_MESSAGE_HISTORY", "SEND_MESSAGES_IN_THREADS"],
+          "deny": []
+        }
+      ]
+    },
+    {
+      "id": "tickets",
+      "name": "tickets",
+      "category": "community",
+      "type": "text",
+      "purpose": "The private path next to e-mail: a member opens a private thread addressed to the operator. Nobody writes in the channel itself.",
+      "owner": "operator",
+      "opens": "start",
+      "private_threads": true,
+      "access": [
+        {
+          "role": "everyone",
+          "allow": ["CREATE_PRIVATE_THREADS"],
+          "deny": ["SEND_MESSAGES", "CREATE_PUBLIC_THREADS"]
+        },
+        {
+          "role": "bot",
+          "allow": [],
+          "deny": ["VIEW_CHANNEL"]
+        }
+      ]
+    },
+    {
+      "id": "home-lab",
+      "name": "home-lab",
+      "category": "areas",
+      "type": "text",
+      "purpose": "Home lab and self-hosting.",
+      "owner": "moderator",
+      "opens": "threshold",
+      "area": "home-lab",
+      "access": [
+        {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
+        {"role": "interest-home-lab", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+      ]
+    },
+    {
+      "id": "media-video",
+      "name": "media-video",
+      "category": "areas",
+      "type": "text",
+      "purpose": "Media and video.",
+      "owner": "moderator",
+      "opens": "threshold",
+      "area": "media-video",
+      "access": [
+        {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
+        {"role": "interest-media", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+      ]
+    },
+    {
+      "id": "games",
+      "name": "games",
+      "category": "areas",
+      "type": "text",
+      "purpose": "Games.",
+      "owner": "moderator",
+      "opens": "threshold",
+      "area": "games",
+      "access": [
+        {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
+        {"role": "interest-games", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+      ]
+    },
+    {
+      "id": "ai-news-tools",
+      "name": "ai-news-tools",
+      "category": "areas",
+      "type": "text",
+      "purpose": "AI news and tools.",
+      "owner": "moderator",
+      "opens": "threshold",
+      "area": "ai-news-tools",
+      "access": [
+        {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
+        {"role": "interest-ai", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+      ]
+    },
+    {
+      "id": "room-es",
+      "name": "espanol",
+      "category": "languages",
+      "type": "text",
+      "purpose": "Social room in Spanish. Technical channels and support stay in English.",
+      "owner": "moderator",
+      "opens": "threshold",
+      "area": "room-es",
+      "access": [
+        {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
+        {"role": "lang-es", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+      ]
+    },
+    {
+      "id": "room-fr",
+      "name": "francais",
+      "category": "languages",
+      "type": "text",
+      "purpose": "Social room in French. Technical channels and support stay in English.",
+      "owner": "moderator",
+      "opens": "threshold",
+      "area": "room-fr",
+      "access": [
+        {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
+        {"role": "lang-fr", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+      ]
+    },
+    {
+      "id": "room-de",
+      "name": "deutsch",
+      "category": "languages",
+      "type": "text",
+      "purpose": "Social room in German. Technical channels and support stay in English.",
+      "owner": "moderator",
+      "opens": "threshold",
+      "area": "room-de",
+      "access": [
+        {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
+        {"role": "lang-de", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+      ]
+    },
+    {
+      "id": "room-it",
+      "name": "italiano",
+      "category": "languages",
+      "type": "text",
+      "purpose": "Social room in Italian. Technical channels and support stay in English.",
+      "owner": "moderator",
+      "opens": "threshold",
+      "area": "room-it",
+      "access": [
+        {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
+        {"role": "lang-it", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []}
+      ]
+    },
+    {
+      "id": "events-voice",
+      "name": "Events",
+      "category": "events",
+      "type": "voice",
+      "purpose": "Voice for scheduled events: office hours, demo days, game nights. Closed between events; push-to-talk.",
+      "owner": "operator",
+      "opens": "start",
+      "access": [
+        {"role": "everyone", "allow": [], "deny": ["CONNECT"]}
+      ]
+    },
+    {
+      "id": "mod-queue",
+      "name": "mod-queue",
+      "category": "staff",
+      "type": "text",
+      "purpose": "Cases the platform's filter flagged, for the moderators.",
+      "owner": "operator",
+      "opens": "start",
+      "staff": true,
+      "access": [
+        {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": []},
+        {"role": "bot", "allow": ["VIEW_CHANNEL", "SEND_MESSAGES"], "deny": []}
+      ]
+    },
+    {
+      "id": "mod-log",
+      "name": "mod-log",
+      "category": "staff",
+      "type": "text",
+      "purpose": "The trail of moderator actions, for the operator to read.",
+      "owner": "operator",
+      "opens": "start",
+      "staff": true,
+      "access": [
+        {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
+        {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": ["SEND_MESSAGES"]},
+        {"role": "bot", "allow": ["VIEW_CHANNEL", "SEND_MESSAGES"], "deny": []}
+      ]
+    }
+  ],
+  "areas": [
+    {
+      "id": "home-lab",
+      "name": "Home lab and self-hosting",
+      "kind": "topic",
+      "role": "interest-home-lab",
+      "on_close": "hide",
+      "conditions": [],
+      "opening": {
+        "metric": "members-with-role",
+        "subject": "interest-home-lab",
+        "comparison": "at-least",
+        "value": 12,
+        "window_days": 14,
+        "basis": "proposal",
+        "reasoning": "A room needs enough people that a message gets an answer the same day. Twelve interested members, on every daily reading for two weeks, is a first guess; it is replaced once the lounge shows how many interested members a daily conversation takes."
+      },
+      "closing": {
+        "metric": "days-without-message",
+        "subject": "home-lab",
+        "comparison": "at-least",
+        "value": 30,
+        "window_days": 30,
+        "basis": "proposal",
+        "reasoning": "A room whose last message is a month old makes the server look deserted. Thirty days is a first guess."
+      }
+    },
+    {
+      "id": "media-video",
+      "name": "Media and video",
+      "kind": "topic",
+      "role": "interest-media",
+      "on_close": "hide",
+      "conditions": [],
+      "opening": {
+        "metric": "members-with-role",
+        "subject": "interest-media",
+        "comparison": "at-least",
+        "value": 12,
+        "window_days": 14,
+        "basis": "proposal",
+        "reasoning": "Same reasoning as for the home lab area; the value is a first guess and is not measured."
+      },
+      "closing": {
+        "metric": "days-without-message",
+        "subject": "media-video",
+        "comparison": "at-least",
+        "value": 30,
+        "window_days": 30,
+        "basis": "proposal",
+        "reasoning": "Same reasoning as for the home lab area; the value is a first guess and is not measured."
+      }
+    },
+    {
+      "id": "games",
+      "name": "Games",
+      "kind": "topic",
+      "role": "interest-games",
+      "on_close": "hide",
+      "conditions": [],
+      "opening": {
+        "metric": "members-with-role",
+        "subject": "interest-games",
+        "comparison": "at-least",
+        "value": 12,
+        "window_days": 14,
+        "basis": "proposal",
+        "reasoning": "Same reasoning as for the home lab area; the value is a first guess and is not measured."
+      },
+      "closing": {
+        "metric": "days-without-message",
+        "subject": "games",
+        "comparison": "at-least",
+        "value": 30,
+        "window_days": 30,
+        "basis": "proposal",
+        "reasoning": "Same reasoning as for the home lab area; the value is a first guess and is not measured."
+      }
+    },
+    {
+      "id": "ai-news-tools",
+      "name": "AI news and tools",
+      "kind": "topic",
+      "role": "interest-ai",
+      "on_close": "hide",
+      "conditions": [],
+      "opening": {
+        "metric": "members-with-role",
+        "subject": "interest-ai",
+        "comparison": "at-least",
+        "value": 12,
+        "window_days": 14,
+        "basis": "proposal",
+        "reasoning": "Same reasoning as for the home lab area; the value is a first guess and is not measured."
+      },
+      "closing": {
+        "metric": "days-without-message",
+        "subject": "ai-news-tools",
+        "comparison": "at-least",
+        "value": 30,
+        "window_days": 30,
+        "basis": "proposal",
+        "reasoning": "Same reasoning as for the home lab area; the value is a first guess and is not measured."
+      }
+    },
+    {
+      "id": "room-es",
+      "name": "Spanish social room",
+      "kind": "language",
+      "role": "lang-es",
+      "on_close": "hide",
+      "conditions": ["A moderator or subject guide who reads Spanish has agreed to watch the room."],
+      "opening": {
+        "metric": "members-with-role",
+        "subject": "lang-es",
+        "comparison": "at-least",
+        "value": 5,
+        "window_days": 14,
+        "basis": "proposal",
+        "reasoning": "A language room is social, so fewer people carry it than a topic room. Five members who asked for it, on every daily reading for two weeks, is a first guess. The room also needs a person who can read it, because nobody can moderate a language they do not read."
+      },
+      "closing": {
+        "metric": "days-without-message",
+        "subject": "room-es",
+        "comparison": "at-least",
+        "value": 30,
+        "window_days": 30,
+        "basis": "proposal",
+        "reasoning": "Same reasoning as for the topic areas; the value is a first guess and is not measured."
+      }
+    },
+    {
+      "id": "room-fr",
+      "name": "French social room",
+      "kind": "language",
+      "role": "lang-fr",
+      "on_close": "hide",
+      "conditions": ["A moderator or subject guide who reads French has agreed to watch the room."],
+      "opening": {
+        "metric": "members-with-role",
+        "subject": "lang-fr",
+        "comparison": "at-least",
+        "value": 5,
+        "window_days": 14,
+        "basis": "proposal",
+        "reasoning": "Same reasoning as for the Spanish room; the value is a first guess and is not measured."
+      },
+      "closing": {
+        "metric": "days-without-message",
+        "subject": "room-fr",
+        "comparison": "at-least",
+        "value": 30,
+        "window_days": 30,
+        "basis": "proposal",
+        "reasoning": "Same reasoning as for the topic areas; the value is a first guess and is not measured."
+      }
+    },
+    {
+      "id": "room-de",
+      "name": "German social room",
+      "kind": "language",
+      "role": "lang-de",
+      "on_close": "hide",
+      "conditions": ["A moderator or subject guide who reads German has agreed to watch the room."],
+      "opening": {
+        "metric": "members-with-role",
+        "subject": "lang-de",
+        "comparison": "at-least",
+        "value": 5,
+        "window_days": 14,
+        "basis": "proposal",
+        "reasoning": "Same reasoning as for the Spanish room; the value is a first guess and is not measured."
+      },
+      "closing": {
+        "metric": "days-without-message",
+        "subject": "room-de",
+        "comparison": "at-least",
+        "value": 30,
+        "window_days": 30,
+        "basis": "proposal",
+        "reasoning": "Same reasoning as for the topic areas; the value is a first guess and is not measured."
+      }
+    },
+    {
+      "id": "room-it",
+      "name": "Italian social room",
+      "kind": "language",
+      "role": "lang-it",
+      "on_close": "hide",
+      "conditions": ["A moderator or subject guide who reads Italian has agreed to watch the room."],
+      "opening": {
+        "metric": "members-with-role",
+        "subject": "lang-it",
+        "comparison": "at-least",
+        "value": 5,
+        "window_days": 14,
+        "basis": "proposal",
+        "reasoning": "Same reasoning as for the Spanish room; the value is a first guess and is not measured."
+      },
+      "closing": {
+        "metric": "days-without-message",
+        "subject": "room-it",
+        "comparison": "at-least",
+        "value": 30,
+        "window_days": 30,
+        "basis": "proposal",
+        "reasoning": "Same reasoning as for the topic areas; the value is a first guess and is not measured."
+      }
+    }
+  ],
+  "onboarding": {
+    "by": "platform",
+    "questions": [
+      {
+        "id": "interests",
+        "title": "What interests you besides the projects?",
+        "required": false,
+        "multiple": true,
+        "options": [
+          {"title": "Home lab and self-hosting", "role": "interest-home-lab"},
+          {"title": "Media and video", "role": "interest-media"},
+          {"title": "Games", "role": "interest-games"},
+          {"title": "AI news and tools", "role": "interest-ai"}
+        ]
+      },
+      {
+        "id": "languages",
+        "title": "Which language rooms would you like to see?",
+        "required": false,
+        "multiple": true,
+        "options": [
+          {"title": "Español", "role": "lang-es"},
+          {"title": "Français", "role": "lang-fr"},
+          {"title": "Deutsch", "role": "lang-de"},
+          {"title": "Italiano", "role": "lang-it"}
+        ]
+      }
+    ]
+  },
+  "automation": [
+    {
+      "id": "ask-command",
+      "what": "Answers the ask command from the documentation, visible only to the member who asked.",
+      "by": "bot",
+      "state": "built",
+      "record": "docs/adr/0003-answer-pipeline.md"
+    },
+    {
+      "id": "support-first-answer",
+      "what": "Reads the first message of a new post in the support forum and replies first with excerpts, unless the post carries the opt-out tag.",
+      "by": "bot",
+      "state": "decided",
+      "record": "docs/adr/0009-support-forum-first-answer.md"
+    },
+    {
+      "id": "discussions-bridge",
+      "what": "Shows new discussions of the listed repositories on the server with a link back.",
+      "by": "bot",
+      "state": "decided",
+      "record": "docs/adr/0004-community-questions.md"
+    },
+    {
+      "id": "moderation-queue",
+      "what": "Puts flagged cases in front of the moderators and writes the trail of their actions.",
+      "by": "bot",
+      "state": "decided",
+      "record": "docs/adr/0005-moderation-and-escalation.md"
+    },
+    {
+      "id": "area-lifecycle",
+      "what": "Opens and closes the threshold areas and language rooms from the readings of their rules. Until it is built, the operator does this by hand.",
+      "by": "bot",
+      "state": "planned",
+      "needs_record": true
+    },
+    {
+      "id": "news",
+      "what": "Posts own releases and security advisories as they happen, and everything else as one digest per channel per day.",
+      "by": "bot",
+      "state": "planned",
+      "needs_record": true
+    },
+    {
+      "id": "supporter-roles",
+      "what": "Gives and takes the supporter roles from the funding platforms.",
+      "by": "bot",
+      "state": "planned",
+      "needs_record": true
+    },
+    {
+      "id": "spam-filter",
+      "what": "Filters spam and obvious abuse before a person sees it.",
+      "by": "platform",
+      "state": "decided",
+      "record": "docs/adr/0005-moderation-and-escalation.md"
+    },
+    {
+      "id": "onboarding-questions",
+      "what": "Asks a new member the onboarding questions and gives the roles of the chosen options.",
+      "by": "platform",
+      "state": "planned"
+    },
+    {
+      "id": "role-grants",
+      "what": "Invites people and grants the moderator, subject guide and contributor roles. The bot grants none of them.",
+      "by": "operator",
+      "state": "decided",
+      "record": "docs/adr/0005-moderation-and-escalation.md"
+    },
+    {
+      "id": "tickets",
+      "what": "Reads and answers the private threads in the ticket channel.",
+      "by": "operator",
+      "state": "decided"
+    },
+    {
+      "id": "events",
+      "what": "Schedules events and opens the voice room for their duration.",
+      "by": "operator",
+      "state": "decided"
+    },
+    {
+      "id": "apply-definition",
+      "what": "Applies this definition to the server. A later unit with the operator.",
+      "by": "operator",
+      "state": "planned"
+    }
+  ]
+}

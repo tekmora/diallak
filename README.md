@@ -62,6 +62,10 @@ Community bot for the Lusoris Discord hub.
 | Compliance | Discord's developer terms and policy, GDPR, and the transparency duty of EU AI Act Art. 50; the provider-or-deployer role assessment is written before launch |
 <!-- markdownlint-enable MD013 -->
 
+The target state of the server itself, its roles, channels and permissions, is
+data with a validator: [docs/server-definition.md](docs/server-definition.md).
+Nothing applies it to a server yet.
+
 ## The name
 
 The bot is called **Diallak** (dee-AHL-lak), from Greek *diallaktes*, the
