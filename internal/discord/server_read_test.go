@@ -3,6 +3,7 @@ package discord
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -835,8 +836,8 @@ func TestReadServer_Negative_NoBotInApplication(t *testing.T) {
 	if err == nil {
 		t.Fatal("readServerWithOptions succeeded, want error")
 	}
-	const wantErr = "the bot has no role of its own on this server"
-	if !strings.Contains(err.Error(), wantErr) {
+	const wantErr = "get application: the application has no bot user"
+	if err.Error() != wantErr {
 		t.Errorf("error = %q, want %q", err.Error(), wantErr)
 	}
 }
@@ -1065,9 +1066,11 @@ func TestReadServer_Negative_HangingRequestTimesOut(t *testing.T) {
 }
 
 func TestReadServer_Negative_AuthorizationHeaderSanitized(t *testing.T) {
-	const secretToken = "secret-token-xyz-987"
+	secretToken := makeFakeToken(1001)
 
+	var hits int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
 		auth := r.Header.Get("Authorization")
 		writeTestResponse(w, http.StatusUnauthorized, fmt.Sprintf(`{"message":"unauthorized: %s"}`, auth))
 	}))
@@ -1078,8 +1081,15 @@ func TestReadServer_Negative_AuthorizationHeaderSanitized(t *testing.T) {
 	if err == nil {
 		t.Fatal("readServerWithOptions succeeded, want error")
 	}
-	if strings.Contains(err.Error(), secretToken) {
-		t.Errorf("error contains token: %q", err.Error())
+	if hits != 1 {
+		t.Fatalf("requests = %d, want 1: the reply that repeats the token was never read", hits)
+	}
+	errStr := err.Error()
+	if strings.Contains(errStr, secretToken) {
+		t.Errorf("error contains token: %q", errStr)
+	}
+	if !strings.HasPrefix(errStr, "get application: ") || !strings.Contains(errStr, "unauthorized: Bot [redacted]") {
+		t.Errorf("error = %q, want the step and the reply with the token replaced", errStr)
 	}
 }
 
@@ -1115,6 +1125,211 @@ func TestReadServer_Positive_SnapshotMarshalledHoldsNoIDs(t *testing.T) {
 		idStr := strconv.FormatUint(id, 10)
 		if strings.Contains(snapStr, idStr) {
 			t.Errorf("snapshot JSON contains platform ID %s: %s", idStr, snapStr)
+		}
+	}
+}
+
+// A transport failure comes back from the HTTP client with the request's address,
+// and the address of the member request holds the server's id and the bot user's id.
+func TestReadServer_Negative_TransportErrorNamesNoID(t *testing.T) {
+	const (
+		guildID   uint64 = 777000111
+		botUserID uint64 = 888000222
+	)
+	appJSON := fmt.Sprintf(`{"id":"9001","bot":{"id":"%d"}}`, botUserID)
+	guildJSON := fmt.Sprintf(`{"id":"%d","roles":[{"id":"%d","name":"@everyone","position":0,"permissions":"1024"}]}`, guildID, guildID)
+
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/applications/@me":
+			writeTestResponse(w, http.StatusOK, appJSON)
+		case fmt.Sprintf("/guilds/%d", guildID):
+			writeTestResponse(w, http.StatusOK, guildJSON)
+		default:
+			select {
+			case <-release:
+			case <-r.Context().Done():
+			}
+		}
+	}))
+	defer srv.Close()
+
+	opts := clientOptions{restURL: srv.URL, serverCallTimeout: 50 * time.Millisecond}
+	_, err := readServerWithOptions(context.Background(), makeFakeToken(1001), guildID, opts)
+	if err == nil {
+		t.Fatal("readServerWithOptions succeeded on a hanging member request, want error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("error = %q, want it to wrap the passed deadline", err.Error())
+	}
+	if !strings.HasPrefix(err.Error(), "get member: ") {
+		t.Errorf("error = %q, want the step \"get member\" first", err.Error())
+	}
+	for _, id := range []uint64{guildID, botUserID} {
+		if strings.Contains(err.Error(), strconv.FormatUint(id, 10)) {
+			t.Errorf("error holds the platform id %d: %q", id, err.Error())
+		}
+	}
+	if strings.Contains(err.Error(), srv.URL) {
+		t.Errorf("error holds the request's address: %q", err.Error())
+	}
+}
+
+// Between the role list and the member request a role can appear. A snapshot
+// built from both would understate what the caller may do.
+func TestReadServer_Negative_MemberRoleMissingFromRoleList(t *testing.T) {
+	const (
+		guildID   uint64 = 1001
+		botUserID uint64 = 2001
+	)
+	appJSON := fmt.Sprintf(`{"id":"9001","bot":{"id":"%d"}}`, botUserID)
+	guildJSON := fmt.Sprintf(`{
+		"id": "%d",
+		"roles": [
+			{"id": "%d", "name": "@everyone", "position": 0, "permissions": "1024"},
+			{"id": "5001", "name": "BotRole", "position": 1, "permissions": "1024", "managed": true, "tags": {"bot_id": "%d"}}
+		]
+	}`, guildID, guildID, botUserID)
+	memberJSON := fmt.Sprintf(`{"user":{"id":"%d"},"roles":["5001","5777"]}`, botUserID)
+
+	srv := newStandardServer(guildID, botUserID, appJSON, guildJSON, memberJSON, `[]`)
+	defer srv.Close()
+
+	_, err := readServerWithOptions(context.Background(), makeFakeToken(1001), guildID, clientOptions{restURL: srv.URL})
+	if err == nil {
+		t.Fatal("readServerWithOptions succeeded, want error")
+	}
+	const wantErr = "the bot holds a role that the server's role list does not have"
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("error = %q, want %q", err.Error(), wantErr)
+	}
+	if strings.Contains(err.Error(), "5777") {
+		t.Errorf("error holds the role's id: %q", err.Error())
+	}
+}
+
+// The snapshot names the caller's role by name. With a second role of that name
+// the plan could take the wrong one for the caller's place in the order, so the
+// snapshot's own check refuses it.
+func TestReadServer_Boundary_BotRoleNameHeldTwice(t *testing.T) {
+	const (
+		guildID   uint64 = 1001
+		botUserID uint64 = 2001
+	)
+	appJSON := fmt.Sprintf(`{"id":"9001","bot":{"id":"%d"}}`, botUserID)
+	memberJSON := fmt.Sprintf(`{"user":{"id":"%d"},"roles":["5001"]}`, botUserID)
+	guild := func(secondName string) string {
+		return fmt.Sprintf(`{
+			"id": "%d",
+			"roles": [
+				{"id": "%d", "name": "@everyone", "position": 0, "permissions": "1024"},
+				{"id": "5001", "name": "BotRole", "position": 1, "permissions": "1024", "managed": true, "tags": {"bot_id": "%d"}},
+				{"id": "5002", "name": %q, "position": 2, "permissions": "1024"}
+			]
+		}`, guildID, guildID, botUserID, secondName)
+	}
+
+	twice := newStandardServer(guildID, botUserID, appJSON, guild("BotRole"), memberJSON, `[]`)
+	defer twice.Close()
+	_, err := readServerWithOptions(context.Background(), makeFakeToken(1001), guildID, clientOptions{restURL: twice.URL})
+	const wantErr = `check snapshot: caller role "BotRole" names multiple roles`
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("error = %v, want %q", err, wantErr)
+	}
+
+	once := newStandardServer(guildID, botUserID, appJSON, guild("Botrole"), memberJSON, `[]`)
+	defer once.Close()
+	snap, err := readServerWithOptions(context.Background(), makeFakeToken(1001), guildID, clientOptions{restURL: once.URL})
+	if err != nil {
+		t.Fatalf("a role whose name differs in case: %v", err)
+	}
+	if snap.Caller.Role != "BotRole" {
+		t.Errorf("Caller.Role = %q, want BotRole", snap.Caller.Role)
+	}
+}
+
+func TestReadServer_Negative_UnknownBitsNamedByNumber(t *testing.T) {
+	const (
+		guildID   uint64 = 1001
+		botUserID uint64 = 2001
+	)
+	bit47 := uint64(1) << 47
+	bits47and53 := bit47 | uint64(1)<<53
+	cases := []struct {
+		name          string
+		everyonePerms uint64
+		plainPerms    uint64
+		entryAllow    uint64
+		entryDeny     uint64
+		want          string
+	}{
+		{"everyone role", bit47, 1024, 0, 0, `role "@everyone" has unknown permission bits: 47`},
+		{"plain role", 1024, bits47and53, 0, 0, `role "Plain" has unknown permission bits: 47, 53`},
+		{"entry allow", 1024, 1024, bit47, 0, `channel "ch-test": role "Plain" has unknown permission bits: 47`},
+		{"entry deny", 1024, 1024, 0, bits47and53, `channel "ch-test": role "Plain" has unknown permission bits: 47, 53`},
+	}
+	appJSON := fmt.Sprintf(`{"id":"9001","bot":{"id":"%d"}}`, botUserID)
+	memberJSON := fmt.Sprintf(`{"user":{"id":"%d"},"roles":["5002"]}`, botUserID)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			guildJSON := fmt.Sprintf(`{"id":"%d","roles":[
+				{"id":"%d","name":"@everyone","position":0,"permissions":"%d"},
+				{"id":"5001","name":"Plain","position":1,"permissions":"%d"},
+				{"id":"5002","name":"BotRole","position":2,"permissions":"1024","managed":true,"tags":{"bot_id":"%d"}}
+			]}`, guildID, guildID, tc.everyonePerms, tc.plainPerms, botUserID)
+			channelsJSON := fmt.Sprintf(`[{"id":"7001","name":"ch-test","type":0,"permission_overwrites":[
+				{"id":"5001","type":0,"allow":"%d","deny":"%d"}
+			]}]`, tc.entryAllow, tc.entryDeny)
+
+			srv := newStandardServer(guildID, botUserID, appJSON, guildJSON, memberJSON, channelsJSON)
+			defer srv.Close()
+
+			_, err := readServerWithOptions(context.Background(), makeFakeToken(1001), guildID, clientOptions{restURL: srv.URL})
+			if err == nil {
+				t.Fatal("readServerWithOptions succeeded, want an error for the unknown bits")
+			}
+			if err.Error() != tc.want {
+				t.Errorf("error = %q, want %q", err.Error(), tc.want)
+			}
+		})
+	}
+}
+
+func TestReadServer_Positive_ManagedFlagKept(t *testing.T) {
+	const (
+		guildID   uint64 = 1001
+		botUserID uint64 = 2001
+	)
+	appJSON := fmt.Sprintf(`{"id":"9001","bot":{"id":"%d"}}`, botUserID)
+	guildJSON := fmt.Sprintf(`{"id":"%d","roles":[
+		{"id":"%d","name":"@everyone","position":0,"permissions":"1024"},
+		{"id":"5001","name":"Plain","position":1,"permissions":"1024"},
+		{"id":"5002","name":"BotRole","position":2,"permissions":"1024","managed":true,"tags":{"bot_id":"%d"}},
+		{"id":"5003","name":"Booster","position":3,"permissions":"0","managed":true,"tags":{"premium_subscriber":null}}
+	]}`, guildID, guildID, botUserID)
+	memberJSON := fmt.Sprintf(`{"user":{"id":"%d"},"roles":["5002"]}`, botUserID)
+
+	srv := newStandardServer(guildID, botUserID, appJSON, guildJSON, memberJSON, `[]`)
+	defer srv.Close()
+
+	snap, err := readServerWithOptions(context.Background(), makeFakeToken(1001), guildID, clientOptions{restURL: srv.URL})
+	if err != nil {
+		t.Fatalf("readServerWithOptions: %v", err)
+	}
+	want := map[string]bool{"Booster": true, "BotRole": true, "Plain": false, "@everyone": false}
+	if len(snap.Roles) != len(want) {
+		t.Fatalf("roles = %d, want %d", len(snap.Roles), len(want))
+	}
+	for _, r := range snap.Roles {
+		managed, known := want[r.Name]
+		if !known {
+			t.Errorf("unexpected role %q", r.Name)
+			continue
+		}
+		if r.Managed != managed {
+			t.Errorf("role %q managed = %v, want %v", r.Name, r.Managed, managed)
 		}
 	}
 }

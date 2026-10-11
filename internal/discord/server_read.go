@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"sort"
 	"strconv"
@@ -92,17 +93,17 @@ func fetchServerData(ctx context.Context, client *bot.Client, token string, guil
 	app, err := client.Rest.GetCurrentApplication(rest.WithCtx(appCtx))
 	appCancel()
 	if err != nil {
-		return nil, fmt.Errorf("get application: %w", sanitizeToken(err, token))
+		return nil, callError("get application", err, token)
 	}
 	if app == nil || app.Bot == nil {
-		return nil, errors.New("the bot has no role of its own on this server")
+		return nil, errors.New("get application: the application has no bot user")
 	}
 
 	guildCtx, guildCancel := context.WithTimeout(ctx, opts.callTimeout())
 	guild, err := client.Rest.GetGuild(snowflake.ID(guildID), false, rest.WithCtx(guildCtx))
 	guildCancel()
 	if err != nil {
-		return nil, fmt.Errorf("get guild: %w", sanitizeToken(err, token))
+		return nil, callError("get guild", err, token)
 	}
 	if guild == nil {
 		return nil, errors.New("get guild: empty response")
@@ -112,7 +113,7 @@ func fetchServerData(ctx context.Context, client *bot.Client, token string, guil
 	member, err := client.Rest.GetMember(snowflake.ID(guildID), app.Bot.ID, rest.WithCtx(memberCtx))
 	memberCancel()
 	if err != nil {
-		return nil, fmt.Errorf("get member: %w", sanitizeToken(err, token))
+		return nil, callError("get member", err, token)
 	}
 	if member == nil {
 		return nil, errors.New("get member: empty response")
@@ -122,10 +123,21 @@ func fetchServerData(ctx context.Context, client *bot.Client, token string, guil
 	channels, err := client.Rest.GetGuildChannels(snowflake.ID(guildID), rest.WithCtx(channelsCtx))
 	channelsCancel()
 	if err != nil {
-		return nil, fmt.Errorf("get channels: %w", sanitizeToken(err, token))
+		return nil, callError("get channels", err, token)
 	}
 
 	return &serverData{app: app, guild: guild, member: member, channels: channels}, nil
+}
+
+// callError names the step of a failed request. A transport failure carries the
+// request's address, which holds the server's id and the bot user's id: only the
+// cause is kept. The reply of the platform to a refused request holds no address.
+func callError(step string, err error, token string) error {
+	var transport *url.Error
+	if errors.As(err, &transport) {
+		err = transport.Err
+	}
+	return fmt.Errorf("%s: %w", step, sanitizeToken(err, token))
 }
 
 func parseRoles(rawRoles []discord.Role, guildID uint64) ([]serverplan.Role, *discord.Role, map[snowflake.ID]discord.Role, error) {
@@ -203,10 +215,13 @@ func resolveCaller(
 
 	callerMask := permissionsToMask(everyoneRole.Permissions)
 	for _, rID := range memberRoleIDs {
-		if r, ok := roleByID[rID]; ok {
-			callerMask |= permissionsToMask(r.Permissions)
+		r, ok := roleByID[rID]
+		if !ok {
+			return serverplan.Caller{}, errors.New("the bot holds a role that the server's role list does not have; the server changed during the read")
 		}
+		callerMask |= permissionsToMask(r.Permissions)
 	}
+	// parseRoles has refused every role with a bit the table does not hold.
 	callerPerms, _ := serverdef.PermissionNames(callerMask)
 
 	return serverplan.Caller{

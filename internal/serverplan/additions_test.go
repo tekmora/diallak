@@ -110,15 +110,15 @@ func TestCompare_Positive_AccessMemberMatchedAndExtra(t *testing.T) {
 		if d.Kind == KindAccessMember && d.Object == fmt.Sprintf("channels[%s]", matchedChannelID) {
 			foundMatched = true
 			matchedIdx = i
-			if d.Detail != "3 entries for single members" {
-				t.Errorf("matched detail = %q, want '3 entries for single members'", d.Detail)
+			if d.Detail != "entries for single members: 3" {
+				t.Errorf("matched detail = %q, want 'entries for single members: 3'", d.Detail)
 			}
 		}
 		if d.Kind == KindAccessMember && d.Object == "server.channels[extra-channel]" {
 			foundExtra = true
 			extraIdx = i
-			if d.Detail != "2 entries for single members" {
-				t.Errorf("extra detail = %q, want '2 entries for single members'", d.Detail)
+			if d.Detail != "entries for single members: 2" {
+				t.Errorf("extra detail = %q, want 'entries for single members: 2'", d.Detail)
 			}
 		}
 		if d.Kind == KindAccessMember && strings.Contains(d.Object, "rules") {
@@ -202,12 +202,12 @@ func TestRenderDifferences_Positive_Formats(t *testing.T) {
 		var buf bytes.Buffer
 		diffs := []Difference{
 			{Kind: KindRoleMissing, Object: "roles[operator]"},
-			{Kind: KindAccessMember, Object: "channels[general]", Detail: "3 entries for single members"},
+			{Kind: KindAccessMember, Object: "channels[general]", Detail: "entries for single members: 3"},
 		}
 		if err := RenderDifferences(&buf, false, diffs); err != nil {
 			t.Fatalf("RenderDifferences: %v", err)
 		}
-		want := "mode: own\ndifferences: 2\n  role-missing roles[operator]\n  access-member channels[general]; 3 entries for single members\n"
+		want := "mode: own\ndifferences: 2\n  role-missing roles[operator]\n  access-member channels[general]; entries for single members: 3\n"
 		if buf.String() != want {
 			t.Errorf("got %q, want %q", buf.String(), want)
 		}
@@ -313,5 +313,44 @@ func TestRaised_Boundary_ThreeRightsVsOneMore(t *testing.T) {
 
 	if !Raised(def, snapFour) {
 		t.Errorf("Raised(def, snapFour) = false, want true for 3 rights + 1 more")
+	}
+}
+
+func TestCompare_Boundary_AccessMemberAtOneEntry(t *testing.T) {
+	def := loadDef(t)
+	snap := snapshotOf(t, def)
+	for i := range snap.Channels {
+		if snap.Channels[i].Name == "lounge" {
+			snap.Channels[i].MemberEntries = 1
+		}
+	}
+	snap.Channels = append(snap.Channels, Channel{
+		Name:          "extra-channel",
+		Type:          "text",
+		Category:      "Community",
+		MemberEntries: 1,
+	})
+
+	diffs, err := Compare(def, snap)
+	if err != nil {
+		t.Fatalf("Compare error: %v", err)
+	}
+	found := make(map[string]string, 2)
+	for _, d := range diffs {
+		if d.Kind == KindAccessMember {
+			found[d.Object] = d.Detail
+		}
+	}
+	want := map[string]string{
+		"channels[lounge]":               "entries for single members: 1",
+		"server.channels[extra-channel]": "entries for single members: 1",
+	}
+	if len(found) != len(want) {
+		t.Fatalf("access-member differences = %v, want %v", found, want)
+	}
+	for object, detail := range want {
+		if found[object] != detail {
+			t.Errorf("access-member detail of %s = %q, want %q", object, found[object], detail)
+		}
 	}
 }

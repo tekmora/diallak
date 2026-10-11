@@ -1262,30 +1262,71 @@ func TestRun_Negative_ServerAndRegisterCommandsMutuallyExclusive(t *testing.T) {
 }
 
 func TestRun_Negative_ServerUnknownModeListsValues(t *testing.T) {
-	var readCalls int
-	deps := dependencies{
-		readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
-			readCalls++
-			return nil, nil
-		},
-	}
+	for _, mode := range []string{"unknown", "apply", "PLAN", "plan ", "compare,plan"} {
+		t.Run(mode, func(t *testing.T) {
+			var readCalls int
+			deps := dependencies{
+				readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+					readCalls++
+					return nil, nil
+				},
+			}
 
-	var out bytes.Buffer
-	err := run(context.Background(), []string{"-server=unknown"}, validEnv(t), &out, deps)
-	if err == nil {
-		t.Fatal("run succeeded with unknown server mode, want error")
-	}
-	if readCalls != 0 {
-		t.Errorf("readCalls = %d, want 0", readCalls)
-	}
-	errStr := err.Error()
-	if !strings.Contains(errStr, "plan") || !strings.Contains(errStr, "compare") {
-		t.Errorf("error %q should list both 'plan' and 'compare'", errStr)
-	}
+			var out bytes.Buffer
+			err := run(context.Background(), []string{"-server=" + mode}, validEnv(t), &out, deps)
+			if err == nil {
+				t.Fatal("run succeeded with an unknown server mode, want error")
+			}
+			if readCalls != 0 {
+				t.Errorf("readCalls = %d, want 0", readCalls)
+			}
+			want := fmt.Sprintf("invalid -server mode %q: must be plan or compare", mode)
+			if err.Error() != want {
+				t.Errorf("error = %q, want %q", err.Error(), want)
+			}
+			if out.Len() != 0 {
+				t.Errorf("output = %q, want none", out.String())
+			}
 
-	var errOut bytes.Buffer
-	if code := report(err, &errOut); code != 1 {
-		t.Errorf("report exit code = %d, want 1", code)
+			var errOut bytes.Buffer
+			if code := report(err, &errOut); code != 1 {
+				t.Errorf("report exit code = %d, want 1", code)
+			}
+		})
+	}
+}
+
+func TestRun_Boundary_ServerCompareNamesTheMode(t *testing.T) {
+	cases := []struct {
+		name     string
+		botPerms []string
+		want     string
+	}{
+		{"rights of the definition only", []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS"}, "mode: own\n"},
+		{"one right more", []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_CHANNELS"}, "mode: raised\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			snap := loadFreshServerSnapshot(t)
+			for i := range snap.Roles {
+				if snap.Roles[i].Name == snap.Caller.Role {
+					snap.Roles[i].Permissions = tc.botPerms
+				}
+			}
+			deps := dependencies{
+				readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+					return snap, nil
+				},
+			}
+
+			var out bytes.Buffer
+			if err := run(context.Background(), []string{"-server=compare"}, validEnv(t), &out, deps); err != nil {
+				t.Fatalf("run -server=compare failed: %v", err)
+			}
+			if !strings.HasPrefix(out.String(), tc.want) {
+				t.Errorf("output starts %q, want %q", out.String(), tc.want)
+			}
+		})
 	}
 }
 

@@ -331,13 +331,19 @@ func compareSingleChannel(def *serverdef.Definition, s *Snapshot, ch *serverdef.
 	}
 	diffs = append(diffs, compareAccessEntries(def, s, ch, sch)...)
 	if sch.MemberEntries > 0 {
-		diffs = append(diffs, Difference{
-			Kind:   KindAccessMember,
-			Object: obj,
-			Detail: fmt.Sprintf("%d entries for single members", sch.MemberEntries),
-		})
+		diffs = append(diffs, memberEntriesDifference(obj, sch.MemberEntries))
 	}
 	return diffs
+}
+
+// memberEntriesDifference reports the entries a channel holds for single members.
+// The definition gives access to roles only, so every such entry is a difference.
+func memberEntriesDifference(object string, entries int) Difference {
+	return Difference{
+		Kind:   KindAccessMember,
+		Object: object,
+		Detail: fmt.Sprintf("entries for single members: %d", entries),
+	}
 }
 
 func setEqual(a, b []string) bool {
@@ -507,11 +513,7 @@ func compareChannelExtras(def *serverdef.Definition, s *Snapshot) []Difference {
 				Object: fmt.Sprintf("server.channels[%s]", sch.Name),
 			})
 			if sch.MemberEntries > 0 {
-				diffs = append(diffs, Difference{
-					Kind:   KindAccessMember,
-					Object: fmt.Sprintf("server.channels[%s]", sch.Name),
-					Detail: fmt.Sprintf("%d entries for single members", sch.MemberEntries),
-				})
+				diffs = append(diffs, memberEntriesDifference(fmt.Sprintf("server.channels[%s]", sch.Name), sch.MemberEntries))
 			}
 		}
 	}
