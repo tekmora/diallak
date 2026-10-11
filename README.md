@@ -302,6 +302,13 @@ Git hooks run the Praetor engine this repository pins (`PRAETOR_REF` in
 [`.config/lefthook/engine.sh`](.config/lefthook/engine.sh). Agent instructions
 live in [`AGENTS.md`](AGENTS.md); the other agent files are compiled from it.
 
+Dependency updates come from Renovate as pull requests
+([`renovate.json`](renovate.json)): Go modules, the actions in the workflows
+and the images in the `Dockerfile`. A release is proposed three days after it
+was published, every action stays pinned to a commit, and nothing merges on
+its own. The generated devcontainer files are left out, because the audit
+refuses an edit to them.
+
 ## Legal
 
 The [imprint](docs/compliance/imprint.md) and the
