@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 
+## [0.2.1] - 2026-10-11
+
+### Changed
+
+- Say how the provenance of the SBOM files was tried against 0.2.0
+
+### Fixed
+
+- Server read no longer stops on a permission bit Discord's reference does not list; compare reports it and a plan refuses to write over it
+
+
 ## [0.2.0] - 2026-10-11
 
 ### Security
