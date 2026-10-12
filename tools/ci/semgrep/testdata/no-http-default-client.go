@@ -1,3 +1,5 @@
+//go:build semgrep_fixture
+
 package fixture
 
 import (

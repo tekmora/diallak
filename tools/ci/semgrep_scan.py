@@ -2,6 +2,8 @@
 
 Each rule in .semgrep.yml needs a fixture in tools/ci/semgrep/testdata/ with at
 least one `// ruleid:` line it must report and one `// ok:` line it must not.
+Every fixture starts with the `//go:build semgrep_fixture` constraint, so no Go
+build, vet or gosec run ever loads the code the rules are meant to report.
 Semgrep's test mode replays every fixture; only when all pass is the scan of
 the tracked Go files trusted. The scan fails on any finding, on any Semgrep
 error, and when the report does not list exactly the files that were passed.
@@ -18,6 +20,7 @@ import sys
 
 RULES = ".semgrep.yml"
 FIXTURES = "tools/ci/semgrep/testdata"
+FIXTURE_CONSTRAINT = "//go:build semgrep_fixture\n"
 MAX_FIXTURES = 64
 MAX_TARGETS = 4096
 TIMEOUT_SECONDS = 600
@@ -61,7 +64,10 @@ def fixtures(root, ids):
         raise ScanError(f"{FIXTURES}: {len(files)} fixtures, expected 1 to {MAX_FIXTURES}")
     seen = {"ruleid": set(), "ok": set()}
     for path in files:
-        for kind, rule in ANNOTATION_RE.findall(path.read_text(encoding="utf-8")):
+        text = path.read_text(encoding="utf-8")
+        if not text.startswith(FIXTURE_CONSTRAINT):
+            raise ScanError(f"{path.name}: does not start with {FIXTURE_CONSTRAINT.strip()!r}")
+        for kind, rule in ANNOTATION_RE.findall(text):
             if rule not in ids:
                 raise ScanError(f"{path.name}: annotation names unknown rule '{rule}'")
             seen[kind].add(rule)
