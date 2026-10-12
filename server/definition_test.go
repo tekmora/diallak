@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -170,6 +171,27 @@ func TestDefinition_Boundary_NoSendPolls(t *testing.T) {
 			t.Errorf("rightsNamedAnywhere did not report SEND_POLLS when added to @everyone")
 		}
 	})
+
+	t.Run("helper reports SEND_POLLS when an entry on a channel allows it", func(t *testing.T) {
+		def, err := Definition()
+		if err != nil {
+			t.Fatalf("Definition() error = %v", err)
+		}
+		if len(def.Channels) == 0 || len(def.Channels[0].Access) == 0 {
+			t.Fatal("first channel of the definition holds no entry")
+		}
+		channelsCopy := make([]serverdef.Channel, len(def.Channels))
+		copy(channelsCopy, def.Channels)
+		accessCopy := make([]serverdef.Access, len(channelsCopy[0].Access))
+		copy(accessCopy, channelsCopy[0].Access)
+		accessCopy[0].Allow = append(append([]string{}, accessCopy[0].Allow...), "SEND_POLLS")
+		channelsCopy[0].Access = accessCopy
+		copyDef := *def
+		copyDef.Channels = channelsCopy
+		if _, ok := rightsNamedAnywhere(&copyDef)["SEND_POLLS"]; !ok {
+			t.Errorf("rightsNamedAnywhere did not report SEND_POLLS allowed by an entry on a channel")
+		}
+	})
 }
 
 func TestDefinition_Positive_ServerSettingsAutomation(t *testing.T) {
@@ -193,11 +215,8 @@ func TestDefinition_Positive_ServerSettingsAutomation(t *testing.T) {
 	if entry.State != "decided" {
 		t.Errorf("server-settings.State = %q, want %q", entry.State, "decided")
 	}
-	recordPath := entry.Record
-	if _, err := os.Stat(recordPath); err != nil {
-		recordPath = "../" + entry.Record
-		if _, err := os.Stat(recordPath); err != nil {
-			t.Errorf("server-settings record file %q does not exist on disk: %v", entry.Record, err)
-		}
+	// The record's path counts from the repository root; this package is one folder below it.
+	if _, err := os.Stat(filepath.Join("..", entry.Record)); err != nil {
+		t.Errorf("server-settings record file %q does not exist on disk: %v", entry.Record, err)
 	}
 }

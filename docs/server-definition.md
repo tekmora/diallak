@@ -37,10 +37,19 @@ and applying one plan. None of it was run against Discord
   members form a group of their own in the member list (`shown_apart`) and
   whether members can mention it (`mentionable`). A field the file does not
   state is not compared and not changed.
-- **The bot holds three rights, each for a decided function:** managing
-  roles, deleting messages and timing members out. The order of roles keeps
-  the first of them away from the staff roles
-  ([ADR-0010](adr/0010-bot-rights-and-apply-path.md)).
+- **The bot holds four rights, each for a decided function:** managing
+  roles, deleting messages, timing members out and managing the server. The
+  order of roles keeps the first of them away from the staff roles
+  ([ADR-0010](adr/0010-bot-rights-and-apply-path.md)). The fourth is held for
+  a function that is not built yet
+  ([ADR-0015](adr/0015-moderator-without-rights-and-server-settings-as-data.md)).
+- **The Moderator role holds no right.** A moderator deletes a message or
+  times a member out through a command of the bot, and every such act lands
+  in the moderators' log channel. Those commands are not built yet; until
+  they are, only the operator can do either (ADR-0015).
+- **Members send no polls.** No role and no entry on a channel gives the
+  right `SEND_POLLS`; this is wanted, not an omission (ADR-0015,
+  `TestDefinition_Boundary_NoSendPolls`).
 
 ## Check the file
 
@@ -116,8 +125,8 @@ Each finding has a code, a path into the file and a message.
 | `staff-visibility` | A moderators' channel that a role other than operator, moderator or bot can see |
 | `moderator-visibility` | A channel that a moderator cannot see |
 | `voice-closed` | A voice channel that members can join between events or use without push-to-talk |
-| `operator-only`, `moderation-only` | Administration rights outside the operator role; moderation rights outside the operator and moderator roles. The bot's role passes for its three rights only |
-| `bot-rights` | A bot role that lacks one of its three rights or holds another; an entry of the bot's role that allows more than its kind of channel needs; a moderators' channel the bot cannot write in; a ticket channel the bot can see |
+| `operator-only`, `moderation-only` | Administration rights outside the operator role; moderation rights outside the operator role; any right on the Moderator role itself. The bot's role passes for its four rights only |
+| `bot-rights` | A bot role that lacks one of its four rights or holds another; an entry of the bot's role that allows more than its kind of channel needs; a moderators' channel the bot cannot write in; a ticket channel the bot can see |
 | `role-order` | A role missing from the order or listed twice; a managed role in the order; a role the operator assigns that does not stand above the bot's role; a role the bot assigns, by itself or from a member's choice, that does not stand below it |
 | `nothing-attaches` | A permission on a recognition, interest, language, notification or managed role; a channel entry that allows something to a recognition or notification role |
 | `role-grant` | A role assigned by the wrong party, such as a member's choice handing out the moderator role, or a managed role not assigned by the platform or an integration; an interest, language or notification role that is not the option of exactly one question; an option that gives a role of another kind; a notification role that does not state `mentionable: true`; `mentionable` on a managed role; `shown_apart` or `mentionable` on the bot's role or on the role every member holds |
@@ -132,8 +141,10 @@ Every condition of every rule has a test that plants exactly that defect
 
 ## What the bot may do
 
-[ADR-0010](adr/0010-bot-rights-and-apply-path.md) ties each right to a function
-and to the line of Discord's documentation that asks for it.
+[ADR-0010](adr/0010-bot-rights-and-apply-path.md) ties the first three rights
+to a function each and to the line of Discord's documentation that asks for
+it. [ADR-0015](adr/0015-moderator-without-rights-and-server-settings-as-data.md)
+does the same for the fourth.
 
 <!-- markdownlint-disable MD013 -->
 | Right of the bot's role | Label in the role's settings | For |
@@ -141,6 +152,7 @@ and to the line of Discord's documentation that asks for it.
 | `MANAGE_ROLES` | Manage Roles | Giving and taking the Supporter roles and the Contributor role; opening and closing an area by the entry of its role on its channel |
 | `MANAGE_MESSAGES` | Manage Messages | Deleting a message when a moderator acts through the bot |
 | `MODERATE_MEMBERS` | Time Out Members | Timing a member out when a moderator acts through the bot |
+| `MANAGE_GUILD` | Manage Server | Comparing and applying the platform's filter rules and the server's verification level as data of the definition. Decided, not built: until then no call of the tool needs the right ([#90](https://github.com/tekmora/diallak/issues/90)) |
 <!-- markdownlint-enable MD013 -->
 
 The labels are the English ones of Discord's settings; the German ones, and
@@ -192,10 +204,12 @@ decided, planned, or observed on the server.
 - **The bot, built:** the `/ask` command.
 - **The bot, decided and not built:** the first answer in the support forum,
   the bridge from GitHub Discussions, what a moderator does through the bot
-  together with the trail of it, and the `/areas` command, which gives and
+  together with the trail of it, the `/areas` command, which gives and
   takes the interest, language and notification roles from the member's own
   choice
-  ([ADR-0011](adr/0011-area-roles-from-member-choice.md)).
+  ([ADR-0011](adr/0011-area-roles-from-member-choice.md)), and the server's
+  settings as data: the platform's filter rules and the verification level,
+  compared and applied through plan and apply (ADR-0015).
 - **The bot, planned:** opening and closing the areas, the news posts, the
   supporter roles and the Contributor role. Each needs its own decision record
   first; until then the operator opens and closes areas by hand.
@@ -213,7 +227,7 @@ decided, planned, or observed on the server.
 - **Applying the definition** is one path with four steps: plan, dry run,
   apply, read-only compare. Every run uses the bot's identity. For the first
   set-up the operator raises the bot's role for the run and lowers it
-  afterwards; with its three rights the bot runs the same path for its own
+  afterwards; with its four rights the bot runs the same path for its own
   changes. It is decided in ADR-0010. All four steps are built and tested
   against a local server only
   ([Applying the server definition](server-apply.md)).

@@ -163,8 +163,8 @@ This record changes single statements. The records stand as they are.
 ## Open points
 
 - **Not tried against Discord.** That a bot holding `MANAGE_GUILD` can create
-  each kind of filter rule the data will name, and that the raised run can
-  give the bot's role the right.
+  each kind of filter rule the data will name, and that the address that
+  adds the bot leaves its role with the right.
 - **The rule data** is not part of this record. It comes with the function
   and is read by the operator first.
 - **What a timed-out or deleted-from member is told,** and how a member

@@ -12,7 +12,9 @@ import (
 	"github.com/tekmora/diallak/server"
 )
 
-// every call the tool may make against the platform; no call on it needs MANAGE_GUILD (ADR-0015).
+// allowedCallShapes holds every call the tool may make against the platform. No call on it needs
+// MANAGE_GUILD (ADR-0015): Discord's pages on servers and on channels ask for MANAGE_ROLES or
+// MANAGE_CHANNELS for the calls that change something and for no right for the calls that read.
 var allowedCallShapes = []string{
 	"GET /applications/@me",
 	"GET /guilds/{id}",
@@ -106,7 +108,7 @@ func runDisplayChangeForCallsTest(
 	}
 }
 
-func TestServerApplyCalls_Positive_FullRunAndDisplayChange(t *testing.T) {
+func TestServerApplyCalls_Positive_FullRunDisplayAndEntryChange(t *testing.T) {
 	ctx := context.Background()
 	const (
 		guildID   uint64 = 1001
@@ -143,11 +145,33 @@ func TestServerApplyCalls_Positive_FullRunAndDisplayChange(t *testing.T) {
 			break
 		}
 	}
+	// An entry the server lost comes back in the same run, as an area's entry does when it opens.
+	dropped := false
+	for i := range fake.channels {
+		if n := len(fake.channels[i].overwrites); n > 0 {
+			fake.channels[i].overwrites = fake.channels[i].overwrites[:n-1]
+			dropped = true
+			break
+		}
+	}
+	if !dropped {
+		t.Fatal("no channel of the local server holds an entry to drop")
+	}
 	runDisplayChangeForCallsTest(t, ctx, fakeToken, guildID, def, defDigest, opts)
 
-	outside := callsOutsideList(fake.getRecorded())
+	recorded := fake.getRecorded()
+	outside := callsOutsideList(recorded)
 	if len(outside) != 0 {
 		t.Errorf("calls outside allow-list: %v", outside)
+	}
+	// The list is frozen at what these runs do: an entry no run makes is a call nobody decided.
+	for _, shape := range allowedCallShapes {
+		made := slices.ContainsFunc(recorded, func(c recordedCall) bool {
+			return c.method+" "+idPattern.ReplaceAllString(c.path, "{id}") == shape
+		})
+		if !made {
+			t.Errorf("allow-list entry %q was made by no run", shape)
+		}
 	}
 }
 

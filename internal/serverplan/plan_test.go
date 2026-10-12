@@ -22,6 +22,7 @@ func raisedFirstSetupSnapshot() *Snapshot {
 		"MANAGE_ROLES",
 		"MANAGE_MESSAGES",
 		"MODERATE_MEMBERS",
+		"MANAGE_GUILD",
 		"MANAGE_CHANNELS",
 		"CREATE_PRIVATE_THREADS",
 		"CONNECT",
@@ -50,7 +51,7 @@ func raisedFirstSetupSnapshot() *Snapshot {
 				Name:        "Diallak",
 				Everyone:    false,
 				Managed:     true,
-				Permissions: []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_CHANNELS", "CREATE_PRIVATE_THREADS", "CONNECT"},
+				Permissions: []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_GUILD", "MANAGE_CHANNELS", "CREATE_PRIVATE_THREADS", "CONNECT"},
 			},
 			{
 				Name:     "@everyone",
