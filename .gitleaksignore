@@ -1,0 +1,6 @@
+# Exceptions for tools/ci/secret_scan.py. One `# expires YYYY-MM-DD: reason` line
+# precedes each full commit:path:rule:line fingerprint. An entry stops applying on
+# its expiry date, and the finding then fails the scan like any unlisted finding.
+
+# expires 2027-01-12: test fixture, not a credential; TestClient_Negative_KeyAbsentFromEveryErrorText checks this literal never reaches an error text
+0724ee232ec453713a3dd2e0aadc145d41a8b056:internal/model/model_test.go:generic-api-key:818

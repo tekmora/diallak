@@ -53,6 +53,9 @@
             "context": "REUSE lint"
           },
           {
+            "context": "secret scan"
+          },
+          {
             "context": "vulncheck"
           }
         ],
