@@ -1,0 +1,251 @@
+# Semgrep rules for this repository, run by tools/ci/semgrep_scan.py in the
+# digest-pinned Semgrep image (the semgrep job in .github/workflows/security.yml).
+#
+# Adapted from golusoris .semgrep.yml (EUPL-1.2, same author) at commit
+# 0a7d41a29c1865e883e2c7d4e97038cd9ae98ed4: the rules that apply to this
+# repository, with messages that point at this code. Each rule has a fixture
+# under tools/ci/semgrep/testdata/ named after it: lines marked `ruleid:` must
+# be reported and lines marked `ok:` must not. The scan script replays every
+# fixture before it scans the tree, so a rule that stops firing fails the job.
+#
+# Every rule gives zero findings on the tree; a finding is a regression.
+rules:
+  # ── HISS-02 · an HTTP client carries a timeout ─────────────────────────────
+  # A client without Timeout has no deadline of its own, so a request sent
+  # without a context deadline can hang on a slow peer. Tests are exempt: they
+  # talk to a local httptest server.
+  - id: http-client-must-set-timeout
+    languages: [go]
+    severity: ERROR
+    message: >-
+      *http.Client must set a Timeout. A client without a deadline can hang
+      on a slow peer when a request carries no context deadline.
+    paths:
+      exclude:
+        - "*_test.go"
+    patterns:
+      - pattern: '&http.Client{...}'
+      - pattern-not: '&http.Client{..., Timeout: $T, ...}'
+
+  # ── HISS-02 · no http.DefaultClient ────────────────────────────────────────
+  # The package-global client has no timeout and is shared by the whole
+  # process; a change to it reaches every caller.
+  - id: no-http-default-client
+    languages: [go]
+    severity: ERROR
+    message: >-
+      Do not use http.DefaultClient: it has no timeout and is shared by the
+      whole process. Build an explicit *http.Client{Timeout: ...}.
+    paths:
+      exclude:
+        - "*_test.go"
+    pattern: http.DefaultClient
+
+  # ── HISS-02 · no http.ListenAndServe ───────────────────────────────────────
+  # The helpers build an *http.Server with no read, write or idle timeouts, so
+  # a slow client can hold a connection open indefinitely.
+  - id: no-http-listenandserve
+    languages: [go]
+    severity: ERROR
+    message: >-
+      http.ListenAndServe builds a Server with no read, write or idle
+      timeouts. Build an explicit *http.Server with timeouts instead.
+    paths:
+      exclude:
+        - "*_test.go"
+    pattern-either:
+      - pattern: http.ListenAndServe(...)
+      - pattern: http.ListenAndServeTLS(...)
+
+  # ── HISS-10 · no io/ioutil ─────────────────────────────────────────────────
+  # Deprecated since Go 1.16; its functions moved to io and os.
+  - id: no-io-ioutil
+    languages: [go]
+    severity: ERROR
+    message: >-
+      io/ioutil is deprecated (Go 1.16). Use the io and os replacements, such
+      as io.ReadAll, os.ReadFile and os.MkdirTemp.
+    pattern-either:
+      - pattern: ioutil.$F(...)
+      - pattern: import "io/ioutil"
+
+  # ── HISS-09 · unsafe needs a // SAFETY: proof directly above ───────────────
+  # The tree imports unsafe nowhere. Importing it, or reinterpreting memory,
+  # is admissible only when the comment block directly above states why it
+  # holds; a blank line between proof and code breaks the block. A regex is
+  # used because Semgrep's Go parser drops the comments the proof lives in.
+  - id: unsafe-requires-safety-proof
+    languages: [go]
+    severity: ERROR
+    message: >-
+      Importing unsafe, or using unsafe.Pointer/Slice/String/Add, needs a
+      `// SAFETY:` proof in the comment block directly above it that states
+      the precondition making it sound. Add the proof or use a safe
+      conversion.
+    pattern-either:
+      - pattern-regex: '(?m)^(?![ \t]*//)[^\n]*\n(?:[ \t]*//(?![ \t]*SAFETY:)[^\n]*\n)*\K[ \t]*(?:import[ \t]+)?(?:[A-Za-z_][A-Za-z0-9_]*[ \t]+|_[ \t]+|\.[ \t]+)?"unsafe"[ \t]*$'
+      - pattern-regex: '(?m)^(?![ \t]*//)[^\n]*\n(?:[ \t]*//(?![ \t]*SAFETY:)[^\n]*\n)*\K(?![ \t]*//)[^\n]*\bunsafe\.(?:Pointer|Slice|String|SliceData|StringData|Add)\b'
+
+  # ── HISS-08 · no dynamic code loading ──────────────────────────────────────
+  # plugin.Open maps a shared object chosen at run time into the process, and
+  # reflect.MakeFunc builds a callee the compiler never saw: neither is in the
+  # build graph that the module checksums describe.
+  - id: no-dynamic-code-loading
+    languages: [go]
+    severity: ERROR
+    message: >-
+      Dynamic code loading is not allowed: plugin.Open maps an
+      unattested object into the process and reflect.MakeFunc builds a callee
+      no compiler saw. Register the implementation statically.
+    pattern-either:
+      - pattern: import "plugin"
+      - pattern: plugin.Open(...)
+      - pattern: reflect.MakeFunc(...)
+
+  # ── HISS-08 · exec names a fixed binary ────────────────────────────────────
+  # A shell turns its argument into code, and a command name built with + or
+  # fmt.Sprintf picks the executable at run time. The shell names are literals,
+  # so a name held in a constant is reported too (Semgrep propagates it). Not
+  # decided: a name held in a variable or field, which needs dataflow this rule
+  # does not have.
+  - id: no-dynamic-exec-command
+    languages: [go]
+    severity: ERROR
+    message: >-
+      os/exec must name a fixed binary. A shell interprets its argument as
+      code, and a name built with + or fmt.Sprintf picks the executable at
+      run time. Name the binary once and pass arguments as a slice.
+    paths:
+      exclude:
+        - "*_test.go"
+    patterns:
+      - pattern-either:
+          - pattern: exec.Command($NAME, ...)
+          - pattern: exec.CommandContext($CTX, $NAME, ...)
+      - metavariable-pattern:
+          metavariable: $NAME
+          pattern-either:
+            - pattern: $A + $B
+            - pattern: fmt.Sprintf(...)
+            - pattern: '"sh"'
+            - pattern: '"bash"'
+            - pattern: '"zsh"'
+            - pattern: '"dash"'
+            - pattern: '"ash"'
+            - pattern: '"ksh"'
+            - pattern: '"fish"'
+            - pattern: '"env"'
+            - pattern: '"cmd"'
+            - pattern: '"cmd.exe"'
+            - pattern: '"powershell"'
+            - pattern: '"powershell.exe"'
+            - pattern: '"pwsh"'
+            - pattern: '"pwsh.exe"'
+            - pattern: '"/bin/sh"'
+            - pattern: '"/bin/bash"'
+            - pattern: '"/bin/zsh"'
+            - pattern: '"/bin/dash"'
+            - pattern: '"/bin/ash"'
+            - pattern: '"/bin/ksh"'
+            - pattern: '"/bin/fish"'
+            - pattern: '"/bin/env"'
+            - pattern: '"/usr/bin/sh"'
+            - pattern: '"/usr/bin/bash"'
+            - pattern: '"/usr/bin/zsh"'
+            - pattern: '"/usr/bin/dash"'
+            - pattern: '"/usr/bin/ash"'
+            - pattern: '"/usr/bin/ksh"'
+            - pattern: '"/usr/bin/fish"'
+            - pattern: '"/usr/bin/env"'
+            - pattern: '"/usr/bin/pwsh"'
+            - pattern: '"/usr/local/bin/pwsh"'
+
+  # ── HISS-06 · no goroutine per input element ───────────────────────────────
+  # A spawn inside a loop over the input starts one goroutine per element, so
+  # the caller's data sets the goroutine count. A `go` statement passes when a
+  # semaphore send or Acquire comes before it in the same loop; a group's Go
+  # passes when SetLimit was called on the same group. Not decided: a counted
+  # loop whose bound is a variable holding len(x).
+  - id: no-unbounded-goroutine-in-loop
+    languages: [go]
+    severity: ERROR
+    message: >-
+      This starts one goroutine per input element, so the goroutine count
+      follows the caller's data. Take a slot before the spawn (a buffered
+      semaphore channel or semaphore.Weighted.Acquire), or call SetLimit on
+      the group you call Go on.
+    paths:
+      exclude:
+        - "*_test.go"
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: |
+                  for $K, $V := range $XS {
+                    ...
+                    go $F(...)
+                    ...
+                  }
+              - pattern: |
+                  for $V := range $XS {
+                    ...
+                    go $F(...)
+                    ...
+                  }
+              - pattern: |
+                  for range $XS {
+                    ...
+                    go $F(...)
+                    ...
+                  }
+              - pattern: |
+                  for $I := 0; $I < len($XS); $I++ {
+                    ...
+                    go $F(...)
+                    ...
+                  }
+          - pattern-not: |
+              for ... {
+                ...
+                $SEM <- $TOK
+                ...
+                go $F(...)
+                ...
+              }
+          - pattern-not: |
+              for ... {
+                ...
+                $SEM.Acquire(...)
+                ...
+                go $F(...)
+                ...
+              }
+      - patterns:
+          - pattern-either:
+              - pattern: |
+                  for $K, $V := range $XS {
+                    ...
+                    $G.Go(...)
+                    ...
+                  }
+              - pattern: |
+                  for $V := range $XS {
+                    ...
+                    $G.Go(...)
+                    ...
+                  }
+              - pattern: |
+                  for range $XS {
+                    ...
+                    $G.Go(...)
+                    ...
+                  }
+              - pattern: |
+                  for $I := 0; $I < len($XS); $I++ {
+                    ...
+                    $G.Go(...)
+                    ...
+                  }
+          - pattern-not-inside: |
+              $G.SetLimit(...)
+              ...

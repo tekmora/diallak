@@ -150,7 +150,9 @@ type Client struct {
 // Timeout must be positive and at most MaxTimeout (0 uses DefaultTimeout).
 // MaxOutputTokens must be between 1 and 4096 (0 uses DefaultMaxOutputTokens).
 // If hc is nil, New creates its own http.Client. That client follows no redirect: a redirecting
-// endpoint is an error. A caller that passes hc decides its redirect policy itself.
+// endpoint is an error. Its Timeout is the completion timeout, a bound that holds even for a
+// request sent without a context deadline. A caller that passes hc decides its redirect policy
+// and timeout itself.
 // Error text never contains cfg.APIKey.
 func New(cfg Config, hc *http.Client) (*Client, error) {
 	if err := validateBaseURL(cfg.BaseURL); err != nil {
@@ -175,7 +177,7 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 
 	client := hc
 	if client == nil {
-		client = &http.Client{CheckRedirect: refuseRedirect}
+		client = &http.Client{CheckRedirect: refuseRedirect, Timeout: timeout}
 	}
 
 	return &Client{

@@ -60,6 +60,9 @@ func TestNew_Positive_ValidConfigurations(t *testing.T) {
 			if c.timeout != tc.wantTimeout {
 				t.Errorf("timeout = %v, want %v", c.timeout, tc.wantTimeout)
 			}
+			if c.httpClient.Timeout != tc.wantTimeout {
+				t.Errorf("httpClient.Timeout = %v, want %v", c.httpClient.Timeout, tc.wantTimeout)
+			}
 			if c.maxTokens != tc.wantTokens {
 				t.Errorf("maxTokens = %d, want %d", c.maxTokens, tc.wantTokens)
 			}
@@ -230,11 +233,25 @@ func TestNew_Boundary_Limits(t *testing.T) {
 	if c, err := New(cfgMaxTimeout, nil); err != nil || c.timeout != MaxTimeout {
 		t.Errorf("New() with MaxTimeout failed: %v", err)
 	}
+	if c, err := New(cfgMaxTimeout, nil); err != nil || c.httpClient.Timeout != MaxTimeout {
+		t.Errorf("New() with MaxTimeout: own client timeout not MaxTimeout (err %v)", err)
+	}
 
 	cfgOverTimeout := baseCfg
 	cfgOverTimeout.Timeout = MaxTimeout + time.Nanosecond
 	if _, err := New(cfgOverTimeout, nil); err == nil {
 		t.Error("New() with MaxTimeout+1ns passed, want error")
+	}
+}
+
+func TestNew_Negative_CallerClientKeepsItsTimeout(t *testing.T) {
+	hc := &http.Client{}
+	c, err := New(Config{BaseURL: "http://localhost:8080", Alias: "router/test", Policy: "example-policy"}, hc)
+	if err != nil {
+		t.Fatalf("New() unexpected error: %v", err)
+	}
+	if c.httpClient != hc || hc.Timeout != 0 {
+		t.Errorf("New() replaced or changed the caller's client: timeout %v", hc.Timeout)
 	}
 }
 
