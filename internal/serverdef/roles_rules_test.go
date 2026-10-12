@@ -390,3 +390,113 @@ func TestValidate_C9_NotificationBelowBotRole(t *testing.T) {
 		t.Errorf("missing finding %q; got %+v", want, findings)
 	}
 }
+
+func TestValidate_ModeratorRolePermissions(t *testing.T) {
+	t.Run("positive empty permissions passes", func(t *testing.T) {
+		def := valid(t)
+		mod := roleOf(t, def, "moderator")
+		mod.Permissions = []string{}
+		findings := Validate(def)
+		for _, f := range findings {
+			if f.Code == CodeModerationOnly && f.Path == "roles[moderator].permissions" {
+				t.Errorf("unexpected moderator finding: %+v", f)
+			}
+		}
+	})
+
+	t.Run("negative one right produces exactly one finding", func(t *testing.T) {
+		def := valid(t)
+		mod := roleOf(t, def, "moderator")
+		mod.Permissions = []string{"VIEW_CHANNEL"}
+		findings := Validate(def)
+		if len(findings) != 1 {
+			t.Fatalf("expected exactly 1 finding, got %d: %+v", len(findings), findings)
+		}
+		wantMsg := "role kind moderator must hold no permission; VIEW_CHANNEL is the bot's to use"
+		f := findings[0]
+		if f.Code != CodeModerationOnly || f.Path != "roles[moderator].permissions" || f.Message != wantMsg {
+			t.Errorf("got finding %+v, want code %s, path %s, message %q",
+				f, CodeModerationOnly, "roles[moderator].permissions", wantMsg)
+		}
+	})
+
+	t.Run("boundary two rights produces two findings", func(t *testing.T) {
+		def := valid(t)
+		mod := roleOf(t, def, "moderator")
+		mod.Permissions = []string{"VIEW_CHANNEL", "ADD_REACTIONS"}
+		findings := Validate(def)
+		if len(findings) != 2 {
+			t.Fatalf("expected exactly 2 findings, got %d: %+v", len(findings), findings)
+		}
+		wantMsg1 := "role kind moderator must hold no permission; VIEW_CHANNEL is the bot's to use"
+		wantMsg2 := "role kind moderator must hold no permission; ADD_REACTIONS is the bot's to use"
+		if findings[0].Code != CodeModerationOnly || findings[0].Path != "roles[moderator].permissions" || findings[0].Message != wantMsg1 {
+			t.Errorf("finding 0 = %+v, want %q", findings[0], wantMsg1)
+		}
+		if findings[1].Code != CodeModerationOnly || findings[1].Path != "roles[moderator].permissions" || findings[1].Message != wantMsg2 {
+			t.Errorf("finding 1 = %+v, want %q", findings[1], wantMsg2)
+		}
+	})
+}
+
+func TestValidate_ModeratorChannelAccess(t *testing.T) {
+	t.Run("positive entry allowing VIEW_CHANNEL only passes", func(t *testing.T) {
+		def := valid(t)
+		mod := roleOf(t, def, "moderator")
+		mod.Permissions = []string{}
+		acc := accessOf(channelOf(t, def, "lounge"), "moderator")
+		acc.Allow = []string{"VIEW_CHANNEL"}
+		findings := Validate(def)
+		path := "channels[lounge].access[moderator]"
+		if hasFinding(findings, CodeModerationOnly, path, "") {
+			t.Errorf("unexpected CodeModerationOnly finding on channel entry: %+v", findings)
+		}
+	})
+
+	t.Run("negative entry allowing MANAGE_MESSAGES produces CodeModerationOnly", func(t *testing.T) {
+		def := valid(t)
+		mod := roleOf(t, def, "moderator")
+		mod.Permissions = []string{}
+		acc := accessOf(channelOf(t, def, "lounge"), "moderator")
+		acc.Allow = []string{"VIEW_CHANNEL", "MANAGE_MESSAGES"}
+		findings := Validate(def)
+		path := "channels[lounge].access[moderator]"
+		if !hasFinding(findings, CodeModerationOnly, path, "MANAGE_MESSAGES") {
+			t.Errorf("missing CodeModerationOnly finding at %s; got %+v", path, findings)
+		}
+	})
+}
+
+func TestValidate_BotRoleFourRights(t *testing.T) {
+	t.Run("positive exactly four rights passes", func(t *testing.T) {
+		def := valid(t)
+		bot := roleOf(t, def, "bot")
+		bot.Permissions = []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_GUILD"}
+		findings := Validate(def)
+		for _, f := range findings {
+			if f.Code == CodeBotRights && f.Path == "roles[bot].permissions" {
+				t.Errorf("unexpected bot-rights finding: %+v", f)
+			}
+		}
+	})
+
+	t.Run("negative three rights lacks MANAGE_GUILD", func(t *testing.T) {
+		def := valid(t)
+		bot := roleOf(t, def, "bot")
+		bot.Permissions = []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS"}
+		findings := Validate(def)
+		if !hasFinding(findings, CodeBotRights, "roles[bot].permissions", "bot role lacks MANAGE_GUILD") {
+			t.Errorf("missing 'bot role lacks MANAGE_GUILD' finding; got %+v", findings)
+		}
+	})
+
+	t.Run("boundary five rights produces beyond the bot rights set", func(t *testing.T) {
+		def := valid(t)
+		bot := roleOf(t, def, "bot")
+		bot.Permissions = []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_GUILD", "VIEW_CHANNEL"}
+		findings := Validate(def)
+		if !hasFinding(findings, CodeBotRights, "roles[bot].permissions", "beyond the bot rights set") {
+			t.Errorf("missing 'beyond the bot rights set' finding; got %+v", findings)
+		}
+	})
+}

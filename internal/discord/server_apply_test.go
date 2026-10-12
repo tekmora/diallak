@@ -696,7 +696,7 @@ func setupFreshServerFake(t *testing.T, guildID, botUserID, botRoleID uint64, ad
 	fake := newFakePlatform(t, guildID, botUserID, botRoleID)
 	botPerms := "8" // ADMINISTRATOR
 	if !adminBot {
-		mask, maskErr := serverdef.PermissionMask([]string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS"})
+		mask, maskErr := serverdef.PermissionMask([]string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_GUILD"})
 		if maskErr != nil {
 			t.Fatalf("PermissionMask: %v", maskErr)
 		}

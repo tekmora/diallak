@@ -120,8 +120,11 @@ func TestValidate_Negative_RolesThatMustExistOnce(t *testing.T) {
 	runPlanted(t, []plantedCase{
 		{"no role for every member", func(t *testing.T, def *Definition) { roleOf(t, def, "everyone").Kind = "recognition" },
 			CodeSingleton, "roles", "everyone"},
-		{"no operator", func(t *testing.T, def *Definition) { roleOf(t, def, "operator").Kind = "moderator" },
-			CodeSingleton, "roles", "operator"},
+		{"no operator", func(t *testing.T, def *Definition) {
+			op := roleOf(t, def, "operator")
+			op.Kind = "moderator"
+			op.Permissions = []string{}
+		}, CodeSingleton, "roles", "operator"},
 		{"no bot role", func(t *testing.T, def *Definition) { roleOf(t, def, "bot").Kind = "recognition" },
 			CodeSingleton, "roles", "bot"},
 		{"two operators", func(t *testing.T, def *Definition) { roleOf(t, def, "moderator").Kind = "operator" },

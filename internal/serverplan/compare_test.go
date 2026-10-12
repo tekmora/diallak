@@ -207,13 +207,13 @@ func TestCompare_Negative_EachKind(t *testing.T) {
 			name: "role-permissions lacks",
 			mutate: func(s *Snapshot) {
 				for i := range s.Roles {
-					if s.Roles[i].Name == "Moderator" {
-						s.Roles[i].Permissions = []string{"MANAGE_MESSAGES"} // lacks MODERATE_MEMBERS
+					if s.Roles[i].Name == "Diallak" {
+						s.Roles[i].Permissions = []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS"} // lacks MANAGE_GUILD
 					}
 				}
 			},
 			wantKind:   KindRolePermissions,
-			wantObject: "roles[moderator]",
+			wantObject: "roles[bot]",
 			wantWord:   "lacks",
 		},
 		{

@@ -1502,8 +1502,8 @@ func TestRun_Boundary_ServerCompareNamesTheMode(t *testing.T) {
 		botPerms []string
 		want     string
 	}{
-		{"rights of the definition only", []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS"}, "mode: own\n"},
-		{"one right more", []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_CHANNELS"}, "mode: raised\n"},
+		{"rights of the definition only", []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_GUILD"}, "mode: own\n"},
+		{"one right more", []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_GUILD", "MANAGE_CHANNELS"}, "mode: raised\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

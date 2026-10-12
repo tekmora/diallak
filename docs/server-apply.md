@@ -365,7 +365,7 @@ by hand.
    application's id in it, choose the server and accept:
 
    ```text
-   https://discord.com/oauth2/authorize?client_id=<application id>&scope=bot&permissions=1168500596752
+   https://discord.com/oauth2/authorize?client_id=<application id>&scope=bot&permissions=1168500596784
    ```
 
    The number stands for six rights: `MANAGE_ROLES`, `MANAGE_CHANNELS`,
@@ -528,6 +528,7 @@ one of the two labels.
 | `ADMINISTRATOR` | Administrator, under "Advanced Permissions" | Administrator, under "Erweiterte Berechtigungen" | [Discord Roles and Permissions](https://support.discord.com/hc/en-us/articles/214836687) |
 | `MANAGE_ROLES` | Manage Roles, under "General Server Permissions" | Rollen verwalten, under "Allgemeine Serverberechtigungen" | the same page |
 | `MANAGE_CHANNELS` | Manage Channels | Kanäle verwalten | [Permissions on Discord](https://discord.com/community/permissions-on-discord-discord); German: [Sprachkanäle FAQ](https://support.discord.com/hc/de/articles/19583625604887) |
+| `MANAGE_GUILD` | Manage Server | Server verwalten | [Pause Invites FAQ](https://support.discord.com/hc/en-us/articles/8458903738647) |
 | `MANAGE_MESSAGES` | Manage Messages | Nachrichten verwalten | [Channel Permissions Settings 101](https://support.discord.com/hc/en-us/articles/10543994968087) |
 | `MODERATE_MEMBERS` | **Time Out Members** | **Mitglieder in Timeout versetzen** | [Time Out FAQ](https://support.discord.com/hc/en-us/articles/4413305239191) |
 | `VIEW_CHANNEL` | View Channel | Kanal anzeigen | Channel Permissions Settings 101 |

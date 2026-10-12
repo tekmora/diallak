@@ -80,6 +80,32 @@ func TestServerApplyDoc_Boundary_LabelRowNeedsBothLabels(t *testing.T) {
 	}
 }
 
+// setUpRights computes the rights the invitation address gives the bot:
+// (rights the plan of a new server needs) UNION (rights the definition gives the bot's role),
+// without those @everyone keeps.
+func setUpRights(t *testing.T, def *serverdef.Definition, bot, everyone []string) []string {
+	t.Helper()
+	own, err := serverplan.Plan(def, newServerSnapshot(def, bot, everyone))
+	if err != nil {
+		t.Fatalf("plan with the bot's own rights: %v", err)
+	}
+	union := make(map[string]struct{})
+	for _, right := range own.Rights() {
+		union[right] = struct{}{}
+	}
+	for _, right := range bot {
+		union[right] = struct{}{}
+	}
+	var setUp []string
+	for right := range union {
+		if !slices.Contains(everyone, right) {
+			setUp = append(setUp, right)
+		}
+	}
+	slices.Sort(setUp)
+	return setUp
+}
+
 // The page gives the address that adds the bot to a new server with the rights of the first
 // set-up as one number. This test computes that number from the definition and the plan: the
 // rights the plan of a new server needs, without those every member keeps through @everyone.
@@ -93,18 +119,21 @@ func TestServerApplyDoc_Negative_InvitationNumberIsThePlansRights(t *testing.T) 
 	def := loadDefinitionForDoc(t)
 	bot, everyone := newServerRights(t, def)
 
-	own, err := serverplan.Plan(def, newServerSnapshot(def, bot, everyone))
-	if err != nil {
-		t.Fatalf("plan with the bot's own rights: %v", err)
-	}
-	var setUp []string
-	for _, right := range own.Rights() {
-		if !slices.Contains(everyone, right) {
-			setUp = append(setUp, right)
+	setUp := setUpRights(t, def, bot, everyone)
+	for _, r := range bot {
+		if !slices.Contains(setUp, r) {
+			t.Fatalf("setUp = %v lacks bot right %s", setUp, r)
 		}
 	}
-	if len(setUp) <= len(bot) || slices.Contains(setUp, "ADMINISTRATOR") {
-		t.Fatalf("rights of the first set-up = %v; want more than the bot's own %v and no ADMINISTRATOR", setUp, bot)
+	hasExtra := false
+	for _, r := range setUp {
+		if !slices.Contains(bot, r) {
+			hasExtra = true
+			break
+		}
+	}
+	if !hasExtra || slices.Contains(setUp, "ADMINISTRATOR") {
+		t.Fatalf("rights of the first set-up = %v; want every bot right, at least one beyond bot, and no ADMINISTRATOR", setUp)
 	}
 
 	raised, err := serverplan.Plan(def, newServerSnapshot(def, setUp, everyone))
@@ -129,6 +158,73 @@ func TestServerApplyDoc_Negative_InvitationNumberIsThePlansRights(t *testing.T) 
 		if got != want {
 			t.Errorf("the documentation page has an address with %q, want %q (rights %s)", got, want, strings.Join(setUp, ", "))
 		}
+	}
+}
+
+func parseLabelsTable(t *testing.T, doc []byte) map[string]string {
+	t.Helper()
+	re := regexp.MustCompile(`(?m)^\| ` + "`([A-Z_]+)`" + ` \| ([^|]+) \|`)
+	matches := re.FindAllStringSubmatch(string(doc), -1)
+	if len(matches) == 0 {
+		t.Fatal("labels table not found in documentation page")
+	}
+	labelToRight := make(map[string]string, len(matches))
+	for _, m := range matches {
+		right := m[1]
+		label := strings.TrimSpace(m[2])
+		label = strings.Trim(label, "*")
+		if idx := strings.Index(label, ", under "); idx >= 0 {
+			label = label[:idx]
+		}
+		labelToRight[label] = right
+	}
+	return labelToRight
+}
+
+func TestServerApplyDoc_Negative_TidyUpRightsMatchExtraSetUpRights(t *testing.T) {
+	doc, err := os.ReadFile("../../docs/server-apply.md")
+	if err != nil {
+		t.Fatalf("read documentation page: %v", err)
+	}
+	def := loadDefinitionForDoc(t)
+	bot, everyone := newServerRights(t, def)
+	setUp := setUpRights(t, def, bot, everyone)
+
+	var extra []string
+	for _, r := range setUp {
+		if !slices.Contains(bot, r) {
+			extra = append(extra, r)
+		}
+	}
+	slices.Sort(extra)
+
+	labelToRight := parseLabelsTable(t, doc)
+
+	reStep := regexp.MustCompile(`(?s)switch off (.*?),\s*so that`)
+	stepMatch := reStep.FindSubmatch(doc)
+	if len(stepMatch) < 2 {
+		t.Fatal("could not find 'switch off ..., so that' clause in documentation page")
+	}
+
+	reBolds := regexp.MustCompile(`\*\*([^*]+)\*\*`)
+	boldMatches := reBolds.FindAllStringSubmatch(string(stepMatch[1]), -1)
+	if len(boldMatches) == 0 {
+		t.Fatal("no bold labels found in switch off clause")
+	}
+
+	var switchedOff []string
+	for _, bm := range boldMatches {
+		label := bm[1]
+		right, ok := labelToRight[label]
+		if !ok {
+			t.Fatalf("label %q in tidy up step is not present in labels table", label)
+		}
+		switchedOff = append(switchedOff, right)
+	}
+	slices.Sort(switchedOff)
+
+	if !slices.Equal(extra, switchedOff) {
+		t.Errorf("rights to switch off = %v, want extra set-up rights %v", switchedOff, extra)
 	}
 }
 

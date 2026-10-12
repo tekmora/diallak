@@ -119,3 +119,85 @@ func TestDefinitionDigest_Positive_ShapeAndEqualsDiskFile(t *testing.T) {
 		t.Errorf("DefinitionDigest() = %q, want %q", digest, expected)
 	}
 }
+
+// rightsNamedAnywhere returns all rights named on any role's permissions or in any channel entry's allow list.
+func rightsNamedAnywhere(def *serverdef.Definition) map[string]struct{} {
+	named := make(map[string]struct{})
+	for _, r := range def.Roles {
+		for _, p := range r.Permissions {
+			named[p] = struct{}{}
+		}
+	}
+	for _, ch := range def.Channels {
+		for _, acc := range ch.Access {
+			for _, p := range acc.Allow {
+				named[p] = struct{}{}
+			}
+		}
+	}
+	return named
+}
+
+func TestDefinition_Boundary_NoSendPolls(t *testing.T) {
+	// members send no polls; a vote that counts runs through the wishes and polls path, ADR-0015
+	t.Run("committed definition names no SEND_POLLS", func(t *testing.T) {
+		def, err := Definition()
+		if err != nil {
+			t.Fatalf("Definition() error = %v", err)
+		}
+		named := rightsNamedAnywhere(def)
+		if _, ok := named["SEND_POLLS"]; ok {
+			t.Errorf("committed definition names SEND_POLLS in role permissions or channel allow")
+		}
+	})
+
+	t.Run("helper reports SEND_POLLS when present on everyone", func(t *testing.T) {
+		def, err := Definition()
+		if err != nil {
+			t.Fatalf("Definition() error = %v", err)
+		}
+		rolesCopy := make([]serverdef.Role, len(def.Roles))
+		copy(rolesCopy, def.Roles)
+		for i, r := range rolesCopy {
+			if r.Kind == "everyone" {
+				rolesCopy[i].Permissions = append(append([]string{}, r.Permissions...), "SEND_POLLS")
+			}
+		}
+		copyDef := *def
+		copyDef.Roles = rolesCopy
+		named := rightsNamedAnywhere(&copyDef)
+		if _, ok := named["SEND_POLLS"]; !ok {
+			t.Errorf("rightsNamedAnywhere did not report SEND_POLLS when added to @everyone")
+		}
+	})
+}
+
+func TestDefinition_Positive_ServerSettingsAutomation(t *testing.T) {
+	def, err := Definition()
+	if err != nil {
+		t.Fatalf("Definition() error = %v", err)
+	}
+	var entry *serverdef.Automation
+	for i := range def.Automation {
+		if def.Automation[i].ID == "server-settings" {
+			entry = &def.Automation[i]
+			break
+		}
+	}
+	if entry == nil {
+		t.Fatal("automation entry server-settings not found")
+	}
+	if entry.By != "bot" {
+		t.Errorf("server-settings.By = %q, want %q", entry.By, "bot")
+	}
+	if entry.State != "decided" {
+		t.Errorf("server-settings.State = %q, want %q", entry.State, "decided")
+	}
+	recordPath := entry.Record
+	if _, err := os.Stat(recordPath); err != nil {
+		recordPath = "../" + entry.Record
+		if _, err := os.Stat(recordPath); err != nil {
+			t.Errorf("server-settings record file %q does not exist on disk: %v", entry.Record, err)
+		}
+	}
+}

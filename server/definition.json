@@ -50,19 +50,19 @@
       "id": "moderator",
       "name": "Moderator",
       "kind": "moderator",
-      "purpose": "Removes content and times members out. Decides unclear cases before the operator.",
+      "purpose": "Decides unclear cases before the operator and acts through the bot's commands. Holds no right of its own.",
       "assigned_by": "operator",
       "basis": "decided",
-      "permissions": ["MANAGE_MESSAGES", "MODERATE_MEMBERS"]
+      "permissions": []
     },
     {
       "id": "bot",
       "name": "Diallak",
       "kind": "bot",
-      "purpose": "The role of the bot's application. Holds the three rights its decided functions need and nothing beyond.",
+      "purpose": "The role of the bot's application. Holds the four rights its decided functions need and nothing beyond.",
       "assigned_by": "platform",
       "basis": "decided",
-      "permissions": ["MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS"]
+      "permissions": ["MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_GUILD"]
     },
     {
       "id": "guide-coding",
@@ -921,6 +921,13 @@
       "by": "operator",
       "state": "decided",
       "record": "docs/adr/0010-bot-rights-and-apply-path.md"
+    },
+    {
+      "id": "server-settings",
+      "what": "Compares the platform's filter rules and the server's verification level with the definition and applies a difference through plan and apply.",
+      "by": "bot",
+      "state": "decided",
+      "record": "docs/adr/0015-moderator-without-rights-and-server-settings-as-data.md"
     },
     {
       "id": "membership-screening",

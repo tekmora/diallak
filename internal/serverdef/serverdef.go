@@ -75,7 +75,7 @@ const (
 	// CodeOperatorOnly flags an operator-only permission effective for another role.
 	CodeOperatorOnly = "operator-only"
 
-	// CodeModerationOnly flags a moderation-only permission effective for an unauthorized role.
+	// CodeModerationOnly flags permissions on a moderator role or moderation-only permissions effective for an unauthorized role.
 	CodeModerationOnly = "moderation-only"
 
 	// CodeNothingAttaches flags permissions attached to roles that must remain empty.
@@ -120,7 +120,7 @@ const (
 	// CodeAutomationRecord flags an automation entry with an invalid or missing record path.
 	CodeAutomationRecord = "automation-record"
 
-	// CodeBotRights flags a bot role or bot channel entry violating the bot rights specification.
+	// CodeBotRights flags a bot role lacking one of the four bot rights, holding extra rights, or violating channel ceilings.
 	CodeBotRights = "bot-rights"
 
 	// CodeRoleOrder flags a role order definition that is incomplete, duplicated, or misordered.
@@ -270,6 +270,7 @@ var botRights = [...]string{
 	"MANAGE_ROLES",
 	"MANAGE_MESSAGES",
 	"MODERATE_MEMBERS",
+	"MANAGE_GUILD",
 }
 
 type permDef struct {
