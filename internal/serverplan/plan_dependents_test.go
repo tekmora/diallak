@@ -1,6 +1,8 @@
 package serverplan
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -228,9 +230,9 @@ func TestPlan_Negative_CreatedRoleAboveARoleAboveTheCaller(t *testing.T) {
 	}
 }
 
-func TestPlan_Boundary_CreatedRoleWithTheCallerOnTop(t *testing.T) {
-	def := loadDef(t)
-	s := operatorMissing(t, def)
+// callerOnTop moves the caller's role above every other role and numbers it
+// as the client does, without gaps, plus the given free positions.
+func callerOnTop(s *Snapshot, free int) {
 	for i := range s.Roles {
 		if s.Roles[i].Name == s.Caller.Role {
 			caller := s.Roles[i]
@@ -239,26 +241,105 @@ func TestPlan_Boundary_CreatedRoleWithTheCallerOnTop(t *testing.T) {
 			break
 		}
 	}
+	s.Caller.Position = len(s.Roles) - 1 + free
+}
 
-	res, err := Plan(def, s)
-	if err != nil {
-		t.Fatalf("Plan failed: %v", err)
-	}
-	if len(res.Refused) != 0 {
-		t.Errorf("refused = %+v, want none", res.Refused)
-	}
-	found := false
-	for _, c := range res.Changes {
-		if c.Action == ActionSetRoleOrder {
-			found = true
-			if !strings.HasPrefix(c.Detail, "operator, moderator, ") {
-				t.Errorf("set-role-order detail = %q, want it to start with the created role", c.Detail)
+// One free position above the roles below the caller's is the room for one
+// created role; without it the order step would stop in the apply.
+func TestPlan_Boundary_CreatedRoleWithTheCallerOnTop(t *testing.T) {
+	def := loadDef(t)
+
+	t.Run("one free position", func(t *testing.T) {
+		s := operatorMissing(t, def)
+		callerOnTop(s, 1)
+		res, err := Plan(def, s)
+		if err != nil {
+			t.Fatalf("Plan failed: %v", err)
+		}
+		if len(res.Refused) != 0 {
+			t.Errorf("refused = %+v, want none", res.Refused)
+		}
+		found := false
+		for _, c := range res.Changes {
+			if c.Action == ActionSetRoleOrder {
+				found = true
+				if !strings.HasPrefix(c.Detail, "operator, moderator, ") {
+					t.Errorf("set-role-order detail = %q, want it to start with the created role", c.Detail)
+				}
 			}
 		}
+		if !found {
+			t.Errorf("set-role-order not accepted: %+v", res.Changes)
+		}
+	})
+
+	t.Run("no free position", func(t *testing.T) {
+		s := operatorMissing(t, def)
+		callerOnTop(s, 0)
+		res, err := Plan(def, s)
+		if err != nil {
+			t.Fatalf("Plan failed: %v", err)
+		}
+		if !changeFor(res, ActionCreateRole, "roles[operator]") {
+			t.Fatalf("create-role roles[operator] not accepted: %+v", res.Refused)
+		}
+		ref, ok := refusalFor(res, ActionSetRoleOrder, "role_order")
+		want := fmt.Sprintf("%d roles would stand below position %d; create operator by hand at the definition's place",
+			s.Caller.Position, s.Caller.Position)
+		if !ok || ref.Reason != ReasonTooFewPositions || ref.Detail != want {
+			t.Errorf("set-role-order = %+v (found %v), want %s with %q", ref, ok, ReasonTooFewPositions, want)
+		}
+	})
+}
+
+// swapBelowCaller swaps the two roles right below the caller's role, so that
+// the order differs from the definition with no role to create.
+func swapBelowCaller(t *testing.T, s *Snapshot) int {
+	t.Helper()
+	at := slices.IndexFunc(s.Roles, func(r Role) bool { return r.Name == s.Caller.Role })
+	if at < 0 || at+2 >= len(s.Roles)-1 {
+		t.Fatalf("no two roles below the caller's role in %+v", s.Roles)
 	}
-	if !found {
-		t.Errorf("set-role-order not accepted: %+v", res.Changes)
-	}
+	s.Roles[at+1], s.Roles[at+2] = s.Roles[at+2], s.Roles[at+1]
+	return len(s.Roles) - 2 - at
+}
+
+// The order step numbers the roles below the caller's from 1; with as many
+// roles below as the caller's position it has no room, and the plan says so
+// before the apply stops.
+func TestPlan_Boundary_ReorderWithoutCreation(t *testing.T) {
+	def := loadDef(t)
+
+	t.Run("one position more than roles below", func(t *testing.T) {
+		s := raisedSnapshotOf(t, def)
+		below := swapBelowCaller(t, s)
+		s.Caller.Position = below + 1
+		res, err := Plan(def, s)
+		if err != nil {
+			t.Fatalf("Plan failed: %v", err)
+		}
+		if len(res.Refused) != 0 {
+			t.Errorf("refused = %+v, want none", res.Refused)
+		}
+		if !changeFor(res, ActionSetRoleOrder, "role_order") {
+			t.Errorf("set-role-order not accepted: %+v", res.Changes)
+		}
+	})
+
+	t.Run("as many roles below as the position", func(t *testing.T) {
+		s := raisedSnapshotOf(t, def)
+		below := swapBelowCaller(t, s)
+		s.Caller.Position = below
+		res, err := Plan(def, s)
+		if err != nil {
+			t.Fatalf("Plan failed: %v", err)
+		}
+		ref, ok := refusalFor(res, ActionSetRoleOrder, "role_order")
+		want := fmt.Sprintf("%d roles stand below position %d; sort them by hand", below, below)
+		if !ok || ref.Reason != ReasonTooFewPositions || ref.Detail != want {
+			t.Errorf("set-role-order = %+v (found %v), want %s with %q", ref, ok, ReasonTooFewPositions, want)
+		}
+	})
 }
 
 func TestPlan_Boundary_FirstReasonWins(t *testing.T) {

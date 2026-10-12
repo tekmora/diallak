@@ -14,8 +14,8 @@ read before. Every test talks to a local server that answers as Discord does.
 
 - **Snapshot:** what a server looks like, as data: roles from the highest to
   the lowest, categories, channels with their permission entries, the server's
-  features, and which role and rights the caller holds. It holds names only,
-  never an id of the platform.
+  features, and which role, rights and position the caller holds. It holds
+  names only, never an id of the platform.
 - **Compare** reports every difference between the definition and a snapshot
   and changes neither.
 - **Plan** turns the differences into an ordered list of changes. Each change
@@ -197,7 +197,7 @@ The list of actions is closed (`serverplan.Actions`), and none of them deletes.
 | `create-role` | A missing role | `MANAGE_ROLES` and every permission the role gets |
 | `set-role-permissions` | A role with other permissions | `MANAGE_ROLES` and every permission added |
 | `set-role-display` | A role whose stated `shown_apart` or `mentionable` differs. The change sends the stated fields only | `MANAGE_ROLES` |
-| `set-role-order` | Roles in another order, or a role that is created | `MANAGE_ROLES` |
+| `set-role-order` | Roles in another order, counted after the roles the plan creates | `MANAGE_ROLES` |
 | `create-category` | A missing category | `MANAGE_CHANNELS` |
 | `create-channel` | A missing channel, created together with its entries | `MANAGE_CHANNELS` and every permission its entries name |
 | `move-channel` | A channel in another category | `MANAGE_CHANNELS` |
@@ -241,6 +241,7 @@ A refused change carries the first reason that holds, in this order.
 | `managed-role` | The platform or an integration manages the server role |
 | `unknown-permission-bits` | The permission entry the change would replace has a bit set that the table does not name. The change sends the whole entry and would clear it |
 | `above-caller` | The role stands above the caller's role, or the new order would move or pass a role that does; Discord lets a bot edit and sort only roles below its own |
+| `too-few-positions` | The order step would need more positions below the caller's role than the server has; the detail names the roles to place by hand |
 | `lacks-right` | The caller does not hold a right the change needs |
 <!-- markdownlint-enable MD013 -->
 
@@ -343,9 +344,29 @@ write each have the limit of one change
 (`TestApplySetRoleOrder_Boundary_EachRequestHasItsOwnDeadline`).
 
 It refuses when the roles below the bot's role do not fit below its position
-(`not enough positions below the bot's role`). That is the case when a new
-role lands on the same position as the bot's role, which this repository
-cannot know: [Not built, not tried](#not-built-not-tried).
+(`not enough positions below the bot's role`). The plan knows that rule and
+the position of the bot's role, so it refuses such a step first, with
+`too-few-positions`, and an apply never meets it with a plan it accepted
+(`TestPlan_Boundary_ReorderWithoutCreation`,
+`TestPlan_Boundary_CreatedRoleWithTheCallerOnTop`).
+
+Discord moves no role when it creates one (measured on a live server on
+2026-10-12: after 24 creations the bot's role still stood on position 4,
+with 27 roles below it). The roles of one run share the places below the
+roles already there and are read in the order of their creation, which is
+the definition's. The plan counts on that and holds an order step only when
+the order after its own creations differs from the definition:
+
+- **A first set-up** holds none, and runs through
+  (`TestApplyServer_Negative_FirstSetUpOnAPlatformThatMovesNoRoleUp`).
+- **A role added at the end of `role_order`** later holds none either
+  (`TestApplyServer_Negative_RoleAddedLaterOnAPlatformThatMovesNoRoleUp`).
+- **A role added between two roles** that stand on the server needs a place
+  that a server whose roles stand without gaps does not have. The plan
+  creates the role and refuses the order step with `too-few-positions`,
+  naming the role; a person drags it to its place, and the next plan holds no
+  order step
+  (`TestApplyServer_Negative_RoleInsertedMidOrderIsRefusedInThePlan`).
 
 ## A first set-up
 
@@ -604,10 +625,11 @@ What the table does not settle:
   authorisation does to the role of a bot that is already a member, and
   whether removing the bot deletes its role and the role's entries on
   channels. A right that did not arrive shows in the plan as `lacks-right`.
-- Not known: whether Discord moves the other roles up when a role is created.
-  The local server can do both. When it does not, the roles stay where they
-  were created, `set-role-order` refuses, and the order is set by hand before
-  a second plan.
+- Not stated on a page of Discord's that was read: in which direction roles
+  on one position are sorted by id. The reader takes the lower id as the
+  higher role, as discord.py does, and the read-back of the live server of
+  2026-10-12 matched the definition with it. Not tried: what Discord does
+  with a request for positions in which two roles share one.
 - Not known: where a new role stands among the roles the server already has.
   Discord's page for creating a role names no place. The local server puts it
   at the bottom, so a managed role that was there before ends above the roles

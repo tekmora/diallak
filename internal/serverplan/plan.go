@@ -47,6 +47,9 @@ const (
 	ReasonManagedRole = "managed-role"
 	// ReasonAboveCaller indicates the caller cannot modify roles at or above its position.
 	ReasonAboveCaller = "above-caller"
+	// ReasonTooFewPositions indicates the order step would number more roles
+	// below the caller's role than positions stand free below it.
+	ReasonTooFewPositions = "too-few-positions"
 	// ReasonLacksRight indicates the caller lacks permissions required for the change.
 	ReasonLacksRight = "lacks-right"
 	// ReasonUnknownBits indicates an entry has bits set that the permission
@@ -318,6 +321,9 @@ func (ctx *planContext) checkRefusal(c candidate) (string, string) {
 	if r, d := ctx.checkAboveCaller(c); r != "" {
 		return r, d
 	}
+	if r, d := ctx.checkPositions(c); r != "" {
+		return r, d
+	}
 	if r, d := ctx.checkLacksRight(c); r != "" {
 		return r, d
 	}
@@ -505,6 +511,32 @@ func (ctx *planContext) checkAboveCaller(c candidate) (string, string) {
 	return "", ""
 }
 
+// checkPositions refuses the order step when the apply would stop at it. The
+// step numbers every role below the caller's role from 1 without gaps, the
+// roles the plan creates included, and a bot may give no role the position of
+// its own role or a higher one. A created role leaves the other roles where
+// they are (measured 2026-10-12), so each creation takes one position.
+func (ctx *planContext) checkPositions(c candidate) (string, string) {
+	if c.action != ActionSetRoleOrder {
+		return "", ""
+	}
+	below := len(ctx.acceptedRoles)
+	for i := ctx.callerIdx + 1; i < len(ctx.snap.Roles); i++ {
+		if !ctx.snap.Roles[i].Everyone {
+			below++
+		}
+	}
+	at := ctx.snap.Caller.Position
+	if below < at {
+		return "", ""
+	}
+	if len(ctx.acceptedRoles) > 0 {
+		return ReasonTooFewPositions, fmt.Sprintf("%d roles would stand below position %d; create %s by hand at the definition's place",
+			below, at, strings.Join(ctx.acceptedRoles, ", "))
+	}
+	return ReasonTooFewPositions, fmt.Sprintf("%d roles stand below position %d; sort them by hand", below, at)
+}
+
 func checkRoleAboveCaller(ctx *planContext, roleID string) (string, string) {
 	roleName := getRoleName(ctx.def, roleID)
 	for i := range ctx.snap.Roles {
@@ -674,13 +706,16 @@ func findLackingPerms(defRole *serverdef.Role, s *Snapshot) []string {
 	return lacks
 }
 
+// addRoleOrderCandidate plans the order step when the order after the plan's
+// creations differs from the definition's. A created role lands below every
+// role on the server, and created roles stand in the order of their creation,
+// which is the definition's (measured 2026-10-12).
 func (ctx *planContext) addRoleOrderCandidate() {
-	wanted := len(ctx.acceptedRoles) > 0 || !slices.Equal(ctx.pOrder, ctx.qOrder)
-	if !wanted {
+	detailIDs := ctx.buildRoleOrderDetail()
+	if slices.Equal(slices.Concat(ctx.pOrder, ctx.acceptedRoles), detailIDs) {
 		return
 	}
 
-	detailIDs := ctx.buildRoleOrderDetail()
 	ctx.evaluateCandidate(candidate{
 		action: ActionSetRoleOrder,
 		object: "role_order",

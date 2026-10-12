@@ -71,7 +71,6 @@ func TestApplyServer_Positive_UnlistedBitOnAChangedRoleIsCleared(t *testing.T) {
 
 	t.Run("control: without the bit the run writes", func(t *testing.T) {
 		fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
-		fake.createShifts = true
 
 		res, writes, err := applyOnFake(t, fake, guildID, botUserID)
 		if err != nil {
@@ -87,7 +86,6 @@ func TestApplyServer_Positive_UnlistedBitOnAChangedRoleIsCleared(t *testing.T) {
 
 	t.Run("bit 47 on the everyone role", func(t *testing.T) {
 		fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
-		fake.createShifts = true
 		fake.roles[0].permissions = everyoneWithBit47
 
 		def, err := server.Definition()
@@ -164,7 +162,6 @@ func TestApplyServer_Negative_UnknownBitOnAnEntryStopsTheRun(t *testing.T) {
 		botRoleID uint64 = 3001
 	)
 	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
-	fake.createShifts = true
 
 	_, guildJSON, _, channelsJSON := buildPlatformFixtureFromDef(t, guildID, botUserID, botRoleID)
 	var apiGuild struct {

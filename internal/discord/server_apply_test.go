@@ -128,7 +128,6 @@ type fakePlatform struct {
 	roles              []fakeRole
 	channels           []fakeChannel
 	nextID             uint64
-	createShifts       bool
 	recorded           []recordedCall
 	writeCount         int
 	failWrite          int
@@ -336,17 +335,11 @@ func (f *fakePlatform) handleCreateRole(w http.ResponseWriter, body []byte) {
 		perms = *req.Permissions
 	}
 
-	// A new role lands at the bottom. Where the platform puts it is not on
-	// its page; the bottom is the place that leaves a role already on the
-	// server above every role the run makes.
-	if f.createShifts {
-		for i := range f.roles {
-			if f.roles[i].name == "Diallak" || f.roles[i].name == "Operator" {
-				f.roles[i].position++
-			}
-		}
-	}
-
+	// A new role moves no other role, and the roles created in one run share
+	// the places below the roles already there, read in the order of their
+	// creation (measured on a live server on 2026-10-12). The local server puts
+	// it on position 1; roles on one position sort by id, so it stands below
+	// every role already on the server.
 	role := fakeRole{
 		id:          snowflake.ID(newID),
 		name:        req.Name,
@@ -962,7 +955,6 @@ func TestApplyServer_Positive_FullRun(t *testing.T) {
 	defDigest := server.DefinitionDigest()
 
 	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
-	fake.createShifts = true
 	srv := fake.server()
 	defer srv.Close()
 
@@ -1467,9 +1459,11 @@ func TestApplyServer_Positive_And_Negative_RoleOrder(t *testing.T) {
 		}
 	})
 
-	t.Run("createShifts false -> not enough positions error", func(t *testing.T) {
+	// The bot's role stands on position 1, and each created role lands there
+	// too, below it: no position is free for an order step, and none is
+	// needed, as the roles stand in the order of their creation.
+	t.Run("fresh server -> no order step, the run goes through", func(t *testing.T) {
 		fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
-		fake.createShifts = false
 		fakeSrv := fake.server()
 		defer fakeSrv.Close()
 
@@ -1480,6 +1474,14 @@ func TestApplyServer_Positive_And_Negative_RoleOrder(t *testing.T) {
 		res, err := serverplan.Plan(def, snap)
 		if err != nil {
 			t.Fatalf("plan: %v", err)
+		}
+		if len(res.Refused) != 0 {
+			t.Fatalf("plan refused %+v, want no refusal", res.Refused)
+		}
+		for _, c := range res.Changes {
+			if c.Action == serverplan.ActionSetRoleOrder {
+				t.Errorf("plan holds %s %s, want no order step", c.Action, c.Object)
+			}
 		}
 		planDigest, err := serverplan.Digest(res, defDigest)
 		if err != nil {
@@ -1492,11 +1494,13 @@ func TestApplyServer_Positive_And_Negative_RoleOrder(t *testing.T) {
 			DefinitionDigest: defDigest,
 			PlanDigest:       planDigest,
 		}, &out, clientOptions{restURL: fakeSrv.URL})
-		if err == nil {
-			t.Fatal("expected error, got nil")
+		if err != nil {
+			t.Fatalf("apply: %v", err)
 		}
-		if !strings.Contains(err.Error(), "not enough positions below the bot's role") {
-			t.Errorf("error = %q, want 'not enough positions below the bot's role'", err.Error())
+		for _, r := range fake.getRecorded() {
+			if r.method == http.MethodPatch && strings.HasSuffix(r.path, "/roles") {
+				t.Errorf("unexpected PATCH roles call on a fresh server")
+			}
 		}
 	})
 
@@ -1672,7 +1676,6 @@ func TestApplyServer_Negative_Failures(t *testing.T) {
 
 	t.Run("failWrite on write k", func(t *testing.T) {
 		fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
-		fake.createShifts = true
 		srv := fake.server()
 		defer srv.Close()
 
@@ -1743,7 +1746,6 @@ func TestApplyServer_Negative_Failures(t *testing.T) {
 
 	t.Run("hangWrite with 50ms timeout errors inside 2s", func(t *testing.T) {
 		fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
-		fake.createShifts = true
 		fake.hangWrite = 1
 		srv := fake.server()
 		defer srv.Close()
@@ -1798,7 +1800,6 @@ func TestApplyServer_Negative_Failures(t *testing.T) {
 
 	t.Run("ctx cancelled after write 1 -> no write 3", func(t *testing.T) {
 		fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
-		fake.createShifts = true
 		srv := fake.server()
 		defer srv.Close()
 
@@ -1846,7 +1847,6 @@ func TestApplyServer_Negative_Failures(t *testing.T) {
 
 	t.Run("refusal body echoes Authorization header -> token not in error", func(t *testing.T) {
 		fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
-		fake.createShifts = true
 		fake.failWrite = 1
 		fake.failStatus = http.StatusUnauthorized
 		fake.failBody = fmt.Sprintf(`{"code":40001,"message":"unauthorized: Bot %s"}`, fakeToken)
@@ -1882,7 +1882,6 @@ func TestApplyServer_Negative_Failures(t *testing.T) {
 
 	t.Run("transport failure during write -> no id in error", func(t *testing.T) {
 		fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
-		fake.createShifts = true
 		srv := fake.server()
 		defer srv.Close()
 

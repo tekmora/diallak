@@ -123,7 +123,6 @@ func TestServerApplyCalls_Positive_FullRunDisplayAndEntryChange(t *testing.T) {
 	defDigest := server.DefinitionDigest()
 
 	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
-	fake.createShifts = true
 	srv := fake.server()
 	defer srv.Close()
 
@@ -138,6 +137,17 @@ func TestServerApplyCalls_Positive_FullRunDisplayAndEntryChange(t *testing.T) {
 		t.Fatalf("Compare: %v", err)
 	}
 
+	// The operator sorts the roles in the client, which numbers them without
+	// gaps, and swaps two roles below the bot's: the run sorts them back.
+	fake.dragInClient(t, func(shown []fakeRole) []fakeRole {
+		helper := slices.IndexFunc(shown, func(r fakeRole) bool { return r.name == "Helper" })
+		maintainer := slices.IndexFunc(shown, func(r fakeRole) bool { return r.name == "Maintainer" })
+		if helper < 0 || maintainer < 0 {
+			t.Fatalf("Helper at %d, Maintainer at %d; want both on the server", helper, maintainer)
+		}
+		shown[helper], shown[maintainer] = shown[maintainer], shown[helper]
+		return shown
+	})
 	// Trigger a set-role-display run by modifying a role display attribute.
 	for i := range fake.roles {
 		if fake.roles[i].name == "Helper" {

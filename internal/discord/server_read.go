@@ -255,6 +255,7 @@ func resolveCaller(
 
 	return serverplan.Caller{
 		Role:        botRole.Name,
+		Position:    botRole.Position,
 		Permissions: callerPerms,
 	}, botRole.ID, nil
 }

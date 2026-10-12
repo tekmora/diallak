@@ -4,6 +4,7 @@
   ],
   "caller": {
     "role": "Diallak",
+    "position": 1,
     "permissions": [
       "VIEW_CHANNEL",
       "SEND_MESSAGES"

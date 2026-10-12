@@ -60,6 +60,7 @@ func validBaseSnapshot() Snapshot {
 		Features: []string{"COMMUNITY"},
 		Caller: Caller{
 			Role:        "Bot",
+			Position:    1,
 			Permissions: []string{"VIEW_CHANNEL", "SEND_MESSAGES"},
 		},
 		Roles: []Role{
@@ -136,6 +137,13 @@ func TestCheck_Negative_Conditions(t *testing.T) {
 				}
 			},
 			wantErr: "caller",
+		},
+		{
+			name: "caller position is the everyone role's",
+			mutate: func(s *Snapshot) {
+				s.Caller.Position = 0
+			},
+			wantErr: "position",
 		},
 		{
 			name: "caller role is everyone",

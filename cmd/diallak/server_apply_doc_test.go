@@ -280,7 +280,7 @@ func newServerSnapshot(def *serverdef.Definition, botRights, everyone []string) 
 	roles = append(roles, serverplan.Role{Name: "@everyone", Everyone: true, Permissions: everyone})
 	return &serverplan.Snapshot{
 		Features:         []string{"COMMUNITY", "NEWS"},
-		Caller:           serverplan.Caller{Role: callerRole, Permissions: slices.Concat(botRights, everyone)},
+		Caller:           serverplan.Caller{Role: callerRole, Position: 1, Permissions: slices.Concat(botRights, everyone)},
 		Roles:            roles,
 		Categories:       []serverplan.Category{},
 		Channels:         []serverplan.Channel{},

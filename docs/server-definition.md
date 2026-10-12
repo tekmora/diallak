@@ -165,6 +165,12 @@ Translator, Tester, Creator, Partner and Honorary supporter. Every role the bot
 gives stands below it. Discord lets a bot give and edit only roles below its own, so the bot
 cannot hand out a staff role. Nothing attaches to the roles below it.
 
+A new role the bot gives is best added at the end of `role_order`: Discord
+creates it below every role on the server, so it stands right without an
+order step. A new role between two others needs a place by hand; the plan
+names it
+([The order of roles](server-apply.md#the-order-of-roles)).
+
 The three managed roles stand outside the order. A run checks that each is on
 the server and managed, and that the two funding roles stand below the
 Moderator role; the operator moves one that does not.
