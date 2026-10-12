@@ -146,6 +146,10 @@ each once and in rising order
 (`TestCheck_Boundary_UnknownBitsAreTheBitsWithoutAName`). A snapshot without
 such a bit holds none of the three keys.
 
+A role also carries how it is shown: `shown_apart` when its members form a
+group of their own in the member list, `mentionable` when members can mention
+it. A snapshot leaves out a key that is false.
+
 Objects are matched by name. The bot's role in the definition is matched to
 the caller's role, whatever it is called on the server. Two roles, categories
 or channels with the same name are reported as ambiguous and never changed,
@@ -162,13 +166,13 @@ administrator rights cannot tell a missing channel from a hidden one.
 <!-- markdownlint-disable MD013 -->
 | Kind | Reported when |
 | :--- | :--- |
-| `role-missing`, `role-ambiguous` | A role of the definition has no match on the server, or more than one |
+| `role-missing`, `role-ambiguous` | A role of the definition has no match on the server, or more than one. A missing role that another party manages carries the note `managed; the plan does not create it` |
 | `role-name` | The caller's role is called something else than the definition's bot role |
 | `role-permissions` | A role lacks a permission or holds one beyond the definition |
 | `role-order` | The roles stand in another order than `role_order` |
-| `role-not-managed` | The server role is not managed by the platform or an integration |
-| `role-place` | The role stands above the moderator role |
-| `role-display` | Shown apart, mentionable or both differ from the definition |
+| `role-not-managed` | The definition marks the role as managed by another party, and the server role of that name is not: a person made it by hand |
+| `role-place` | A role an integration manages stands above the Moderator role. The plan holds no step for it; a person drags the role down |
+| `role-display` | `shown_apart` or `mentionable` of a role differs from what the definition states. A field the definition does not state is not compared |
 | `category-missing`, `category-ambiguous` | The same for a category |
 | `channel-missing`, `channel-ambiguous` | The same for a channel, when the channel list is complete |
 | `channel-not-visible` | A channel has no match and the list is not complete: either hidden from the bot by the definition, as the ticket channel is, or missing or hidden |
@@ -192,7 +196,7 @@ The list of actions is closed (`serverplan.Actions`), and none of them deletes.
 | :--- | :--- | :--- |
 | `create-role` | A missing role | `MANAGE_ROLES` and every permission the role gets |
 | `set-role-permissions` | A role with other permissions | `MANAGE_ROLES` and every permission added |
-| `set-role-display` | Sets shown_apart, mentionable or both on a role to match the definition | `MANAGE_ROLES` |
+| `set-role-display` | A role whose stated `shown_apart` or `mentionable` differs. The change sends the stated fields only | `MANAGE_ROLES` |
 | `set-role-order` | Roles in another order, or a role that is created | `MANAGE_ROLES` |
 | `create-category` | A missing category | `MANAGE_CHANNELS` |
 | `create-channel` | A missing channel, created together with its entries | `MANAGE_CHANNELS` and every permission its entries name |
@@ -203,6 +207,15 @@ The list of actions is closed (`serverplan.Actions`), and none of them deletes.
 
 The plan never holds a change to the caller's own role. Its rights, its name
 and its place are the operator's to change by hand.
+
+It never holds a change to a role another party manages either: the booster
+role and the roles of the two funding integrations
+([ADR-0014](adr/0014-roles-managed-notification-recognition.md)). Compare
+reports one that is missing, made by hand, shown otherwise than the definition
+states or, for a funding role, placed above the Moderator role; each of these
+is a person's to settle. The apply step returns an error before any request
+if a plan names such a role
+(`TestApply_Defense_ManagedRoleRefusedWithoutRestCall`).
 
 `Result.Rights` is the list of every right the plan needs, refused changes
 included; the dry run prints it as `rights needed:`. It is the list the
@@ -225,7 +238,7 @@ A refused change carries the first reason that holds, in this order.
 | `not-visible` | The channel may exist hidden from the reader |
 | `outside-own-changes` | The bot's role is not raised, and the change is not the entry of an area's role on that area's channel |
 | `missing-feature` | The server lacks the feature the channel type needs |
-| `managed-role` | An integration manages the role |
+| `managed-role` | The platform or an integration manages the server role |
 | `unknown-permission-bits` | The permission entry the change would replace has a bit set that the table does not name. The change sends the whole entry and would clear it |
 | `above-caller` | The role stands above the caller's role, or the new order would move or pass a role that does; Discord lets a bot edit and sort only roles below its own |
 | `lacks-right` | The caller does not hold a right the change needs |
@@ -384,8 +397,15 @@ by hand.
    highest role, and its own role is that role (Discord's
    [permissions page](https://discord.com/developers/docs/topics/permissions),
    "Permission Hierarchy").
-7. `-server=compare` prints `mode: own`. The differences that remain are
-   things the server has and the definition does not.
+7. `-server=compare` prints `mode: own`. Three kinds of difference can
+   remain, and no plan holds a change for any of them:
+
+   - things the server has and the definition does not;
+   - `role-missing` with the note `managed; the plan does not create it`, for
+     the booster role until a member boosts the server and for a funding role
+     until its integration is connected;
+   - `role-place` for a funding role that was on the server before the run
+     and now stands above the Moderator role. Drag it below that role.
 
 Between step 5 and step 6 compare still reports two differences, and the plan
 holds no change for either: the rights of the bot's role and its place in the
@@ -448,15 +468,26 @@ No test covers a server without the role.
 
 ### What the tests of a first set-up cover
 
-Three tests walk a first set-up against the local server
-([`server_apply_setup_test.go`](../internal/discord/server_apply_setup_test.go)).
+Five tests walk a first set-up against the local server
+([`server_apply_setup_test.go`](../internal/discord/server_apply_setup_test.go),
+[`server_apply_managed_test.go`](../internal/discord/server_apply_managed_test.go)).
 They give the bot's role every right the first plan names: those of the
 address and those a member has.
 
 - `TestApplyServer_Positive_FirstSetUpWithTheRightsThePlanNames`: with the
   rights the first plan names, the second plan holds no refusal, the apply run
-  makes every change, and after the tidy-up compare holds no difference. The
-  list holds no `ADMINISTRATOR`.
+  makes every change, and after the tidy-up compare holds nothing but managed
+  roles that are missing. The list holds no `ADMINISTRATOR`.
+- `TestApplyServer_Boundary_FirstSetUpWithoutTheManagedRoles`: on a server
+  without the three managed roles, compare names exactly those three after
+  the tidy-up, each with its note, and the next plan holds neither a change
+  nor a refusal.
+- `TestApplyServer_Boundary_FirstSetUpLeavesFundingRolesWhereTheyStand`: on a
+  server that held the three managed roles before, the two funding roles
+  stand above the Moderator role after the run and compare reports
+  `role-place` for both; once they are dragged down, compare holds no
+  difference. The local server puts a new role at the bottom, which Discord's
+  page does not state ([Not built, not tried](#not-built-not-tried)).
 - `TestApplyServer_Boundary_EveryNamedRightIsNeeded`: with any one of the
   named rights left out, the plan holds a refusal as `lacks-right` and the
   apply run sends no change.
@@ -480,35 +511,37 @@ The tool prints a right under the name of Discord's programming interface
 operator switches it on under another name: in the server's settings, under
 Roles, on the role's permissions. For most rights the label is the same words
 in another spelling. One is not: `MODERATE_MEMBERS` is the switch
-**Time Out Members**, and no switch is called "Moderate Members".
+**Time Out Members**, in the German app **Mitglieder in Timeout versetzen**,
+and no switch is called "Moderate Members".
 
 The table holds every right the definition of this repository names, on a
 role or on a channel's entry, and `MANAGE_CHANNELS`, which every plan that
 makes a channel needs ([What a plan holds](#what-a-plan-holds)). The line
 `rights needed:` of a plan names a part of them; which part depends on what
 the server already has. The test `TestServerApplyDoc_Negative_LabelsEveryRight`
-fails when the definition names a right the table lacks.
+fails when the definition names a right the table lacks, or when a row lacks
+one of the two labels.
 
 <!-- markdownlint-disable MD013 -->
-| Name the tool prints | Label in the settings | Read from |
-| :--- | :--- | :--- |
-| `ADMINISTRATOR` | Administrator, under "Advanced Permissions" | [Discord Roles and Permissions](https://support.discord.com/hc/en-us/articles/214836687) |
-| `MANAGE_ROLES` | Manage Roles, under "General Server Permissions" | the same page |
-| `MANAGE_CHANNELS` | Manage Channels | [Permissions on Discord](https://discord.com/community/permissions-on-discord-discord) |
-| `MANAGE_MESSAGES` | Manage Messages | [Channel Permissions Settings 101](https://support.discord.com/hc/en-us/articles/10543994968087) |
-| `MODERATE_MEMBERS` | **Time Out Members** | [Time Out FAQ](https://support.discord.com/hc/en-us/articles/4413305239191) |
-| `VIEW_CHANNEL` | View Channel | Channel Permissions Settings 101 |
-| `SEND_MESSAGES` | Send Messages | Channel Permissions Settings 101 |
-| `SEND_MESSAGES_IN_THREADS` | Send Messages in Threads | Channel Permissions Settings 101; [Threads FAQ](https://support.discord.com/hc/en-us/articles/4403205878423) |
-| `CREATE_PUBLIC_THREADS` | Create Public Threads | the same two pages |
-| `CREATE_PRIVATE_THREADS` | Create Private Threads | the same two pages |
-| `READ_MESSAGE_HISTORY` | Read Message History | Channel Permissions Settings 101 |
-| `ADD_REACTIONS` | Add Reactions | Channel Permissions Settings 101 |
-| `EMBED_LINKS` | Embed Links | Channel Permissions Settings 101 |
-| `ATTACH_FILES` | Attach Files | Channel Permissions Settings 101 |
-| `USE_APPLICATION_COMMANDS` | Use Application Commands | Channel Permissions Settings 101 |
-| `CONNECT` | Connect | Permissions on Discord |
-| `SPEAK` | Speak | Permissions on Discord |
+| Name the tool prints | Label, English app | Label, German app | Read from |
+| :--- | :--- | :--- | :--- |
+| `ADMINISTRATOR` | Administrator, under "Advanced Permissions" | Administrator, under "Erweiterte Berechtigungen" | [Discord Roles and Permissions](https://support.discord.com/hc/en-us/articles/214836687) |
+| `MANAGE_ROLES` | Manage Roles, under "General Server Permissions" | Rollen verwalten, under "Allgemeine Serverberechtigungen" | the same page |
+| `MANAGE_CHANNELS` | Manage Channels | Kanäle verwalten | [Permissions on Discord](https://discord.com/community/permissions-on-discord-discord); German: [Sprachkanäle FAQ](https://support.discord.com/hc/de/articles/19583625604887) |
+| `MANAGE_MESSAGES` | Manage Messages | Nachrichten verwalten | [Channel Permissions Settings 101](https://support.discord.com/hc/en-us/articles/10543994968087) |
+| `MODERATE_MEMBERS` | **Time Out Members** | **Mitglieder in Timeout versetzen** | [Time Out FAQ](https://support.discord.com/hc/en-us/articles/4413305239191) |
+| `VIEW_CHANNEL` | View Channel | Kanal anzeigen | Channel Permissions Settings 101 |
+| `SEND_MESSAGES` | Send Messages | Nachrichten senden | Channel Permissions Settings 101 |
+| `SEND_MESSAGES_IN_THREADS` | Send Messages in Threads | Nachrichten in Threads senden | Channel Permissions Settings 101; [Threads FAQ](https://support.discord.com/hc/en-us/articles/4403205878423) |
+| `CREATE_PUBLIC_THREADS` | Create Public Threads | Öffentliche Threads erstellen | the same two pages |
+| `CREATE_PRIVATE_THREADS` | Create Private Threads | Private Threads erstellen | the same two pages |
+| `READ_MESSAGE_HISTORY` | Read Message History | Nachrichtenverlauf lesen | Channel Permissions Settings 101 |
+| `ADD_REACTIONS` | Add Reactions | Reaktionen hinzufügen | Channel Permissions Settings 101 |
+| `EMBED_LINKS` | Embed Links | Links einbetten | Channel Permissions Settings 101 |
+| `ATTACH_FILES` | Attach Files | Dateien anhängen | Channel Permissions Settings 101 |
+| `USE_APPLICATION_COMMANDS` | Use Application Commands | Anwendungsbefehle verwenden | Channel Permissions Settings 101 |
+| `CONNECT` | Connect | Verbinden | Permissions on Discord; German: [Geplante Events](https://support.discord.com/hc/de/articles/4409494125719) |
+| `SPEAK` | Speak | Sprechen | the same two pages |
 <!-- markdownlint-enable MD013 -->
 
 What the table does not settle:
@@ -517,11 +550,21 @@ What the table does not settle:
   Which name belongs to which label follows from the description of each
   right in Discord's
   [permissions page](https://discord.com/developers/docs/topics/permissions).
-- The labels are the English ones. The app shows them in the language it is
-  set to; those texts were not read.
+- A German label was read from the German version of the page its row names
+  (the same address with `de` in place of `en-us`), unless the row names a
+  German page of its own. The app's other languages were not read.
+- The timeout right has two English spellings on Discord's own pages: the
+  help page writes "Time Out Members", the permissions page for developers
+  "Timeout Members". Both mean the same switch.
+- The German labels of `CONNECT` and `SPEAK` were read in a sentence of the
+  page about events, not in a list of switches.
 - Channel Permissions Settings 101 shows a channel's settings. "Permissions on
   Discord" names `VIEW_CHANNEL` on a role "Read Text Channels & See Voice
-  Channels"; the wording on a role's own screen was not read.
+  Channels"; the page about private servers calls it "View Channels", in
+  German "Kanäle anzeigen". The wording on a role's own screen was not read
+  in the app.
+- On a channel's entries the right `MANAGE_ROLES` appears as "Manage
+  Permissions", in German "Berechtigungen verwalten".
 - A definition with other entries names other rights. For a name that is not
   in the table, the description in Discord's permissions page says what the
   switch does.
@@ -542,6 +585,13 @@ What the table does not settle:
   The local server can do both. When it does not, the roles stay where they
   were created, `set-role-order` refuses, and the order is set by hand before
   a second plan.
+- Not known: where a new role stands among the roles the server already has.
+  Discord's page for creating a role names no place. The local server puts it
+  at the bottom, so a managed role that was there before ends above the roles
+  of the run, and `set-role-order` leaves it there
+  (`TestApplyServer_Boundary_FirstSetUpLeavesFundingRolesWhereTheyStand`).
+- Not tried: whether Discord lets a bot change how the platform's own booster
+  role is shown. The plan holds no step for it.
 - Not tested: how Discord answers a change of positions that leaves a role
   out, a permission entry that removes a right the bot lacks, and a rate limit
   in the middle of a run.
@@ -552,6 +602,6 @@ What the table does not settle:
 - A change is judged on its own when it is planned: an entry for a role whose
   creation was refused is not refused with it. The apply step does not need
   that settled, because it refuses a plan with any refusal.
-- Compared today: roles, their order, categories, channels and permission
-  entries. Not compared and not applied yet: forum tags, filter rules and
+- Compared today: roles, their order, how a role is shown where the
+  definition states it, categories, channels and permission entries. Not compared and not applied yet: forum tags, filter rules and
   channel topics.

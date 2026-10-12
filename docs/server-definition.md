@@ -28,6 +28,15 @@ and applying one plan. None of it was run against Discord
   moderator.
 - **Thresholds are proposals.** Each one names what is measured, over which
   window and why, and none is measured yet.
+- **Three roles belong to another party:** the role Discord gives to members
+  who boost the server, and the roles of two funding integrations. The file
+  lists them so that a run can check that they are there; the tool never
+  creates, changes or deletes one
+  ([ADR-0014](adr/0014-roles-managed-notification-recognition.md)).
+- **How a role is shown is data where the file states it:** whether its
+  members form a group of their own in the member list (`shown_apart`) and
+  whether members can mention it (`mentionable`). A field the file does not
+  state is not compared and not changed.
 - **The bot holds three rights, each for a decided function:** managing
   roles, deleting messages and timing members out. The order of roles keeps
   the first of them away from the staff roles
@@ -54,8 +63,8 @@ after the definition and a file over one mebibyte are refused
 | Part | Content | In the file today |
 | :--- | :--- | :--- |
 | `metrics` | What a threshold rule may measure, and from which data | 2 |
-| `roles` | Every role with its kind, who assigns it and its server-wide permissions | 28 |
-| `role_order` | The roles from the highest to the lowest, without the role every member holds | 24 |
+| `roles` | Every role with its kind, who assigns it, its server-wide permissions and, where stated, how it is shown | 28 |
+| `role_order` | The roles from the highest to the lowest, without the role every member holds and the roles another party manages | 24 |
 | `categories` | The groups channels are shown in | 6 |
 | `channels` | Every channel with type, purpose, owner and the permissions it changes per role | 16 |
 | `areas` | The rooms that open at a threshold, each with an opening and a closing rule | 8 |
@@ -109,12 +118,12 @@ Each finding has a code, a path into the file and a message.
 | `voice-closed` | A voice channel that members can join between events or use without push-to-talk |
 | `operator-only`, `moderation-only` | Administration rights outside the operator role; moderation rights outside the operator and moderator roles. The bot's role passes for its three rights only |
 | `bot-rights` | A bot role that lacks one of its three rights or holds another; an entry of the bot's role that allows more than its kind of channel needs; a moderators' channel the bot cannot write in; a ticket channel the bot can see |
-| `role-order` | A role missing from the order or listed twice; a role the operator assigns that does not stand above the bot's role; a role the bot assigns, by itself or from a member's choice, that does not stand below it |
-| `nothing-attaches` | A permission on a recognition, interest or language role |
-| `role-grant` | A role assigned by the wrong party, such as a member's choice handing out the moderator role; an interest or language role that is not the option of exactly one question; an option that gives a role of another kind |
+| `role-order` | A role missing from the order or listed twice; a managed role in the order; a role the operator assigns that does not stand above the bot's role; a role the bot assigns, by itself or from a member's choice, that does not stand below it |
+| `nothing-attaches` | A permission on a recognition, interest, language, notification or managed role; a channel entry that allows something to a recognition or notification role |
+| `role-grant` | A role assigned by the wrong party, such as a member's choice handing out the moderator role, or a managed role not assigned by the platform or an integration; an interest, language or notification role that is not the option of exactly one question; an option that gives a role of another kind; a notification role that does not state `mentionable: true`; `mentionable` on a managed role; `shown_apart` or `mentionable` on the bot's role or on the role every member holds |
 | `choice-limit` | A question with more than 25 options, or an option title longer than 100 characters |
 | `automation-record` | Something the bot or the platform does without a decision record, a planned bot feature not marked as needing one, or the state `observed` on anything but the platform or together with a record |
-| `id`, `text`, `enum`, `ref`, `version`, `singleton`, `permission-name`, `access-shape` | Malformed ids, empty texts, unknown values, references to nothing, a wrong version, a missing or doubled base role, unknown or doubled permissions |
+| `id`, `text`, `enum`, `ref`, `version`, `singleton`, `permission-name`, `access-shape` | Malformed ids, empty texts, unknown values, references to nothing or to a managed role from a channel entry or an area, a wrong version, a missing or doubled base role, unknown or doubled permissions |
 <!-- markdownlint-enable MD013 -->
 
 Every condition of every rule has a test that plants exactly that defect
@@ -134,13 +143,19 @@ and to the line of Discord's documentation that asks for it.
 | `MODERATE_MEMBERS` | Time Out Members | Timing a member out when a moderator acts through the bot |
 <!-- markdownlint-enable MD013 -->
 
-The labels are the English ones of Discord's settings; where they were read is
-in [Applying the server definition](server-apply.md#the-rights-by-their-name-in-the-settings).
+The labels are the English ones of Discord's settings; the German ones, and
+where both were read, are in
+[Applying the server definition](server-apply.md#the-rights-by-their-name-in-the-settings).
 
-`role_order` puts the Operator, the Moderator and the subject guide roles above
-the bot's role and every other role below it. Discord lets a bot give and edit
-only roles below its own, so the bot cannot hand out a staff role. Nothing
-attaches to the roles below it.
+`role_order` puts every role the operator gives above the bot's role: the
+Operator, the Moderator, Maintainer, Helper, the two subject guide roles,
+Translator, Tester, Creator and Partner. Every role the bot gives stands below
+it. Discord lets a bot give and edit only roles below its own, so the bot
+cannot hand out a staff role. Nothing attaches to the roles below it.
+
+The three managed roles stand outside the order. A run checks that each is on
+the server and managed, and that the two funding roles stand below the
+Moderator role; the operator moves one that does not.
 
 In channels the bot's role has an entry only where a function needs one: the
 support forum, the two moderators' channels and the eight area channels. It is
@@ -178,16 +193,17 @@ decided, planned, or observed on the server.
 - **The bot, decided and not built:** the first answer in the support forum,
   the bridge from GitHub Discussions, what a moderator does through the bot
   together with the trail of it, and the `/areas` command, which gives and
-  takes the interest and language roles from the member's own choice
+  takes the interest, language and notification roles from the member's own
+  choice
   ([ADR-0011](adr/0011-area-roles-from-member-choice.md)).
 - **The bot, planned:** opening and closing the areas, the news posts, the
   supporter roles and the Contributor role. Each needs its own decision record
   first; until then the operator opens and closes areas by hand.
 - **The platform:** the spam filter, which writes each flagged case into the
   moderators' queue channel by itself.
-- **The operator:** inviting people and granting the moderator and subject
-  guide roles, reading the ticket threads, scheduling events and opening the
-  voice room for them.
+- **The operator:** inviting people and granting the moderator, the subject
+  guide and the other recognition roles above the bot's role, reading the
+  ticket threads, scheduling events and opening the voice room for them.
 - **Observed on the server, decided nowhere:** Discord's Membership
   Screening, which holds a new member back from every action until they
   completed the server's form. It was switched on by hand in the server's
@@ -215,7 +231,12 @@ decided, planned, or observed on the server.
   step. The bot gives the role; how it learns which member a contribution
   belongs to is not decided and gets its own record.
 - **Supporter roles** are decided: one role for supporters and one cosmetic
-  role after a year of support. Nothing attaches to either.
+  role after a year of support. Nothing attaches to either, and there is no
+  channel for supporters only (ADR-0014). How the bot learns who supports is
+  not decided.
+- **Boosting** shows the member in a group of their own in the member list
+  and gates nothing. The operator sets that display by hand; a run reports
+  while it is off and holds no step for it (ADR-0014).
 - **The boost level of the server.** The definition sets no banner, no role
   icon, no audio bitrate and no vanity address; Discord's documentation ties
   each of these to a server feature or a boost level. By that documentation
@@ -230,8 +251,9 @@ decided, planned, or observed on the server.
   member sees and three in which every member can write. The platform's
   onboarding is therefore not used: the bot gives the interest and language
   roles from the member's own choice, made through its `/areas` command
-  ([ADR-0011](adr/0011-area-roles-from-member-choice.md)). The file holds the
-  two questions under `choices`, and the eight roles carry
+  ([ADR-0011](adr/0011-area-roles-from-member-choice.md)). The two
+  notification roles are a third question of the same command (ADR-0014). The
+  file holds the three questions under `choices`, and the ten roles carry
   `"assigned_by": "choice"`. The command is not built yet.
 - **Discord's onboarding** and the two measurements are described as its
   documentation gives them

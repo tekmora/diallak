@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -32,7 +31,7 @@ func mustDefinition(t *testing.T) *serverdef.Definition {
 
 // orderAuditReason is the audit reason as the library puts it in the header.
 func orderAuditReason() string {
-	return strings.ReplaceAll(url.QueryEscape("diallak apply "+orderDigest), "+", " ")
+	return auditReasonOf(orderDigest)
 }
 
 // runChange runs one change against the fake, with the index a run's first

@@ -252,6 +252,52 @@ func TestCompare_RoleDisplay(t *testing.T) {
 		}
 	})
 
+	t.Run("a field the definition does not state is not compared", func(t *testing.T) {
+		s := snapshotOf(t, def)
+		// helper states shown_apart only, notify-releases states mentionable
+		// only, contributor states neither.
+		roleNamed(t, s, "Helper").Mentionable = true
+		roleNamed(t, s, "Notify: releases").ShownApart = true
+		contributor := roleNamed(t, s, "Contributor")
+		contributor.ShownApart, contributor.Mentionable = true, true
+		diffs, err := Compare(def, s)
+		if err != nil {
+			t.Fatalf("Compare failed: %v", err)
+		}
+		for _, d := range diffs {
+			if d.Kind == KindRoleDisplay {
+				t.Errorf("%s %s (%s) for a field the definition does not state", d.Kind, d.Object, d.Detail)
+			}
+		}
+	})
+
+	t.Run("a stated no against a server yes", func(t *testing.T) {
+		defCopy := deepCopy(t, def)
+		for i := range defCopy.Roles {
+			if defCopy.Roles[i].ID == "helper" {
+				defCopy.Roles[i].ShownApart = boolPtr(false)
+				defCopy.Roles[i].Mentionable = boolPtr(false)
+			}
+		}
+		s := snapshotOf(t, defCopy)
+		helper := roleNamed(t, s, "Helper")
+		helper.ShownApart, helper.Mentionable = true, true
+		diffs, err := Compare(defCopy, s)
+		if err != nil {
+			t.Fatalf("Compare failed: %v", err)
+		}
+		var details []string
+		for _, d := range diffs {
+			if d.Kind == KindRoleDisplay && d.Object == "roles[helper]" {
+				details = append(details, d.Detail)
+			}
+		}
+		want := []string{"shown apart: server yes; definition no; mentionable: server yes; definition no"}
+		if !slices.Equal(details, want) {
+			t.Errorf("role-display of roles[helper] = %q, want %q", details, want)
+		}
+	})
+
 	t.Run("both differ joined by semicolon", func(t *testing.T) {
 		defCopy := deepCopy(t, def)
 		for i := range defCopy.Roles {

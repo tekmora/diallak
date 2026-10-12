@@ -336,20 +336,21 @@ func (f *fakePlatform) handleCreateRole(w http.ResponseWriter, body []byte) {
 		perms = *req.Permissions
 	}
 
-	createdPos := 1
+	// A new role lands at the bottom. Where the platform puts it is not on
+	// its page; the bottom is the place that leaves a role already on the
+	// server above every role the run makes.
 	if f.createShifts {
 		for i := range f.roles {
 			if f.roles[i].name == "Diallak" || f.roles[i].name == "Operator" {
 				f.roles[i].position++
 			}
 		}
-		createdPos = 4
 	}
 
 	role := fakeRole{
 		id:          snowflake.ID(newID),
 		name:        req.Name,
-		position:    createdPos,
+		position:    1,
 		permissions: perms,
 		hoist:       req.Hoist,
 		mentionable: req.Mentionable,
@@ -711,31 +712,9 @@ func setupFreshServerFake(t *testing.T, guildID, botUserID, botRoleID uint64, ad
 			managed:     false,
 		},
 		{
-			id:          snowflake.ID(4002),
-			name:        "Server Booster",
-			position:    1,
-			permissions: "0",
-			managed:     true,
-			hoist:       true,
-		},
-		{
-			id:          snowflake.ID(4003),
-			name:        "Ko-fi Bot",
-			position:    2,
-			permissions: "0",
-			managed:     true,
-		},
-		{
-			id:          snowflake.ID(4004),
-			name:        "Patreon",
-			position:    3,
-			permissions: "0",
-			managed:     true,
-		},
-		{
 			id:          snowflake.ID(botRoleID),
 			name:        "Diallak",
-			position:    4,
+			position:    1,
 			permissions: botPerms,
 			managed:     true,
 			botID:       &bID,
@@ -743,12 +722,30 @@ func setupFreshServerFake(t *testing.T, guildID, botUserID, botRoleID uint64, ad
 		{
 			id:          snowflake.ID(4001),
 			name:        "Operator",
-			position:    5,
+			position:    2,
 			permissions: "8",
 			managed:     false,
 		},
 	}
 	return fake
+}
+
+// addManagedRoles puts the three roles another party manages on the server,
+// at the bottom, as on a server that had its boosters and its two funding
+// integrations before the bot came.
+func addManagedRoles(fake *fakePlatform) {
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	for i := range fake.roles {
+		if fake.roles[i].position > 0 {
+			fake.roles[i].position += 3
+		}
+	}
+	fake.roles = append(fake.roles,
+		fakeRole{id: snowflake.ID(4002), name: "Server Booster", position: 1, permissions: "0", managed: true, hoist: true},
+		fakeRole{id: snowflake.ID(4003), name: "Ko-fi Bot", position: 2, permissions: "0", managed: true},
+		fakeRole{id: snowflake.ID(4004), name: "Patreon", position: 3, permissions: "0", managed: true},
+	)
 }
 func assertRequestCounts(t *testing.T, recorded []recordedCall, wantReads, wantWrites int) {
 	t.Helper()

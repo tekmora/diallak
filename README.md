@@ -37,9 +37,9 @@ Community bot for the Lusoris Discord hub.
   back to the thread.
 - **Votes and wishes:** community polls whose results feed the projects'
   planning.
-- **Thanks to supporters:** a cosmetic role, a public credit in plain text and a
-  channel that announces early builds. Nothing is sold: the perks are a
-  thank-you only, and there is no priority support.
+- **Thanks to supporters:** a cosmetic role and a public credit in plain text.
+  Nothing is sold: the perks are a thank-you only, there is no priority
+  support, and early builds are announced to everybody.
 - **Answers from the docs:** a locally run model answers from the projects'
   documentation. Every answer cites its sources and is labelled as AI-generated.
 
