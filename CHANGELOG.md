@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 
+## [0.4.0] - 2026-10-12
+
+### Added
+
+- Server definition: managed, notification and six more recognition roles
+
+### Changed
+
+- The pages on applying and on the definition give each right the label it carries in the settings of the chat platform beside its programming name; the right to time members out is the switch Time Out Members
+- Server definition: Moderator role without rights; bot may manage the server
+- The first set-up page names the step that comes first: the operator makes the Operator role by hand, and the bot's role holds no ADMINISTRATOR
+- The privacy notice names what the model endpoint holds and for how long: a cached answer for 60 minutes, a log line about a blocked question for about 74 hours, and a record without question or answer for 30 days
+- The first set-up starts from an invitation address that carries the seven rights
+
+
 ## [0.3.1] - 2026-10-11
 
 ### Fixed
