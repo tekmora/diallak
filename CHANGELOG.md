@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 
+## [0.4.2] - 2026-10-12
+
+### Fixed
+
+- A server plan that creates roles no longer stops in the apply at the order step: the plan holds the step only when the order differs, and refuses it with too-few-positions when the server has no room (#108)
+
+
 ## [0.4.1] - 2026-10-12
 
 ### Added

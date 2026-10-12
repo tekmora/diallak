@@ -1,3 +1,0 @@
-type: fixed
-title: 'A server plan that creates roles no longer stops in the apply at the order step: the plan holds the step only when the order differs, and refuses it with too-few-positions when the server has no room'
-issue: '#108'
