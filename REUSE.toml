@@ -23,3 +23,12 @@ SPDX-License-Identifier = "CC-BY-SA-4.0"
 path = "internal/eval/testdata/snatcharr/corpus/**"
 SPDX-FileCopyrightText = "2026 lusoris <lusoris@pm.me>"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+# Test data copied verbatim from https://tartarus.org/martin/PorterStemmer/:
+# the sample vocabulary (voc.txt) and the stemmer's expected output
+# (output.txt) that Martin Porter publishes for testing implementations.
+# This table comes after the whole-tree one, so it decides for these paths.
+[[annotations]]
+path = "internal/retrieval/testdata/porter/**"
+SPDX-FileCopyrightText = "Martin Porter"
+SPDX-License-Identifier = "LicenseRef-PorterStemmer"

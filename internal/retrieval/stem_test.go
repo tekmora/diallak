@@ -2,6 +2,7 @@ package retrieval
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -86,74 +87,117 @@ func TestStem_RuleCoverageTable(t *testing.T) {
 	}
 }
 
-func TestStem_OfficialVocabulary(t *testing.T) {
-	vocDir := os.Getenv("PORTER_VOC_DIR")
-	if vocDir == "" {
-		t.Skip("PORTER_VOC_DIR not set; skipping official vocabulary test")
+// porterVocabularyWords is the line count of testdata/porter/voc.txt. The test
+// checks it so that an emptied or truncated copy cannot pass with zero
+// mismatches.
+const porterVocabularyWords = 23531
+
+// compareVocabulary stems each word of voc and compares it with the line at the
+// same position in out. It returns the number of pairs read and up to 20
+// mismatches; an error means the inputs differ in length or could not be read.
+func compareVocabulary(voc, out io.Reader) (int, []string, error) {
+	const limitBytes = 2 << 20 // 2 MiB
+	vocScanner := bufio.NewScanner(io.LimitReader(voc, limitBytes))
+	outScanner := bufio.NewScanner(io.LimitReader(out, limitBytes))
+
+	total := 0
+	var mismatches []string
+	for vocScanner.Scan() {
+		if !outScanner.Scan() {
+			return total, mismatches, fmt.Errorf("output ended early at line %d", total+1)
+		}
+		total++
+		word := strings.TrimSpace(vocScanner.Text())
+		expected := strings.TrimSpace(outScanner.Text())
+		if got := stem(word); got != expected && len(mismatches) < 20 {
+			mismatches = append(mismatches, word+" -> got "+got+", want "+expected)
+		}
 	}
+	if err := vocScanner.Err(); err != nil {
+		return total, mismatches, fmt.Errorf("read vocabulary: %w", err)
+	}
+	if outScanner.Scan() {
+		return total, mismatches, fmt.Errorf("vocabulary ended early at line %d", total+1)
+	}
+	if err := outScanner.Err(); err != nil {
+		return total, mismatches, fmt.Errorf("read output: %w", err)
+	}
+	return total, mismatches, nil
+}
 
-	vocPath := filepath.Join(vocDir, "voc.txt")
-	outPath := filepath.Join(vocDir, "output.txt")
-
-	vocFile, err := os.Open(vocPath)
+// TestStem_OfficialVocabulary runs the stemmer over Martin Porter's published
+// sample vocabulary and its expected output, copied into testdata/porter from
+// https://tartarus.org/martin/PorterStemmer/ (voc.txt and output.txt).
+func TestStem_OfficialVocabulary(t *testing.T) {
+	vocFile, err := os.Open(filepath.Join("testdata", "porter", "voc.txt"))
 	if err != nil {
 		t.Fatalf("open voc.txt: %v", err)
 	}
 	defer func() {
 		if closeErr := vocFile.Close(); closeErr != nil {
-			t.Errorf("close vocFile: %v", closeErr)
+			t.Errorf("close voc.txt: %v", closeErr)
 		}
 	}()
 
-	outFile, err := os.Open(outPath)
+	outFile, err := os.Open(filepath.Join("testdata", "porter", "output.txt"))
 	if err != nil {
 		t.Fatalf("open output.txt: %v", err)
 	}
 	defer func() {
 		if closeErr := outFile.Close(); closeErr != nil {
-			t.Errorf("close outFile: %v", closeErr)
+			t.Errorf("close output.txt: %v", closeErr)
 		}
 	}()
 
-	const limitBytes = 2 << 20 // 2 MiB
-	vocScanner := bufio.NewScanner(io.LimitReader(vocFile, limitBytes))
-	outScanner := bufio.NewScanner(io.LimitReader(outFile, limitBytes))
-
-	total := 0
-	var mismatches []string
-
-	for vocScanner.Scan() {
-		if !outScanner.Scan() {
-			t.Fatalf("output.txt ended early at line %d", total+1)
-		}
-		total++
-		word := strings.TrimSpace(vocScanner.Text())
-		expected := strings.TrimSpace(outScanner.Text())
-		got := stem(word)
-		if got != expected {
-			if len(mismatches) < 20 {
-				mismatches = append(mismatches, word+" -> got "+got+", want "+expected)
-			}
-		}
+	total, mismatches, err := compareVocabulary(vocFile, outFile)
+	if err != nil {
+		t.Fatalf("compare vocabulary: %v", err)
 	}
-	if outScanner.Scan() {
-		t.Fatalf("voc.txt ended earlier than output.txt")
+	if total != porterVocabularyWords {
+		t.Fatalf("read %d words, want %d", total, porterVocabularyWords)
 	}
-
-	if err := vocScanner.Err(); err != nil {
-		t.Fatalf("voc scanner error: %v", err)
-	}
-	if err := outScanner.Err(); err != nil {
-		t.Fatalf("out scanner error: %v", err)
-	}
-
 	if len(mismatches) > 0 {
 		for _, m := range mismatches {
 			t.Logf("mismatch: %s", m)
 		}
 		t.Fatalf("%d mismatches of %d", len(mismatches), total)
 	}
-	t.Logf("0 mismatches of %d", total)
+}
+
+func TestCompareVocabulary_Negative(t *testing.T) {
+	cases := []struct {
+		name      string
+		voc, out  string
+		wantError bool
+	}{
+		{name: "wrong expected stem", voc: "cats\nponies\n", out: "cat\nponies\n"},
+		{name: "output shorter", voc: "cats\nponies\n", out: "cat\n", wantError: true},
+		{name: "vocabulary shorter", voc: "cats\n", out: "cat\nponi\n", wantError: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, mismatches, err := compareVocabulary(strings.NewReader(tc.voc), strings.NewReader(tc.out))
+			if tc.wantError {
+				if err == nil {
+					t.Fatal("want an error for inputs of different length, got none")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("compare vocabulary: %v", err)
+			}
+			if len(mismatches) != 1 {
+				t.Fatalf("want 1 mismatch, got %d: %v", len(mismatches), mismatches)
+			}
+		})
+	}
+}
+
+func TestCompareVocabulary_Boundary(t *testing.T) {
+	total, mismatches, err := compareVocabulary(strings.NewReader(""), strings.NewReader(""))
+	if err != nil || total != 0 || len(mismatches) != 0 {
+		t.Fatalf("empty inputs: total %d, mismatches %v, err %v", total, mismatches, err)
+	}
 }
 
 func TestStem_Boundary(t *testing.T) {

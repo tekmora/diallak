@@ -1,0 +1,12 @@
+Licence statement for the Porter stemmer sample vocabulary and its output,
+published by Martin Porter at https://tartarus.org/martin/PorterStemmer/
+(files voc.txt and output.txt). The statement below is copied from that page.
+
+All these encodings of the algorithm can be used free of charge for any
+purpose.
+
+FAQ #1, "What is the licensing arrangement for this software?":
+
+The software is completely free for any purpose, unless notes at the head of
+the program text indicates otherwise (which is rare). In any case, the notes
+about licensing are never more restrictive than the BSD License.
