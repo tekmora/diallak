@@ -59,6 +59,9 @@
             "context": "semgrep"
           },
           {
+            "context": "trivy"
+          },
+          {
             "context": "vulncheck"
           }
         ],
