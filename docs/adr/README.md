@@ -24,4 +24,5 @@ record that supersedes it.
 | [0013](0013-guardrail-policy-and-receipt.md) | 2026-10-11 | A guardrail policy on every model call, and a receipt for the member | Accepted |
 | [0014](0014-roles-managed-notification-recognition.md) | 2026-10-12 | Roles other parties manage, notification roles and more recognition roles | Accepted |
 | [0015](0015-moderator-without-rights-and-server-settings-as-data.md) | 2026-10-12 | A Moderator role without rights, and server settings as data | Accepted |
+| [0016](0016-honorary-supporter-and-third-subject-guide.md) | 2026-10-12 | An honorary supporter role and a third subject guide role | Accepted |
 <!-- markdownlint-enable MD013 -->

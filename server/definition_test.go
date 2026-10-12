@@ -220,3 +220,238 @@ func TestDefinition_Positive_ServerSettingsAutomation(t *testing.T) {
 		t.Errorf("server-settings record file %q does not exist on disk: %v", entry.Record, err)
 	}
 }
+
+// roleByID returns the role of the given id, or nil.
+func roleByID(def *serverdef.Definition, id string) *serverdef.Role {
+	for i := range def.Roles {
+		if def.Roles[i].ID == id {
+			return &def.Roles[i]
+		}
+	}
+	return nil
+}
+
+// entryFor returns the entry the channel holds for the role, or nil.
+func entryFor(ch serverdef.Channel, role string) *serverdef.Access {
+	for i := range ch.Access {
+		if ch.Access[i].Role == role {
+			return &ch.Access[i]
+		}
+	}
+	return nil
+}
+
+// holdsAll reports whether have names every right of want.
+func holdsAll(have, want []string) bool {
+	held := make(map[string]struct{}, len(have))
+	for _, p := range have {
+		held[p] = struct{}{}
+	}
+	for _, p := range want {
+		if _, ok := held[p]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// holdsAny reports whether have names at least one right of want.
+func holdsAny(have, want []string) bool {
+	for _, p := range want {
+		if holdsAll(have, []string{p}) {
+			return true
+		}
+	}
+	return false
+}
+
+// supporterStandingGaps lists every place where the definition gives a supporter role something the
+// Honorary supporter role does not get: a right on the role, or what an entry on a channel allows. ADR-0016.
+func supporterStandingGaps(def *serverdef.Definition) []string {
+	honorary := roleByID(def, "honorary-supporter")
+	if honorary == nil {
+		return []string{"roles[honorary-supporter]"}
+	}
+	var gaps []string
+	for _, id := range []string{"supporter", "supporter-12-months"} {
+		given := roleByID(def, id)
+		if given == nil {
+			gaps = append(gaps, "roles["+id+"]")
+			continue
+		}
+		if !holdsAll(honorary.Permissions, given.Permissions) {
+			gaps = append(gaps, "roles[honorary-supporter].permissions")
+		}
+		for _, ch := range def.Channels {
+			theirs := entryFor(ch, id)
+			if theirs == nil {
+				continue
+			}
+			ours := entryFor(ch, "honorary-supporter")
+			if ours == nil {
+				ours = &serverdef.Access{}
+			}
+			if !holdsAll(ours.Allow, theirs.Allow) || holdsAny(ours.Deny, theirs.Allow) {
+				gaps = append(gaps, "channels["+ch.ID+"].access")
+			}
+		}
+	}
+	return gaps
+}
+
+// withEntries returns a copy of the definition whose first channel holds the given entries in addition.
+func withEntries(t *testing.T, entries ...serverdef.Access) *serverdef.Definition {
+	t.Helper()
+	def, err := Definition()
+	if err != nil {
+		t.Fatalf("Definition() error = %v", err)
+	}
+	if len(def.Channels) == 0 {
+		t.Fatal("the definition holds no channel")
+	}
+	channels := make([]serverdef.Channel, len(def.Channels))
+	copy(channels, def.Channels)
+	channels[0].Access = append(append([]serverdef.Access{}, channels[0].Access...), entries...)
+	copyDef := *def
+	copyDef.Channels = channels
+	return &copyDef
+}
+
+func TestDefinition_Boundary_SupporterStandingHeldByHonorary(t *testing.T) {
+	// whatever is attached to a supporter role is attached to the Honorary supporter role, ADR-0016
+	view := []string{"VIEW_CHANNEL"}
+	both := []string{"VIEW_CHANNEL", "SEND_MESSAGES"}
+	cases := []struct {
+		name    string
+		entries []serverdef.Access
+		gaps    int
+	}{
+		{"committed definition", nil, 0},
+		{"entry for honorary only", []serverdef.Access{{Role: "honorary-supporter", Allow: view}}, 0},
+		{"supporter entry without one for honorary", []serverdef.Access{{Role: "supporter", Allow: view}}, 1},
+		{"year role entry without one for honorary", []serverdef.Access{{Role: "supporter-12-months", Allow: view}}, 1},
+		{"both entries, equal", []serverdef.Access{
+			{Role: "supporter", Allow: view}, {Role: "honorary-supporter", Allow: view},
+		}, 0},
+		{"both entries, honorary allows more", []serverdef.Access{
+			{Role: "supporter", Allow: view}, {Role: "honorary-supporter", Allow: both},
+		}, 0},
+		{"both entries, honorary allows less", []serverdef.Access{
+			{Role: "supporter", Allow: both}, {Role: "honorary-supporter", Allow: view},
+		}, 1},
+		{"both entries, honorary denies what supporter is allowed", []serverdef.Access{
+			{Role: "supporter", Allow: view}, {Role: "honorary-supporter", Allow: view, Deny: view},
+		}, 1},
+		{"supporter entry that allows nothing", []serverdef.Access{{Role: "supporter", Deny: view}}, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gaps := supporterStandingGaps(withEntries(t, tc.entries...))
+			if len(gaps) != tc.gaps {
+				t.Errorf("supporterStandingGaps = %v, want %d", gaps, tc.gaps)
+			}
+		})
+	}
+}
+
+// withRoles returns a copy of the definition whose roles went through edit.
+func withRoles(t *testing.T, edit func([]serverdef.Role) []serverdef.Role) *serverdef.Definition {
+	t.Helper()
+	def := withEntries(t)
+	roles := make([]serverdef.Role, len(def.Roles))
+	copy(roles, def.Roles)
+	def.Roles = edit(roles)
+	return def
+}
+
+// withoutRole drops the role of the given id.
+func withoutRole(id string) func([]serverdef.Role) []serverdef.Role {
+	return func(roles []serverdef.Role) []serverdef.Role {
+		kept := roles[:0]
+		for _, r := range roles {
+			if r.ID != id {
+				kept = append(kept, r)
+			}
+		}
+		return kept
+	}
+}
+
+// withRight gives the role of the given id one right.
+func withRight(id string) func([]serverdef.Role) []serverdef.Role {
+	return func(roles []serverdef.Role) []serverdef.Role {
+		for i := range roles {
+			if roles[i].ID == id {
+				roles[i].Permissions = []string{"USE_EXTERNAL_EMOJIS"}
+			}
+		}
+		return roles
+	}
+}
+
+func TestDefinition_Negative_SupporterStandingRolesAndRights(t *testing.T) {
+	cases := []struct {
+		name string
+		edit func([]serverdef.Role) []serverdef.Role
+		want string
+	}{
+		{"no honorary role", withoutRole("honorary-supporter"), "roles[honorary-supporter]"},
+		{"no supporter role", withoutRole("supporter"), "roles[supporter]"},
+		{"no year role", withoutRole("supporter-12-months"), "roles[supporter-12-months]"},
+		{"a right on the supporter role only", withRight("supporter"), "roles[honorary-supporter].permissions"},
+		{"a right on the year role only", withRight("supporter-12-months"), "roles[honorary-supporter].permissions"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gaps := supporterStandingGaps(withRoles(t, tc.edit))
+			if len(gaps) != 1 || gaps[0] != tc.want {
+				t.Errorf("supporterStandingGaps = %v, want [%s]", gaps, tc.want)
+			}
+		})
+	}
+	t.Run("the same right on the honorary role closes the gap", func(t *testing.T) {
+		def := withRoles(t, func(roles []serverdef.Role) []serverdef.Role {
+			return withRight("honorary-supporter")(withRight("supporter")(roles))
+		})
+		if gaps := supporterStandingGaps(def); len(gaps) != 0 {
+			t.Errorf("supporterStandingGaps = %v, want none", gaps)
+		}
+	})
+}
+
+func TestDefinition_Positive_HonoraryAndThirdGuideRole(t *testing.T) {
+	// two roles the operator gives by hand, both above the bot's role, ADR-0016
+	def, err := Definition()
+	if err != nil {
+		t.Fatalf("Definition() error = %v", err)
+	}
+	names := map[string]string{
+		"honorary-supporter":         "Honorary supporter",
+		"guide-software-engineering": "Subject guide: software engineering",
+	}
+	for id, name := range names {
+		role := roleByID(def, id)
+		if role == nil {
+			t.Fatalf("the definition holds no role %s", id)
+		}
+		if role.Name != name || role.Kind != "recognition" || role.AssignedBy != "operator" || role.Basis != "decided" {
+			t.Errorf("role %s = name %q, kind %q, by %q, basis %q; want %q, recognition, operator, decided",
+				id, role.Name, role.Kind, role.AssignedBy, role.Basis, name)
+		}
+		if len(role.Permissions) != 0 || role.ShownApart != nil || role.Mentionable != nil {
+			t.Errorf("role %s holds a right or states how it is shown", id)
+		}
+	}
+	place := make(map[string]int, len(def.RoleOrder))
+	for i, id := range def.RoleOrder {
+		place[id] = i
+	}
+	if place["bot"] != place["honorary-supporter"]+1 {
+		t.Errorf("honorary-supporter stands at %d and the bot's role at %d, want directly above",
+			place["honorary-supporter"], place["bot"])
+	}
+	if place["guide-software-engineering"] != place["guide-video"]+1 || place["guide-video"] != place["guide-coding"]+1 {
+		t.Errorf("the three subject guide roles do not stand together: coding %d, video %d, software engineering %d",
+			place["guide-coding"], place["guide-video"], place["guide-software-engineering"])
+	}
+}

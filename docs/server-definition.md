@@ -72,8 +72,8 @@ after the definition and a file over one mebibyte are refused
 | Part | Content | In the file today |
 | :--- | :--- | :--- |
 | `metrics` | What a threshold rule may measure, and from which data | 2 |
-| `roles` | Every role with its kind, who assigns it, its server-wide permissions and, where stated, how it is shown | 28 |
-| `role_order` | The roles from the highest to the lowest, without the role every member holds and the roles another party manages | 24 |
+| `roles` | Every role with its kind, who assigns it, its server-wide permissions and, where stated, how it is shown | 30 |
+| `role_order` | The roles from the highest to the lowest, without the role every member holds and the roles another party manages | 26 |
 | `categories` | The groups channels are shown in | 6 |
 | `channels` | Every channel with type, purpose, owner and the permissions it changes per role | 16 |
 | `areas` | The rooms that open at a threshold, each with an opening and a closing rule | 8 |
@@ -160,9 +160,9 @@ where both were read, are in
 [Applying the server definition](server-apply.md#the-rights-by-their-name-in-the-settings).
 
 `role_order` puts every role the operator gives above the bot's role: the
-Operator, the Moderator, Maintainer, Helper, the two subject guide roles,
-Translator, Tester, Creator and Partner. Every role the bot gives stands below
-it. Discord lets a bot give and edit only roles below its own, so the bot
+Operator, the Moderator, Maintainer, Helper, the three subject guide roles,
+Translator, Tester, Creator, Partner and Honorary supporter. Every role the bot
+gives stands below it. Discord lets a bot give and edit only roles below its own, so the bot
 cannot hand out a staff role. Nothing attaches to the roles below it.
 
 The three managed roles stand outside the order. A run checks that each is on
@@ -248,6 +248,11 @@ decided, planned, or observed on the server.
   role after a year of support. Nothing attaches to either, and there is no
   channel for supporters only (ADR-0014). How the bot learns who supports is
   not decided.
+- **Honorary supporter** is decided: a role the operator gives by hand, for
+  good and tied to no funding platform. It stands above the bot's role, so the
+  bot can neither give nor take it, and no file holds who has it. Whatever is
+  attached to the supporter roles is attached to it; a test holds that
+  ([ADR-0016](adr/0016-honorary-supporter-and-third-subject-guide.md)).
 - **Boosting** shows the member in a group of their own in the member list
   and gates nothing. The operator sets that display by hand; a run reports
   while it is off and holds no step for it (ADR-0014).
