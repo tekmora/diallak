@@ -83,6 +83,15 @@
       "permissions": []
     },
     {
+      "id": "guide-software-engineering",
+      "name": "Subject guide: software engineering",
+      "kind": "recognition",
+      "purpose": "The visible helper for software engineering questions. Carries no moderation right.",
+      "assigned_by": "operator",
+      "basis": "decided",
+      "permissions": []
+    },
+    {
       "id": "contributor",
       "name": "Contributor",
       "kind": "recognition",
@@ -237,6 +246,15 @@
       "permissions": []
     },
     {
+      "id": "honorary-supporter",
+      "name": "Honorary supporter",
+      "kind": "recognition",
+      "purpose": "Supporter standing for good, given by the operator by hand and tied to no funding platform. Whatever is attached to supporters is attached to it.",
+      "assigned_by": "operator",
+      "basis": "decided",
+      "permissions": []
+    },
+    {
       "id": "notify-releases",
       "name": "Notify: releases",
       "kind": "notification",
@@ -292,10 +310,12 @@
     "helper",
     "guide-coding",
     "guide-video",
+    "guide-software-engineering",
     "translator",
     "tester",
     "creator",
     "partner",
+    "honorary-supporter",
     "bot",
     "contributor",
     "supporter",
