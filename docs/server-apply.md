@@ -268,7 +268,7 @@ Discord's permissions reference does not say whether a write that clears such
 a bit takes effect. The compare after the apply shows it: a bit that is still
 set is reported again as `unknown-permission-bits`.
 
-With its three rights the bot may plan one kind of change only: the entry of
+With its four rights the bot may plan one kind of change only: the entry of
 an area's role on that area's channel, which is how an area opens and closes.
 Everything else waits for a run in which the operator has raised the bot's
 role.
@@ -349,7 +349,7 @@ cannot know: [Not built, not tried](#not-built-not-tried).
 
 ## A first set-up
 
-On a new server the bot's three rights are not enough for anything but area
+On a new server the bot's four rights are not enough for anything but area
 entries. For the first run the bot's role holds more and stands above the
 roles it sets up, and afterwards a person lowers it again
 ([ADR-0010](adr/0010-bot-rights-and-apply-path.md), "One apply path").
@@ -365,13 +365,25 @@ by hand.
    application's id in it, choose the server and accept:
 
    ```text
-   https://discord.com/oauth2/authorize?client_id=<application id>&scope=bot&permissions=1168500596752
+   https://discord.com/oauth2/authorize?client_id=<application id>&scope=bot&permissions=1168500596784
    ```
 
-   The number stands for six rights: `MANAGE_ROLES`, `MANAGE_CHANNELS`,
-   `MANAGE_MESSAGES`, `MODERATE_MEMBERS`, `CONNECT` and
-   `CREATE_PRIVATE_THREADS`. It holds no `ADMINISTRATOR`. The run needs six
-   more, and the bot has those as a member through `@everyone`. Discord
+   The number stands for seven rights. It holds no `ADMINISTRATOR`.
+
+   - Four are for the run: `MANAGE_ROLES`, `MANAGE_CHANNELS`, `CONNECT` and
+     `CREATE_PRIVATE_THREADS`. The run needs six more, and the bot has those
+     as a member through `@everyone`.
+   - Three more are rights the definition gives the bot's role for good:
+     `MANAGE_MESSAGES`, `MODERATE_MEMBERS` and `MANAGE_GUILD`. No change of
+     the run needs them. The address carries them because the plan never
+     holds a change to the bot's own role
+     ([What a plan holds](#what-a-plan-holds)).
+
+   `MANAGE_GUILD` is held for a function that is decided and not built:
+   server settings as data
+   ([ADR-0015](adr/0015-moderator-without-rights-and-server-settings-as-data.md)).
+   Until it is built the tool makes no call that needs the right
+   (`TestServerApplyCalls_Positive_FullRunDisplayAndEntryChange`). Discord
    describes the address in its
    [page on authorisation](https://discord.com/developers/docs/topics/oauth2),
    "Bot Authorization Flow"; adding `&guild_id=<server id>&disable_guild_select=true`
@@ -382,7 +394,10 @@ by hand.
    The definition has an announcement channel, and without the server feature
    `NEWS` the plan refuses it as `missing-feature`
    ([Why a change is refused](#why-a-change-is-refused)). The bot cannot
-   switch this on: that takes `MANAGE_GUILD`, which ADR-0010 leaves out.
+   switch this on: Discord asks for Administrator to switch the server
+   feature `COMMUNITY` on
+   ([page on servers](https://discord.com/developers/docs/resources/guild),
+   "Mutable Guild Features"), and the bot's role holds that right at no step.
 3. **Make the Operator role** by hand: the name the definition gives it, with
    **Administrator**, above the bot's role, given to yourself
    ([The Operator role](#the-operator-role)).
@@ -391,9 +406,9 @@ by hand.
    programming name on a change refused as `lacks-right`.
 5. `-server=apply=<digest>`.
 6. **Tidy up.** On the bot's role switch off **Manage Channels**, **Connect**
-   and **Create Private Threads**, so that Manage Roles, Manage Messages and
-   Time Out Members stay, and drag the role to the place the definition gives
-   it. The bot can do neither: a bot edits and sorts only roles below its own
+   and **Create Private Threads**, so that Manage Roles, Manage Messages,
+   Time Out Members and Manage Server stay, and drag the role to the place the
+   definition gives it. The bot can do neither: a bot edits and sorts only roles below its own
    highest role, and its own role is that role (Discord's
    [permissions page](https://discord.com/developers/docs/topics/permissions),
    "Permission Hierarchy").
@@ -413,10 +428,14 @@ order (`TestApplyServer_Positive_FullRun`).
 
 The number is computed, not written by hand: the test
 `TestServerApplyDoc_Negative_InvitationNumberIsThePlansRights` plans a new
-server, takes the rights the plan needs without those `@everyone` keeps, and
+server, takes the rights the plan needs together with the rights the
+definition gives the bot's role, leaves out those `@everyone` keeps, and
 fails when the address on this page carries another number or when those
 rights leave a refusal in the plan. A definition with other entries gives
 another number; the test prints it.
+`TestServerApplyDoc_Negative_TidyUpRightsMatchExtraSetUpRights` fails when the
+rights step 6 switches off are not exactly those of the address that the
+definition does not give the bot's role.
 
 ### A server the bot is already on
 
@@ -431,8 +450,11 @@ rights on by hand:
    rights do not cover is refused as `outside-own-changes` or `lacks-right`;
    the line `rights needed:` lists every right the run needs.
 2. Give the bot's role the rights of that list which neither it nor
-   `@everyone` holds. The table below has the label each one carries in the
-   role's settings. The role has to stand above every role the plan creates,
+   `@everyone` holds, and every right the definition gives it for good: the
+   plan never holds a change to the bot's own role, so `-server=compare`
+   reports such a right as `role-permissions roles[bot]` after the word
+   `lacks` until a person switches it on. The table below has the label each
+   one carries in the role's settings. The role has to stand above every role the plan creates,
    changes or sorts; a change that reaches a role above it is refused as
    `above-caller` (`TestPlan_Boundary_NeighboursOfTheCaller`).
 3. Go on with step 2 of [A new server](#a-new-server).
@@ -471,8 +493,8 @@ No test covers a server without the role.
 Five tests walk a first set-up against the local server
 ([`server_apply_setup_test.go`](../internal/discord/server_apply_setup_test.go),
 [`server_apply_managed_test.go`](../internal/discord/server_apply_managed_test.go)).
-They give the bot's role every right the first plan names: those of the
-address and those a member has.
+They give the bot's role every right the first plan names: the four of the
+address that the run needs and those a member has.
 
 - `TestApplyServer_Positive_FirstSetUpWithTheRightsThePlanNames`: with the
   rights the first plan names, the second plan holds no refusal, the apply run
@@ -501,7 +523,7 @@ address and those a member has.
 
 `TestPlan_Positive_RaisedFirstSetUp`
 ([`plan_test.go`](../internal/serverplan/plan_test.go)) plans the set-up with
-the six rights of the address on the bot's role and the member rights on
+the seven rights of the address on the bot's role and the member rights on
 `@everyone` alone: no refusal.
 
 ### The rights by their name in the settings
@@ -528,6 +550,7 @@ one of the two labels.
 | `ADMINISTRATOR` | Administrator, under "Advanced Permissions" | Administrator, under "Erweiterte Berechtigungen" | [Discord Roles and Permissions](https://support.discord.com/hc/en-us/articles/214836687) |
 | `MANAGE_ROLES` | Manage Roles, under "General Server Permissions" | Rollen verwalten, under "Allgemeine Serverberechtigungen" | the same page |
 | `MANAGE_CHANNELS` | Manage Channels | Kanäle verwalten | [Permissions on Discord](https://discord.com/community/permissions-on-discord-discord); German: [Sprachkanäle FAQ](https://support.discord.com/hc/de/articles/19583625604887) |
+| `MANAGE_GUILD` | Manage Server | Server verwalten | [Pause Invites FAQ](https://support.discord.com/hc/en-us/articles/8458903738647) |
 | `MANAGE_MESSAGES` | Manage Messages | Nachrichten verwalten | [Channel Permissions Settings 101](https://support.discord.com/hc/en-us/articles/10543994968087) |
 | `MODERATE_MEMBERS` | **Time Out Members** | **Mitglieder in Timeout versetzen** | [Time Out FAQ](https://support.discord.com/hc/en-us/articles/4413305239191) |
 | `VIEW_CHANNEL` | View Channel | Kanal anzeigen | Channel Permissions Settings 101 |

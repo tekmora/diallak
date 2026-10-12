@@ -180,7 +180,7 @@ func (v *validator) checkOperatorOnly() {
 }
 
 func (v *validator) checkChannelModerationOnly(ch Channel, r Role, modPerms []string) {
-	if r.Kind == "operator" || r.Kind == "moderator" {
+	if r.Kind == "operator" {
 		return
 	}
 	p := fmt.Sprintf("channels[%s].access[%s]", ch.ID, r.ID)
@@ -195,7 +195,19 @@ func (v *validator) checkChannelModerationOnly(ch Channel, r Role, modPerms []st
 	}
 }
 
+func (v *validator) checkModeratorRolePermissions() {
+	for _, r := range v.def.Roles {
+		if r.Kind == "moderator" {
+			path := fmt.Sprintf("roles[%s].permissions", r.ID)
+			for _, perm := range r.Permissions {
+				v.add(CodeModerationOnly, path, fmt.Sprintf("role kind moderator must hold no permission; %s is the bot's to use", perm))
+			}
+		}
+	}
+}
+
 func (v *validator) checkModerationOnly() {
+	v.checkModeratorRolePermissions()
 	modPerms := []string{
 		"MANAGE_MESSAGES", "MANAGE_THREADS", "MODERATE_MEMBERS",
 		"MUTE_MEMBERS", "MOVE_MEMBERS", "VIEW_AUDIT_LOG",

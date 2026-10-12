@@ -482,10 +482,10 @@ func TestPlan_SetRoleDisplay_CandidateAndRefusals(t *testing.T) {
 
 	t.Run("caller lacks MANAGE_ROLES refused lacks-right", func(t *testing.T) {
 		s := snapshotOf(t, def)
-		// Raise bot with MANAGE_GUILD (not ADMINISTRATOR) so raised is true, but lacks MANAGE_ROLES
+		// Raise bot with MANAGE_CHANNELS (not ADMINISTRATOR) so raised is true, but lacks MANAGE_ROLES
 		for i := range s.Roles {
 			if s.Roles[i].Name == s.Caller.Role {
-				s.Roles[i].Permissions = append(s.Roles[i].Permissions, "MANAGE_GUILD")
+				s.Roles[i].Permissions = append(s.Roles[i].Permissions, "MANAGE_CHANNELS")
 				break
 			}
 		}
@@ -495,7 +495,7 @@ func TestPlan_SetRoleDisplay_CandidateAndRefusals(t *testing.T) {
 				callerPerms = append(callerPerms, p)
 			}
 		}
-		callerPerms = append(callerPerms, "MANAGE_GUILD")
+		callerPerms = append(callerPerms, "MANAGE_CHANNELS")
 		s.Caller.Permissions = callerPerms
 
 		for i := range s.Roles {

@@ -15,7 +15,7 @@ func TestBotRights_Positive_CommittedSet(t *testing.T) {
 }
 
 func TestBotRights_Negative_LacksEachRight(t *testing.T) {
-	rights := []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS"}
+	rights := []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_GUILD"}
 	for _, perm := range rights {
 		p := perm
 		t.Run("lacks "+p, func(t *testing.T) {
@@ -32,7 +32,7 @@ func TestBotRights_Negative_LacksEachRight(t *testing.T) {
 
 func TestBotRights_Negative_RightBeyondTheSet(t *testing.T) {
 	beyond := []string{
-		"ADMINISTRATOR", "MANAGE_GUILD", "MANAGE_CHANNELS", "MANAGE_WEBHOOKS",
+		"ADMINISTRATOR", "MANAGE_CHANNELS", "MANAGE_WEBHOOKS",
 		"KICK_MEMBERS", "BAN_MEMBERS", "MANAGE_THREADS", "VIEW_AUDIT_LOG",
 		"MENTION_EVERYONE", "ADD_REACTIONS",
 	}
@@ -63,8 +63,8 @@ func TestBotRights_Boundary_EmptyPermissions(t *testing.T) {
 			botFindings = append(botFindings, f)
 		}
 	}
-	if len(botFindings) != 3 {
-		t.Fatalf("expected exactly 3 bot-rights findings at roles[bot].permissions, got %d: %+v", len(botFindings), botFindings)
+	if len(botFindings) != 4 {
+		t.Fatalf("expected exactly 4 bot-rights findings at roles[bot].permissions, got %d: %+v", len(botFindings), botFindings)
 	}
 }
 
@@ -161,7 +161,7 @@ func TestBotRights_Negative_BotSeesTheTicketChannel(t *testing.T) {
 	})
 }
 
-func TestValidate_Boundary_BotPassesForItsThreeRightsOnly(t *testing.T) {
+func TestValidate_Boundary_BotPassesForItsFourRightsOnly(t *testing.T) {
 	t.Run("committed definition has no operator-only or moderation-only finding for bot", func(t *testing.T) {
 		def := valid(t)
 		for _, f := range Validate(def) {
@@ -171,24 +171,27 @@ func TestValidate_Boundary_BotPassesForItsThreeRightsOnly(t *testing.T) {
 		}
 	})
 
-	t.Run("bot + MANAGE_GUILD produces operator-only naming MANAGE_GUILD and none naming MANAGE_ROLES", func(t *testing.T) {
+	t.Run("bot + MANAGE_CHANNELS produces operator-only naming MANAGE_CHANNELS and none naming MANAGE_ROLES or MANAGE_GUILD", func(t *testing.T) {
 		def := valid(t)
 		bot := roleOf(t, def, "bot")
-		bot.Permissions = append(bot.Permissions, "MANAGE_GUILD")
+		bot.Permissions = append(bot.Permissions, "MANAGE_CHANNELS")
 		findings := Validate(def)
-		foundGuild := false
+		foundChannels := false
 		for _, f := range findings {
 			if f.Code == CodeOperatorOnly && strings.Contains(f.Path, "bot") {
-				if strings.Contains(f.Message, "MANAGE_GUILD") {
-					foundGuild = true
+				if strings.Contains(f.Message, "MANAGE_CHANNELS") {
+					foundChannels = true
 				}
 				if strings.Contains(f.Message, "MANAGE_ROLES") {
 					t.Errorf("unexpected finding naming MANAGE_ROLES: %+v", f)
 				}
+				if strings.Contains(f.Message, "MANAGE_GUILD") {
+					t.Errorf("unexpected finding naming MANAGE_GUILD: %+v", f)
+				}
 			}
 		}
-		if !foundGuild {
-			t.Errorf("missing operator-only finding naming MANAGE_GUILD for bot: %+v", findings)
+		if !foundChannels {
+			t.Errorf("missing operator-only finding naming MANAGE_CHANNELS for bot: %+v", findings)
 		}
 	})
 
