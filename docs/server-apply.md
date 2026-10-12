@@ -339,7 +339,11 @@ role and once to lower it again
 
 Before the first step the operator makes one role by hand: the Operator role,
 under the name the definition gives it, with `ADMINISTRATOR`, above the bot's
-role. The plan cannot make this role. Creating a role needs every right the
+role. The role's settings call that right **Administrator**; the tool prints
+the names of Discord's programming interface, and the settings show other
+words for some of them
+([The rights by their name in the settings](#the-rights-by-their-name-in-the-settings)).
+The plan cannot make this role. Creating a role needs every right the
 role gets ([What a plan holds](#what-a-plan-holds)), a bot gives a role only
 rights it holds itself, and the bot's role holds no `ADMINISTRATOR` at any
 step. ADR-0010 left open who makes the role ("Open points"). The three tests
@@ -363,12 +367,16 @@ No test covers a server without the role.
 1. `-server=plan` with the bot's own rights. Every change is refused as
    `outside-own-changes`; the line `rights needed:` is the list for the next
    step.
-2. The operator gives the bot's role exactly those rights. The role has to
+2. The operator gives the bot's role exactly those rights. The table below
+   has the label each one carries in the role's settings. The role has to
    stand above every role the plan creates, changes or sorts; a change that
    reaches a role above it is refused as `above-caller`
    (`TestPlan_Boundary_NeighboursOfTheCaller`).
 3. `-server=plan` again. Now the plan holds changes and, when all is well, no
-   refusal. A person reads it and keeps the digest.
+   refusal. A person reads it and keeps the digest. A right that was not
+   switched on shows here by its programming name, as a change refused as
+   `lacks-right` and, in `-server=compare`, after the word `lacks` on the line
+   `role-permissions roles[bot]`.
 4. `-server=apply=<digest>`.
 5. The operator takes the rights away again and puts the bot's role where the
    definition has it.
@@ -396,6 +404,59 @@ Three tests walk these steps against the local server
   the definition lets the bot see is refused as `not-visible`. A channel the
   definition hides from the bot, as the ticket channel, is then not planned
   at all.
+
+### The rights by their name in the settings
+
+The tool prints a right under the name of Discord's programming interface
+(`permissionsTable` in [`serverdef.go`](../internal/serverdef/serverdef.go)). The
+operator switches it on under another name: in the server's settings, under
+Roles, on the role's permissions. For most rights the label is the same words
+in another spelling. One is not: `MODERATE_MEMBERS` is the switch
+**Time Out Members**, and no switch is called "Moderate Members".
+
+The table holds every right the definition of this repository names, on a
+role or on a channel's entry, and `MANAGE_CHANNELS`, which every plan that
+makes a channel needs ([What a plan holds](#what-a-plan-holds)). The line
+`rights needed:` of a plan names a part of them; which part depends on what
+the server already has. The test `TestServerApplyDoc_Negative_LabelsEveryRight`
+fails when the definition names a right the table lacks.
+
+<!-- markdownlint-disable MD013 -->
+| Name the tool prints | Label in the settings | Read from |
+| :--- | :--- | :--- |
+| `ADMINISTRATOR` | Administrator, under "Advanced Permissions" | [Discord Roles and Permissions](https://support.discord.com/hc/en-us/articles/214836687) |
+| `MANAGE_ROLES` | Manage Roles, under "General Server Permissions" | the same page |
+| `MANAGE_CHANNELS` | Manage Channels | [Permissions on Discord](https://discord.com/community/permissions-on-discord-discord) |
+| `MANAGE_MESSAGES` | Manage Messages | [Channel Permissions Settings 101](https://support.discord.com/hc/en-us/articles/10543994968087) |
+| `MODERATE_MEMBERS` | **Time Out Members** | [Time Out FAQ](https://support.discord.com/hc/en-us/articles/4413305239191) |
+| `VIEW_CHANNEL` | View Channel | Channel Permissions Settings 101 |
+| `SEND_MESSAGES` | Send Messages | Channel Permissions Settings 101 |
+| `SEND_MESSAGES_IN_THREADS` | Send Messages in Threads | Channel Permissions Settings 101; [Threads FAQ](https://support.discord.com/hc/en-us/articles/4403205878423) |
+| `CREATE_PUBLIC_THREADS` | Create Public Threads | the same two pages |
+| `CREATE_PRIVATE_THREADS` | Create Private Threads | the same two pages |
+| `READ_MESSAGE_HISTORY` | Read Message History | Channel Permissions Settings 101 |
+| `ADD_REACTIONS` | Add Reactions | Channel Permissions Settings 101 |
+| `EMBED_LINKS` | Embed Links | Channel Permissions Settings 101 |
+| `ATTACH_FILES` | Attach Files | Channel Permissions Settings 101 |
+| `USE_APPLICATION_COMMANDS` | Use Application Commands | Channel Permissions Settings 101 |
+| `CONNECT` | Connect | Permissions on Discord |
+| `SPEAK` | Speak | Permissions on Discord |
+<!-- markdownlint-enable MD013 -->
+
+What the table does not settle:
+
+- The labels were read from Discord's own pages on 2026-10-12, not in the app.
+  Which name belongs to which label follows from the description of each
+  right in Discord's
+  [permissions page](https://discord.com/developers/docs/topics/permissions).
+- The labels are the English ones. The app shows them in the language it is
+  set to; those texts were not read.
+- Channel Permissions Settings 101 shows a channel's settings. "Permissions on
+  Discord" names `VIEW_CHANNEL` on a role "Read Text Channels & See Voice
+  Channels"; the wording on a role's own screen was not read.
+- A definition with other entries names other rights. For a name that is not
+  in the table, the description in Discord's permissions page says what the
+  switch does.
 
 ## Not built, not tried
 
