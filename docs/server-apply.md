@@ -333,29 +333,107 @@ cannot know: [Not built, not tried](#not-built-not-tried).
 ## A first set-up
 
 On a new server the bot's three rights are not enough for anything but area
-entries, so the first run needs the operator twice: once to raise the bot's
-role and once to lower it again
+entries. For the first run the bot's role holds more and stands above the
+roles it sets up, and afterwards a person lowers it again
 ([ADR-0010](adr/0010-bot-rights-and-apply-path.md), "One apply path").
 
-Before the first step the operator makes one role by hand: the Operator role,
-under the name the definition gives it, with `ADMINISTRATOR`, above the bot's
-role. The role's settings call that right **Administrator**; the tool prints
-the names of Discord's programming interface, and the settings show other
-words for some of them
+### A new server
+
+A person acts four times: adds the bot, switches the server to a community
+server, makes the Operator role, and tidies up after the run. The rights of
+the run come with the address that adds the bot, so nobody switches them on
+by hand.
+
+1. **Add the bot with the rights of the set-up.** Open this address with your
+   application's id in it, choose the server and accept:
+
+   ```text
+   https://discord.com/oauth2/authorize?client_id=<application id>&scope=bot&permissions=1168500596752
+   ```
+
+   The number stands for six rights: `MANAGE_ROLES`, `MANAGE_CHANNELS`,
+   `MANAGE_MESSAGES`, `MODERATE_MEMBERS`, `CONNECT` and
+   `CREATE_PRIVATE_THREADS`. It holds no `ADMINISTRATOR`. The run needs six
+   more, and the bot has those as a member through `@everyone`. Discord
+   describes the address in its
+   [page on authorisation](https://discord.com/developers/docs/topics/oauth2),
+   "Bot Authorization Flow"; adding `&guild_id=<server id>&disable_guild_select=true`
+   fixes the server in the dialog.
+2. **Switch the server to a community server**: Server Settings, Enable
+   Community
+   ([Enabling Your Community Server](https://support.discord.com/hc/en-us/articles/360047132851)).
+   The definition has an announcement channel, and without the server feature
+   `NEWS` the plan refuses it as `missing-feature`
+   ([Why a change is refused](#why-a-change-is-refused)). The bot cannot
+   switch this on: that takes `MANAGE_GUILD`, which ADR-0010 leaves out.
+3. **Make the Operator role** by hand: the name the definition gives it, with
+   **Administrator**, above the bot's role, given to yourself
+   ([The Operator role](#the-operator-role)).
+4. `-server=plan`. The plan holds changes and, when all is well, no refusal.
+   A person reads it and keeps the digest. A right the bot lacks shows by its
+   programming name on a change refused as `lacks-right`.
+5. `-server=apply=<digest>`.
+6. **Tidy up.** On the bot's role switch off **Manage Channels**, **Connect**
+   and **Create Private Threads**, so that Manage Roles, Manage Messages and
+   Time Out Members stay, and drag the role to the place the definition gives
+   it. The bot can do neither: a bot edits and sorts only roles below its own
+   highest role, and its own role is that role (Discord's
+   [permissions page](https://discord.com/developers/docs/topics/permissions),
+   "Permission Hierarchy").
+7. `-server=compare` prints `mode: own`. The differences that remain are
+   things the server has and the definition does not.
+
+Between step 5 and step 6 compare still reports two differences, and the plan
+holds no change for either: the rights of the bot's role and its place in the
+order (`TestApplyServer_Positive_FullRun`).
+
+The number is computed, not written by hand: the test
+`TestServerApplyDoc_Negative_InvitationNumberIsThePlansRights` plans a new
+server, takes the rights the plan needs without those `@everyone` keeps, and
+fails when the address on this page carries another number or when those
+rights leave a refusal in the plan. A definition with other entries gives
+another number; the test prints it.
+
+### A server the bot is already on
+
+Do not open the address a second time to change the rights. Discord's pages
+do not say what a second authorisation does to the role of a bot that is
+already a member, and they do not say what becomes of the role and of its
+entries on channels when the bot is removed and added again (both read
+2026-10-12; [Not built, not tried](#not-built-not-tried)). Switch the missing
+rights on by hand:
+
+1. `-server=plan` with the rights the bot's role has. A change the role's
+   rights do not cover is refused as `outside-own-changes` or `lacks-right`;
+   the line `rights needed:` lists every right the run needs.
+2. Give the bot's role the rights of that list which neither it nor
+   `@everyone` holds. The table below has the label each one carries in the
+   role's settings. The role has to stand above every role the plan creates,
+   changes or sorts; a change that reaches a role above it is refused as
+   `above-caller` (`TestPlan_Boundary_NeighboursOfTheCaller`).
+3. Go on with step 2 of [A new server](#a-new-server).
+
+### The Operator role
+
+The Operator role is the one role a person makes: under the name the
+definition gives it, with `ADMINISTRATOR`, above the bot's role. The role's
+settings call that right **Administrator**; the tool prints the names of
+Discord's programming interface, and the settings show other words for some
+of them
 ([The rights by their name in the settings](#the-rights-by-their-name-in-the-settings)).
 The plan cannot make this role. Creating a role needs every right the
 role gets ([What a plan holds](#what-a-plan-holds)), a bot gives a role only
 rights it holds itself, and the bot's role holds no `ADMINISTRATOR` at any
-step. ADR-0010 left open who makes the role ("Open points"). The three tests
-below start from a server that has it (`setupFreshServerFake` in
+step. ADR-0010 left open who makes the role ("Open points"). The tests of a
+first set-up start from a server that has it (`setupFreshServerFake` in
 [`server_apply_test.go`](../internal/discord/server_apply_test.go)).
 
 Two lines of `-server=compare` show that this is not done yet:
 
 - `role-missing roles[operator]`: the role is not there, or has another name.
 - `role-permissions roles[bot]` with `ADMINISTRATOR` after the word `beyond`:
-  the bot's role holds the right, for example from its invitation. The
-  operator takes it away first.
+  the bot's role holds the right, for example from an invitation with another
+  number. The operator takes it away first.
 
 Without the Operator role the tool does not stop by itself yet
 ([#83](https://github.com/tekmora/diallak/issues/83)). `rights needed:` then
@@ -364,36 +442,17 @@ names `ADMINISTRATOR`, because the plan holds `create-role roles[operator]`
 That list is not one to give the bot's role: make the role, then plan again.
 No test covers a server without the role.
 
-1. `-server=plan` with the bot's own rights. Every change is refused as
-   `outside-own-changes`; the line `rights needed:` is the list for the next
-   step.
-2. The operator gives the bot's role exactly those rights. The table below
-   has the label each one carries in the role's settings. The role has to
-   stand above every role the plan creates, changes or sorts; a change that
-   reaches a role above it is refused as `above-caller`
-   (`TestPlan_Boundary_NeighboursOfTheCaller`).
-3. `-server=plan` again. Now the plan holds changes and, when all is well, no
-   refusal. A person reads it and keeps the digest. A right that was not
-   switched on shows here by its programming name, as a change refused as
-   `lacks-right` and, in `-server=compare`, after the word `lacks` on the line
-   `role-permissions roles[bot]`.
-4. `-server=apply=<digest>`.
-5. The operator takes the rights away again and puts the bot's role where the
-   definition has it.
-6. `-server=compare` prints `mode: own`. The differences that remain are
-   things the server has and the definition does not.
+### What the tests of a first set-up cover
 
-Between step 4 and step 5 compare still reports two differences, and the plan
-holds no change for either: the rights of the bot's role and its place in the
-order (`TestApplyServer_Positive_FullRun`).
-
-Three tests walk these steps against the local server
+Three tests walk a first set-up against the local server
 ([`server_apply_setup_test.go`](../internal/discord/server_apply_setup_test.go)).
+They give the bot's role every right the first plan names: those of the
+address and those a member has.
 
 - `TestApplyServer_Positive_FirstSetUpWithTheRightsThePlanNames`: with the
   rights the first plan names, the second plan holds no refusal, the apply run
-  makes every change, and after step 5 compare holds no difference. The list
-  holds no `ADMINISTRATOR`.
+  makes every change, and after the tidy-up compare holds no difference. The
+  list holds no `ADMINISTRATOR`.
 - `TestApplyServer_Boundary_EveryNamedRightIsNeeded`: with any one of the
   named rights left out, the plan holds a refusal as `lacks-right` and the
   apply run sends no change.
@@ -404,6 +463,11 @@ Three tests walk these steps against the local server
   the definition lets the bot see is refused as `not-visible`. A channel the
   definition hides from the bot, as the ticket channel, is then not planned
   at all.
+
+`TestPlan_Positive_RaisedFirstSetUp`
+([`plan_test.go`](../internal/serverplan/plan_test.go)) plans the set-up with
+the six rights of the address on the bot's role and the member rights on
+`@everyone` alone: no refusal.
 
 ### The rights by their name in the settings
 
@@ -463,6 +527,13 @@ What the table does not settle:
 - Nothing was run against Discord. The reader and the apply step are tested
   against a local server only; the first read and the first change of the real
   server are part of the first set-up.
+- The address that adds the bot was not opened. That it carries the rights as
+  a number and that a person accepts them is read from Discord's page on
+  authorisation (2026-10-12). Not stated on a page of Discord's that was read:
+  whether the person can switch single rights off in the dialog, what a second
+  authorisation does to the role of a bot that is already a member, and
+  whether removing the bot deletes its role and the role's entries on
+  channels. A right that did not arrive shows in the plan as `lacks-right`.
 - Not known: whether Discord moves the other roles up when a role is created.
   The local server can do both. When it does not, the roles stay where they
   were created, `set-role-order` refuses, and the order is set by hand before
