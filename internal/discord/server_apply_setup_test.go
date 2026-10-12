@@ -2,6 +2,7 @@ package discord
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -31,7 +32,6 @@ type setupFixture struct {
 func newSetupFixture(t *testing.T) setupFixture {
 	t.Helper()
 	fake := setupFreshServerFake(t, orderGuildID, orderBotUserID, orderBotRoleID, false)
-	fake.createShifts = true
 	fake.roles[0].permissions = "0"
 	srv := fake.server()
 	t.Cleanup(srv.Close)
@@ -134,26 +134,52 @@ func (fx setupFixture) lowerBotRole(t *testing.T) {
 		}
 	}
 	above := roleAboveBot(t, fx.def)
-	fx.fake.mu.Lock()
-	defer fx.fake.mu.Unlock()
-	roles := fx.fake.roles
-	bot := slices.IndexFunc(roles, func(r fakeRole) bool { return r.id == snowflake.ID(orderBotRoleID) })
-	target := slices.IndexFunc(roles, func(r fakeRole) bool { return r.name == above })
-	if bot < 0 || target < 0 || roles[target].position >= roles[bot].position {
-		t.Fatalf("bot role at %d, %s at %d; want both on the server and the bot's role above", bot, above, target)
-	}
-	from, to := roles[target].position, roles[bot].position
-	for i := range roles {
-		if roles[i].position >= from && roles[i].position < to {
-			roles[i].position++
+	fx.fake.dragInClient(t, func(shown []fakeRole) []fakeRole {
+		bot := slices.IndexFunc(shown, func(r fakeRole) bool { return r.id == snowflake.ID(orderBotRoleID) })
+		target := slices.IndexFunc(shown, func(r fakeRole) bool { return r.name == above })
+		if bot < 0 || target < 0 || target < bot {
+			t.Fatalf("bot role at %d, %s at %d; want both on the server and the bot's role above", bot, above, target)
 		}
+		botRole := shown[bot]
+		shown = slices.Delete(shown, bot, bot+1)
+		return slices.Insert(shown, target, botRole)
+	})
+}
+
+// dragInClient is a hand act of the operator in the client: the roles stand
+// in the order arrange returns, top first, and take the positions from their
+// count down to 1. Whether the client numbers without gaps is not measured;
+// the tests rest on the order only.
+func (f *fakePlatform) dragInClient(t *testing.T, arrange func(shown []fakeRole) []fakeRole) {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	everyone := slices.IndexFunc(f.roles, func(r fakeRole) bool { return r.id == snowflake.ID(f.guildID) })
+	if everyone < 0 {
+		t.Fatal("the everyone role is not on the server")
 	}
-	roles[bot].position = from
+	everyoneRole := f.roles[everyone]
+	shown := slices.Delete(slices.Clone(f.roles), everyone, everyone+1)
+	slices.SortFunc(shown, func(a, b fakeRole) int {
+		if a.position != b.position {
+			return b.position - a.position
+		}
+		return cmp.Compare(a.id, b.id)
+	})
+	arranged := arrange(shown)
+	if len(arranged) != len(shown) {
+		t.Fatalf("the drag left %d roles of %d", len(arranged), len(shown))
+	}
+	for i := range arranged {
+		arranged[i].position = len(arranged) - i
+	}
+	f.roles = append(arranged, everyoneRole)
 }
 
 // assertRefusalsBecameChanges holds the second plan of a first set-up to the
-// first: everything refused before is a change now, and the one change on top
-// is the order of the roles, which is planned only when roles are created.
+// first: everything refused before is a change now, and nothing else is. The
+// roles the run creates stand in the definition's order by themselves, so the
+// plan holds no order step.
 func assertRefusalsBecameChanges(t *testing.T, refused []serverplan.Refusal, changes []serverplan.Change) {
 	t.Helper()
 	planned := make(map[string]bool, len(changes))
@@ -166,8 +192,8 @@ func assertRefusalsBecameChanges(t *testing.T, refused []serverplan.Refusal, cha
 		}
 		delete(planned, r.Action+" "+r.Object)
 	}
-	if len(planned) != 1 || !planned[serverplan.ActionSetRoleOrder+" role_order"] {
-		t.Errorf("changes the first plan did not name = %v, want only %s role_order", planned, serverplan.ActionSetRoleOrder)
+	if len(planned) != 0 {
+		t.Errorf("changes the first plan did not name = %v, want none", planned)
 	}
 }
 
@@ -228,6 +254,96 @@ func TestApplyServer_Positive_FirstSetUpWithTheRightsThePlanNames(t *testing.T) 
 		if d.Kind != serverplan.KindRoleMissing || d.Detail != managedRoleNote {
 			t.Errorf("compare after the set-up holds %s %s (%q), want only managed roles that are missing", d.Kind, d.Object, d.Detail)
 		}
+	}
+}
+
+func TestApplyServer_Negative_FirstSetUpOnAPlatformThatMovesNoRoleUp(t *testing.T) {
+	fx := newSetupFixture(t)
+	rights, _ := fx.ownPlanRights(t)
+
+	fx.setBotRights(t, rights)
+	raised, in := fx.plan(t, setupDay)
+	if len(raised.Refused) != 0 {
+		t.Fatalf("plan refused %+v, want no refusal", raised.Refused)
+	}
+	if _, err := fx.apply(t, setupDay, in); err != nil {
+		t.Fatalf("a plan with no refusal stopped in the apply: %v", err)
+	}
+}
+
+// addRoleLike adds a copy of the definition's role id to the definition, under
+// a new id and name, and puts it in the order directly above the role before.
+func addRoleLike(t *testing.T, def *serverdef.Definition, id, before string) serverdef.Role {
+	t.Helper()
+	at := slices.IndexFunc(def.Roles, func(r serverdef.Role) bool { return r.ID == id })
+	place := slices.Index(def.RoleOrder, before)
+	if at < 0 || (before != "" && place < 0) {
+		t.Fatalf("role %q at %d, %q at %d of the order; want both in the definition", id, at, before, place)
+	}
+	added := def.Roles[at]
+	added.ID, added.Name = added.ID+"-2", added.Name+" 2"
+	def.Roles = append(def.Roles, added)
+	if before == "" {
+		def.RoleOrder = append(def.RoleOrder, added.ID)
+	} else {
+		def.RoleOrder = slices.Insert(def.RoleOrder, place, added.ID)
+	}
+	return added
+}
+
+// finishSetUp runs a first set-up and leaves the server as the operator does
+// after it: the bot's role directly above the roles it gives, with the rights
+// of the set-up.
+func (fx setupFixture) finishSetUp(t *testing.T) []string {
+	t.Helper()
+	rights, _ := fx.ownPlanRights(t)
+	fx.setBotRights(t, rights)
+	_, in := fx.plan(t, setupDay)
+	if _, err := fx.apply(t, setupDay, in); err != nil {
+		t.Fatalf("set-up: %v", err)
+	}
+	fx.lowerBotRole(t)
+	fx.setBotRights(t, rights)
+	return rights
+}
+
+func TestApplyServer_Negative_RoleAddedLaterOnAPlatformThatMovesNoRoleUp(t *testing.T) {
+	fx := newSetupFixture(t)
+	fx.finishSetUp(t)
+	addRoleLike(t, fx.def, "contributor", "")
+
+	later, in := fx.plan(t, setupDay)
+	if len(later.Refused) != 0 {
+		t.Fatalf("plan refused %+v, want no refusal", later.Refused)
+	}
+	if _, err := fx.apply(t, setupDay, in); err != nil {
+		t.Fatalf("a plan with no refusal stopped in the apply: %v", err)
+	}
+}
+
+// A role defined between two roles that already stand on the server lands
+// below them all; sorting it in needs a position the server does not have, so
+// the plan refuses the order step and names the role to place by hand.
+func TestApplyServer_Negative_RoleInsertedMidOrderIsRefusedInThePlan(t *testing.T) {
+	fx := newSetupFixture(t)
+	fx.finishSetUp(t)
+	addRoleLike(t, fx.def, "contributor", "supporter")
+
+	later, _ := fx.plan(t, setupDay)
+	var found bool
+	for _, r := range later.Refused {
+		if r.Action != serverplan.ActionSetRoleOrder {
+			t.Errorf("%s %s refused as %q, want only the order step refused", r.Action, r.Object, r.Reason)
+			continue
+		}
+		found = true
+		if r.Reason != serverplan.ReasonTooFewPositions || !strings.Contains(r.Detail, "contributor-2") {
+			t.Errorf("order step refused as %q (%q), want %q naming contributor-2",
+				r.Reason, r.Detail, serverplan.ReasonTooFewPositions)
+		}
+	}
+	if !found {
+		t.Fatalf("plan refused %+v, want the order step refused", later.Refused)
 	}
 }
 

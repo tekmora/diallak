@@ -31,7 +31,6 @@ func newApplyFixture(t *testing.T) applyFixture {
 	t.Helper()
 	def := mustDefinition(t)
 	fake := setupFreshServerFake(t, orderGuildID, orderBotUserID, orderBotRoleID, true)
-	fake.createShifts = true
 	srv := fake.server()
 	t.Cleanup(srv.Close)
 

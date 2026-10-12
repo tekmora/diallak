@@ -3,6 +3,7 @@ package serverplan
 import (
 	"bytes"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -121,7 +122,9 @@ func snapshotOf(t *testing.T, def *serverdef.Definition) *Snapshot {
 	return &Snapshot{
 		Features: []string{"COMMUNITY", "NEWS"},
 		Caller: Caller{
-			Role:        botRole.Name,
+			Role: botRole.Name,
+			// Numbered without gaps: one more than the roles below the bot's.
+			Position:    len(snapRoles) - 1 - slices.IndexFunc(snapRoles, func(r Role) bool { return r.Name == botRole.Name }),
 			Permissions: callerPerms,
 		},
 		Roles:            snapRoles,

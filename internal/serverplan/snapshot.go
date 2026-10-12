@@ -21,8 +21,13 @@ type Snapshot struct {
 }
 
 // Caller identifies the inspecting identity, its role, and its effective permissions.
+// Position is the place number the platform gives the caller's role; the
+// everyone role holds 0, and roles may share a number. The order step numbers
+// the roles below the caller's role from 1 without gaps, so it needs fewer
+// roles there than this number.
 type Caller struct {
 	Role        string   `json:"role"`
+	Position    int      `json:"position"`
 	Permissions []string `json:"permissions"`
 }
 
@@ -95,6 +100,9 @@ func Check(s *Snapshot) error {
 	}
 	if err := checkCallerRole(s.Roles, s.Caller.Role); err != nil {
 		errs = append(errs, err)
+	}
+	if s.Caller.Position < 1 {
+		errs = append(errs, fmt.Errorf("caller position %d is below 1; only the everyone role stands on 0", s.Caller.Position))
 	}
 	errs = append(errs, checkNamesAndTypes(s)...)
 	errs = append(errs, checkPermissions(s)...)

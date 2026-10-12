@@ -52,7 +52,7 @@ func sampleDefWithBot() *serverdef.Definition {
 
 func TestCheck_Negative_NegativeMemberEntries(t *testing.T) {
 	snap := &Snapshot{
-		Caller: Caller{Role: "Diallak", Permissions: []string{"VIEW_CHANNEL"}},
+		Caller: Caller{Role: "Diallak", Position: 1, Permissions: []string{"VIEW_CHANNEL"}},
 		Roles: []Role{
 			{Name: "Diallak", Everyone: false, Permissions: []string{"VIEW_CHANNEL"}},
 			{Name: "@everyone", Everyone: true, Permissions: []string{"VIEW_CHANNEL"}},
@@ -279,6 +279,7 @@ func TestRaised_Boundary_ThreeRightsVsOneMore(t *testing.T) {
 	snapThree := &Snapshot{
 		Caller: Caller{
 			Role:        "Diallak",
+			Position:    1,
 			Permissions: []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS"},
 		},
 		Roles: []Role{
@@ -304,6 +305,7 @@ func TestRaised_Boundary_ThreeRightsVsOneMore(t *testing.T) {
 	snapFour := &Snapshot{
 		Caller: Caller{
 			Role:        "Diallak",
+			Position:    1,
 			Permissions: []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "ADMINISTRATOR"},
 		},
 		Roles: []Role{

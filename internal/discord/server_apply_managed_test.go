@@ -77,25 +77,21 @@ func (fx setupFixture) display(t *testing.T, name string) (hoist, mentionable bo
 }
 
 // dragToBottom is a hand act of the operator: the named roles move below
-// every other role, and no other role changes its place against another.
+// every other role, the first name lowest, and no other role changes its
+// place against another.
 func (fx setupFixture) dragToBottom(t *testing.T, names ...string) {
 	t.Helper()
-	fx.fake.mu.Lock()
-	defer fx.fake.mu.Unlock()
-	roles := fx.fake.roles
-	slices.SortStableFunc(roles, func(a, b fakeRole) int { return a.position - b.position })
-	next := len(names) + 1
-	for i := range roles {
-		if at := slices.Index(names, roles[i].name); at >= 0 {
-			roles[i].position = at + 1
-		} else if roles[i].position > 0 {
-			roles[i].position = next
-			next++
+	fx.fake.dragInClient(t, func(shown []fakeRole) []fakeRole {
+		rest := slices.DeleteFunc(slices.Clone(shown), func(r fakeRole) bool { return slices.Contains(names, r.name) })
+		for i := len(names) - 1; i >= 0; i-- {
+			at := slices.IndexFunc(shown, func(r fakeRole) bool { return r.name == names[i] })
+			if at < 0 {
+				t.Fatalf("role %q is not on the server", names[i])
+			}
+			rest = append(rest, shown[at])
 		}
-	}
-	if next != len(roles) {
-		t.Fatalf("placed %d roles, the server holds %d: one of %v is not on it", next, len(roles), names)
-	}
+		return rest
+	})
 }
 
 func managedRoleLines(fx setupFixture, kind string) []string {

@@ -43,6 +43,7 @@ func raisedFirstSetupSnapshot() *Snapshot {
 		Features: []string{"COMMUNITY", "NEWS"},
 		Caller: Caller{
 			Role:        "Diallak",
+			Position:    1,
 			Permissions: callerPerms,
 		},
 		Roles: []Role{
