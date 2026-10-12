@@ -127,12 +127,15 @@ Every condition of every rule has a test that plants exactly that defect
 and to the line of Discord's documentation that asks for it.
 
 <!-- markdownlint-disable MD013 -->
-| Right of the bot's role | For |
-| :--- | :--- |
-| `MANAGE_ROLES` | Giving and taking the Supporter roles and the Contributor role; opening and closing an area by the entry of its role on its channel |
-| `MANAGE_MESSAGES` | Deleting a message when a moderator acts through the bot |
-| `MODERATE_MEMBERS` | Timing a member out when a moderator acts through the bot |
+| Right of the bot's role | Label in the role's settings | For |
+| :--- | :--- | :--- |
+| `MANAGE_ROLES` | Manage Roles | Giving and taking the Supporter roles and the Contributor role; opening and closing an area by the entry of its role on its channel |
+| `MANAGE_MESSAGES` | Manage Messages | Deleting a message when a moderator acts through the bot |
+| `MODERATE_MEMBERS` | Time Out Members | Timing a member out when a moderator acts through the bot |
 <!-- markdownlint-enable MD013 -->
+
+The labels are the English ones of Discord's settings; where they were read is
+in [Applying the server definition](server-apply.md#the-rights-by-their-name-in-the-settings).
 
 `role_order` puts the Operator, the Moderator and the subject guide roles above
 the bot's role and every other role below it. Discord lets a bot give and edit
