@@ -14,6 +14,8 @@ const (
 	ActionCreateRole = "create-role"
 	// ActionSetRolePermissions is the candidate action to update role permissions.
 	ActionSetRolePermissions = "set-role-permissions"
+	// ActionSetRoleDisplay is the candidate action to update role display settings.
+	ActionSetRoleDisplay = "set-role-display"
 	// ActionSetRoleOrder is the candidate action to reorder roles.
 	ActionSetRoleOrder = "set-role-order"
 	// ActionCreateCategory is the candidate action to create a missing category.
@@ -104,6 +106,7 @@ func Actions() []string {
 	return []string{
 		ActionCreateRole,
 		ActionSetRolePermissions,
+		ActionSetRoleDisplay,
 		ActionSetRoleOrder,
 		ActionCreateCategory,
 		ActionCreateChannel,
@@ -255,6 +258,7 @@ func computeRoleOrderPQ(def *serverdef.Definition, s *Snapshot, botRoleID string
 func (ctx *planContext) generateAndEvaluateCandidates() {
 	ctx.addRoleMissingCandidates()
 	ctx.addRolePermissionsCandidates()
+	ctx.addRoleDisplayCandidates()
 	ctx.addRoleOrderCandidate()
 	ctx.addCategoryMissingCandidates()
 	ctx.addChannelCandidates()
@@ -403,7 +407,7 @@ func (ctx *planContext) checkMissingFeature(c candidate) (string, string) {
 }
 
 func (ctx *planContext) checkManagedRole(c candidate) (string, string) {
-	if c.action != ActionSetRolePermissions || c.roleID == "" {
+	if (c.action != ActionSetRolePermissions && c.action != ActionSetRoleDisplay) || c.roleID == "" {
 		return "", ""
 	}
 	for i := range ctx.snap.Roles {
@@ -492,7 +496,7 @@ func getRoleName(def *serverdef.Definition, roleID string) string {
 }
 
 func (ctx *planContext) checkAboveCaller(c candidate) (string, string) {
-	if c.action == ActionSetRolePermissions && c.roleID != "" {
+	if (c.action == ActionSetRolePermissions || c.action == ActionSetRoleDisplay) && c.roleID != "" {
 		return checkRoleAboveCaller(ctx, c.roleID)
 	}
 	if c.action == ActionSetRoleOrder {
@@ -621,6 +625,31 @@ func (ctx *planContext) addRolePermissionsCandidates() {
 				object: d.Object,
 				needs:  needs,
 				detail: ctx.roleClearsUnlistedBitsDetail(id),
+				roleID: id,
+			})
+		}
+	}
+}
+
+func (ctx *planContext) addRoleDisplayCandidates() {
+	for _, d := range ctx.diffs {
+		if d.Kind == KindRoleDisplay {
+			id := extractBracketID(d.Object)
+			var defRole *serverdef.Role
+			for i := range ctx.def.Roles {
+				if ctx.def.Roles[i].ID == id {
+					defRole = &ctx.def.Roles[i]
+					break
+				}
+			}
+			if defRole == nil || defRole.Kind == "managed" {
+				continue
+			}
+			ctx.evaluateCandidate(candidate{
+				action: ActionSetRoleDisplay,
+				object: d.Object,
+				needs:  []string{"MANAGE_ROLES"},
+				detail: d.Detail,
 				roleID: id,
 			})
 		}

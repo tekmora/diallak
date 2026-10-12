@@ -180,17 +180,128 @@
       "assigned_by": "choice",
       "basis": "proposal",
       "permissions": []
+    },
+    {
+      "id": "maintainer",
+      "name": "Maintainer",
+      "kind": "recognition",
+      "purpose": "Maintains one of the projects and speaks for it here. Carries no moderation right.",
+      "assigned_by": "operator",
+      "basis": "decided",
+      "permissions": []
+    },
+    {
+      "id": "helper",
+      "name": "Helper",
+      "kind": "recognition",
+      "purpose": "Helps members and is shown apart in the member list. Carries no right and sees no staff channel; reports through the path every member has.",
+      "assigned_by": "operator",
+      "basis": "decided",
+      "permissions": [],
+      "shown_apart": true
+    },
+    {
+      "id": "translator",
+      "name": "Translator",
+      "kind": "recognition",
+      "purpose": "Translated one of the projects or its documentation.",
+      "assigned_by": "operator",
+      "basis": "decided",
+      "permissions": []
+    },
+    {
+      "id": "tester",
+      "name": "Tester",
+      "kind": "recognition",
+      "purpose": "Tests builds before a release and reports what fails.",
+      "assigned_by": "operator",
+      "basis": "decided",
+      "permissions": []
+    },
+    {
+      "id": "creator",
+      "name": "Creator",
+      "kind": "recognition",
+      "purpose": "Makes guides, videos or other material about the projects.",
+      "assigned_by": "operator",
+      "basis": "decided",
+      "permissions": []
+    },
+    {
+      "id": "partner",
+      "name": "Partner",
+      "kind": "recognition",
+      "purpose": "Speaks for a project or community this one works with.",
+      "assigned_by": "operator",
+      "basis": "decided",
+      "permissions": []
+    },
+    {
+      "id": "notify-releases",
+      "name": "Notify: releases",
+      "kind": "notification",
+      "purpose": "The member wants a mention when a release is out. Every member can mention this role.",
+      "assigned_by": "choice",
+      "basis": "decided",
+      "permissions": [],
+      "mentionable": true
+    },
+    {
+      "id": "notify-events",
+      "name": "Notify: events",
+      "kind": "notification",
+      "purpose": "The member wants a mention when an event is announced. Every member can mention this role.",
+      "assigned_by": "choice",
+      "basis": "decided",
+      "permissions": [],
+      "mentionable": true
+    },
+    {
+      "id": "booster",
+      "name": "Server Booster",
+      "kind": "managed",
+      "purpose": "The platform's own role for a member who boosts the server. Shown apart in the member list; it gates nothing and no right attaches to it here.",
+      "assigned_by": "platform",
+      "basis": "decided",
+      "permissions": [],
+      "shown_apart": true
+    },
+    {
+      "id": "funding-ko-fi",
+      "name": "Ko-fi Bot",
+      "kind": "managed",
+      "purpose": "The role of the Ko-fi integration. That integration manages it; nothing here creates, changes or deletes it.",
+      "assigned_by": "integration",
+      "basis": "decided",
+      "permissions": []
+    },
+    {
+      "id": "funding-patreon",
+      "name": "Patreon",
+      "kind": "managed",
+      "purpose": "The role of the Patreon integration. That integration manages it; nothing here creates, changes or deletes it.",
+      "assigned_by": "integration",
+      "basis": "decided",
+      "permissions": []
     }
   ],
   "role_order": [
     "operator",
     "moderator",
+    "maintainer",
+    "helper",
     "guide-coding",
     "guide-video",
+    "translator",
+    "tester",
+    "creator",
+    "partner",
     "bot",
     "contributor",
     "supporter",
     "supporter-12-months",
+    "notify-releases",
+    "notify-events",
     "interest-home-lab",
     "interest-media",
     "interest-games",
@@ -702,6 +813,15 @@
           {"title": "Deutsch", "role": "lang-de"},
           {"title": "Italiano", "role": "lang-it"}
         ]
+      },
+      {
+        "id": "notifications",
+        "title": "What do you want a mention for?",
+        "multiple": true,
+        "options": [
+          {"title": "New releases", "role": "notify-releases"},
+          {"title": "Events", "role": "notify-events"}
+        ]
       }
     ]
   },
@@ -736,7 +856,7 @@
     },
     {
       "id": "area-choices",
-      "what": "Gives and takes the interest and language roles from the member's own choice, made through the areas command.",
+      "what": "Gives and takes the interest, language and notification roles from the member's own choice, made through the areas command.",
       "by": "bot",
       "state": "decided",
       "record": "docs/adr/0011-area-roles-from-member-choice.md"

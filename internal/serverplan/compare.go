@@ -20,6 +20,12 @@ const (
 	KindRolePermissions = "role-permissions"
 	// KindRoleOrder indicates the relative ordering of roles differs from definition.
 	KindRoleOrder = "role-order"
+	// KindRoleNotManaged indicates a defined managed role matches a server role with managed=false.
+	KindRoleNotManaged = "role-not-managed"
+	// KindRolePlace indicates a defined integration managed role stands above the moderator role.
+	KindRolePlace = "role-place"
+	// KindRoleDisplay indicates a defined role's display settings differ from definition.
+	KindRoleDisplay = "role-display"
 	// KindCategoryMissing indicates a defined category does not exist on the server.
 	KindCategoryMissing = "category-missing"
 	// KindCategoryAmbiguous indicates multiple server categories match a single defined category.
@@ -228,6 +234,98 @@ func permDiffDetail(defPerms, snapPerms []string) (string, bool) {
 	return fmt.Sprintf("beyond %s", strings.Join(beyond, ", ")), true
 }
 
+func boolToYesNo(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
+}
+
+func compareRoleDisplay(r *serverdef.Role, sr *Role, obj string) *Difference {
+	var parts []string
+	if r.ShownApart != nil && sr.ShownApart != *r.ShownApart {
+		parts = append(parts, fmt.Sprintf("shown apart: server %s; definition %s", boolToYesNo(sr.ShownApart), boolToYesNo(*r.ShownApart)))
+	}
+	if r.Mentionable != nil && sr.Mentionable != *r.Mentionable {
+		parts = append(parts, fmt.Sprintf("mentionable: server %s; definition %s", boolToYesNo(sr.Mentionable), boolToYesNo(*r.Mentionable)))
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	return &Difference{
+		Kind:   KindRoleDisplay,
+		Object: obj,
+		Detail: strings.Join(parts, "; "),
+	}
+}
+
+func findModeratorDefRole(def *serverdef.Definition) *serverdef.Role {
+	for i := range def.Roles {
+		if def.Roles[i].Kind == "moderator" {
+			return &def.Roles[i]
+		}
+	}
+	return nil
+}
+
+func checkRolePlace(def *serverdef.Definition, s *Snapshot, sr *Role, obj string) *Difference {
+	modDefRole := findModeratorDefRole(def)
+	if modDefRole == nil {
+		return nil
+	}
+	modMatches := matchRoleInSnapshot(modDefRole, s)
+	if len(modMatches) != 1 {
+		return nil
+	}
+	modName := modMatches[0].Name
+	srIdx, modIdx := -1, -1
+	for i := range s.Roles {
+		if s.Roles[i].Name == sr.Name && srIdx == -1 {
+			srIdx = i
+		}
+		if s.Roles[i].Name == modName && modIdx == -1 {
+			modIdx = i
+		}
+	}
+	if srIdx != -1 && modIdx != -1 && srIdx < modIdx {
+		return &Difference{
+			Kind:   KindRolePlace,
+			Object: obj,
+			Detail: fmt.Sprintf("above roles[%s]", modDefRole.ID),
+		}
+	}
+	return nil
+}
+
+func compareSingleRole(def *serverdef.Definition, s *Snapshot, r *serverdef.Role, sr *Role, obj string) []Difference {
+	var diffs []Difference
+	if r.Kind == "bot" && sr.Name != r.Name {
+		diffs = append(diffs, Difference{
+			Kind:   KindRoleName,
+			Object: obj,
+			Detail: fmt.Sprintf("server: %s; definition: %s", sr.Name, r.Name),
+		})
+	}
+	if r.Kind == "managed" {
+		if !sr.Managed {
+			diffs = append(diffs, Difference{Kind: KindRoleNotManaged, Object: obj})
+		}
+		if r.AssignedBy == "integration" {
+			if diff := checkRolePlace(def, s, sr, obj); diff != nil {
+				diffs = append(diffs, *diff)
+			}
+		}
+	} else {
+		if detail, diff := permDiffDetail(r.Permissions, sr.Permissions); diff {
+			diffs = append(diffs, Difference{Kind: KindRolePermissions, Object: obj, Detail: detail})
+		}
+	}
+	if diff := compareRoleDisplay(r, sr, obj); diff != nil {
+		diffs = append(diffs, *diff)
+	}
+	return diffs
+}
+
 func compareRoles(def *serverdef.Definition, s *Snapshot) []Difference {
 	var diffs []Difference
 	for i := range def.Roles {
@@ -236,19 +334,13 @@ func compareRoles(def *serverdef.Definition, s *Snapshot) []Difference {
 		matches := matchRoleInSnapshot(r, s)
 		switch len(matches) {
 		case 0:
-			diffs = append(diffs, Difference{Kind: KindRoleMissing, Object: obj})
+			detail := ""
+			if r.Kind == "managed" {
+				detail = "managed; the plan does not create it"
+			}
+			diffs = append(diffs, Difference{Kind: KindRoleMissing, Object: obj, Detail: detail})
 		case 1:
-			sr := matches[0]
-			if r.Kind == "bot" && sr.Name != r.Name {
-				diffs = append(diffs, Difference{
-					Kind:   KindRoleName,
-					Object: obj,
-					Detail: fmt.Sprintf("server: %s; definition: %s", sr.Name, r.Name),
-				})
-			}
-			if detail, diff := permDiffDetail(r.Permissions, sr.Permissions); diff {
-				diffs = append(diffs, Difference{Kind: KindRolePermissions, Object: obj, Detail: detail})
-			}
+			diffs = append(diffs, compareSingleRole(def, s, r, &matches[0], obj)...)
 		default:
 			diffs = append(diffs, Difference{Kind: KindRoleAmbiguous, Object: obj, Detail: fmt.Sprintf("%d", len(matches))})
 		}
@@ -260,7 +352,7 @@ func getMatchedDefRoleMap(def *serverdef.Definition, s *Snapshot) map[string]str
 	matched := make(map[string]string, len(def.Roles))
 	for i := range def.Roles {
 		dr := &def.Roles[i]
-		if dr.Kind == "everyone" {
+		if dr.Kind == "everyone" || dr.Kind == "managed" {
 			continue
 		}
 		matches := matchRoleInSnapshot(dr, s)

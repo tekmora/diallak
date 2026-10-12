@@ -39,18 +39,47 @@ func snapshotOf(t *testing.T, def *serverdef.Definition) *Snapshot {
 		t.Fatalf("missing bot or everyone role in definition")
 	}
 
-	snapRoles := make([]Role, 0, len(def.RoleOrder)+1)
+	snapRoles := make([]Role, 0, len(def.RoleOrder)+4)
 	for _, id := range def.RoleOrder {
 		r, ok := rolesByID[id]
 		if !ok {
 			t.Fatalf("role_order id %q not in roles", id)
 		}
+		var shownApart, mentionable bool
+		if r.ShownApart != nil {
+			shownApart = *r.ShownApart
+		}
+		if r.Mentionable != nil {
+			mentionable = *r.Mentionable
+		}
 		snapRoles = append(snapRoles, Role{
 			Name:        r.Name,
 			Everyone:    false,
 			Managed:     r.Kind == "bot",
+			ShownApart:  shownApart,
+			Mentionable: mentionable,
 			Permissions: append([]string(nil), r.Permissions...),
 		})
+	}
+	for i := range def.Roles {
+		r := &def.Roles[i]
+		if r.Kind == "managed" {
+			var shownApart, mentionable bool
+			if r.ShownApart != nil {
+				shownApart = *r.ShownApart
+			}
+			if r.Mentionable != nil {
+				mentionable = *r.Mentionable
+			}
+			snapRoles = append(snapRoles, Role{
+				Name:        r.Name,
+				Everyone:    false,
+				Managed:     true,
+				ShownApart:  shownApart,
+				Mentionable: mentionable,
+				Permissions: append([]string(nil), r.Permissions...),
+			})
+		}
 	}
 	snapRoles = append(snapRoles, Role{
 		Name:        everyoneRole.Name,

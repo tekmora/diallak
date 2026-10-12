@@ -33,7 +33,7 @@ func (v *validator) checkChoiceTexts() {
 	}
 }
 
-func (v *validator) checkChoiceRefs(roleMap map[string]struct{}) {
+func (v *validator) checkChoiceRefs(roleMap map[string]Role) {
 	for _, q := range v.def.Choices.Questions {
 		p := fmt.Sprintf("choices.questions[%s]", q.ID)
 		for _, opt := range q.Options {
@@ -54,9 +54,17 @@ func (v *validator) checkChoiceGrantRoles() {
 		p := fmt.Sprintf("choices.questions[%s]", q.ID)
 		for _, opt := range q.Options {
 			r, ok := roleMap[opt.Role]
-			if ok && r.Kind != "interest" && r.Kind != "language" {
+			if !ok {
+				continue
+			}
+			if r.Kind == "managed" {
 				v.add(CodeRoleGrant, fmt.Sprintf("%s.options[%s]", p, opt.Role),
-					"choice option grants role that is neither interest nor language")
+					fmt.Sprintf("role %q is managed", opt.Role))
+				continue
+			}
+			if r.Kind != "interest" && r.Kind != "language" && r.Kind != "notification" {
+				v.add(CodeRoleGrant, fmt.Sprintf("%s.options[%s]", p, opt.Role),
+					"choice option grants role that is neither interest nor language nor notification")
 			}
 		}
 	}
@@ -71,7 +79,7 @@ func (v *validator) checkChoiceRoleCoverage() {
 		}
 	}
 	for _, r := range v.def.Roles {
-		if r.Kind == "interest" || r.Kind == "language" {
+		if r.Kind == "interest" || r.Kind == "language" || r.Kind == "notification" {
 			c := counts[r.ID]
 			if c != 1 {
 				v.add(CodeRoleGrant, fmt.Sprintf("roles[%s]", r.ID),

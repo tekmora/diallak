@@ -96,8 +96,8 @@ func TestDefinition_Positive_AreaChoicesIsTheBotsDecidedAutomation(t *testing.T)
 	if found != 1 {
 		t.Errorf("automation entries with id area-choices = %d, want 1", found)
 	}
-	if def.Choices.By != "bot" || len(def.Choices.Questions) != 2 {
-		t.Errorf("choices = by %q with %d questions, want by bot with 2",
+	if def.Choices.By != "bot" || len(def.Choices.Questions) != 3 {
+		t.Errorf("choices = by %q with %d questions, want by bot with 3",
 			def.Choices.By, len(def.Choices.Questions))
 	}
 }

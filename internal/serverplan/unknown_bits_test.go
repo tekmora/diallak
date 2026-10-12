@@ -3,6 +3,7 @@ package serverplan
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -169,9 +170,9 @@ func TestCompare_Negative_UnknownBitsEveryCarrier(t *testing.T) {
 	def := loadDef(t)
 	s := snapshotOf(t, def)
 
-	// A role an integration manages and the definition does not hold, above
-	// every other role, as the first server read found it.
-	booster := Role{Name: "Server Booster", Managed: true, Permissions: []string{}, UnknownBits: []int{47}}
+	// A role an integration manages, above every other role, as the first server read found it.
+	s.Roles = slices.DeleteFunc(s.Roles, func(r Role) bool { return r.Name == "Server Booster" })
+	booster := Role{Name: "Server Booster", Managed: true, ShownApart: true, Permissions: []string{}, UnknownBits: []int{47}}
 	s.Roles = append([]Role{booster}, s.Roles...)
 	roleNamed(t, s, "Moderator").UnknownBits = []int{47, 53}
 	roleNamed(t, s, "@everyone").UnknownBits = []int{47}

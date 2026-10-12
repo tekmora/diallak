@@ -106,7 +106,7 @@ func TestValidate_ExactlyOneOptionPerRole(t *testing.T) {
 		def.Choices.Questions = nil
 		keptRoles := make([]Role, 0, len(def.Roles))
 		for _, r := range def.Roles {
-			if r.Kind != "interest" && r.Kind != "language" {
+			if r.Kind != "interest" && r.Kind != "language" && r.Kind != "notification" {
 				keptRoles = append(keptRoles, r)
 			}
 		}

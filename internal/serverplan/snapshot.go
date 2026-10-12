@@ -33,6 +33,8 @@ type Role struct {
 	Name        string   `json:"name"`
 	Everyone    bool     `json:"everyone"`
 	Managed     bool     `json:"managed"`
+	ShownApart  bool     `json:"shown_apart,omitempty"`
+	Mentionable bool     `json:"mentionable,omitempty"`
 	Permissions []string `json:"permissions"`
 	UnknownBits []int    `json:"unknown_bits,omitempty"`
 }

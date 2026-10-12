@@ -19,7 +19,7 @@ func (v *validator) checkRoleOrder() {
 
 func (v *validator) checkRoleOrderEntries(orderCounts map[string]int) {
 	reportedDuplicates := make(map[string]struct{}, len(orderCounts))
-	reportedEveryone := make(map[string]struct{}, 1)
+	reportedForbidden := make(map[string]struct{}, len(v.def.Roles))
 	for _, entry := range v.def.RoleOrder {
 		r := findRole(v.def.Roles, entry)
 		if r == nil {
@@ -34,19 +34,24 @@ func (v *validator) checkRoleOrderEntries(orderCounts map[string]int) {
 				reportedDuplicates[entry] = struct{}{}
 			}
 		}
-		if r.Kind == "everyone" {
-			if _, reported := reportedEveryone[entry]; !reported {
-				v.add(CodeRoleOrder, fmt.Sprintf("role_order[%s]", entry),
-					fmt.Sprintf("role %q of kind everyone must not be listed in role_order", entry))
-				reportedEveryone[entry] = struct{}{}
-			}
-		}
+		checkForbiddenRoleOrderKind(v, r, entry, reportedForbidden)
+	}
+}
+
+func checkForbiddenRoleOrderKind(v *validator, r *Role, entry string, reported map[string]struct{}) {
+	if r.Kind != "everyone" && r.Kind != "managed" {
+		return
+	}
+	if _, already := reported[entry]; !already {
+		v.add(CodeRoleOrder, fmt.Sprintf("role_order[%s]", entry),
+			fmt.Sprintf("role %q of kind %s must not be listed in role_order", entry, r.Kind))
+		reported[entry] = struct{}{}
 	}
 }
 
 func (v *validator) checkRoleOrderPresence(orderCounts map[string]int) {
 	for _, r := range v.def.Roles {
-		if r.Kind != "everyone" && orderCounts[r.ID] == 0 {
+		if r.Kind != "everyone" && r.Kind != "managed" && orderCounts[r.ID] == 0 {
 			v.add(CodeRoleOrder, fmt.Sprintf("roles[%s]", r.ID),
 				fmt.Sprintf("role %q is not listed in role_order", r.ID))
 		}
@@ -69,7 +74,7 @@ func (v *validator) checkRoleOrderPositions(firstIndex, orderCounts map[string]i
 }
 
 func (v *validator) checkSingleRolePosition(r Role, botIdx int, firstIndex map[string]int) {
-	if r.Kind == "everyone" {
+	if r.Kind == "everyone" || r.Kind == "managed" {
 		return
 	}
 	rIdx, ok := firstIndex[r.ID]

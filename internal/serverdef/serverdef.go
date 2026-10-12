@@ -167,6 +167,12 @@ type Role struct {
 	AssignedBy  string   `json:"assigned_by"`
 	Basis       string   `json:"basis"`
 	Permissions []string `json:"permissions"`
+	// ShownApart indicates whether the role is displayed separately in the member list.
+	// Absent = the definition does not state it; nothing compares or changes that value on the server.
+	ShownApart *bool `json:"shown_apart,omitempty"`
+	// Mentionable indicates whether anyone can mention the role.
+	// Absent = the definition does not state it; nothing compares or changes that value on the server.
+	Mentionable *bool `json:"mentionable,omitempty"`
 }
 
 // Category defines an organizational grouping of channels.

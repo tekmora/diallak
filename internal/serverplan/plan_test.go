@@ -10,6 +10,13 @@ import (
 	"github.com/tekmora/diallak/internal/serverdef"
 )
 
+func raiseBotRole(t *testing.T, s *Snapshot, extraPerm string) {
+	t.Helper()
+	r := roleNamed(t, s, s.Caller.Role)
+	r.Permissions = append(r.Permissions, extraPerm)
+	s.Caller.Permissions = append(s.Caller.Permissions, extraPerm)
+}
+
 func raisedFirstSetupSnapshot() *Snapshot {
 	callerPerms := []string{
 		"MANAGE_ROLES",
@@ -499,11 +506,8 @@ func TestPlan_Boundary_NeighboursOfTheCaller(t *testing.T) {
 
 	t.Run("role directly below caller with wrong permissions -> accepted", func(t *testing.T) {
 		s := snapshotOf(t, def)
-		// Give bot extra permission so Raised is true
-		s.Roles[4].Permissions = append(s.Roles[4].Permissions, "MANAGE_CHANNELS")
-		s.Caller.Permissions = append(s.Caller.Permissions, "MANAGE_CHANNELS")
-		// Contributor is index 5 (directly below bot at index 4)
-		s.Roles[5].Permissions = []string{"VIEW_AUDIT_LOG"}
+		raiseBotRole(t, s, "MANAGE_CHANNELS")
+		roleNamed(t, s, "Contributor").Permissions = []string{"VIEW_AUDIT_LOG"}
 
 		res, err := Plan(def, s)
 		if err != nil {
@@ -523,10 +527,8 @@ func TestPlan_Boundary_NeighboursOfTheCaller(t *testing.T) {
 
 	t.Run("role directly above caller with wrong permissions -> refused above-caller", func(t *testing.T) {
 		s := snapshotOf(t, def)
-		s.Roles[4].Permissions = append(s.Roles[4].Permissions, "MANAGE_CHANNELS")
-		s.Caller.Permissions = append(s.Caller.Permissions, "MANAGE_CHANNELS")
-		// Guide-video is index 3 (directly above bot at index 4)
-		s.Roles[3].Permissions = []string{"VIEW_AUDIT_LOG"}
+		raiseBotRole(t, s, "MANAGE_CHANNELS")
+		roleNamed(t, s, "Subject guide: video").Permissions = []string{"VIEW_AUDIT_LOG"}
 
 		res, err := Plan(def, s)
 		if err != nil {
@@ -546,10 +548,17 @@ func TestPlan_Boundary_NeighboursOfTheCaller(t *testing.T) {
 
 	t.Run("two roles below caller swapped -> set-role-order accepted", func(t *testing.T) {
 		s := snapshotOf(t, def)
-		s.Roles[4].Permissions = append(s.Roles[4].Permissions, "MANAGE_CHANNELS")
-		s.Caller.Permissions = append(s.Caller.Permissions, "MANAGE_CHANNELS")
-		// Swap contributor (5) and supporter (6)
-		s.Roles[5], s.Roles[6] = s.Roles[6], s.Roles[5]
+		raiseBotRole(t, s, "MANAGE_CHANNELS")
+		cIdx, sIdx := -1, -1
+		for i := range s.Roles {
+			if s.Roles[i].Name == "Contributor" {
+				cIdx = i
+			}
+			if s.Roles[i].Name == "Supporter" {
+				sIdx = i
+			}
+		}
+		s.Roles[cIdx], s.Roles[sIdx] = s.Roles[sIdx], s.Roles[cIdx]
 
 		res, err := Plan(def, s)
 		if err != nil {
@@ -569,8 +578,7 @@ func TestPlan_Boundary_NeighboursOfTheCaller(t *testing.T) {
 
 	t.Run("two roles above caller swapped -> set-role-order refused above-caller", func(t *testing.T) {
 		s := snapshotOf(t, def)
-		s.Roles[4].Permissions = append(s.Roles[4].Permissions, "MANAGE_CHANNELS")
-		s.Caller.Permissions = append(s.Caller.Permissions, "MANAGE_CHANNELS")
+		raiseBotRole(t, s, "MANAGE_CHANNELS")
 		// Swap operator (0) and moderator (1)
 		s.Roles[0], s.Roles[1] = s.Roles[1], s.Roles[0]
 
@@ -606,8 +614,7 @@ func TestPlan_Negative_Reasons(t *testing.T) {
 			name: "announcements missing + no NEWS -> missing-feature",
 			setup: func() *Snapshot {
 				s := snapshotOf(t, def)
-				s.Roles[4].Permissions = append(s.Roles[4].Permissions, "MANAGE_CHANNELS")
-				s.Caller.Permissions = append(s.Caller.Permissions, "MANAGE_CHANNELS")
+				raiseBotRole(t, s, "MANAGE_CHANNELS")
 				s.Features = []string{"COMMUNITY"} // lacks NEWS
 				var newCh []Channel
 				for _, ch := range s.Channels {
@@ -626,8 +633,7 @@ func TestPlan_Negative_Reasons(t *testing.T) {
 			name: "lounge observed as voice -> convert-channel type-differs",
 			setup: func() *Snapshot {
 				s := snapshotOf(t, def)
-				s.Roles[4].Permissions = append(s.Roles[4].Permissions, "MANAGE_CHANNELS")
-				s.Caller.Permissions = append(s.Caller.Permissions, "MANAGE_CHANNELS")
+				raiseBotRole(t, s, "MANAGE_CHANNELS")
 				for i := range s.Channels {
 					if s.Channels[i].Name == "lounge" {
 						s.Channels[i].Type = "voice"
@@ -643,8 +649,7 @@ func TestPlan_Negative_Reasons(t *testing.T) {
 			name: "two channels named lounge -> resolve-name ambiguous-name",
 			setup: func() *Snapshot {
 				s := snapshotOf(t, def)
-				s.Roles[4].Permissions = append(s.Roles[4].Permissions, "MANAGE_CHANNELS")
-				s.Caller.Permissions = append(s.Caller.Permissions, "MANAGE_CHANNELS")
+				raiseBotRole(t, s, "MANAGE_CHANNELS")
 				s.Channels = append(s.Channels, Channel{
 					Name:     "lounge",
 					Type:     "text",
@@ -660,8 +665,7 @@ func TestPlan_Negative_Reasons(t *testing.T) {
 			name: "two roles named Moderator -> resolve-name ambiguous-name",
 			setup: func() *Snapshot {
 				s := snapshotOf(t, def)
-				s.Roles[4].Permissions = append(s.Roles[4].Permissions, "MANAGE_CHANNELS")
-				s.Caller.Permissions = append(s.Caller.Permissions, "MANAGE_CHANNELS")
+				raiseBotRole(t, s, "MANAGE_CHANNELS")
 				for i, r := range s.Roles {
 					if r.Name == "Moderator" {
 						s.Roles = append(s.Roles[:i+1], append([]Role{r}, s.Roles[i+1:]...)...)
@@ -678,8 +682,7 @@ func TestPlan_Negative_Reasons(t *testing.T) {
 			name: "Supporter managed with other permissions -> managed-role",
 			setup: func() *Snapshot {
 				s := snapshotOf(t, def)
-				s.Roles[4].Permissions = append(s.Roles[4].Permissions, "MANAGE_CHANNELS")
-				s.Caller.Permissions = append(s.Caller.Permissions, "MANAGE_CHANNELS")
+				raiseBotRole(t, s, "MANAGE_CHANNELS")
 				for i := range s.Roles {
 					if s.Roles[i].Name == "Supporter" {
 						s.Roles[i].Managed = true
@@ -696,8 +699,7 @@ func TestPlan_Negative_Reasons(t *testing.T) {
 			name: "lounge missing + not complete -> not-visible",
 			setup: func() *Snapshot {
 				s := snapshotOf(t, def)
-				s.Roles[4].Permissions = append(s.Roles[4].Permissions, "MANAGE_CHANNELS")
-				s.Caller.Permissions = append(s.Caller.Permissions, "MANAGE_CHANNELS")
+				raiseBotRole(t, s, "MANAGE_CHANNELS")
 				s.ChannelsComplete = false
 				var newCh []Channel
 				for _, ch := range s.Channels {
@@ -736,8 +738,7 @@ func TestPlan_Negative_Reasons(t *testing.T) {
 
 	t.Run("tickets missing + not complete -> NO candidate at all", func(t *testing.T) {
 		s := snapshotOf(t, def)
-		s.Roles[4].Permissions = append(s.Roles[4].Permissions, "MANAGE_CHANNELS")
-		s.Caller.Permissions = append(s.Caller.Permissions, "MANAGE_CHANNELS")
+		raiseBotRole(t, s, "MANAGE_CHANNELS")
 		s.ChannelsComplete = false
 		var newCh []Channel
 		for _, ch := range s.Channels {
@@ -796,8 +797,8 @@ func TestPlan_Boundary_ExtrasAreLeftAlone(t *testing.T) {
 
 func TestPlan_Boundary_ClosedActionList(t *testing.T) {
 	actions := Actions()
-	if len(actions) != 9 {
-		t.Fatalf("len(Actions()) = %d, want 9", len(actions))
+	if len(actions) != 10 {
+		t.Fatalf("len(Actions()) = %d, want 10", len(actions))
 	}
 	actionSet := make(map[string]struct{}, len(actions))
 	for _, a := range actions {

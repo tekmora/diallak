@@ -54,12 +54,12 @@ after the definition and a file over one mebibyte are refused
 | Part | Content | In the file today |
 | :--- | :--- | :--- |
 | `metrics` | What a threshold rule may measure, and from which data | 2 |
-| `roles` | Every role with its kind, who assigns it and its server-wide permissions | 17 |
-| `role_order` | The roles from the highest to the lowest, without the role every member holds | 16 |
+| `roles` | Every role with its kind, who assigns it and its server-wide permissions | 28 |
+| `role_order` | The roles from the highest to the lowest, without the role every member holds | 24 |
 | `categories` | The groups channels are shown in | 6 |
 | `channels` | Every channel with type, purpose, owner and the permissions it changes per role | 16 |
 | `areas` | The rooms that open at a threshold, each with an opening and a closing rule | 8 |
-| `choices` | The questions the bot's areas command offers and the role each option gives | 2 questions |
+| `choices` | The questions the bot's areas command offers and the role each option gives | 3 questions |
 | `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 15 |
 <!-- markdownlint-enable MD013 -->
 

@@ -153,6 +153,7 @@ func TestExecuteSingleChange_Negative_RefusalNamesTheCallStep(t *testing.T) {
 	}{
 		{"create-role", "roles[contributor]", "create role"},
 		{"set-role-permissions", "roles[moderator]", "set role permissions"},
+		{"set-role-display", "roles[helper]", "set role display"},
 		{"create-category", "categories[start]", "create category"},
 		{"create-channel", "channels[lounge]", "create channel"},
 		{"move-channel", "channels[room-es]", "move channel"},

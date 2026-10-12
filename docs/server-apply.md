@@ -166,6 +166,9 @@ administrator rights cannot tell a missing channel from a hidden one.
 | `role-name` | The caller's role is called something else than the definition's bot role |
 | `role-permissions` | A role lacks a permission or holds one beyond the definition |
 | `role-order` | The roles stand in another order than `role_order` |
+| `role-not-managed` | The server role is not managed by the platform or an integration |
+| `role-place` | The role stands above the moderator role |
+| `role-display` | Shown apart, mentionable or both differ from the definition |
 | `category-missing`, `category-ambiguous` | The same for a category |
 | `channel-missing`, `channel-ambiguous` | The same for a channel, when the channel list is complete |
 | `channel-not-visible` | A channel has no match and the list is not complete: either hidden from the bot by the definition, as the ticket channel is, or missing or hidden |
@@ -189,6 +192,7 @@ The list of actions is closed (`serverplan.Actions`), and none of them deletes.
 | :--- | :--- | :--- |
 | `create-role` | A missing role | `MANAGE_ROLES` and every permission the role gets |
 | `set-role-permissions` | A role with other permissions | `MANAGE_ROLES` and every permission added |
+| `set-role-display` | Sets shown_apart, mentionable or both on a role to match the definition | `MANAGE_ROLES` |
 | `set-role-order` | Roles in another order, or a role that is created | `MANAGE_ROLES` |
 | `create-category` | A missing category | `MANAGE_CHANNELS` |
 | `create-channel` | A missing channel, created together with its entries | `MANAGE_CHANNELS` and every permission its entries name |

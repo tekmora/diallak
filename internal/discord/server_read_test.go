@@ -49,6 +49,8 @@ func buildPlatformFixtureFromDef(t *testing.T, guildID uint64, botUserID uint64,
 		Position    int      `json:"position"`
 		Permissions string   `json:"permissions"`
 		Managed     bool     `json:"managed"`
+		Hoist       bool     `json:"hoist"`
+		Mentionable bool     `json:"mentionable"`
 		Tags        *roleTag `json:"tags,omitempty"`
 	}
 
@@ -56,25 +58,13 @@ func buildPlatformFixtureFromDef(t *testing.T, guildID uint64, botUserID uint64,
 	var apiRoles []apiRole
 	nextRoleID := uint64(5000)
 
-	// Position assignments: roles in RoleOrder get descending positions.
+	// Position assignments: roles in RoleOrder get descending positions above managed roles.
 	// Everyone role gets position 0 and ID = guildID.
 	for i, id := range def.RoleOrder {
-		var defRole *struct {
-			name        string
-			kind        string
-			permissions []string
-		}
+		var defRole *serverdef.Role
 		for rIdx := range def.Roles {
 			if def.Roles[rIdx].ID == id {
-				defRole = &struct {
-					name        string
-					kind        string
-					permissions []string
-				}{
-					name:        def.Roles[rIdx].Name,
-					kind:        def.Roles[rIdx].Kind,
-					permissions: def.Roles[rIdx].Permissions,
-				}
+				defRole = &def.Roles[rIdx]
 				break
 			}
 		}
@@ -85,7 +75,7 @@ func buildPlatformFixtureFromDef(t *testing.T, guildID uint64, botUserID uint64,
 		nextRoleID++
 		var tags *roleTag
 		managed := false
-		if defRole.kind == "bot" {
+		if defRole.Kind == "bot" {
 			rID = botRoleID
 			bIDStr := strconv.FormatUint(botUserID, 10)
 			tags = &roleTag{BotID: &bIDStr}
@@ -93,17 +83,60 @@ func buildPlatformFixtureFromDef(t *testing.T, guildID uint64, botUserID uint64,
 		}
 		roleIDMap[id] = rID
 
-		mask, maskErr := serverdefPermissionMask(defRole.permissions)
+		mask, maskErr := serverdefPermissionMask(defRole.Permissions)
 		if maskErr != nil {
 			t.Fatalf("PermissionMask: %v", maskErr)
 		}
+		var hoist, mentionable bool
+		if defRole.ShownApart != nil {
+			hoist = *defRole.ShownApart
+		}
+		if defRole.Mentionable != nil {
+			mentionable = *defRole.Mentionable
+		}
 		apiRoles = append(apiRoles, apiRole{
 			ID:          strconv.FormatUint(rID, 10),
-			Name:        defRole.name,
-			Position:    len(def.RoleOrder) - i,
+			Name:        defRole.Name,
+			Position:    len(def.RoleOrder) + 3 - i,
 			Permissions: strconv.FormatUint(mask, 10),
 			Managed:     managed,
+			Hoist:       hoist,
+			Mentionable: mentionable,
 			Tags:        tags,
+		})
+	}
+
+	// Managed roles below moderator
+	managedIDs := []string{"booster", "funding-ko-fi", "funding-patreon"}
+	for mIdx, mID := range managedIDs {
+		var mRole *serverdef.Role
+		for rIdx := range def.Roles {
+			if def.Roles[rIdx].ID == mID {
+				mRole = &def.Roles[rIdx]
+				break
+			}
+		}
+		if mRole == nil {
+			t.Fatalf("managed role %s not found in def.Roles", mID)
+		}
+		rID := nextRoleID
+		nextRoleID++
+		roleIDMap[mID] = rID
+		var hoist, mentionable bool
+		if mRole.ShownApart != nil {
+			hoist = *mRole.ShownApart
+		}
+		if mRole.Mentionable != nil {
+			mentionable = *mRole.Mentionable
+		}
+		apiRoles = append(apiRoles, apiRole{
+			ID:          strconv.FormatUint(rID, 10),
+			Name:        mRole.Name,
+			Position:    len(managedIDs) - mIdx,
+			Permissions: "0",
+			Managed:     true,
+			Hoist:       hoist,
+			Mentionable: mentionable,
 		})
 	}
 
@@ -115,12 +148,21 @@ func buildPlatformFixtureFromDef(t *testing.T, guildID uint64, botUserID uint64,
 			if maskErr != nil {
 				t.Fatalf("PermissionMask everyone: %v", maskErr)
 			}
+			var hoist, mentionable bool
+			if def.Roles[rIdx].ShownApart != nil {
+				hoist = *def.Roles[rIdx].ShownApart
+			}
+			if def.Roles[rIdx].Mentionable != nil {
+				mentionable = *def.Roles[rIdx].Mentionable
+			}
 			apiRoles = append(apiRoles, apiRole{
 				ID:          strconv.FormatUint(guildID, 10),
 				Name:        def.Roles[rIdx].Name,
 				Position:    0,
 				Permissions: strconv.FormatUint(mask, 10),
 				Managed:     false,
+				Hoist:       hoist,
+				Mentionable: mentionable,
 			})
 			break
 		}
