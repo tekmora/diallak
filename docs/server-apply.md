@@ -337,6 +337,29 @@ entries, so the first run needs the operator twice: once to raise the bot's
 role and once to lower it again
 ([ADR-0010](adr/0010-bot-rights-and-apply-path.md), "One apply path").
 
+Before the first step the operator makes one role by hand: the Operator role,
+under the name the definition gives it, with `ADMINISTRATOR`, above the bot's
+role. The plan cannot make this role. Creating a role needs every right the
+role gets ([What a plan holds](#what-a-plan-holds)), a bot gives a role only
+rights it holds itself, and the bot's role holds no `ADMINISTRATOR` at any
+step. ADR-0010 left open who makes the role ("Open points"). The three tests
+below start from a server that has it (`setupFreshServerFake` in
+[`server_apply_test.go`](../internal/discord/server_apply_test.go)).
+
+Two lines of `-server=compare` show that this is not done yet:
+
+- `role-missing roles[operator]`: the role is not there, or has another name.
+- `role-permissions roles[bot]` with `ADMINISTRATOR` after the word `beyond`:
+  the bot's role holds the right, for example from its invitation. The
+  operator takes it away first.
+
+Without the Operator role the tool does not stop by itself yet
+([#83](https://github.com/tekmora/diallak/issues/83)). `rights needed:` then
+names `ADMINISTRATOR`, because the plan holds `create-role roles[operator]`
+(`addRoleMissingCandidates` in [`plan.go`](../internal/serverplan/plan.go)).
+That list is not one to give the bot's role: make the role, then plan again.
+No test covers a server without the role.
+
 1. `-server=plan` with the bot's own rights. Every change is refused as
    `outside-own-changes`; the line `rights needed:` is the list for the next
    step.
