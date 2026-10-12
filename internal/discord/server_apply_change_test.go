@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -32,7 +31,7 @@ func mustDefinition(t *testing.T) *serverdef.Definition {
 
 // orderAuditReason is the audit reason as the library puts it in the header.
 func orderAuditReason() string {
-	return strings.ReplaceAll(url.QueryEscape("diallak apply "+orderDigest), "+", " ")
+	return auditReasonOf(orderDigest)
 }
 
 // runChange runs one change against the fake, with the index a run's first
@@ -153,6 +152,7 @@ func TestExecuteSingleChange_Negative_RefusalNamesTheCallStep(t *testing.T) {
 	}{
 		{"create-role", "roles[contributor]", "create role"},
 		{"set-role-permissions", "roles[moderator]", "set role permissions"},
+		{"set-role-display", "roles[helper]", "set role display"},
 		{"create-category", "categories[start]", "create category"},
 		{"create-channel", "channels[lounge]", "create channel"},
 		{"move-channel", "channels[room-es]", "move channel"},

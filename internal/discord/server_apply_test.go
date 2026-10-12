@@ -29,6 +29,8 @@ type fakeRole struct {
 	permissions string
 	managed     bool
 	botID       *snowflake.ID
+	hoist       bool
+	mentionable bool
 }
 
 func (r *fakeRole) UnmarshalJSON(data []byte) error {
@@ -38,6 +40,8 @@ func (r *fakeRole) UnmarshalJSON(data []byte) error {
 		Position    int          `json:"position"`
 		Permissions string       `json:"permissions"`
 		Managed     bool         `json:"managed"`
+		Hoist       bool         `json:"hoist"`
+		Mentionable bool         `json:"mentionable"`
 		Tags        *struct {
 			BotID *snowflake.ID `json:"bot_id"`
 		} `json:"tags"`
@@ -50,6 +54,8 @@ func (r *fakeRole) UnmarshalJSON(data []byte) error {
 	r.position = raw.Position
 	r.permissions = raw.Permissions
 	r.managed = raw.Managed
+	r.hoist = raw.Hoist
+	r.mentionable = raw.Mentionable
 	if raw.Tags != nil && raw.Tags.BotID != nil {
 		r.botID = raw.Tags.BotID
 	}
@@ -314,6 +320,8 @@ func (f *fakePlatform) handleCreateRole(w http.ResponseWriter, body []byte) {
 	var req struct {
 		Name        string  `json:"name"`
 		Permissions *string `json:"permissions"`
+		Hoist       bool    `json:"hoist"`
+		Mentionable bool    `json:"mentionable"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -328,6 +336,9 @@ func (f *fakePlatform) handleCreateRole(w http.ResponseWriter, body []byte) {
 		perms = *req.Permissions
 	}
 
+	// A new role lands at the bottom. Where the platform puts it is not on
+	// its page; the bottom is the place that leaves a role already on the
+	// server above every role the run makes.
 	if f.createShifts {
 		for i := range f.roles {
 			if f.roles[i].name == "Diallak" || f.roles[i].name == "Operator" {
@@ -341,12 +352,14 @@ func (f *fakePlatform) handleCreateRole(w http.ResponseWriter, body []byte) {
 		name:        req.Name,
 		position:    1,
 		permissions: perms,
+		hoist:       req.Hoist,
+		mentionable: req.Mentionable,
 	}
 	f.roles = append(f.roles, role)
 	f.mu.Unlock()
 
-	writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":%q,"position":%d,"permissions":%q,"managed":false}`,
-		newID, req.Name, role.position, perms))
+	writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":%q,"position":%d,"permissions":%q,"managed":false,"hoist":%t,"mentionable":%t}`,
+		newID, req.Name, role.position, perms, req.Hoist, req.Mentionable))
 }
 
 func (f *fakePlatform) handleUpdateRole(w http.ResponseWriter, path string, body []byte) {
@@ -360,6 +373,8 @@ func (f *fakePlatform) handleUpdateRole(w http.ResponseWriter, path string, body
 
 	var req struct {
 		Permissions *string `json:"permissions"`
+		Hoist       *bool   `json:"hoist"`
+		Mentionable *bool   `json:"mentionable"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -373,6 +388,12 @@ func (f *fakePlatform) handleUpdateRole(w http.ResponseWriter, path string, body
 			if req.Permissions != nil {
 				f.roles[i].permissions = *req.Permissions
 			}
+			if req.Hoist != nil {
+				f.roles[i].hoist = *req.Hoist
+			}
+			if req.Mentionable != nil {
+				f.roles[i].mentionable = *req.Mentionable
+			}
 			updated = &f.roles[i]
 			break
 		}
@@ -383,8 +404,12 @@ func (f *fakePlatform) handleUpdateRole(w http.ResponseWriter, path string, body
 		http.NotFound(w, nil)
 		return
 	}
-	writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":%q,"position":%d,"permissions":%q,"managed":%t}`,
-		updated.id, updated.name, updated.position, updated.permissions, updated.managed))
+	perms := updated.permissions
+	if perms == "" {
+		perms = "0"
+	}
+	writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":%q,"position":%d,"permissions":%q,"managed":%t,"hoist":%t,"mentionable":%t}`,
+		updated.id, updated.name, updated.position, perms, updated.managed, updated.hoist, updated.mentionable))
 }
 
 func (f *fakePlatform) handleUpdateRolePositions(w http.ResponseWriter, body []byte) {
@@ -591,6 +616,8 @@ func (f *fakePlatform) rolesToJSON(roles []fakeRole) string {
 		Position    int    `json:"position"`
 		Permissions string `json:"permissions"`
 		Managed     bool   `json:"managed"`
+		Hoist       bool   `json:"hoist"`
+		Mentionable bool   `json:"mentionable"`
 		Tags        *struct {
 			BotID *string `json:"bot_id,omitempty"`
 		} `json:"tags,omitempty"`
@@ -616,6 +643,8 @@ func (f *fakePlatform) rolesToJSON(roles []fakeRole) string {
 			Position:    r.position,
 			Permissions: perms,
 			Managed:     r.managed,
+			Hoist:       r.hoist,
+			Mentionable: r.mentionable,
 			Tags:        tags,
 		})
 	}
@@ -699,6 +728,24 @@ func setupFreshServerFake(t *testing.T, guildID, botUserID, botRoleID uint64, ad
 		},
 	}
 	return fake
+}
+
+// addManagedRoles puts the three roles another party manages on the server,
+// at the bottom, as on a server that had its boosters and its two funding
+// integrations before the bot came.
+func addManagedRoles(fake *fakePlatform) {
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	for i := range fake.roles {
+		if fake.roles[i].position > 0 {
+			fake.roles[i].position += 3
+		}
+	}
+	fake.roles = append(fake.roles,
+		fakeRole{id: snowflake.ID(4002), name: "Server Booster", position: 1, permissions: "0", managed: true, hoist: true},
+		fakeRole{id: snowflake.ID(4003), name: "Ko-fi Bot", position: 2, permissions: "0", managed: true},
+		fakeRole{id: snowflake.ID(4004), name: "Patreon", position: 3, permissions: "0", managed: true},
+	)
 }
 func assertRequestCounts(t *testing.T, recorded []recordedCall, wantReads, wantWrites int) {
 	t.Helper()
@@ -971,7 +1018,11 @@ func assertFullRunDifferences(t *testing.T, diffs []serverplan.Difference) {
 	var botPermsDiff, roleOrderDiff bool
 	for _, d := range diffs {
 		switch d.Kind {
-		case serverplan.KindRoleMissing, serverplan.KindCategoryMissing, serverplan.KindChannelMissing,
+		case serverplan.KindRoleMissing:
+			if d.Detail != "managed; the plan does not create it" {
+				t.Errorf("unexpected diff of kind %s: %+v", d.Kind, d)
+			}
+		case serverplan.KindCategoryMissing, serverplan.KindChannelMissing,
 			serverplan.KindChannelCategory, serverplan.KindChannelType, serverplan.KindAccessMissing,
 			serverplan.KindAccessDiffers:
 			t.Errorf("unexpected diff of kind %s: %+v", d.Kind, d)

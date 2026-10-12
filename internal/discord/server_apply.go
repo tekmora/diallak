@@ -97,7 +97,7 @@ func verifyApplyGates(result serverplan.Result, in ApplyInput) error {
 
 func validateChangeObject(def *serverdef.Definition, c serverplan.Change) error {
 	switch c.Action {
-	case "create-role", "set-role-permissions":
+	case "create-role", "set-role-permissions", "set-role-display":
 		return validateRoleChange(def, c)
 	case "set-role-order":
 		return validateRoleOrderChange(c)
@@ -311,6 +311,8 @@ func executeSingleChange(
 		return applyCreateRole(callCtx, client, guildID, in.Definition, c.Object, idx, auditReason)
 	case "set-role-permissions":
 		return applySetRolePermissions(callCtx, client, guildID, in.Definition, c.Object, idx, auditReason)
+	case "set-role-display":
+		return applySetRoleDisplay(callCtx, client, guildID, in.Definition, c.Object, idx, auditReason)
 	case "create-category":
 		return applyCreateCategory(callCtx, client, guildID, in.Definition, c.Object, idx, auditReason)
 	case "create-channel":
@@ -341,6 +343,9 @@ func applyCreateRole(
 	if !ok {
 		return fmt.Errorf("role %q not found in definition", id)
 	}
+	if defRole.Kind == "managed" {
+		return fmt.Errorf("role %q is managed by another party; the tool does not change it", id)
+	}
 
 	mask, err := serverdef.PermissionMask(defRole.Permissions)
 	if err != nil {
@@ -350,6 +355,8 @@ func applyCreateRole(
 	roleCreate := discord.RoleCreate{
 		Name:        defRole.Name,
 		Permissions: &perms,
+		Hoist:       defRole.ShownApart != nil && *defRole.ShownApart,
+		Mentionable: defRole.Mentionable != nil && *defRole.Mentionable,
 	}
 
 	created, err := client.Rest.CreateRole(snowflake.ID(guildID), roleCreate, rest.WithCtx(ctx), rest.WithReason(reason))
@@ -380,6 +387,9 @@ func applySetRolePermissions(
 	if !ok {
 		return fmt.Errorf("role %q not found in definition", id)
 	}
+	if defRole.Kind == "managed" {
+		return fmt.Errorf("role %q is managed by another party; the tool does not change it", id)
+	}
 
 	roleID, err := resolveRoleID(defRole, idx)
 	if err != nil {
@@ -398,6 +408,44 @@ func applySetRolePermissions(
 	_, err = client.Rest.UpdateRole(snowflake.ID(guildID), roleID, roleUpdate, rest.WithCtx(ctx), rest.WithReason(reason))
 	if err != nil {
 		return callError("set role permissions", err, client.Token)
+	}
+	return nil
+}
+
+func applySetRoleDisplay(
+	ctx context.Context,
+	client *bot.Client,
+	guildID uint64,
+	def *serverdef.Definition,
+	object string,
+	idx *serverIndex,
+	reason string,
+) error {
+	id, err := extractBracketedID(object, "roles[")
+	if err != nil {
+		return err
+	}
+	defRole, ok := findRoleInDef(def, id)
+	if !ok {
+		return fmt.Errorf("role %q not found in definition", id)
+	}
+	if defRole.Kind == "managed" {
+		return fmt.Errorf("role %q is managed by another party; the tool does not change it", id)
+	}
+
+	roleID, err := resolveRoleID(defRole, idx)
+	if err != nil {
+		return err
+	}
+
+	roleUpdate := discord.RoleUpdate{
+		Hoist:       defRole.ShownApart,
+		Mentionable: defRole.Mentionable,
+	}
+
+	_, err = client.Rest.UpdateRole(snowflake.ID(guildID), roleID, roleUpdate, rest.WithCtx(ctx), rest.WithReason(reason))
+	if err != nil {
+		return callError("set role display", err, client.Token)
 	}
 	return nil
 }

@@ -15,7 +15,8 @@ import (
 // The page on applying the definition has a table that gives each right the label it carries in
 // Discord's settings, because the operator switches rights on by label and the tool prints
 // programming names. This test keeps the table in step with the definition: every right the
-// definition names on a role or on a channel's entry, and MANAGE_CHANNELS, has a row with a label.
+// definition names on a role or on a channel's entry, and MANAGE_CHANNELS, has a row with the label
+// of the English and of the German app.
 func TestServerApplyDoc_Negative_LabelsEveryRight(t *testing.T) {
 	doc, err := os.ReadFile("../../docs/server-apply.md")
 	if err != nil {
@@ -43,10 +44,39 @@ func TestServerApplyDoc_Negative_LabelsEveryRight(t *testing.T) {
 		t.Fatalf("the definition names %d rights; the walk of this test no longer fits", len(named))
 	}
 	for right := range named {
-		row := regexp.MustCompile("(?m)^\\| `" + regexp.QuoteMeta(right) + "` \\| [^|`]*[A-Za-z][^|`]* \\| [^|]+ \\|$")
-		if !row.Match(doc) {
-			t.Errorf("the documentation page has no row with a settings label for the right %q", right)
+		if !labelRow(right).Match(doc) {
+			t.Errorf("the documentation page has no row with both settings labels for the right %q", right)
 		}
+	}
+}
+
+// labelRow matches the table row of a right: its name, the label of the English app, the label of
+// the German app and where both were read.
+func labelRow(right string) *regexp.Regexp {
+	const label = " \\| [^|`]*[A-Za-z][^|`]*"
+	return regexp.MustCompile("(?m)^\\| `" + regexp.QuoteMeta(right) + "`" + label + label + " \\| [^|]+ \\|$")
+}
+
+// A row that holds one label only, or an empty cell in place of one, is no row of the table.
+func TestServerApplyDoc_Boundary_LabelRowNeedsBothLabels(t *testing.T) {
+	cases := []struct {
+		name string
+		row  string
+		want bool
+	}{
+		{"both labels", "| `SPEAK` | Speak | Sprechen | the same two pages |", true},
+		{"one label", "| `SPEAK` | Speak | the same two pages |", false},
+		{"empty second label", "| `SPEAK` | Speak |  | the same two pages |", false},
+		{"empty first label", "| `SPEAK` |  | Sprechen | the same two pages |", false},
+		{"no source", "| `SPEAK` | Speak | Sprechen |", false},
+		{"another right", "| `SPEAKER` | Speak | Sprechen | the same two pages |", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := labelRow("SPEAK").MatchString(tc.row); got != tc.want {
+				t.Errorf("labelRow matches %q: %t, want %t", tc.row, got, tc.want)
+			}
+		})
 	}
 }
 

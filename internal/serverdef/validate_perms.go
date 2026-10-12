@@ -211,7 +211,7 @@ func (v *validator) checkNothingAttaches() {
 	roleMap := make(map[string]Role, len(v.def.Roles))
 	for _, r := range v.def.Roles {
 		roleMap[r.ID] = r
-		if r.Kind == "recognition" || r.Kind == "interest" || r.Kind == "language" {
+		if r.Kind == "recognition" || r.Kind == "interest" || r.Kind == "language" || r.Kind == "managed" || r.Kind == "notification" {
 			if len(r.Permissions) > 0 {
 				v.add(CodeNothingAttaches, fmt.Sprintf("roles[%s].permissions", r.ID),
 					fmt.Sprintf("role kind %s must have empty permissions list", r.Kind))
@@ -231,8 +231,8 @@ func (v *validator) checkChannelNothingAttaches(ch Channel, roleMap map[string]R
 			continue
 		}
 		accPath := fmt.Sprintf("%s.access[%s]", p, acc.Role)
-		if r.Kind == "recognition" && len(acc.Allow) > 0 {
-			v.add(CodeNothingAttaches, accPath, "recognition role must have empty allow list")
+		if (r.Kind == "recognition" || r.Kind == "notification") && len(acc.Allow) > 0 {
+			v.add(CodeNothingAttaches, accPath, fmt.Sprintf("%s role must have empty allow list", r.Kind))
 		}
 		if r.Kind == "interest" || r.Kind == "language" {
 			checkInterestOrLangAllow(v, accPath, r.Kind, acc.Allow)
@@ -252,6 +252,7 @@ func checkInterestOrLangAllow(v *validator, accPath, kind string, allow []string
 func (v *validator) checkRoleGrants() {
 	v.checkRoleAssignedBy()
 	v.checkChoiceGrantRoles()
+	v.checkRoleDisplayFields()
 }
 
 func (v *validator) checkRoleAssignedBy() {
@@ -262,12 +263,16 @@ func (v *validator) checkRoleAssignedBy() {
 }
 
 func checkSingleRoleAssignedBy(v *validator, p string, r Role) {
+	if r.AssignedBy == "integration" && r.Kind != "managed" {
+		v.add(CodeRoleGrant, p, "assigned_by integration is only for role kind managed")
+		return
+	}
 	switch r.Kind {
 	case "operator", "moderator":
 		if r.AssignedBy != "operator" {
 			v.add(CodeRoleGrant, p, fmt.Sprintf("role kind %s must have assigned_by operator", r.Kind))
 		}
-	case "interest", "language":
+	case "interest", "language", "notification":
 		if r.AssignedBy != "choice" {
 			v.add(CodeRoleGrant, p, fmt.Sprintf("role kind %s must have assigned_by choice", r.Kind))
 		}
@@ -275,9 +280,43 @@ func checkSingleRoleAssignedBy(v *validator, p string, r Role) {
 		if r.AssignedBy != "platform" {
 			v.add(CodeRoleGrant, p, fmt.Sprintf("role kind %s must have assigned_by platform", r.Kind))
 		}
-	case "recognition":
-		if r.AssignedBy != "operator" && r.AssignedBy != "bot" {
-			v.add(CodeRoleGrant, p, "recognition role must have assigned_by operator or bot")
+	case "recognition", "managed":
+		checkMultiGrantRoleAssignedBy(v, p, r)
+	}
+}
+
+func checkMultiGrantRoleAssignedBy(v *validator, p string, r Role) {
+	if r.Kind == "recognition" && r.AssignedBy != "operator" && r.AssignedBy != "bot" {
+		v.add(CodeRoleGrant, p, "recognition role must have assigned_by operator or bot")
+	}
+	if r.Kind == "managed" && r.AssignedBy != "platform" && r.AssignedBy != "integration" {
+		v.add(CodeRoleGrant, p, "role kind managed must have assigned_by platform or integration")
+	}
+}
+
+func (v *validator) checkRoleDisplayFields() {
+	for _, r := range v.def.Roles {
+		checkSingleRoleDisplayFields(v, r)
+	}
+}
+
+func checkSingleRoleDisplayFields(v *validator, r Role) {
+	p := fmt.Sprintf("roles[%s]", r.ID)
+	switch r.Kind {
+	case "managed":
+		if r.Mentionable != nil {
+			v.add(CodeRoleGrant, p+".mentionable", "role kind managed must not state mentionable")
+		}
+	case "everyone", "bot":
+		if r.ShownApart != nil {
+			v.add(CodeRoleGrant, p+".shown_apart", fmt.Sprintf("role kind %s must not state shown_apart or mentionable", r.Kind))
+		}
+		if r.Mentionable != nil {
+			v.add(CodeRoleGrant, p+".mentionable", fmt.Sprintf("role kind %s must not state shown_apart or mentionable", r.Kind))
+		}
+	case "notification":
+		if r.Mentionable == nil || !*r.Mentionable {
+			v.add(CodeRoleGrant, p+".mentionable", "role kind notification must state mentionable true")
 		}
 	}
 }

@@ -158,8 +158,8 @@ func inSet(val string, allowed []string) bool {
 }
 
 func (v *validator) checkEnums() {
-	roleKinds := []string{"everyone", "operator", "moderator", "bot", "recognition", "interest", "language"}
-	roleAssignedBy := []string{"platform", "operator", "choice", "bot"}
+	roleKinds := []string{"everyone", "operator", "moderator", "bot", "recognition", "interest", "language", "notification", "managed"}
+	roleAssignedBy := []string{"platform", "operator", "choice", "bot", "integration"}
 	roleBases := []string{"decided", "proposal"}
 	for _, r := range v.def.Roles {
 		p := fmt.Sprintf("roles[%s]", r.ID)
@@ -258,9 +258,9 @@ func (v *validator) checkReferences() {
 	for _, c := range v.def.Categories {
 		catMap[c.ID] = struct{}{}
 	}
-	roleMap := make(map[string]struct{})
+	roleMap := make(map[string]Role, len(v.def.Roles))
 	for _, r := range v.def.Roles {
-		roleMap[r.ID] = struct{}{}
+		roleMap[r.ID] = r
 	}
 	areaMap := make(map[string]struct{})
 	for _, a := range v.def.Areas {
@@ -276,7 +276,7 @@ func (v *validator) checkReferences() {
 	v.checkChoiceRefs(roleMap)
 }
 
-func (v *validator) checkChannelRefs(catMap, areaMap, roleMap map[string]struct{}) {
+func (v *validator) checkChannelRefs(catMap, areaMap map[string]struct{}, roleMap map[string]Role) {
 	for _, ch := range v.def.Channels {
 		p := fmt.Sprintf("channels[%s]", ch.ID)
 		if _, ok := catMap[ch.Category]; !ok {
@@ -287,20 +287,32 @@ func (v *validator) checkChannelRefs(catMap, areaMap, roleMap map[string]struct{
 				v.add(CodeRef, p+".area", fmt.Sprintf("unknown area %q", ch.Area))
 			}
 		}
-		for _, acc := range ch.Access {
-			if _, ok := roleMap[acc.Role]; !ok {
-				v.add(CodeRef, fmt.Sprintf("%s.access[%s]", p, acc.Role),
-					fmt.Sprintf("unknown access role %q", acc.Role))
-			}
+		v.checkChannelAccessRefs(p, ch.Access, roleMap)
+	}
+}
+
+func (v *validator) checkChannelAccessRefs(channelPath string, access []Access, roleMap map[string]Role) {
+	for _, acc := range access {
+		p := fmt.Sprintf("%s.access[%s]", channelPath, acc.Role)
+		r, ok := roleMap[acc.Role]
+		if !ok {
+			v.add(CodeRef, p, fmt.Sprintf("unknown access role %q", acc.Role))
+			continue
+		}
+		if r.Kind == "managed" {
+			v.add(CodeRef, p, fmt.Sprintf("role %q is managed", acc.Role))
 		}
 	}
 }
 
-func (v *validator) checkAreaRefs(roleMap, metricMap map[string]struct{}) {
+func (v *validator) checkAreaRefs(roleMap map[string]Role, metricMap map[string]struct{}) {
 	for _, a := range v.def.Areas {
 		p := fmt.Sprintf("areas[%s]", a.ID)
-		if _, ok := roleMap[a.Role]; !ok {
+		r, ok := roleMap[a.Role]
+		if !ok {
 			v.add(CodeRef, p+".role", fmt.Sprintf("unknown area role %q", a.Role))
+		} else if r.Kind == "managed" {
+			v.add(CodeRef, p+".role", fmt.Sprintf("role %q is managed", a.Role))
 		}
 		if a.Opening != nil {
 			if _, ok := metricMap[a.Opening.Metric]; !ok {
@@ -329,6 +341,10 @@ func (v *validator) checkChannelOwner() {
 		role, ok := roleMap[ch.Owner]
 		if !ok {
 			v.add(CodeChannelOwner, p, fmt.Sprintf("channel owner %q not found", ch.Owner))
+			continue
+		}
+		if role.Kind == "managed" {
+			v.add(CodeChannelOwner, p, fmt.Sprintf("role %q is managed", role.ID))
 			continue
 		}
 		if role.Kind != "operator" && role.Kind != "moderator" {

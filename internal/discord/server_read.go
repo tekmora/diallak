@@ -201,6 +201,8 @@ func parseRoles(rawRoles []discord.Role, guildID uint64) ([]serverplan.Role, *di
 			Name:        r.Name,
 			Everyone:    false,
 			Managed:     r.Managed,
+			ShownApart:  r.Hoist,
+			Mentionable: r.Mentionable,
 			Permissions: permNames,
 			UnknownBits: unknownBits(unknown),
 		})
@@ -211,6 +213,8 @@ func parseRoles(rawRoles []discord.Role, guildID uint64) ([]serverplan.Role, *di
 		Name:        everyoneRole.Name,
 		Everyone:    true,
 		Managed:     everyoneRole.Managed,
+		ShownApart:  everyoneRole.Hoist,
+		Mentionable: everyoneRole.Mentionable,
 		Permissions: everyonePerms,
 		UnknownBits: unknownBits(unknown),
 	})

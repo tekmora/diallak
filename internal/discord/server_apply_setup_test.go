@@ -222,8 +222,12 @@ func TestApplyServer_Positive_FirstSetUpWithTheRightsThePlanNames(t *testing.T) 
 	if err != nil {
 		t.Fatalf("compare: %v", err)
 	}
-	if len(diffs) != 0 {
-		t.Errorf("compare after the set-up holds %d differences, want 0: %+v", len(diffs), diffs)
+	// A new server holds none of the roles another party manages; the plan
+	// does not make them, and they are all compare has left to name.
+	for _, d := range diffs {
+		if d.Kind != serverplan.KindRoleMissing || d.Detail != managedRoleNote {
+			t.Errorf("compare after the set-up holds %s %s (%q), want only managed roles that are missing", d.Kind, d.Object, d.Detail)
+		}
 	}
 }
 
