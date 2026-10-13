@@ -378,6 +378,58 @@ func TestHandleAsk_Positive_AnswerRepliesNameTheConfiguredPlace(t *testing.T) {
 	}
 }
 
+// assertCommandOptionMaxLength parses registered command payload and verifies the max_length property.
+func assertCommandOptionMaxLength(t *testing.T, body []byte, want int) {
+	t.Helper()
+	var payload []struct {
+		Options []struct {
+			MaxLength int `json:"max_length"`
+		} `json:"options"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("payload %q does not parse: %v", body, err)
+	}
+	if len(payload) != 1 || len(payload[0].Options) != 1 {
+		t.Fatalf("payload %q is not one command with one option", body)
+	}
+	if got := payload[0].Options[0].MaxLength; got != want {
+		t.Fatalf("max_length = %d, want %d", got, want)
+	}
+}
+
+// runRegisterCommandsPayloadTest tests that command registration options carry the expected max question length.
+func runRegisterCommandsPayloadTest(t *testing.T, appID, guildID uint64, setting, want int) {
+	t.Helper()
+	var mu sync.Mutex
+	var body []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/applications/@me" {
+			writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d"}`, appID))
+			return
+		}
+		raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+		if err != nil {
+			http.Error(w, "read error", http.StatusInternalServerError)
+			return
+		}
+		mu.Lock()
+		body = raw
+		mu.Unlock()
+		writeTestResponse(w, http.StatusOK, "[]")
+	}))
+	t.Cleanup(srv.Close)
+
+	opts := clientOptions{restURL: srv.URL, maxQuestionChars: setting}
+	if err := registerCommandsWithOptions(context.Background(), makeFakeToken(appID), guildID, opts); err != nil {
+		t.Fatalf("registerCommandsWithOptions = %v", err)
+	}
+
+	mu.Lock()
+	captured := body
+	mu.Unlock()
+	assertCommandOptionMaxLength(t, captured, want)
+}
+
 func TestRegisterCommands_Positive_PayloadCarriesTheQuestionLimit(t *testing.T) {
 	const (
 		appID   uint64 = 555555555555555555
@@ -394,46 +446,7 @@ func TestRegisterCommands_Positive_PayloadCarriesTheQuestionLimit(t *testing.T) 
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var mu sync.Mutex
-			var body []byte
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == http.MethodGet && r.URL.Path == "/applications/@me" {
-					writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d"}`, appID))
-					return
-				}
-				raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
-				if err != nil {
-					http.Error(w, "read error", http.StatusInternalServerError)
-					return
-				}
-				mu.Lock()
-				body = raw
-				mu.Unlock()
-				writeTestResponse(w, http.StatusOK, "[]")
-			}))
-			t.Cleanup(srv.Close)
-
-			opts := clientOptions{restURL: srv.URL, maxQuestionChars: tc.setting}
-			if err := registerCommandsWithOptions(context.Background(), makeFakeToken(appID), guildID, opts); err != nil {
-				t.Fatalf("registerCommandsWithOptions = %v", err)
-			}
-
-			var payload []struct {
-				Options []struct {
-					MaxLength int `json:"max_length"`
-				} `json:"options"`
-			}
-			mu.Lock()
-			defer mu.Unlock()
-			if err := json.Unmarshal(body, &payload); err != nil {
-				t.Fatalf("payload %q does not parse: %v", body, err)
-			}
-			if len(payload) != 1 || len(payload[0].Options) != 1 {
-				t.Fatalf("payload %q is not one command with one option", body)
-			}
-			if got := payload[0].Options[0].MaxLength; got != tc.want {
-				t.Fatalf("max_length = %d, want %d", got, tc.want)
-			}
+			runRegisterCommandsPayloadTest(t, appID, guildID, tc.setting, tc.want)
 		})
 	}
 }
