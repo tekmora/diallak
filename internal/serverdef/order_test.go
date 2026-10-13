@@ -80,99 +80,118 @@ func TestRoleOrder_Negative_Conditions(t *testing.T) {
 	})
 }
 
-func TestRoleOrder_Boundary_NeighboursOfTheBot(t *testing.T) {
+// verifyRoleOrderCommittedNoFindings verifies that committed order produces no role-order findings.
+func verifyRoleOrderCommittedNoFindings(t *testing.T) {
+	t.Helper()
 	def := valid(t)
 	for _, f := range Validate(def) {
 		if f.Code == CodeRoleOrder {
 			t.Fatalf("committed order produced unexpected role-order finding: %+v", f)
 		}
 	}
+}
 
-	t.Run("swap bot with honorary-supporter directly above", func(t *testing.T) {
-		d := valid(t)
-		swapRoles(d.RoleOrder, "bot", "honorary-supporter")
-		var orderFindings []Finding
-		for _, f := range Validate(d) {
-			if f.Code == CodeRoleOrder {
-				orderFindings = append(orderFindings, f)
-			}
+// verifyRoleOrderSwapHonorarySupporterAbove verifies finding when bot is swapped with honorary-supporter directly above.
+func verifyRoleOrderSwapHonorarySupporterAbove(t *testing.T) {
+	t.Helper()
+	d := valid(t)
+	swapRoles(d.RoleOrder, "bot", "honorary-supporter")
+	var orderFindings []Finding
+	for _, f := range Validate(d) {
+		if f.Code == CodeRoleOrder {
+			orderFindings = append(orderFindings, f)
 		}
-		if len(orderFindings) != 1 {
-			t.Fatalf("expected exactly 1 role-order finding, got %d: %+v", len(orderFindings), orderFindings)
-		}
-		if orderFindings[0].Path != "role_order[honorary-supporter]" {
-			t.Errorf("finding path = %q, want role_order[honorary-supporter]", orderFindings[0].Path)
-		}
-		if !strings.Contains(orderFindings[0].Message, "above") {
-			t.Errorf("finding message %q does not contain 'above'", orderFindings[0].Message)
-		}
-	})
+	}
+	if len(orderFindings) != 1 {
+		t.Fatalf("expected exactly 1 role-order finding, got %d: %+v", len(orderFindings), orderFindings)
+	}
+	if orderFindings[0].Path != "role_order[honorary-supporter]" {
+		t.Errorf("finding path = %q, want role_order[honorary-supporter]", orderFindings[0].Path)
+	}
+	if !strings.Contains(orderFindings[0].Message, "above") {
+		t.Errorf("finding message %q does not contain 'above'", orderFindings[0].Message)
+	}
+}
 
-	t.Run("swap bot with contributor directly below", func(t *testing.T) {
-		d := valid(t)
-		swapRoles(d.RoleOrder, "bot", "contributor")
-		var orderFindings []Finding
-		for _, f := range Validate(d) {
-			if f.Code == CodeRoleOrder {
-				orderFindings = append(orderFindings, f)
-			}
+// verifyRoleOrderSwapContributorBelow verifies finding when bot is swapped with contributor directly below.
+func verifyRoleOrderSwapContributorBelow(t *testing.T) {
+	t.Helper()
+	d := valid(t)
+	swapRoles(d.RoleOrder, "bot", "contributor")
+	var orderFindings []Finding
+	for _, f := range Validate(d) {
+		if f.Code == CodeRoleOrder {
+			orderFindings = append(orderFindings, f)
 		}
-		if len(orderFindings) != 1 {
-			t.Fatalf("expected exactly 1 role-order finding, got %d: %+v", len(orderFindings), orderFindings)
+	}
+	if len(orderFindings) != 1 {
+		t.Fatalf("expected exactly 1 role-order finding, got %d: %+v", len(orderFindings), orderFindings)
+	}
+	if orderFindings[0].Path != "role_order[contributor]" {
+		t.Errorf("finding path = %q, want role_order[contributor]", orderFindings[0].Path)
+	}
+	if !strings.Contains(orderFindings[0].Message, "below") {
+		t.Errorf("finding message %q does not contain 'below'", orderFindings[0].Message)
+	}
+}
+
+func TestRoleOrder_Boundary_NeighboursOfTheBot(t *testing.T) {
+	verifyRoleOrderCommittedNoFindings(t)
+	t.Run("swap bot with honorary-supporter directly above", verifyRoleOrderSwapHonorarySupporterAbove)
+	t.Run("swap bot with contributor directly below", verifyRoleOrderSwapContributorBelow)
+}
+
+// verifyRoleOrderNil verifies findings when role_order is nil.
+func verifyRoleOrderNil(t *testing.T) {
+	t.Helper()
+	d := valid(t)
+	d.RoleOrder = nil
+	var orderFindings []Finding
+	for _, f := range Validate(d) {
+		if f.Code == CodeRoleOrder {
+			orderFindings = append(orderFindings, f)
 		}
-		if orderFindings[0].Path != "role_order[contributor]" {
-			t.Errorf("finding path = %q, want role_order[contributor]", orderFindings[0].Path)
+	}
+	if len(orderFindings) != 26 {
+		t.Fatalf("expected 26 role-order findings, got %d: %+v", len(orderFindings), orderFindings)
+	}
+	for _, f := range orderFindings {
+		if !strings.Contains(f.Message, "not listed") {
+			t.Errorf("finding %+v message does not contain 'not listed'", f)
 		}
-		if !strings.Contains(orderFindings[0].Message, "below") {
-			t.Errorf("finding message %q does not contain 'below'", orderFindings[0].Message)
+	}
+}
+
+// verifyRoleOrderBotRemoved verifies findings when bot is removed from role_order.
+func verifyRoleOrderBotRemoved(t *testing.T) {
+	t.Helper()
+	d := valid(t)
+	d.RoleOrder = without(d.RoleOrder, "bot")
+	var orderFindings []Finding
+	for _, f := range Validate(d) {
+		if f.Code == CodeRoleOrder {
+			orderFindings = append(orderFindings, f)
 		}
-	})
+	}
+	if len(orderFindings) != 1 {
+		t.Fatalf("expected exactly 1 role-order finding, got %d: %+v", len(orderFindings), orderFindings)
+	}
+	if orderFindings[0].Path != "roles[bot]" {
+		t.Errorf("path = %q, want roles[bot]", orderFindings[0].Path)
+	}
+	if !strings.Contains(orderFindings[0].Message, "not listed") {
+		t.Errorf("message %q does not contain 'not listed'", orderFindings[0].Message)
+	}
+	for _, f := range orderFindings {
+		if strings.Contains(f.Message, "above") || strings.Contains(f.Message, "below") {
+			t.Errorf("unexpected above/below finding when bot is missing: %+v", f)
+		}
+	}
 }
 
 func TestRoleOrder_Boundary_EmptyAndBotMissing(t *testing.T) {
-	t.Run("role_order nil", func(t *testing.T) {
-		d := valid(t)
-		d.RoleOrder = nil
-		var orderFindings []Finding
-		for _, f := range Validate(d) {
-			if f.Code == CodeRoleOrder {
-				orderFindings = append(orderFindings, f)
-			}
-		}
-		if len(orderFindings) != 26 {
-			t.Fatalf("expected 26 role-order findings, got %d: %+v", len(orderFindings), orderFindings)
-		}
-		for _, f := range orderFindings {
-			if !strings.Contains(f.Message, "not listed") {
-				t.Errorf("finding %+v message does not contain 'not listed'", f)
-			}
-		}
-	})
-
-	t.Run("bot removed from the list", func(t *testing.T) {
-		d := valid(t)
-		d.RoleOrder = without(d.RoleOrder, "bot")
-		var orderFindings []Finding
-		for _, f := range Validate(d) {
-			if f.Code == CodeRoleOrder {
-				orderFindings = append(orderFindings, f)
-			}
-		}
-		if len(orderFindings) != 1 {
-			t.Fatalf("expected exactly 1 role-order finding, got %d: %+v", len(orderFindings), orderFindings)
-		}
-		if orderFindings[0].Path != "roles[bot]" {
-			t.Errorf("path = %q, want roles[bot]", orderFindings[0].Path)
-		}
-		if !strings.Contains(orderFindings[0].Message, "not listed") {
-			t.Errorf("message %q does not contain 'not listed'", orderFindings[0].Message)
-		}
-		for _, f := range orderFindings {
-			if strings.Contains(f.Message, "above") || strings.Contains(f.Message, "below") {
-				t.Errorf("unexpected above/below finding when bot is missing: %+v", f)
-			}
-		}
-	})
+	t.Run("role_order nil", verifyRoleOrderNil)
+	t.Run("bot removed from the list", verifyRoleOrderBotRemoved)
 }
 
 func roleOrderFindings(def *Definition) []Finding {

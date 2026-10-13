@@ -13,6 +13,27 @@ import (
 	"time"
 )
 
+// verifyValidConfig verifies that New succeeds and initializes fields matching expectations.
+func verifyValidConfig(t *testing.T, cfg Config, wantURL string, wantTimeout time.Duration, wantTokens int) {
+	t.Helper()
+	c, err := New(cfg, nil)
+	if err != nil {
+		t.Fatalf("New() unexpected error: %v", err)
+	}
+	if c.baseURL != wantURL {
+		t.Errorf("baseURL = %q, want %q", c.baseURL, wantURL)
+	}
+	if c.timeout != wantTimeout {
+		t.Errorf("timeout = %v, want %v", c.timeout, wantTimeout)
+	}
+	if c.httpClient.Timeout != wantTimeout {
+		t.Errorf("httpClient.Timeout = %v, want %v", c.httpClient.Timeout, wantTimeout)
+	}
+	if c.maxTokens != wantTokens {
+		t.Errorf("maxTokens = %d, want %d", c.maxTokens, wantTokens)
+	}
+}
+
 func TestNew_Positive_ValidConfigurations(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -50,33 +71,20 @@ func TestNew_Positive_ValidConfigurations(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			c, err := New(tc.cfg, nil)
-			if err != nil {
-				t.Fatalf("New() unexpected error: %v", err)
-			}
-			if c.baseURL != tc.wantURL {
-				t.Errorf("baseURL = %q, want %q", c.baseURL, tc.wantURL)
-			}
-			if c.timeout != tc.wantTimeout {
-				t.Errorf("timeout = %v, want %v", c.timeout, tc.wantTimeout)
-			}
-			if c.httpClient.Timeout != tc.wantTimeout {
-				t.Errorf("httpClient.Timeout = %v, want %v", c.httpClient.Timeout, tc.wantTimeout)
-			}
-			if c.maxTokens != tc.wantTokens {
-				t.Errorf("maxTokens = %d, want %d", c.maxTokens, tc.wantTokens)
-			}
+			verifyValidConfig(t, tc.cfg, tc.wantURL, tc.wantTimeout, tc.wantTokens)
 		})
 	}
 }
 
-func TestNew_Negative_ValidationErrors(t *testing.T) {
-	const secretKey = "super-secret-key-12345"
-	tests := []struct {
-		name    string
-		cfg     Config
-		wantErr string
-	}{
+type newValidationTestCase struct {
+	name    string
+	cfg     Config
+	wantErr string
+}
+
+// newValidationURLCases returns invalid URL configuration test cases.
+func newValidationURLCases(secretKey string) []newValidationTestCase {
+	return []newValidationTestCase{
 		{
 			name:    "empty base URL",
 			cfg:     Config{BaseURL: "", Alias: "router/test", Policy: "example-policy", APIKey: secretKey},
@@ -107,6 +115,12 @@ func TestNew_Negative_ValidationErrors(t *testing.T) {
 			cfg:     Config{BaseURL: "http://localhost:8080#section", Alias: "router/test", Policy: "example-policy", APIKey: secretKey},
 			wantErr: "fragment",
 		},
+	}
+}
+
+// newValidationFieldCases returns invalid field configuration test cases.
+func newValidationFieldCases(secretKey string) []newValidationTestCase {
+	return []newValidationTestCase{
 		{
 			name:    "empty alias",
 			cfg:     Config{BaseURL: "http://localhost:8080", Alias: "", Policy: "example-policy", APIKey: secretKey},
@@ -153,6 +167,16 @@ func TestNew_Negative_ValidationErrors(t *testing.T) {
 			wantErr: "outside 1..4096",
 		},
 	}
+}
+
+// newValidationTestCases returns all invalid configuration test cases.
+func newValidationTestCases(secretKey string) []newValidationTestCase {
+	return append(newValidationURLCases(secretKey), newValidationFieldCases(secretKey)...)
+}
+
+func TestNew_Negative_ValidationErrors(t *testing.T) {
+	const secretKey = "super-secret-key-12345"
+	tests := newValidationTestCases(secretKey)
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -170,14 +194,9 @@ func TestNew_Negative_ValidationErrors(t *testing.T) {
 	}
 }
 
-func TestNew_Boundary_Limits(t *testing.T) {
-	baseCfg := Config{
-		BaseURL: "http://localhost:8080",
-		Alias:   "router/test",
-		Policy:  "example-policy",
-	}
-
-	// Alias boundary: exactly 128 chars vs 129 chars
+// verifyNewBoundaryAlias tests alias length boundaries for New.
+func verifyNewBoundaryAlias(t *testing.T, baseCfg Config) {
+	t.Helper()
 	validAlias128 := strings.Repeat("a", 128)
 	cfg128 := baseCfg
 	cfg128.Alias = validAlias128
@@ -191,8 +210,11 @@ func TestNew_Boundary_Limits(t *testing.T) {
 	if _, err := New(cfg129, nil); err == nil {
 		t.Error("New() with 129-char alias passed, want error")
 	}
+}
 
-	// Policy boundary: exactly 128 chars vs 129 chars, and punctuation
+// verifyNewBoundaryPolicy tests policy length and punctuation boundaries for New.
+func verifyNewBoundaryPolicy(t *testing.T, baseCfg Config) {
+	t.Helper()
 	validPolicy128 := strings.Repeat("p", 128)
 	cfgPolicy128 := baseCfg
 	cfgPolicy128.Policy = validPolicy128
@@ -213,8 +235,11 @@ func TestNew_Boundary_Limits(t *testing.T) {
 	if _, err := New(cfgPunct, nil); err != nil {
 		t.Errorf("New() with punctuation policy failed: %v", err)
 	}
+}
 
-	// MaxOutputTokens boundary: 1, 4096 vs 0, 4097
+// verifyNewBoundaryTokens tests token limit boundaries for New.
+func verifyNewBoundaryTokens(t *testing.T, baseCfg Config) {
+	t.Helper()
 	cfgTok1 := baseCfg
 	cfgTok1.MaxOutputTokens = 1
 	if c, err := New(cfgTok1, nil); err != nil || c.maxTokens != 1 {
@@ -226,8 +251,11 @@ func TestNew_Boundary_Limits(t *testing.T) {
 	if c, err := New(cfgTok4096, nil); err != nil || c.maxTokens != 4096 {
 		t.Errorf("New() with 4096 tokens failed: %v", err)
 	}
+}
 
-	// Timeout boundary: MaxTimeout vs MaxTimeout + 1ns
+// verifyNewBoundaryTimeout tests timeout boundaries for New.
+func verifyNewBoundaryTimeout(t *testing.T, baseCfg Config) {
+	t.Helper()
 	cfgMaxTimeout := baseCfg
 	cfgMaxTimeout.Timeout = MaxTimeout
 	if c, err := New(cfgMaxTimeout, nil); err != nil || c.timeout != MaxTimeout {
@@ -244,6 +272,19 @@ func TestNew_Boundary_Limits(t *testing.T) {
 	}
 }
 
+func TestNew_Boundary_Limits(t *testing.T) {
+	baseCfg := Config{
+		BaseURL: "http://localhost:8080",
+		Alias:   "router/test",
+		Policy:  "example-policy",
+	}
+
+	verifyNewBoundaryAlias(t, baseCfg)
+	verifyNewBoundaryPolicy(t, baseCfg)
+	verifyNewBoundaryTokens(t, baseCfg)
+	verifyNewBoundaryTimeout(t, baseCfg)
+}
+
 func TestNew_Negative_CallerClientKeepsItsTimeout(t *testing.T) {
 	hc := &http.Client{}
 	c, err := New(Config{BaseURL: "http://localhost:8080", Alias: "router/test", Policy: "example-policy"}, hc)
@@ -255,23 +296,26 @@ func TestNew_Negative_CallerClientKeepsItsTimeout(t *testing.T) {
 	}
 }
 
-func TestComplete_Positive_RequestShapeAndResponse(t *testing.T) {
-	var capturedReq chatRequest
-	var capturedAuth string
-	var capturedContentType string
-	var capturedPath string
+type capturedCompleteState struct {
+	req         chatRequest
+	auth        string
+	contentType string
+	path        string
+}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedPath = r.URL.Path
-		capturedAuth = r.Header.Get("Authorization")
-		capturedContentType = r.Header.Get("Content-Type")
+// newCompleteMockServer creates an httptest server recording request details for Complete tests.
+func newCompleteMockServer(state *capturedCompleteState) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		state.path = r.URL.Path
+		state.auth = r.Header.Get("Authorization")
+		state.contentType = r.Header.Get("Content-Type")
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "read error", http.StatusInternalServerError)
 			return
 		}
-		if err := json.Unmarshal(body, &capturedReq); err != nil {
+		if err := json.Unmarshal(body, &state.req); err != nil {
 			http.Error(w, "unmarshal error", http.StatusBadRequest)
 			return
 		}
@@ -288,6 +332,45 @@ func TestComplete_Positive_RequestShapeAndResponse(t *testing.T) {
 			return
 		}
 	}))
+}
+
+// verifyCompleteCapturedRequest verifies headers, payload, and returned content from Complete.
+func verifyCompleteCapturedRequest(t *testing.T, content string, state capturedCompleteState) {
+	t.Helper()
+	if content != "Simulated answer text." {
+		t.Errorf("content = %q, want %q", content, "Simulated answer text.")
+	}
+	if state.path != "/chat/completions" {
+		t.Errorf("path = %q, want /chat/completions", state.path)
+	}
+	if state.contentType != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", state.contentType)
+	}
+	if state.auth != "Bearer test-secret-key" {
+		t.Errorf("Authorization = %q, want 'Bearer test-secret-key'", state.auth)
+	}
+	if state.req.Model != "router/test" {
+		t.Errorf("model = %q, want 'router/test'", state.req.Model)
+	}
+	if state.req.MaxTokens != 256 {
+		t.Errorf("max_tokens = %d, want 256", state.req.MaxTokens)
+	}
+	if state.req.Temperature != 0 {
+		t.Errorf("temperature = %v, want 0", state.req.Temperature)
+	}
+	if state.req.Stream {
+		t.Errorf("stream = %v, want false", state.req.Stream)
+	}
+	if len(state.req.Messages) != 2 ||
+		state.req.Messages[0].Content != "System prompt" ||
+		state.req.Messages[1].Content != "User prompt" {
+		t.Errorf("messages = %+v, unexpected", state.req.Messages)
+	}
+}
+
+func TestComplete_Positive_RequestShapeAndResponse(t *testing.T) {
+	var state capturedCompleteState
+	server := newCompleteMockServer(&state)
 	defer server.Close()
 
 	client, err := New(Config{
@@ -306,35 +389,7 @@ func TestComplete_Positive_RequestShapeAndResponse(t *testing.T) {
 		t.Fatalf("Complete() unexpected error: %v", err)
 	}
 
-	if content != "Simulated answer text." {
-		t.Errorf("content = %q, want %q", content, "Simulated answer text.")
-	}
-	if capturedPath != "/chat/completions" {
-		t.Errorf("path = %q, want /chat/completions", capturedPath)
-	}
-	if capturedContentType != "application/json" {
-		t.Errorf("Content-Type = %q, want application/json", capturedContentType)
-	}
-	if capturedAuth != "Bearer test-secret-key" {
-		t.Errorf("Authorization = %q, want 'Bearer test-secret-key'", capturedAuth)
-	}
-	if capturedReq.Model != "router/test" {
-		t.Errorf("model = %q, want 'router/test'", capturedReq.Model)
-	}
-	if capturedReq.MaxTokens != 256 {
-		t.Errorf("max_tokens = %d, want 256", capturedReq.MaxTokens)
-	}
-	if capturedReq.Temperature != 0 {
-		t.Errorf("temperature = %v, want 0", capturedReq.Temperature)
-	}
-	if capturedReq.Stream {
-		t.Errorf("stream = %v, want false", capturedReq.Stream)
-	}
-	if len(capturedReq.Messages) != 2 ||
-		capturedReq.Messages[0].Content != "System prompt" ||
-		capturedReq.Messages[1].Content != "User prompt" {
-		t.Errorf("messages = %+v, unexpected", capturedReq.Messages)
-	}
+	verifyCompleteCapturedRequest(t, content, state)
 }
 
 func TestComplete_Positive_AuthorizationAbsentWithoutKey(t *testing.T) {
@@ -771,6 +826,98 @@ func TestClassify_Boundary_Table(t *testing.T) {
 	}
 }
 
+type capturedProbeState struct {
+	path        string
+	method      string
+	auth        string
+	contentType string
+	req         chatRequest
+}
+
+// newProbeMockServer creates an httptest server recording request details for Probe tests.
+func newProbeMockServer(t *testing.T, state *capturedProbeState) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		state.path = r.URL.Path
+		state.method = r.Method
+		state.auth = r.Header.Get("Authorization")
+		state.contentType = r.Header.Get("Content-Type")
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "read error", http.StatusInternalServerError)
+			return
+		}
+		if err := json.Unmarshal(body, &state.req); err != nil {
+			http.Error(w, "unmarshal error", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("x-litellm-applied-policies", "example-policy")
+		w.WriteHeader(http.StatusOK)
+		if _, writeErr := w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"pong"}}]}`)); writeErr != nil {
+			t.Errorf("write response: %v", writeErr)
+		}
+	}))
+}
+
+// verifyProbeCapturedHeaders verifies path, method, content type, and authorization headers for Probe.
+func verifyProbeCapturedHeaders(t *testing.T, state capturedProbeState, withKey bool) {
+	t.Helper()
+	if state.path != "/chat/completions" || state.method != http.MethodPost {
+		t.Errorf("path/method = %s %s, want POST /chat/completions", state.method, state.path)
+	}
+	if state.contentType != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", state.contentType)
+	}
+	if withKey && state.auth != "Bearer test-key" {
+		t.Errorf("Authorization = %q, want Bearer test-key", state.auth)
+	}
+	if !withKey && state.auth != "" {
+		t.Errorf("Authorization = %q, want empty", state.auth)
+	}
+}
+
+// verifyProbeCapturedBody verifies the chat request payload structure for Probe.
+func verifyProbeCapturedBody(t *testing.T, req chatRequest) {
+	t.Helper()
+	if req.Model != "test-alias" || req.MaxTokens != 1 || req.Stream {
+		t.Errorf("req = %+v, unexpected fields", req)
+	}
+	if len(req.Messages) != 1 || req.Messages[0].Role != "user" || req.Messages[0].Content != "ping" {
+		t.Errorf("messages = %+v, want single user ping message", req.Messages)
+	}
+}
+
+// verifyProbeCapturedRequest verifies headers, method, and payload for Probe requests.
+func verifyProbeCapturedRequest(t *testing.T, state capturedProbeState, withKey bool) {
+	t.Helper()
+	verifyProbeCapturedHeaders(t, state, withKey)
+	verifyProbeCapturedBody(t, state.req)
+}
+
+// verifyProbeRequestShapeCase runs the Probe request shape verification for a key configuration.
+func verifyProbeRequestShapeCase(t *testing.T, withKey bool, key string) {
+	t.Helper()
+	var state capturedProbeState
+	server := newProbeMockServer(t, &state)
+	defer server.Close()
+
+	c, err := New(Config{
+		BaseURL: server.URL,
+		Alias:   "test-alias",
+		Policy:  "example-policy",
+		APIKey:  key,
+	}, server.Client())
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	if err := c.Probe(context.Background()); err != nil {
+		t.Fatalf("Probe() unexpected error: %v", err)
+	}
+
+	verifyProbeCapturedRequest(t, state, withKey)
+}
+
 func TestProbe_Positive_RequestShape(t *testing.T) {
 	for _, withKey := range []bool{true, false} {
 		name := "without key"
@@ -780,64 +927,7 @@ func TestProbe_Positive_RequestShape(t *testing.T) {
 			key = "test-key"
 		}
 		t.Run(name, func(t *testing.T) {
-			var capturedPath, capturedMethod, capturedAuth, capturedContentType string
-			var capturedReq chatRequest
-
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				capturedPath = r.URL.Path
-				capturedMethod = r.Method
-				capturedAuth = r.Header.Get("Authorization")
-				capturedContentType = r.Header.Get("Content-Type")
-
-				body, err := io.ReadAll(r.Body)
-				if err != nil {
-					http.Error(w, "read error", http.StatusInternalServerError)
-					return
-				}
-				if err := json.Unmarshal(body, &capturedReq); err != nil {
-					http.Error(w, "unmarshal error", http.StatusBadRequest)
-					return
-				}
-				w.Header().Set("x-litellm-applied-policies", "example-policy")
-				w.WriteHeader(http.StatusOK)
-				if _, writeErr := w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"pong"}}]}`)); writeErr != nil {
-					t.Errorf("write response: %v", writeErr)
-				}
-			}))
-			defer server.Close()
-
-			c, err := New(Config{
-				BaseURL: server.URL,
-				Alias:   "test-alias",
-				Policy:  "example-policy",
-				APIKey:  key,
-			}, server.Client())
-			if err != nil {
-				t.Fatalf("New() failed: %v", err)
-			}
-
-			if err := c.Probe(context.Background()); err != nil {
-				t.Fatalf("Probe() unexpected error: %v", err)
-			}
-
-			if capturedPath != "/chat/completions" || capturedMethod != http.MethodPost {
-				t.Errorf("path/method = %s %s, want POST /chat/completions", capturedMethod, capturedPath)
-			}
-			if capturedContentType != "application/json" {
-				t.Errorf("Content-Type = %q, want application/json", capturedContentType)
-			}
-			if withKey && capturedAuth != "Bearer test-key" {
-				t.Errorf("Authorization = %q, want Bearer test-key", capturedAuth)
-			}
-			if !withKey && capturedAuth != "" {
-				t.Errorf("Authorization = %q, want empty", capturedAuth)
-			}
-			if capturedReq.Model != "test-alias" || capturedReq.MaxTokens != 1 || capturedReq.Stream {
-				t.Errorf("req = %+v, unexpected fields", capturedReq)
-			}
-			if len(capturedReq.Messages) != 1 || capturedReq.Messages[0].Role != "user" || capturedReq.Messages[0].Content != "ping" {
-				t.Errorf("messages = %+v, want single user ping message", capturedReq.Messages)
-			}
+			verifyProbeRequestShapeCase(t, withKey, key)
 		})
 	}
 }
@@ -1068,6 +1158,38 @@ func build65NamesHeader() http.Header {
 	return http.Header{PolicyHeader: []string{strings.Join(all, ",")}}
 }
 
+// verifyCompleteNegativePolicyCase checks that Complete returns a sanitized PolicyError for missing/invalid policy headers.
+func verifyCompleteNegativePolicyCase(t *testing.T, headers http.Header, secretBody string) {
+	t.Helper()
+	server := runPolicyServer(headers, http.StatusOK, secretBody)
+	defer server.Close()
+
+	c, err := New(Config{BaseURL: server.URL, Alias: "test-alias", Policy: "example-policy"}, server.Client())
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+	out, err := c.Complete(context.Background(), "sys", "usr")
+	if err == nil {
+		t.Fatal("Complete() want PolicyError, got nil")
+	}
+	if out != "" {
+		t.Errorf("Complete() out = %q, want empty", out)
+	}
+	var polErr *PolicyError
+	if !errors.As(err, &polErr) {
+		t.Fatalf("err type %T, want *PolicyError", err)
+	}
+	if Classify(err) != ClassPolicy {
+		t.Errorf("Classify(%v) = %v, want ClassPolicy", err, Classify(err))
+	}
+	if strings.Contains(err.Error(), "secret-model-reply") {
+		t.Errorf("error %q leaked body", err.Error())
+	}
+	if strings.Contains(err.Error(), "example-policy") || strings.Contains(err.Error(), "other1") {
+		t.Errorf("error %q leaked policy header names", err.Error())
+	}
+}
+
 func TestComplete_Negative_PolicyValidationTable(t *testing.T) {
 	const secretBody = `{"choices":[{"message":{"content":"secret-model-reply"}}]}`
 	tests := []struct {
@@ -1084,33 +1206,7 @@ func TestComplete_Negative_PolicyValidationTable(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			server := runPolicyServer(tc.headers, http.StatusOK, secretBody)
-			defer server.Close()
-
-			c, err := New(Config{BaseURL: server.URL, Alias: "test-alias", Policy: "example-policy"}, server.Client())
-			if err != nil {
-				t.Fatalf("New() failed: %v", err)
-			}
-			out, err := c.Complete(context.Background(), "sys", "usr")
-			if err == nil {
-				t.Fatal("Complete() want PolicyError, got nil")
-			}
-			if out != "" {
-				t.Errorf("Complete() out = %q, want empty", out)
-			}
-			var polErr *PolicyError
-			if !errors.As(err, &polErr) {
-				t.Fatalf("err type %T, want *PolicyError", err)
-			}
-			if Classify(err) != ClassPolicy {
-				t.Errorf("Classify(%v) = %v, want ClassPolicy", err, Classify(err))
-			}
-			if strings.Contains(err.Error(), "secret-model-reply") {
-				t.Errorf("error %q leaked body", err.Error())
-			}
-			if strings.Contains(err.Error(), "example-policy") || strings.Contains(err.Error(), "other1") {
-				t.Errorf("error %q leaked policy header names", err.Error())
-			}
+			verifyCompleteNegativePolicyCase(t, tc.headers, secretBody)
 		})
 	}
 }
@@ -1165,6 +1261,35 @@ func TestProbe_Positive_PolicyValidationTable(t *testing.T) {
 	}
 }
 
+// verifyProbeNegativePolicyCase checks that Probe returns a sanitized PolicyError for missing/invalid policy headers.
+func verifyProbeNegativePolicyCase(t *testing.T, headers http.Header, secretBody string) {
+	t.Helper()
+	server := runPolicyServer(headers, http.StatusOK, secretBody)
+	defer server.Close()
+
+	c, err := New(Config{BaseURL: server.URL, Alias: "test-alias", Policy: "example-policy"}, server.Client())
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+	err = c.Probe(context.Background())
+	if err == nil {
+		t.Fatal("Probe() want PolicyError, got nil")
+	}
+	var polErr *PolicyError
+	if !errors.As(err, &polErr) {
+		t.Fatalf("err type %T, want *PolicyError", err)
+	}
+	if Classify(err) != ClassPolicy {
+		t.Errorf("Classify(%v) = %v, want ClassPolicy", err, Classify(err))
+	}
+	if strings.Contains(err.Error(), secretBody) {
+		t.Errorf("error %q leaked body", err.Error())
+	}
+	if strings.Contains(err.Error(), "example-policy") || strings.Contains(err.Error(), "other") {
+		t.Errorf("error %q leaked policy names", err.Error())
+	}
+}
+
 func TestProbe_Negative_PolicyValidationTable(t *testing.T) {
 	const secretBody = "secret-probe-reply"
 	tests := []struct {
@@ -1179,30 +1304,7 @@ func TestProbe_Negative_PolicyValidationTable(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			server := runPolicyServer(tc.headers, http.StatusOK, secretBody)
-			defer server.Close()
-
-			c, err := New(Config{BaseURL: server.URL, Alias: "test-alias", Policy: "example-policy"}, server.Client())
-			if err != nil {
-				t.Fatalf("New() failed: %v", err)
-			}
-			err = c.Probe(context.Background())
-			if err == nil {
-				t.Fatal("Probe() want PolicyError, got nil")
-			}
-			var polErr *PolicyError
-			if !errors.As(err, &polErr) {
-				t.Fatalf("err type %T, want *PolicyError", err)
-			}
-			if Classify(err) != ClassPolicy {
-				t.Errorf("Classify(%v) = %v, want ClassPolicy", err, Classify(err))
-			}
-			if strings.Contains(err.Error(), secretBody) {
-				t.Errorf("error %q leaked body", err.Error())
-			}
-			if strings.Contains(err.Error(), "example-policy") || strings.Contains(err.Error(), "other") {
-				t.Errorf("error %q leaked policy names", err.Error())
-			}
+			verifyProbeNegativePolicyCase(t, tc.headers, secretBody)
 		})
 	}
 }

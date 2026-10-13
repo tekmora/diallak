@@ -75,42 +75,48 @@ func TestNew_Negative_PolicyErrorDoesNotEchoTheValue(t *testing.T) {
 	}
 }
 
+// verifyPolicyLatchesCancelledContextPath tests that policy failure latches even if caller context was cancelled.
+func verifyPolicyLatchesCancelledContextPath(t *testing.T, path string) {
+	t.Helper()
+	clock := newClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	ep := &fakeEndpoint{}
+	if path == "trial" {
+		ep.probeErr = &StatusError{Code: 503}
+	}
+	g, err := NewGate(GateConfig{Endpoint: ep, RetryInterval: 30 * time.Second, Now: clock.Now})
+	if err != nil {
+		t.Fatalf("NewGate: %v", err)
+	}
+	if err := g.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	clock.Advance(30 * time.Second)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ep.completeErr = &PolicyError{}
+	ep.onComplete = cancel // the caller gives up while the reply is read
+	res, err := g.Complete(ctx, "s", "u")
+	if res != "" || !errors.Is(err, ErrPolicyMissing) {
+		t.Fatalf("Complete: res=%q err=%v, want ErrPolicyMissing", res, err)
+	}
+	if g.State() != StateNotReady || g.Reason() != "policy" {
+		t.Fatalf("state=%q reason=%q, want not ready for policy", g.State(), g.Reason())
+	}
+
+	ep.onComplete = nil
+	clock.Advance(time.Hour)
+	if _, err := g.Complete(context.Background(), "s", "u"); !errors.Is(err, ErrPolicyMissing) {
+		t.Errorf("later Complete: err=%v, want ErrPolicyMissing", err)
+	}
+	if got := ep.completeCalls.Load(); got != 1 {
+		t.Errorf("endpoint calls = %d, want 1", got)
+	}
+}
+
 func TestGate_Negative_PolicyLatchesWithACancelledContext(t *testing.T) {
 	for _, path := range []string{"ready", "trial"} {
 		t.Run(path, func(t *testing.T) {
-			clock := newClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-			ep := &fakeEndpoint{}
-			if path == "trial" {
-				ep.probeErr = &StatusError{Code: 503}
-			}
-			g, err := NewGate(GateConfig{Endpoint: ep, RetryInterval: 30 * time.Second, Now: clock.Now})
-			if err != nil {
-				t.Fatalf("NewGate: %v", err)
-			}
-			if err := g.Start(context.Background()); err != nil {
-				t.Fatalf("Start: %v", err)
-			}
-			clock.Advance(30 * time.Second)
-
-			ctx, cancel := context.WithCancel(context.Background())
-			ep.completeErr = &PolicyError{}
-			ep.onComplete = cancel // the caller gives up while the reply is read
-			res, err := g.Complete(ctx, "s", "u")
-			if res != "" || !errors.Is(err, ErrPolicyMissing) {
-				t.Fatalf("Complete: res=%q err=%v, want ErrPolicyMissing", res, err)
-			}
-			if g.State() != StateNotReady || g.Reason() != "policy" {
-				t.Fatalf("state=%q reason=%q, want not ready for policy", g.State(), g.Reason())
-			}
-
-			ep.onComplete = nil
-			clock.Advance(time.Hour)
-			if _, err := g.Complete(context.Background(), "s", "u"); !errors.Is(err, ErrPolicyMissing) {
-				t.Errorf("later Complete: err=%v, want ErrPolicyMissing", err)
-			}
-			if got := ep.completeCalls.Load(); got != 1 {
-				t.Errorf("endpoint calls = %d, want 1", got)
-			}
+			verifyPolicyLatchesCancelledContextPath(t, path)
 		})
 	}
 }
