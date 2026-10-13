@@ -118,13 +118,14 @@ func TestDefinition_Positive_CommittedDefinitionValidates(t *testing.T) {
 	}
 }
 
-// The rows below were taken from the platform's permission page (state of
-// 2026-10-11), not from the table under test. Bit 47 is not assigned.
-func TestPermissions_Positive_NamesAndBitsPinned(t *testing.T) {
-	want := []struct {
-		name string
-		bit  uint
-	}{
+type pinnedPermission struct {
+	name string
+	bit  uint
+}
+
+// pinnedPermissionsBase returns the first half of pinned platform permissions.
+func pinnedPermissionsBase() []pinnedPermission {
+	return []pinnedPermission{
 		{"CREATE_INSTANT_INVITE", 0},
 		{"KICK_MEMBERS", 1},
 		{"BAN_MEMBERS", 2},
@@ -151,6 +152,12 @@ func TestPermissions_Positive_NamesAndBitsPinned(t *testing.T) {
 		{"DEAFEN_MEMBERS", 23},
 		{"MOVE_MEMBERS", 24},
 		{"USE_VAD", 25},
+	}
+}
+
+// pinnedPermissionsExtended returns the second half of pinned platform permissions.
+func pinnedPermissionsExtended() []pinnedPermission {
+	return []pinnedPermission{
 		{"CHANGE_NICKNAME", 26},
 		{"MANAGE_NICKNAMES", 27},
 		{"MANAGE_ROLES", 28},
@@ -178,6 +185,17 @@ func TestPermissions_Positive_NamesAndBitsPinned(t *testing.T) {
 		{"PIN_MESSAGES", 51},
 		{"BYPASS_SLOWMODE", 52},
 	}
+}
+
+// pinnedPermissions returns all pinned platform permission names and bit positions.
+func pinnedPermissions() []pinnedPermission {
+	return append(pinnedPermissionsBase(), pinnedPermissionsExtended()...)
+}
+
+// The rows below were taken from the platform's permission page (state of
+// 2026-10-11), not from the table under test. Bit 47 is not assigned.
+func TestPermissions_Positive_NamesAndBitsPinned(t *testing.T) {
+	want := pinnedPermissions()
 	got := Permissions()
 	if len(got) != len(want) {
 		t.Fatalf("len(Permissions()) = %d, want %d", len(got), len(want))
