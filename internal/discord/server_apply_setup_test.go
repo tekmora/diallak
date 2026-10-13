@@ -347,36 +347,79 @@ func TestApplyServer_Negative_RoleInsertedMidOrderIsRefusedInThePlan(t *testing.
 	}
 }
 
+// assertPlanRefusedWithoutRight verifies that omitting a required right causes plan refusal and prevents apply.
+func assertPlanRefusedWithoutRight(t *testing.T, fx setupFixture, rights []string, without string) {
+	t.Helper()
+	fx.setBotRights(t, slices.DeleteFunc(slices.Clone(rights), func(r string) bool { return r == without }))
+	result, in := fx.plan(t, setupDay)
+	if len(result.Refused) == 0 {
+		t.Fatalf("no refusal without %s: the list names a right the set-up does not need", without)
+	}
+	for _, r := range result.Refused {
+		if r.Reason != serverplan.ReasonLacksRight || !slices.Contains(strings.Split(r.Detail, ", "), without) {
+			t.Errorf("%s %s refused as %q (%q), want %q naming %s",
+				r.Action, r.Object, r.Reason, r.Detail, serverplan.ReasonLacksRight, without)
+		}
+	}
+
+	fx.fake.resetRecorded()
+	out, err := fx.apply(t, setupDay, in)
+	want := fmt.Sprintf("the plan holds %d refused changes; a plan with a refusal is not applied", len(result.Refused))
+	if err == nil || err.Error() != want {
+		t.Errorf("apply error = %v, want %q", err, want)
+	}
+	if out != "" {
+		t.Errorf("output = %q, want none", out)
+	}
+	assertRequestCounts(t, fx.fake.getRecorded(), 4, 0)
+}
+
 func TestApplyServer_Boundary_EveryNamedRightIsNeeded(t *testing.T) {
 	fx := newSetupFixture(t)
 	rights, _ := fx.ownPlanRights(t)
 
 	for _, without := range rights {
 		t.Run(without, func(t *testing.T) {
-			fx.setBotRights(t, slices.DeleteFunc(slices.Clone(rights), func(r string) bool { return r == without }))
-			result, in := fx.plan(t, setupDay)
-			if len(result.Refused) == 0 {
-				t.Fatalf("no refusal without %s: the list names a right the set-up does not need", without)
-			}
-			for _, r := range result.Refused {
-				if r.Reason != serverplan.ReasonLacksRight || !slices.Contains(strings.Split(r.Detail, ", "), without) {
-					t.Errorf("%s %s refused as %q (%q), want %q naming %s",
-						r.Action, r.Object, r.Reason, r.Detail, serverplan.ReasonLacksRight, without)
-				}
-			}
-
-			fx.fake.resetRecorded()
-			out, err := fx.apply(t, setupDay, in)
-			want := fmt.Sprintf("the plan holds %d refused changes; a plan with a refusal is not applied", len(result.Refused))
-			if err == nil || err.Error() != want {
-				t.Errorf("apply error = %v, want %q", err, want)
-			}
-			if out != "" {
-				t.Errorf("output = %q, want none", out)
-			}
-			assertRequestCounts(t, fx.fake.getRecorded(), 4, 0)
+			assertPlanRefusedWithoutRight(t, fx, rights, without)
 		})
 	}
+}
+
+// assertChannelListPlanResult validates channel creation refusals and planned changes against visibility rules.
+func assertChannelListPlanResult(t *testing.T, fx setupFixture, result serverplan.Result, wantRefused bool) {
+	t.Helper()
+	if got := len(result.Refused) > 0; got != wantRefused {
+		t.Fatalf("refused = %+v, want refusals: %t", result.Refused, wantRefused)
+	}
+	for _, r := range result.Refused {
+		if r.Action != serverplan.ActionCreateChannel || r.Reason != serverplan.ReasonNotVisible {
+			t.Errorf("%s %s refused as %q, want only %s refused as %q",
+				r.Action, r.Object, r.Reason, serverplan.ActionCreateChannel, serverplan.ReasonNotVisible)
+		}
+	}
+	for _, c := range result.Changes {
+		if wantRefused && c.Action == serverplan.ActionCreateChannel {
+			t.Errorf("%s is planned from a list of channels that is not the whole list", c.Object)
+		}
+	}
+	if want := visibleChannels(fx.def); wantRefused && (len(result.Refused) != want || want == len(fx.def.Channels)) {
+		t.Errorf("%d channels refused, want the %d of %d the definition lets the bot see",
+			len(result.Refused), want, len(fx.def.Channels))
+	}
+}
+
+// runChannelListDateSubtest sets up bot rights, computes the plan at day, and checks channel visibility behavior.
+func runChannelListDateSubtest(t *testing.T, day time.Time, administrator, wantRefused bool) {
+	t.Helper()
+	fx := newSetupFixture(t)
+	rights, _ := fx.ownPlanRights(t)
+	if administrator {
+		rights = append(rights, "ADMINISTRATOR")
+	}
+	fx.setBotRights(t, rights)
+
+	result, _ := fx.plan(t, day.Format(time.RFC3339))
+	assertChannelListPlanResult(t, fx, result, wantRefused)
 }
 
 func TestApplyServer_Boundary_FirstSetUpAndTheChannelListDate(t *testing.T) {
@@ -396,32 +439,7 @@ func TestApplyServer_Boundary_FirstSetUpAndTheChannelListDate(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			fx := newSetupFixture(t)
-			rights, _ := fx.ownPlanRights(t)
-			if tc.administrator {
-				rights = append(rights, "ADMINISTRATOR")
-			}
-			fx.setBotRights(t, rights)
-
-			result, _ := fx.plan(t, tc.day.Format(time.RFC3339))
-			if got := len(result.Refused) > 0; got != tc.wantRefused {
-				t.Fatalf("refused = %+v, want refusals: %t", result.Refused, tc.wantRefused)
-			}
-			for _, r := range result.Refused {
-				if r.Action != serverplan.ActionCreateChannel || r.Reason != serverplan.ReasonNotVisible {
-					t.Errorf("%s %s refused as %q, want only %s refused as %q",
-						r.Action, r.Object, r.Reason, serverplan.ActionCreateChannel, serverplan.ReasonNotVisible)
-				}
-			}
-			for _, c := range result.Changes {
-				if tc.wantRefused && c.Action == serverplan.ActionCreateChannel {
-					t.Errorf("%s is planned from a list of channels that is not the whole list", c.Object)
-				}
-			}
-			if want := visibleChannels(fx.def); tc.wantRefused && (len(result.Refused) != want || want == len(fx.def.Channels)) {
-				t.Errorf("%d channels refused, want the %d of %d the definition lets the bot see",
-					len(result.Refused), want, len(fx.def.Channels))
-			}
+			runChannelListDateSubtest(t, tc.day, tc.administrator, tc.wantRefused)
 		})
 	}
 }

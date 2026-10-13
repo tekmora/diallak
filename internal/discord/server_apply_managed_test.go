@@ -162,6 +162,46 @@ func TestApplyServer_Boundary_FirstSetUpLeavesFundingRolesWhereTheyStand(t *test
 	}
 }
 
+// assertDisplayWrites verifies that all writes were PATCH calls with the expected audit reason.
+func assertDisplayWrites(t *testing.T, calls []recordedCall, wantWrites int, planDigest string) {
+	t.Helper()
+	writes := 0
+	wantReason := auditReasonOf(planDigest)
+	for _, call := range calls {
+		if call.method == http.MethodGet {
+			continue
+		}
+		writes++
+		if call.method != http.MethodPatch || call.auditReason != wantReason {
+			t.Errorf("%s %s carries the audit reason %q, want a PATCH with %q",
+				call.method, call.path, call.auditReason, wantReason)
+		}
+	}
+	if writes != wantWrites {
+		t.Errorf("%d writes, want %d", writes, wantWrites)
+	}
+}
+
+// assertRoleDisplaysAfterApply checks role hoist and mentionable states after apply.
+func assertRoleDisplaysAfterApply(t *testing.T, fx setupFixture) {
+	t.Helper()
+	if hoist, mentionable := fx.display(t, "Helper"); !hoist || mentionable {
+		t.Errorf("Helper: shown apart %t, mentionable %t; want yes and no", hoist, mentionable)
+	}
+	if hoist, mentionable := fx.display(t, "Notify: releases"); hoist || !mentionable {
+		t.Errorf("Notify: releases: shown apart %t, mentionable %t; want no and yes", hoist, mentionable)
+	}
+	if hoist, mentionable := fx.display(t, "Contributor"); !hoist || !mentionable {
+		t.Errorf("Contributor: shown apart %t, mentionable %t; the definition states neither, want both left on", hoist, mentionable)
+	}
+	lines, _ := fx.differences(t)
+	for _, line := range lines {
+		if strings.HasPrefix(line, serverplan.KindRoleDisplay+" ") {
+			t.Errorf("compare after the apply still holds %s", line)
+		}
+	}
+}
+
 // A display someone changed by hand goes back through plan and apply while the
 // bot's role is raised. A field the definition does not state stays as it is.
 func TestApplyServer_Positive_DisplaySetBackByPlanAndApply(t *testing.T) {
@@ -191,36 +231,8 @@ func TestApplyServer_Positive_DisplaySetBackByPlanAndApply(t *testing.T) {
 	if _, err := fx.apply(t, setupDay, in); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
-	writes := 0
-	for _, call := range fx.fake.getRecorded() {
-		if call.method == http.MethodGet {
-			continue
-		}
-		writes++
-		if call.method != http.MethodPatch || call.auditReason != auditReasonOf(in.PlanDigest) {
-			t.Errorf("%s %s carries the audit reason %q, want a PATCH with %q",
-				call.method, call.path, call.auditReason, auditReasonOf(in.PlanDigest))
-		}
-	}
-	if writes != len(want) {
-		t.Errorf("%d writes, want %d", writes, len(want))
-	}
-
-	if hoist, mentionable := fx.display(t, "Helper"); !hoist || mentionable {
-		t.Errorf("Helper: shown apart %t, mentionable %t; want yes and no", hoist, mentionable)
-	}
-	if hoist, mentionable := fx.display(t, "Notify: releases"); hoist || !mentionable {
-		t.Errorf("Notify: releases: shown apart %t, mentionable %t; want no and yes", hoist, mentionable)
-	}
-	if hoist, mentionable := fx.display(t, "Contributor"); !hoist || !mentionable {
-		t.Errorf("Contributor: shown apart %t, mentionable %t; the definition states neither, want both left on", hoist, mentionable)
-	}
-	lines, _ := fx.differences(t)
-	for _, line := range lines {
-		if strings.HasPrefix(line, serverplan.KindRoleDisplay+" ") {
-			t.Errorf("compare after the apply still holds %s", line)
-		}
-	}
+	assertDisplayWrites(t, fx.fake.getRecorded(), len(want), in.PlanDigest)
+	assertRoleDisplaysAfterApply(t, fx)
 }
 
 // With its own rights the bot changes no display: the plan refuses the change
