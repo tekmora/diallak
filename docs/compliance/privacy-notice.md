@@ -45,14 +45,13 @@ to the operator, is accepted too.
 The bot is run by the provider named here and in the [imprint](imprint.md):
 
 <!-- identity block: start -->
-- **Name:** *filled before launch*
-- **Address:** *filled before launch*
-- **E-mail:** *filled before launch*
+- **Name:** Kilian Cromm
+- **Address:** c/o IBC, Bahnhofstraße 9, 65549 Limburg a. d. Lahn
+- **E-mail:** lusoris@pm.me
 <!-- identity block: end -->
 
-The block is filled before the public launch with the provider's full name, the
-address of a service that is authorised to receive legal mail for the provider,
-and an e-mail address.
+The block holds the provider's full name, a c/o address at which the provider
+receives legal mail, and an e-mail address.
 
 No data protection officer is appointed.
 
