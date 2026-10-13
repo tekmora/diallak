@@ -79,6 +79,12 @@ jobs:
       - name: Test
         if: github.event.pull_request.draft != true
         run: go test -race ./...
+      # disgo v0.19.6 races its own heartbeat field on close
+      # (gateway/gateway.go:317 and :451), so the race build leaves out the
+      # tests that run the real gateway client; this step runs them.
+      - name: Gateway health tests
+        if: github.event.pull_request.draft != true
+        run: go test -count=1 -run 'TestRun_.*Readyz' ./cmd/diallak/
       # The release workflow refuses a tag without a changelog section through
       # this script, so its refusals are tested on every change.
       - name: Release notes script
