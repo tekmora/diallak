@@ -173,13 +173,48 @@ func TestExecuteSingleChange_Negative_RefusalNamesTheCallStep(t *testing.T) {
 	}
 }
 
+type singleChangeTestCase struct {
+	action string
+	object string
+	lookup func(idx *serverIndex, def *serverdef.Definition) (snowflake.ID, error)
+	noID   string
+}
+
+// assertCreatedObjectIDIndexed tests that the created object is correctly indexed under the returned id.
+func assertCreatedObjectIDIndexed(t *testing.T, tc singleChangeTestCase, c serverplan.Change) {
+	t.Helper()
+	def := mustDefinition(t)
+	fx := newChangeFixture(t, def, tc.object)
+	want := snowflake.ID(fx.fake.nextID)
+	if err := runChange(t, fx.fake, def, fx.idx, c, 10*time.Second); err != nil {
+		t.Fatalf("%s error = %v, want nil", tc.action, err)
+	}
+	got, err := tc.lookup(fx.idx, def)
+	if err != nil || got != want {
+		t.Errorf("index holds %d, %v, want %d", got, err, want)
+	}
+	if call := oneWrite(t, fx.fake); call.auditReason != orderAuditReason() {
+		t.Errorf("audit reason = %q, want %q", call.auditReason, orderAuditReason())
+	}
+}
+
+// assertCreatedObjectZeroIDFails tests that creating an object with nextID 0 fails with the expected error.
+func assertCreatedObjectZeroIDFails(t *testing.T, tc singleChangeTestCase, c serverplan.Change) {
+	t.Helper()
+	def := mustDefinition(t)
+	fx := newChangeFixture(t, def, tc.object)
+	fx.fake.nextID = 0
+	err := runChange(t, fx.fake, def, fx.idx, c, 10*time.Second)
+	if err == nil || err.Error() != tc.noID {
+		t.Errorf("%s error = %v, want %q", tc.action, err, tc.noID)
+	}
+	if got, err := tc.lookup(fx.idx, def); err == nil {
+		t.Errorf("index holds %d for the object without an id", got)
+	}
+}
+
 func TestExecuteSingleChange_Boundary_CreatedObjectAndItsID(t *testing.T) {
-	cases := []struct {
-		action string
-		object string
-		lookup func(idx *serverIndex, def *serverdef.Definition) (snowflake.ID, error)
-		noID   string
-	}{
+	cases := []singleChangeTestCase{
 		{
 			"create-role", "roles[contributor]",
 			func(idx *serverIndex, _ *serverdef.Definition) (snowflake.ID, error) {
@@ -205,31 +240,10 @@ func TestExecuteSingleChange_Boundary_CreatedObjectAndItsID(t *testing.T) {
 	for _, tc := range cases {
 		c := serverplan.Change{Step: 1, Action: tc.action, Object: tc.object}
 		t.Run(tc.action+" is indexed under the returned id", func(t *testing.T) {
-			def := mustDefinition(t)
-			fx := newChangeFixture(t, def, tc.object)
-			want := snowflake.ID(fx.fake.nextID)
-			if err := runChange(t, fx.fake, def, fx.idx, c, 10*time.Second); err != nil {
-				t.Fatalf("%s error = %v, want nil", tc.action, err)
-			}
-			got, err := tc.lookup(fx.idx, def)
-			if err != nil || got != want {
-				t.Errorf("index holds %d, %v, want %d", got, err, want)
-			}
-			if call := oneWrite(t, fx.fake); call.auditReason != orderAuditReason() {
-				t.Errorf("audit reason = %q, want %q", call.auditReason, orderAuditReason())
-			}
+			assertCreatedObjectIDIndexed(t, tc, c)
 		})
 		t.Run(tc.action+" with the id 0 fails", func(t *testing.T) {
-			def := mustDefinition(t)
-			fx := newChangeFixture(t, def, tc.object)
-			fx.fake.nextID = 0
-			err := runChange(t, fx.fake, def, fx.idx, c, 10*time.Second)
-			if err == nil || err.Error() != tc.noID {
-				t.Errorf("%s error = %v, want %q", tc.action, err, tc.noID)
-			}
-			if got, err := tc.lookup(fx.idx, def); err == nil {
-				t.Errorf("index holds %d for the object without an id", got)
-			}
+			assertCreatedObjectZeroIDFails(t, tc, c)
 		})
 	}
 }
@@ -244,6 +258,25 @@ type channelRequest struct {
 		Allow string `json:"allow"`
 		Deny  string `json:"deny"`
 	} `json:"permission_overwrites"`
+}
+
+// assertForumChannelRequest verifies the decoded channel creation request properties and overwrites.
+func assertForumChannelRequest(t *testing.T, req channelRequest, parentID string) {
+	t.Helper()
+	if req.Name != "help-desk" || req.Type != int(discord.ChannelTypeGuildForum) {
+		t.Errorf("name and type = %q, %d, want help-desk, %d", req.Name, req.Type, discord.ChannelTypeGuildForum)
+	}
+	if req.ParentID == nil || *req.ParentID != parentID {
+		t.Errorf("parent = %v, want the category Community %s", req.ParentID, parentID)
+	}
+	if len(req.PermissionOverwrites) != 1 {
+		t.Fatalf("access entries = %+v, want one for the bot's role", req.PermissionOverwrites)
+	}
+	wantAllow := discord.PermissionViewChannel | discord.PermissionReadMessageHistory | discord.PermissionSendMessagesInThreads
+	got := req.PermissionOverwrites[0]
+	if got.ID != strconv.FormatUint(orderBotRoleID, 10) || got.Type != 0 || got.Allow != permissionText(wantAllow) || got.Deny != "0" {
+		t.Errorf("access entry = %+v, want role %d, allow %s, deny 0", got, orderBotRoleID, permissionText(wantAllow))
+	}
 }
 
 func TestApplyCreateChannel_Positive_ForumCarriesNameCategoryAndAccess(t *testing.T) {
@@ -268,20 +301,7 @@ func TestApplyCreateChannel_Positive_ForumCarriesNameCategoryAndAccess(t *testin
 	if err := json.Unmarshal(call.body, &req); err != nil {
 		t.Fatalf("decode the request: %v", err)
 	}
-	if req.Name != "help-desk" || req.Type != int(discord.ChannelTypeGuildForum) {
-		t.Errorf("name and type = %q, %d, want help-desk, %d", req.Name, req.Type, discord.ChannelTypeGuildForum)
-	}
-	if req.ParentID == nil || *req.ParentID != fx.categories["community"].String() {
-		t.Errorf("parent = %v, want the category Community %d", req.ParentID, fx.categories["community"])
-	}
-	if len(req.PermissionOverwrites) != 1 {
-		t.Fatalf("access entries = %+v, want one for the bot's role", req.PermissionOverwrites)
-	}
-	wantAllow := discord.PermissionViewChannel | discord.PermissionReadMessageHistory | discord.PermissionSendMessagesInThreads
-	got := req.PermissionOverwrites[0]
-	if got.ID != strconv.FormatUint(orderBotRoleID, 10) || got.Type != 0 || got.Allow != permissionText(wantAllow) || got.Deny != "0" {
-		t.Errorf("access entry = %+v, want role %d, allow %s, deny 0", got, orderBotRoleID, permissionText(wantAllow))
-	}
+	assertForumChannelRequest(t, req, fx.categories["community"].String())
 }
 
 func TestApplyMoveChannel_Positive_RequestNamesTheCategoryAndTheReason(t *testing.T) {

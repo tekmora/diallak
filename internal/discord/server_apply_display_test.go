@@ -9,107 +9,77 @@ import (
 	"github.com/tekmora/diallak/internal/serverplan"
 )
 
-func TestApplyCreateRole_SendsHoistAndMentionable(t *testing.T) {
+// assertCreateRoleDisplay verifies that create-role sends the expected role display fields.
+func assertCreateRoleDisplay(t *testing.T, roleObject, wantName string, wantHoist, wantMentionable bool) {
+	t.Helper()
 	def := mustDefinition(t)
+	fx := newChangeFixture(t, def, roleObject)
+	c := serverplan.Change{Step: 1, Action: "create-role", Object: roleObject}
+	err := runChange(t, fx.fake, def, fx.idx, c, 10*time.Second)
+	if err != nil {
+		t.Fatalf("runChange: %v", err)
+	}
+	w := oneWrite(t, fx.fake)
+	var req struct {
+		Name        string `json:"name"`
+		Hoist       bool   `json:"hoist"`
+		Mentionable bool   `json:"mentionable"`
+	}
+	if err := json.Unmarshal(w.body, &req); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if req.Name != wantName {
+		t.Errorf("Name = %q, want '%s'", req.Name, wantName)
+	}
+	if req.Hoist != wantHoist {
+		t.Errorf("Hoist = %t, want %t", req.Hoist, wantHoist)
+	}
+	if req.Mentionable != wantMentionable {
+		t.Errorf("Mentionable = %t, want %t", req.Mentionable, wantMentionable)
+	}
+}
 
+func TestApplyCreateRole_SendsHoistAndMentionable(t *testing.T) {
 	t.Run("helper sends hoist true and mentionable false", func(t *testing.T) {
-		fx := newChangeFixture(t, def, "roles[helper]")
-		c := serverplan.Change{Step: 1, Action: "create-role", Object: "roles[helper]"}
-		err := runChange(t, fx.fake, def, fx.idx, c, 10*time.Second)
-		if err != nil {
-			t.Fatalf("runChange: %v", err)
-		}
-		w := oneWrite(t, fx.fake)
-		var req struct {
-			Name        string `json:"name"`
-			Hoist       bool   `json:"hoist"`
-			Mentionable bool   `json:"mentionable"`
-		}
-		if err := json.Unmarshal(w.body, &req); err != nil {
-			t.Fatalf("Unmarshal: %v", err)
-		}
-		if req.Name != "Helper" {
-			t.Errorf("Name = %q, want 'Helper'", req.Name)
-		}
-		if !req.Hoist {
-			t.Errorf("Hoist = %t, want true", req.Hoist)
-		}
-		if req.Mentionable {
-			t.Errorf("Mentionable = %t, want false", req.Mentionable)
-		}
+		assertCreateRoleDisplay(t, "roles[helper]", "Helper", true, false)
 	})
 
 	t.Run("notify-releases sends mentionable true and hoist false", func(t *testing.T) {
-		fx := newChangeFixture(t, def, "roles[notify-releases]")
-		c := serverplan.Change{Step: 1, Action: "create-role", Object: "roles[notify-releases]"}
-		err := runChange(t, fx.fake, def, fx.idx, c, 10*time.Second)
-		if err != nil {
-			t.Fatalf("runChange: %v", err)
-		}
-		w := oneWrite(t, fx.fake)
-		var req struct {
-			Name        string `json:"name"`
-			Hoist       bool   `json:"hoist"`
-			Mentionable bool   `json:"mentionable"`
-		}
-		if err := json.Unmarshal(w.body, &req); err != nil {
-			t.Fatalf("Unmarshal: %v", err)
-		}
-		if req.Name != "Notify: releases" {
-			t.Errorf("Name = %q, want 'Notify: releases'", req.Name)
-		}
-		if req.Hoist {
-			t.Errorf("Hoist = %t, want false", req.Hoist)
-		}
-		if !req.Mentionable {
-			t.Errorf("Mentionable = %t, want true", req.Mentionable)
-		}
+		assertCreateRoleDisplay(t, "roles[notify-releases]", "Notify: releases", false, true)
 	})
 }
 
-func TestApplySetRoleDisplay_SendsOnlyStatedFields(t *testing.T) {
+// assertSetRoleDisplayField verifies that set-role-display sends only the stated field.
+func assertSetRoleDisplayField(t *testing.T, roleObject, presentField, absentField string) {
+	t.Helper()
 	def := mustDefinition(t)
+	fx := newChangeFixture(t, def)
+	c := serverplan.Change{Step: 1, Action: "set-role-display", Object: roleObject}
+	err := runChange(t, fx.fake, def, fx.idx, c, 10*time.Second)
+	if err != nil {
+		t.Fatalf("runChange: %v", err)
+	}
+	w := oneWrite(t, fx.fake)
+	var raw map[string]any
+	if err := json.Unmarshal(w.body, &raw); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	val, present := raw[presentField]
+	if !present || val != true {
+		t.Errorf("%s = %v (present: %t), want true", presentField, val, present)
+	}
+	if _, hasAbsent := raw[absentField]; hasAbsent {
+		t.Errorf("%s present in request body %s, want absent", absentField, string(w.body))
+	}
+}
 
+func TestApplySetRoleDisplay_SendsOnlyStatedFields(t *testing.T) {
 	t.Run("helper sends hoist only", func(t *testing.T) {
-		fx := newChangeFixture(t, def)
-		c := serverplan.Change{Step: 1, Action: "set-role-display", Object: "roles[helper]"}
-		err := runChange(t, fx.fake, def, fx.idx, c, 10*time.Second)
-		if err != nil {
-			t.Fatalf("runChange: %v", err)
-		}
-		w := oneWrite(t, fx.fake)
-		var raw map[string]any
-		if err := json.Unmarshal(w.body, &raw); err != nil {
-			t.Fatalf("Unmarshal: %v", err)
-		}
-		hoistVal, hasHoist := raw["hoist"]
-		if !hasHoist || hoistVal != true {
-			t.Errorf("hoist = %v (present: %t), want true", hoistVal, hasHoist)
-		}
-		if _, hasMentionable := raw["mentionable"]; hasMentionable {
-			t.Errorf("mentionable present in request body %s, want absent", string(w.body))
-		}
+		assertSetRoleDisplayField(t, "roles[helper]", "hoist", "mentionable")
 	})
 
 	t.Run("notify-releases sends mentionable only", func(t *testing.T) {
-		fx := newChangeFixture(t, def)
-		c := serverplan.Change{Step: 1, Action: "set-role-display", Object: "roles[notify-releases]"}
-		err := runChange(t, fx.fake, def, fx.idx, c, 10*time.Second)
-		if err != nil {
-			t.Fatalf("runChange: %v", err)
-		}
-		w := oneWrite(t, fx.fake)
-		var raw map[string]any
-		if err := json.Unmarshal(w.body, &raw); err != nil {
-			t.Fatalf("Unmarshal: %v", err)
-		}
-		mentionableVal, hasMentionable := raw["mentionable"]
-		if !hasMentionable || mentionableVal != true {
-			t.Errorf("mentionable = %v (present: %t), want true", mentionableVal, hasMentionable)
-		}
-		if _, hasHoist := raw["hoist"]; hasHoist {
-			t.Errorf("hoist present in request body %s, want absent", string(w.body))
-		}
+		assertSetRoleDisplayField(t, "roles[notify-releases]", "mentionable", "hoist")
 	})
 }
 

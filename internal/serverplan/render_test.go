@@ -13,77 +13,84 @@ func (f *failWriter) Write([]byte) (int, error) {
 	return 0, errors.New("write disk full")
 }
 
-func TestRender_Positive_Golden(t *testing.T) {
-	def := loadDef(t)
-
-	t.Run("own-mode area entry plan", func(t *testing.T) {
-		s := snapshotOf(t, def)
-		for i := range s.Channels {
-			if s.Channels[i].Name == "home-lab" {
-				var newAccess []Access
-				for _, acc := range s.Channels[i].Access {
-					if acc.Role != "Interest: home lab and self-hosting" {
-						newAccess = append(newAccess, acc)
-					}
+// filterOutChannelAccessRole removes a specific role's access entry from a channel.
+func filterOutChannelAccessRole(s *Snapshot, channelName, roleName string) {
+	for i := range s.Channels {
+		if s.Channels[i].Name == channelName {
+			var newAccess []Access
+			for _, acc := range s.Channels[i].Access {
+				if acc.Role != roleName {
+					newAccess = append(newAccess, acc)
 				}
-				s.Channels[i].Access = newAccess
 			}
+			s.Channels[i].Access = newAccess
 		}
+	}
+}
 
-		res, err := Plan(def, s)
-		if err != nil {
-			t.Fatalf("Plan failed: %v", err)
-		}
+// runRenderGoldenOwnModeAreaEntry tests rendering of an own-mode area entry plan.
+func runRenderGoldenOwnModeAreaEntry(t *testing.T) {
+	t.Helper()
+	def := loadDef(t)
+	s := snapshotOf(t, def)
+	filterOutChannelAccessRole(s, "home-lab", "Interest: home lab and self-hosting")
 
-		var buf bytes.Buffer
-		if err := Render(&buf, res); err != nil {
-			t.Fatalf("Render failed: %v", err)
-		}
+	res, err := Plan(def, s)
+	if err != nil {
+		t.Fatalf("Plan failed: %v", err)
+	}
 
-		want := "mode: own\n" +
-			"rights needed: MANAGE_ROLES, VIEW_CHANNEL\n" +
-			"changes: 1\n" +
-			"  1. set-access channels[home-lab].access[interest-home-lab] needs MANAGE_ROLES, VIEW_CHANNEL\n" +
-			"refused: 0\n"
+	var buf bytes.Buffer
+	if err := Render(&buf, res); err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
 
-		if buf.String() != want {
-			t.Errorf("Render mismatch:\n--- got ---\n%s\n--- want ---\n%s", buf.String(), want)
-		}
+	want := "mode: own\n" +
+		"rights needed: MANAGE_ROLES, VIEW_CHANNEL\n" +
+		"changes: 1\n" +
+		"  1. set-access channels[home-lab].access[interest-home-lab] needs MANAGE_ROLES, VIEW_CHANNEL\n" +
+		"refused: 0\n"
+
+	if buf.String() != want {
+		t.Errorf("Render mismatch:\n--- got ---\n%s\n--- want ---\n%s", buf.String(), want)
+	}
+}
+
+// runRenderGoldenOneRefusedPlan tests rendering of a plan with one refusal.
+func runRenderGoldenOneRefusedPlan(t *testing.T) {
+	t.Helper()
+	def := loadDef(t)
+	s := snapshotOf(t, def)
+	filterOutChannelAccessRole(s, "home-lab", "Moderator")
+
+	res, err := Plan(def, s)
+	if err != nil {
+		t.Fatalf("Plan failed: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := Render(&buf, res); err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+
+	want := "mode: own\n" +
+		"rights needed: MANAGE_ROLES, VIEW_CHANNEL\n" +
+		"changes: 0\n" +
+		"refused: 1\n" +
+		"  - set-access channels[home-lab].access[moderator]: outside-own-changes\n"
+
+	if buf.String() != want {
+		t.Errorf("Render mismatch:\n--- got ---\n%s\n--- want ---\n%s", buf.String(), want)
+	}
+}
+
+func TestRender_Positive_Golden(t *testing.T) {
+	t.Run("own-mode area entry plan", func(t *testing.T) {
+		runRenderGoldenOwnModeAreaEntry(t)
 	})
 
 	t.Run("one refused plan", func(t *testing.T) {
-		s := snapshotOf(t, def)
-		for i := range s.Channels {
-			if s.Channels[i].Name == "home-lab" {
-				var newAccess []Access
-				for _, acc := range s.Channels[i].Access {
-					if acc.Role != "Moderator" {
-						newAccess = append(newAccess, acc)
-					}
-				}
-				s.Channels[i].Access = newAccess
-			}
-		}
-
-		res, err := Plan(def, s)
-		if err != nil {
-			t.Fatalf("Plan failed: %v", err)
-		}
-
-		var buf bytes.Buffer
-		if err := Render(&buf, res); err != nil {
-			t.Fatalf("Render failed: %v", err)
-		}
-
-		want := "mode: own\n" +
-			"rights needed: MANAGE_ROLES, VIEW_CHANNEL\n" +
-			"changes: 0\n" +
-			"refused: 1\n" +
-			"  - set-access channels[home-lab].access[moderator]: outside-own-changes\n"
-
-		if buf.String() != want {
-			t.Errorf("Render mismatch:\n--- got ---\n%s\n--- want ---\n%s", buf.String(), want)
-		}
+		runRenderGoldenOneRefusedPlan(t)
 	})
 }
 
