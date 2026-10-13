@@ -13,22 +13,20 @@ import (
 	"time"
 )
 
-func TestHandler_Positive_HealthzAndReadyz(t *testing.T) {
-	state := &State{}
-	handler := NewHandler(state)
-	ctx := context.Background()
-
-	checkHeaders := func(t *testing.T, rec *httptest.ResponseRecorder) {
-		t.Helper()
-		if got := rec.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
-			t.Errorf("Content-Type = %q, want text/plain; charset=utf-8", got)
-		}
-		if got := rec.Header().Get("Cache-Control"); got != "no-store" {
-			t.Errorf("Cache-Control = %q, want no-store", got)
-		}
+// checkHealthHeaders asserts content-type and cache-control headers on the response.
+func checkHealthHeaders(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	if got := rec.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
+		t.Errorf("Content-Type = %q, want text/plain; charset=utf-8", got)
 	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+}
 
-	// GET /healthz -> 200 "ok\n"
+// verifyHealthzEndpoints checks GET and HEAD requests against /healthz.
+func verifyHealthzEndpoints(t *testing.T, ctx context.Context, handler http.Handler) {
+	t.Helper()
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -38,20 +36,22 @@ func TestHandler_Positive_HealthzAndReadyz(t *testing.T) {
 	if rec.Body.String() != "ok\n" {
 		t.Errorf("GET /healthz body = %q, want ok\\n", rec.Body.String())
 	}
-	checkHeaders(t, rec)
+	checkHealthHeaders(t, rec)
 
-	// HEAD /healthz -> 200
 	req = httptest.NewRequestWithContext(ctx, http.MethodHead, "/healthz", nil)
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Errorf("HEAD /healthz code = %d, want 200", rec.Code)
 	}
-	checkHeaders(t, rec)
+	checkHealthHeaders(t, rec)
+}
 
-	// GET /readyz before ready -> 503 "not ready\n"
-	req = httptest.NewRequestWithContext(ctx, http.MethodGet, "/readyz", nil)
-	rec = httptest.NewRecorder()
+// verifyReadyzUnready checks GET and HEAD requests against /readyz before ready is set.
+func verifyReadyzUnready(t *testing.T, ctx context.Context, handler http.Handler) {
+	t.Helper()
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("GET /readyz (not ready) code = %d, want 503", rec.Code)
@@ -59,26 +59,27 @@ func TestHandler_Positive_HealthzAndReadyz(t *testing.T) {
 	if rec.Body.String() != "not ready\n" {
 		t.Errorf("GET /readyz body = %q, want not ready\\n", rec.Body.String())
 	}
-	checkHeaders(t, rec)
+	checkHealthHeaders(t, rec)
 
-	// HEAD /readyz before ready -> 503
 	req = httptest.NewRequestWithContext(ctx, http.MethodHead, "/readyz", nil)
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("HEAD /readyz (not ready) code = %d, want 503", rec.Code)
 	}
-	checkHeaders(t, rec)
+	checkHealthHeaders(t, rec)
+}
 
-	// Set ready -> true
+// verifyReadyzReady sets ready to true and verifies GET and HEAD requests against /readyz.
+func verifyReadyzReady(t *testing.T, ctx context.Context, handler http.Handler, state *State) {
+	t.Helper()
 	state.SetReady(true)
 	if !state.Ready() {
 		t.Errorf("state.Ready() = false, want true")
 	}
 
-	// GET /readyz after setter -> 200 "ready\n"
-	req = httptest.NewRequestWithContext(ctx, http.MethodGet, "/readyz", nil)
-	rec = httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Errorf("GET /readyz (ready) code = %d, want 200", rec.Code)
@@ -86,26 +87,27 @@ func TestHandler_Positive_HealthzAndReadyz(t *testing.T) {
 	if rec.Body.String() != "ready\n" {
 		t.Errorf("GET /readyz body = %q, want ready\\n", rec.Body.String())
 	}
-	checkHeaders(t, rec)
+	checkHealthHeaders(t, rec)
 
-	// HEAD /readyz after setter -> 200
 	req = httptest.NewRequestWithContext(ctx, http.MethodHead, "/readyz", nil)
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Errorf("HEAD /readyz (ready) code = %d, want 200", rec.Code)
 	}
-	checkHeaders(t, rec)
+	checkHealthHeaders(t, rec)
+}
 
-	// Set ready -> false (cleared)
+// verifyReadyzCleared sets ready to false and verifies GET request against /readyz.
+func verifyReadyzCleared(t *testing.T, ctx context.Context, handler http.Handler, state *State) {
+	t.Helper()
 	state.SetReady(false)
 	if state.Ready() {
 		t.Errorf("state.Ready() = true, want false")
 	}
 
-	// GET /readyz after cleared -> 503 "not ready\n"
-	req = httptest.NewRequestWithContext(ctx, http.MethodGet, "/readyz", nil)
-	rec = httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("GET /readyz (cleared) code = %d, want 503", rec.Code)
@@ -113,7 +115,18 @@ func TestHandler_Positive_HealthzAndReadyz(t *testing.T) {
 	if rec.Body.String() != "not ready\n" {
 		t.Errorf("GET /readyz body = %q, want not ready\\n", rec.Body.String())
 	}
-	checkHeaders(t, rec)
+	checkHealthHeaders(t, rec)
+}
+
+func TestHandler_Positive_HealthzAndReadyz(t *testing.T) {
+	state := &State{}
+	handler := NewHandler(state)
+	ctx := context.Background()
+
+	verifyHealthzEndpoints(t, ctx, handler)
+	verifyReadyzUnready(t, ctx, handler)
+	verifyReadyzReady(t, ctx, handler, state)
+	verifyReadyzCleared(t, ctx, handler, state)
 }
 
 func TestHandler_Negative_MethodNotAllowed(t *testing.T) {

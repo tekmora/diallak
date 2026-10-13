@@ -74,6 +74,28 @@ func verifyOffTopicCases(t *testing.T, p *Pipeline, gen *fakeGenerator, cases []
 	}
 }
 
+// verifySingleAnswerableCase checks Ask and Render output for an answerable case with search hits.
+func verifySingleAnswerableCase(t *testing.T, p *Pipeline, c eval.Case) {
+	t.Helper()
+	ans, askErr := p.Ask(context.Background(), c.Question)
+	if askErr != nil {
+		t.Fatalf("case %s Ask() unexpected error: %v", c.ID, askErr)
+	}
+	if ans.Kind != KindAnswer {
+		t.Errorf("case %s Kind = %v, want answer", c.ID, ans.Kind)
+	}
+	if len(ans.Sources) != 1 || ans.Sources[0].N != 1 {
+		t.Errorf("case %s Sources = %+v, want exactly source 1", c.ID, ans.Sources)
+	}
+	rendered := Render(ans, RenderOptions{})
+	if !strings.HasPrefix(rendered, LabelAnswer) {
+		t.Errorf("case %s rendered prefix want LabelAnswer, got: %s", c.ID, rendered)
+	}
+	if !strings.Contains(rendered, "revision 9e70c2e03d22") {
+		t.Errorf("case %s rendered missing revision: %s", c.ID, rendered)
+	}
+}
+
 func verifyAnswerableCases(t *testing.T, p *Pipeline, ix *retrieval.Index, cases []eval.Case) {
 	t.Helper()
 	answerableHits := 0
@@ -89,24 +111,7 @@ func verifyAnswerableCases(t *testing.T, p *Pipeline, ix *retrieval.Index, cases
 			continue
 		}
 		answerableHits++
-
-		ans, askErr := p.Ask(context.Background(), c.Question)
-		if askErr != nil {
-			t.Fatalf("case %s Ask() unexpected error: %v", c.ID, askErr)
-		}
-		if ans.Kind != KindAnswer {
-			t.Errorf("case %s Kind = %v, want answer", c.ID, ans.Kind)
-		}
-		if len(ans.Sources) != 1 || ans.Sources[0].N != 1 {
-			t.Errorf("case %s Sources = %+v, want exactly source 1", c.ID, ans.Sources)
-		}
-		rendered := Render(ans, RenderOptions{})
-		if !strings.HasPrefix(rendered, LabelAnswer) {
-			t.Errorf("case %s rendered prefix want LabelAnswer, got: %s", c.ID, rendered)
-		}
-		if !strings.Contains(rendered, "revision 9e70c2e03d22") {
-			t.Errorf("case %s rendered missing revision: %s", c.ID, rendered)
-		}
+		verifySingleAnswerableCase(t, p, c)
 	}
 	if answerableHits < 28 {
 		t.Errorf("answerableHits = %d, want at least 28", answerableHits)

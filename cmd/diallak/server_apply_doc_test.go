@@ -12,6 +12,32 @@ import (
 	"github.com/tekmora/diallak/internal/serverplan"
 )
 
+// collectChannelNamedRights gathers rights from a channel's access list.
+func collectChannelNamedRights(named map[string]struct{}, channel serverdef.Channel) {
+	for _, entry := range channel.Access {
+		for _, right := range entry.Allow {
+			named[right] = struct{}{}
+		}
+		for _, right := range entry.Deny {
+			named[right] = struct{}{}
+		}
+	}
+}
+
+// collectAllNamedRights gathers all rights named across roles, channels, and MANAGE_CHANNELS.
+func collectAllNamedRights(def *serverdef.Definition) map[string]struct{} {
+	named := map[string]struct{}{"MANAGE_CHANNELS": {}}
+	for _, role := range def.Roles {
+		for _, right := range role.Permissions {
+			named[right] = struct{}{}
+		}
+	}
+	for _, channel := range def.Channels {
+		collectChannelNamedRights(named, channel)
+	}
+	return named
+}
+
 // The page on applying the definition has a table that gives each right the label it carries in
 // Discord's settings, because the operator switches rights on by label and the tool prints
 // programming names. This test keeps the table in step with the definition: every right the
@@ -24,22 +50,7 @@ func TestServerApplyDoc_Negative_LabelsEveryRight(t *testing.T) {
 	}
 	def := loadDefinitionForDoc(t)
 
-	named := map[string]struct{}{"MANAGE_CHANNELS": {}}
-	for _, role := range def.Roles {
-		for _, right := range role.Permissions {
-			named[right] = struct{}{}
-		}
-	}
-	for _, channel := range def.Channels {
-		for _, entry := range channel.Access {
-			for _, right := range entry.Allow {
-				named[right] = struct{}{}
-			}
-			for _, right := range entry.Deny {
-				named[right] = struct{}{}
-			}
-		}
-	}
+	named := collectAllNamedRights(def)
 	if len(named) < 10 {
 		t.Fatalf("the definition names %d rights; the walk of this test no longer fits", len(named))
 	}
@@ -106,20 +117,9 @@ func setUpRights(t *testing.T, def *serverdef.Definition, bot, everyone []string
 	return setUp
 }
 
-// The page gives the address that adds the bot to a new server with the rights of the first
-// set-up as one number. This test computes that number from the definition and the plan: the
-// rights the plan of a new server needs, without those every member keeps through @everyone.
-// It fails when the page carries another number, and when the rights behind the number leave
-// a refusal in the plan.
-func TestServerApplyDoc_Negative_InvitationNumberIsThePlansRights(t *testing.T) {
-	doc, err := os.ReadFile("../../docs/server-apply.md")
-	if err != nil {
-		t.Fatalf("read documentation page: %v", err)
-	}
-	def := loadDefinitionForDoc(t)
-	bot, everyone := newServerRights(t, def)
-
-	setUp := setUpRights(t, def, bot, everyone)
+// verifySetUpRightsCoverage ensures setUp includes all bot rights, extra rights, and no ADMINISTRATOR.
+func verifySetUpRightsCoverage(t *testing.T, setUp, bot []string) {
+	t.Helper()
 	for _, r := range bot {
 		if !slices.Contains(setUp, r) {
 			t.Fatalf("setUp = %v lacks bot right %s", setUp, r)
@@ -135,7 +135,11 @@ func TestServerApplyDoc_Negative_InvitationNumberIsThePlansRights(t *testing.T) 
 	if !hasExtra || slices.Contains(setUp, "ADMINISTRATOR") {
 		t.Fatalf("rights of the first set-up = %v; want every bot right, at least one beyond bot, and no ADMINISTRATOR", setUp)
 	}
+}
 
+// verifySetUpRightsPlan verifies that planning with setUp rights produces changes and no refusals.
+func verifySetUpRightsPlan(t *testing.T, def *serverdef.Definition, setUp, everyone []string) {
+	t.Helper()
 	raised, err := serverplan.Plan(def, newServerSnapshot(def, setUp, everyone))
 	if err != nil {
 		t.Fatalf("plan with the rights of the first set-up: %v", err)
@@ -144,7 +148,11 @@ func TestServerApplyDoc_Negative_InvitationNumberIsThePlansRights(t *testing.T) 
 		t.Fatalf("plan with %v on the bot's role: %d changes, %d refused; want changes and no refusal",
 			setUp, len(raised.Changes), len(raised.Refused))
 	}
+}
 
+// verifyDocInvitationNumber verifies the documentation contains the correct permission mask in the URL.
+func verifyDocInvitationNumber(t *testing.T, doc []byte, setUp []string) {
+	t.Helper()
 	mask, err := serverdef.PermissionMask(setUp)
 	if err != nil {
 		t.Fatalf("number for %v: %v", setUp, err)
@@ -159,6 +167,25 @@ func TestServerApplyDoc_Negative_InvitationNumberIsThePlansRights(t *testing.T) 
 			t.Errorf("the documentation page has an address with %q, want %q (rights %s)", got, want, strings.Join(setUp, ", "))
 		}
 	}
+}
+
+// The page gives the address that adds the bot to a new server with the rights of the first
+// set-up as one number. This test computes that number from the definition and the plan: the
+// rights the plan of a new server needs, without those every member keeps through @everyone.
+// It fails when the page carries another number, and when the rights behind the number leave
+// a refusal in the plan.
+func TestServerApplyDoc_Negative_InvitationNumberIsThePlansRights(t *testing.T) {
+	doc, err := os.ReadFile("../../docs/server-apply.md")
+	if err != nil {
+		t.Fatalf("read documentation page: %v", err)
+	}
+	def := loadDefinitionForDoc(t)
+	bot, everyone := newServerRights(t, def)
+
+	setUp := setUpRights(t, def, bot, everyone)
+	verifySetUpRightsCoverage(t, setUp, bot)
+	verifySetUpRightsPlan(t, def, setUp, everyone)
+	verifyDocInvitationNumber(t, doc, setUp)
 }
 
 func parseLabelsTable(t *testing.T, doc []byte) map[string]string {
