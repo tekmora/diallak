@@ -99,12 +99,15 @@ func assertCheckFails(t *testing.T, mutate func(*Snapshot), wantErr string) {
 	}
 }
 
-func TestCheck_Negative_Conditions(t *testing.T) {
-	tests := []struct {
-		name    string
-		mutate  func(*Snapshot)
-		wantErr string
-	}{
+type checkNegativeCase struct {
+	name    string
+	mutate  func(*Snapshot)
+	wantErr string
+}
+
+// checkNegativeConditionsRole returns role-related negative condition test cases.
+func checkNegativeConditionsRole() []checkNegativeCase {
+	return []checkNegativeCase{
 		{
 			name: "no everyone role",
 			mutate: func(s *Snapshot) {
@@ -135,6 +138,12 @@ func TestCheck_Negative_Conditions(t *testing.T) {
 			},
 			wantErr: "last",
 		},
+	}
+}
+
+// checkNegativeConditionsCaller returns caller-related negative condition test cases.
+func checkNegativeConditionsCaller() []checkNegativeCase {
+	return []checkNegativeCase{
 		{
 			name: "caller role names no role",
 			mutate: func(s *Snapshot) {
@@ -167,6 +176,12 @@ func TestCheck_Negative_Conditions(t *testing.T) {
 			},
 			wantErr: "caller",
 		},
+	}
+}
+
+// checkNegativeConditionsPermissionsAndChannels returns permission and channel negative test cases.
+func checkNegativeConditionsPermissionsAndChannels() []checkNegativeCase {
+	return []checkNegativeCase{
 		{
 			name: "unknown permission in caller",
 			mutate: func(s *Snapshot) {
@@ -210,6 +225,11 @@ func TestCheck_Negative_Conditions(t *testing.T) {
 			wantErr: "channel name",
 		},
 	}
+}
+
+func TestCheck_Negative_Conditions(t *testing.T) {
+	tests := append(checkNegativeConditionsRole(), checkNegativeConditionsCaller()...)
+	tests = append(tests, checkNegativeConditionsPermissionsAndChannels()...)
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
