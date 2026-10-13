@@ -81,6 +81,16 @@ jobs:
           go install -modfile=tools/go/go.mod
           golang.org/x/vuln/cmd/govulncheck
           github.com/securego/gosec/v2/cmd/gosec
+      # Both scanners first run on modules planted at run time: a clean one
+      # must pass and a known defect must fail with its id, so their exit
+      # status on the tracked code below is trusted.
+      - name: Scanner self-test
+        if: github.event.pull_request.draft != true
+        shell: bash
+        run: |
+          bin="$(go env GOPATH)/bin"
+          python3 -I tools/ci/vulncheck_selftest.py \
+            --govulncheck "$bin/govulncheck" --gosec "$bin/gosec"
       - name: Run govulncheck
         if: github.event.pull_request.draft != true
         run: govulncheck ./...
