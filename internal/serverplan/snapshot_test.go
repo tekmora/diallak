@@ -84,6 +84,21 @@ func validBaseSnapshot() Snapshot {
 	}
 }
 
+// assertCheckFails applies mutate to the valid base snapshot and wants Check to
+// fail with an error that contains wantErr, ignoring case.
+func assertCheckFails(t *testing.T, mutate func(*Snapshot), wantErr string) {
+	t.Helper()
+	s := validBaseSnapshot()
+	mutate(&s)
+	err := Check(&s)
+	if err == nil {
+		t.Fatalf("Check succeeded, want error containing %q", wantErr)
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(wantErr)) {
+		t.Errorf("Check error %q does not contain %q", err.Error(), wantErr)
+	}
+}
+
 func TestCheck_Negative_Conditions(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -198,16 +213,73 @@ func TestCheck_Negative_Conditions(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			s := validBaseSnapshot()
-			tc.mutate(&s)
-			err := Check(&s)
-			if err == nil {
-				t.Fatalf("Check succeeded, want error containing %q", tc.wantErr)
-			}
-			if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tc.wantErr)) {
-				t.Errorf("Check error %q does not contain %q", err.Error(), tc.wantErr)
-			}
+			assertCheckFails(t, tc.mutate, tc.wantErr)
 		})
+	}
+}
+
+func TestCheck_Negative_BlankNamesAndCounts(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*Snapshot)
+		wantErr string
+	}{
+		{
+			name: "blank role name",
+			mutate: func(s *Snapshot) {
+				s.Roles = append(s.Roles, Role{Name: " ", Permissions: []string{}})
+			},
+			wantErr: "empty role name at index 2",
+		},
+		{
+			name: "blank category name",
+			mutate: func(s *Snapshot) {
+				s.Categories[0].Name = "\t"
+			},
+			wantErr: "empty category name at index 0",
+		},
+		{
+			name: "negative member entries",
+			mutate: func(s *Snapshot) {
+				s.Channels[0].MemberEntries = -1
+			},
+			wantErr: "negative member entries -1",
+		},
+		{
+			name: "blank feature name",
+			mutate: func(s *Snapshot) {
+				s.Features = append(s.Features, "")
+			},
+			wantErr: "empty feature name at index 1",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assertCheckFails(t, tc.mutate, tc.wantErr)
+		})
+	}
+}
+
+func TestCheck_Boundary_ZeroMemberEntriesIsNoError(t *testing.T) {
+	s := validBaseSnapshot()
+	s.Channels[0].MemberEntries = 0
+	if err := Check(&s); err != nil {
+		t.Errorf("Check failed for zero member entries: %v, want nil", err)
+	}
+}
+
+func TestCheck_Negative_EveryChannelReported(t *testing.T) {
+	s := validBaseSnapshot()
+	s.Channels = append(s.Channels, Channel{Name: "", Type: "stage", Category: "General", MemberEntries: -2})
+	err := Check(&s)
+	if err == nil {
+		t.Fatal("Check succeeded, want three errors for the second channel")
+	}
+	for _, want := range []string{"empty channel name at index 1", `unknown channel type "stage"`, "negative member entries -2"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("Check error %q does not contain %q", err.Error(), want)
+		}
 	}
 }
 

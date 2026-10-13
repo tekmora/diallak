@@ -296,38 +296,46 @@ func (ctx *planContext) evaluateCandidate(c candidate) {
 	}
 }
 
+// refusalChecks are the refusals that carry a detail, in the order the first
+// one that applies is reported.
+var refusalChecks = [...]func(*planContext, candidate) (string, string){
+	(*planContext).checkMissingFeature,
+	(*planContext).checkManagedRole,
+	(*planContext).checkUnknownBits,
+	(*planContext).checkAboveCaller,
+	(*planContext).checkPositions,
+	(*planContext).checkLacksRight,
+}
+
 func (ctx *planContext) checkRefusal(c candidate) (string, string) {
-	if c.action == ActionResolveName || ctx.namesAmbiguous(c) {
-		return ReasonAmbiguousName, ""
+	if r := ctx.checkShapeRefusal(c); r != "" {
+		return r, ""
 	}
-	if c.action == ActionConvertChannel {
-		return ReasonTypeDiffers, ""
-	}
-	if c.isNotVisible {
-		return ReasonNotVisible, ""
-	}
-	if !ctx.raised && !ctx.isAllowedInOwnMode(c) {
-		return ReasonOutsideOwnChanges, ""
-	}
-	if r, d := ctx.checkMissingFeature(c); r != "" {
-		return r, d
-	}
-	if r, d := ctx.checkManagedRole(c); r != "" {
-		return r, d
-	}
-	if r, d := ctx.checkUnknownBits(c); r != "" {
-		return r, d
-	}
-	if r, d := ctx.checkAboveCaller(c); r != "" {
-		return r, d
-	}
-	if r, d := ctx.checkPositions(c); r != "" {
-		return r, d
-	}
-	if r, d := ctx.checkLacksRight(c); r != "" {
-		return r, d
+	for _, check := range refusalChecks {
+		if r, d := check(ctx, c); r != "" {
+			return r, d
+		}
 	}
 	return "", ""
+}
+
+// checkShapeRefusal reports the refusals that need no detail: an ambiguous
+// name, a type change, an object the caller cannot see and, unless raised, a
+// change outside the caller's own objects.
+func (ctx *planContext) checkShapeRefusal(c candidate) string {
+	if c.action == ActionResolveName || ctx.namesAmbiguous(c) {
+		return ReasonAmbiguousName
+	}
+	if c.action == ActionConvertChannel {
+		return ReasonTypeDiffers
+	}
+	if c.isNotVisible {
+		return ReasonNotVisible
+	}
+	if !ctx.raised && !ctx.isAllowedInOwnMode(c) {
+		return ReasonOutsideOwnChanges
+	}
+	return ""
 }
 
 func (ctx *planContext) defChannel(id string) *serverdef.Channel {
