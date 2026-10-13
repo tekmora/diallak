@@ -6,14 +6,14 @@ community server the bot serves.
 ## Provider
 
 <!-- identity block: start -->
-- **Name:** *filled before launch*
-- **Address:** *filled before launch*
-- **E-mail:** *filled before launch*
+- **Name:** Kilian Cromm
+- **Address:** c/o IBC, Bahnhofstraße 9, 65549 Limburg a. d. Lahn
+- **E-mail:** lusoris@pm.me
 <!-- identity block: end -->
 
-The name is the provider's full name. The address is that of a service which is
-authorised to receive legal mail for the provider; the provider's home address
-is not published.
+The name is the provider's full name. The address is a c/o address at which the
+provider receives legal mail; the provider's home and office addresses are not
+published.
 
 The same block stands in the [privacy notice](privacy-notice.md). It is filled
 in both places at once
@@ -27,8 +27,5 @@ Once published, it is linked from the bot's profile, from the
 
 ## Before the public launch
 
-- The block is filled.
-- The address service is contracted. Nothing public launches before that
-  address exists.
 - What an imprint has to hold for this project is part of the legal research
   that runs before the launch. This page follows its result.
