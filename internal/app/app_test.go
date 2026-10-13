@@ -172,47 +172,71 @@ func TestBuild_Positive_WithModelAnswersQuestion(t *testing.T) {
 	}
 }
 
+// testBuildMissingDir asserts Build failure when CorpusDir does not exist.
+func testBuildMissingDir(t *testing.T) {
+	t.Helper()
+	cfg := config.Config{CorpusDir: filepath.Join(t.TempDir(), "nonexistent")}
+	_, _, err := Build(context.Background(), cfg, nil)
+	if err == nil || !strings.Contains(err.Error(), "open corpus root") {
+		t.Fatalf("Build missing dir error = %v, want open corpus root error", err)
+	}
+}
+
+// testBuildMissingManifest asserts Build failure when the manifest file is absent.
+func testBuildMissingManifest(t *testing.T) {
+	t.Helper()
+	emptyDir := t.TempDir()
+	cfg := config.Config{CorpusDir: emptyDir}
+	_, _, err := Build(context.Background(), cfg, nil)
+	if err == nil || !strings.Contains(err.Error(), "load manifest") {
+		t.Fatalf("Build missing manifest error = %v, want load manifest error", err)
+	}
+}
+
+// testBuildBadManifest asserts Build failure when the manifest contains invalid JSON.
+func testBuildBadManifest(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, corpus.ManifestName), []byte("{invalid json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{CorpusDir: dir}
+	_, _, err := Build(context.Background(), cfg, nil)
+	if err == nil || !strings.Contains(err.Error(), "load manifest") {
+		t.Fatalf("Build bad manifest error = %v, want load manifest error", err)
+	}
+}
+
+// testBuildSourceDirMissing asserts Build failure when a source directory listed in manifest is absent.
+func testBuildSourceDirMissing(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	manifest := `{"version": 1, "sources": [{"directory": "absent", "repository": "tekmora/absent", "revision": "rev", "paths": ["*.md"]}]}`
+	if err := os.WriteFile(filepath.Join(dir, corpus.ManifestName), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{CorpusDir: dir}
+	_, _, err := Build(context.Background(), cfg, nil)
+	if err == nil || !strings.Contains(err.Error(), "load corpus") {
+		t.Fatalf("Build missing source dir error = %v, want load corpus error", err)
+	}
+}
+
 func TestBuild_Negative_ConfigurationAndDirectoryErrors(t *testing.T) {
 	t.Run("missing dir", func(t *testing.T) {
-		cfg := config.Config{CorpusDir: filepath.Join(t.TempDir(), "nonexistent")}
-		_, _, err := Build(context.Background(), cfg, nil)
-		if err == nil || !strings.Contains(err.Error(), "open corpus root") {
-			t.Fatalf("Build missing dir error = %v, want open corpus root error", err)
-		}
+		testBuildMissingDir(t)
 	})
 
 	t.Run("missing manifest", func(t *testing.T) {
-		emptyDir := t.TempDir()
-		cfg := config.Config{CorpusDir: emptyDir}
-		_, _, err := Build(context.Background(), cfg, nil)
-		if err == nil || !strings.Contains(err.Error(), "load manifest") {
-			t.Fatalf("Build missing manifest error = %v, want load manifest error", err)
-		}
+		testBuildMissingManifest(t)
 	})
 
 	t.Run("bad manifest", func(t *testing.T) {
-		dir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(dir, corpus.ManifestName), []byte("{invalid json"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		cfg := config.Config{CorpusDir: dir}
-		_, _, err := Build(context.Background(), cfg, nil)
-		if err == nil || !strings.Contains(err.Error(), "load manifest") {
-			t.Fatalf("Build bad manifest error = %v, want load manifest error", err)
-		}
+		testBuildBadManifest(t)
 	})
 
 	t.Run("source dir missing", func(t *testing.T) {
-		dir := t.TempDir()
-		manifest := `{"version": 1, "sources": [{"directory": "absent", "repository": "tekmora/absent", "revision": "rev", "paths": ["*.md"]}]}`
-		if err := os.WriteFile(filepath.Join(dir, corpus.ManifestName), []byte(manifest), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		cfg := config.Config{CorpusDir: dir}
-		_, _, err := Build(context.Background(), cfg, nil)
-		if err == nil || !strings.Contains(err.Error(), "load corpus") {
-			t.Fatalf("Build missing source dir error = %v, want load corpus error", err)
-		}
+		testBuildSourceDirMissing(t)
 	})
 }
 

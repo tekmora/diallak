@@ -275,18 +275,38 @@ func TestRun_Negative_ControlPathIsolation(t *testing.T) {
 	}
 }
 
-func TestRun_Negative_ConfigurationErrors(t *testing.T) {
-	distinctToken := "distinct-secret-token-111"
-	distinctKey := "distinct-secret-key-222"
-	tokenPath := writeSecret(t, "token", distinctToken)
-	keyPath := writeSecret(t, "key", distinctKey)
-	corpusPath := setupTestCorpus(t)
+// verifyRunConfigError runs run() with the test environment and verifies failure output and secret leaks.
+func verifyRunConfigError(t *testing.T, env map[string]string, wantVar, distinctToken, distinctKey string) {
+	t.Helper()
+	var out bytes.Buffer
+	err := run(context.Background(), nil, func(k string) string { return env[k] }, &out, noopDeps())
+	if err == nil {
+		t.Fatalf("run succeeded, want error naming %q", wantVar)
+	}
+	errStr := err.Error()
+	if !strings.Contains(errStr, wantVar) {
+		t.Errorf("error %q does not name expected variable %q", errStr, wantVar)
+	}
+	if strings.Contains(errStr, distinctToken) {
+		t.Errorf("error leaks token: %q", errStr)
+	}
+	if strings.Contains(errStr, distinctKey) {
+		t.Errorf("error leaks model key: %q", errStr)
+	}
+	if out.Len() != 0 {
+		t.Errorf("run wrote output before configuration failure: %q", out.String())
+	}
+}
 
-	cases := []struct {
-		name    string
-		env     map[string]string
-		wantVar string
-	}{
+type runConfigErrorCase struct {
+	name    string
+	env     map[string]string
+	wantVar string
+}
+
+// buildBaseRunConfigCases returns config error cases for missing base settings.
+func buildBaseRunConfigCases(tokenPath, corpusPath string) []runConfigErrorCase {
+	return []runConfigErrorCase{
 		{
 			name: "guild missing",
 			env: map[string]string{
@@ -311,6 +331,12 @@ func TestRun_Negative_ConfigurationErrors(t *testing.T) {
 			},
 			wantVar: config.EnvCorpusDir,
 		},
+	}
+}
+
+// buildModelRunConfigCases returns config error cases for invalid model settings.
+func buildModelRunConfigCases(tokenPath, keyPath, corpusPath string) []runConfigErrorCase {
+	return []runConfigErrorCase{
 		{
 			name: "model base without alias",
 			env: map[string]string{
@@ -363,27 +389,20 @@ func TestRun_Negative_ConfigurationErrors(t *testing.T) {
 			wantVar: config.EnvModelPolicy,
 		},
 	}
+}
 
+func TestRun_Negative_ConfigurationErrors(t *testing.T) {
+	distinctToken := "distinct-secret-token-111"
+	distinctKey := "distinct-secret-key-222"
+	tokenPath := writeSecret(t, "token", distinctToken)
+	keyPath := writeSecret(t, "key", distinctKey)
+	corpusPath := setupTestCorpus(t)
+
+	cases := append(buildBaseRunConfigCases(tokenPath, corpusPath),
+		buildModelRunConfigCases(tokenPath, keyPath, corpusPath)...)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var out bytes.Buffer
-			err := run(context.Background(), nil, func(k string) string { return tc.env[k] }, &out, noopDeps())
-			if err == nil {
-				t.Fatalf("run succeeded, want error naming %q", tc.wantVar)
-			}
-			errStr := err.Error()
-			if !strings.Contains(errStr, tc.wantVar) {
-				t.Errorf("error %q does not name expected variable %q", errStr, tc.wantVar)
-			}
-			if strings.Contains(errStr, distinctToken) {
-				t.Errorf("error leaks token: %q", errStr)
-			}
-			if strings.Contains(errStr, distinctKey) {
-				t.Errorf("error leaks model key: %q", errStr)
-			}
-			if out.Len() != 0 {
-				t.Errorf("run wrote output before configuration failure: %q", out.String())
-			}
+			verifyRunConfigError(t, tc.env, tc.wantVar, distinctToken, distinctKey)
 		})
 	}
 }
@@ -536,6 +555,87 @@ func TestRun_Positive_OptionalConfigurationThreaded(t *testing.T) {
 	}
 }
 
+// probeHealthz requests /healthz and validates HTTP 200 and "ok\n" body.
+func probeHealthz(ctx context.Context, client *http.Client, addr string) error {
+	healthReq, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/healthz", nil)
+	if reqErr != nil {
+		return fmt.Errorf("new health request: %w", reqErr)
+	}
+	resp, getErr := client.Do(healthReq)
+	if getErr != nil {
+		return fmt.Errorf("probe /healthz: %w", getErr)
+	}
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return fmt.Errorf("read health body: %w", readErr)
+	}
+	if closeErr := resp.Body.Close(); closeErr != nil {
+		return fmt.Errorf("close health body: %w", closeErr)
+	}
+	if resp.StatusCode != http.StatusOK || string(body) != "ok\n" {
+		return fmt.Errorf("/healthz = %d %q, want 200 ok\\n", resp.StatusCode, string(body))
+	}
+	return nil
+}
+
+// probeReadyzBeforeReady requests /readyz and validates HTTP 503 before ready is reported.
+func probeReadyzBeforeReady(ctx context.Context, client *http.Client, addr string) error {
+	readyReq1, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/readyz", nil)
+	if reqErr != nil {
+		return fmt.Errorf("new ready request: %w", reqErr)
+	}
+	readyResp, readyErr := client.Do(readyReq1)
+	if readyErr != nil {
+		return fmt.Errorf("probe /readyz before ready: %w", readyErr)
+	}
+	if closeErr := readyResp.Body.Close(); closeErr != nil {
+		return fmt.Errorf("close ready body: %w", closeErr)
+	}
+	if readyResp.StatusCode != http.StatusServiceUnavailable {
+		return fmt.Errorf("/readyz before ready = %d, want 503", readyResp.StatusCode)
+	}
+	return nil
+}
+
+// probeReadyzAfterReady requests /readyz and validates HTTP 200 and "ready\n" body.
+func probeReadyzAfterReady(ctx context.Context, client *http.Client, addr string) error {
+	readyReq2, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/readyz", nil)
+	if reqErr != nil {
+		return fmt.Errorf("new ready request 2: %w", reqErr)
+	}
+	readyResp2, readyErr2 := client.Do(readyReq2)
+	if readyErr2 != nil {
+		return fmt.Errorf("probe /readyz after ready: %w", readyErr2)
+	}
+	body2, readErr2 := io.ReadAll(readyResp2.Body)
+	if readErr2 != nil {
+		return fmt.Errorf("read ready body 2: %w", readErr2)
+	}
+	if closeErr := readyResp2.Body.Close(); closeErr != nil {
+		return fmt.Errorf("close ready body 2: %w", closeErr)
+	}
+	if readyResp2.StatusCode != http.StatusOK || string(body2) != "ready\n" {
+		return fmt.Errorf("/readyz after ready = %d %q, want 200 ready\\n", readyResp2.StatusCode, string(body2))
+	}
+	return nil
+}
+
+// verifyHealthEndpointClosed checks that the health server stops responding after run completes.
+func verifyHealthEndpointClosed(t *testing.T, client *http.Client, addr string) {
+	t.Helper()
+	probeReq, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+addr+"/healthz", nil)
+	if reqErr != nil {
+		t.Fatalf("new probe request: %v", reqErr)
+	}
+	probeResp, probeAfterErr := client.Do(probeReq)
+	if probeAfterErr == nil {
+		if closeErr := probeResp.Body.Close(); closeErr != nil {
+			t.Errorf("close probe response: %v", closeErr)
+		}
+		t.Fatal("health server still responding after run completed")
+	}
+}
+
 func TestRun_Positive_HealthEndpointServesAndReportsReady(t *testing.T) {
 	ctx := context.Background()
 	// Allocate free ephemeral port
@@ -569,65 +669,16 @@ func TestRun_Positive_HealthEndpointServesAndReportsReady(t *testing.T) {
 			if cfg.ReportReady == nil {
 				return errors.New("cfg.ReportReady is nil")
 			}
-			// Probe /healthz while fake Discord run blocks
-			healthReq, reqErr := http.NewRequestWithContext(discordCtx, http.MethodGet, "http://"+addr+"/healthz", nil)
-			if reqErr != nil {
-				return fmt.Errorf("new health request: %w", reqErr)
+			if err := probeHealthz(discordCtx, httpClient, addr); err != nil {
+				return err
 			}
-			resp, getErr := httpClient.Do(healthReq)
-			if getErr != nil {
-				return fmt.Errorf("probe /healthz: %w", getErr)
+			if err := probeReadyzBeforeReady(discordCtx, httpClient, addr); err != nil {
+				return err
 			}
-			body, readErr := io.ReadAll(resp.Body)
-			if readErr != nil {
-				return fmt.Errorf("read health body: %w", readErr)
-			}
-			if closeErr := resp.Body.Close(); closeErr != nil {
-				return fmt.Errorf("close health body: %w", closeErr)
-			}
-			if resp.StatusCode != http.StatusOK || string(body) != "ok\n" {
-				return fmt.Errorf("/healthz = %d %q, want 200 ok\\n", resp.StatusCode, string(body))
-			}
-
-			// Probe /readyz before ReportReady(true) -> 503
-			readyReq1, reqErr := http.NewRequestWithContext(discordCtx, http.MethodGet, "http://"+addr+"/readyz", nil)
-			if reqErr != nil {
-				return fmt.Errorf("new ready request: %w", reqErr)
-			}
-			readyResp, readyErr := httpClient.Do(readyReq1)
-			if readyErr != nil {
-				return fmt.Errorf("probe /readyz before ready: %w", readyErr)
-			}
-			if closeErr := readyResp.Body.Close(); closeErr != nil {
-				return fmt.Errorf("close ready body: %w", closeErr)
-			}
-			if readyResp.StatusCode != http.StatusServiceUnavailable {
-				return fmt.Errorf("/readyz before ready = %d, want 503", readyResp.StatusCode)
-			}
-
-			// Call ReportReady(true)
 			cfg.ReportReady(true)
-
-			// Probe /readyz after ReportReady(true) -> 200
-			readyReq2, reqErr := http.NewRequestWithContext(discordCtx, http.MethodGet, "http://"+addr+"/readyz", nil)
-			if reqErr != nil {
-				return fmt.Errorf("new ready request 2: %w", reqErr)
+			if err := probeReadyzAfterReady(discordCtx, httpClient, addr); err != nil {
+				return err
 			}
-			readyResp2, readyErr2 := httpClient.Do(readyReq2)
-			if readyErr2 != nil {
-				return fmt.Errorf("probe /readyz after ready: %w", readyErr2)
-			}
-			body2, readErr2 := io.ReadAll(readyResp2.Body)
-			if readErr2 != nil {
-				return fmt.Errorf("read ready body 2: %w", readErr2)
-			}
-			if closeErr := readyResp2.Body.Close(); closeErr != nil {
-				return fmt.Errorf("close ready body 2: %w", closeErr)
-			}
-			if readyResp2.StatusCode != http.StatusOK || string(body2) != "ready\n" {
-				return fmt.Errorf("/readyz after ready = %d %q, want 200 ready\\n", readyResp2.StatusCode, string(body2))
-			}
-
 			readyChecked = true
 			return nil
 		},
@@ -642,18 +693,7 @@ func TestRun_Positive_HealthEndpointServesAndReportsReady(t *testing.T) {
 		t.Fatal("health checks were not verified")
 	}
 
-	// Listener should be closed after run completes
-	probeReq, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+addr+"/healthz", nil)
-	if reqErr != nil {
-		t.Fatalf("new probe request: %v", reqErr)
-	}
-	probeResp, probeAfterErr := httpClient.Do(probeReq)
-	if probeAfterErr == nil {
-		if closeErr := probeResp.Body.Close(); closeErr != nil {
-			t.Errorf("close probe response: %v", closeErr)
-		}
-		t.Fatal("health server still responding after run completed")
-	}
+	verifyHealthEndpointClosed(t, httpClient, addr)
 }
 
 func TestRun_Negative_HealthAddrAlreadyInUse(t *testing.T) {
@@ -861,51 +901,57 @@ func TestRun_Negative_UnknownAliasStopsTheStart(t *testing.T) {
 	}
 }
 
+// verifyRejectedProbeStopsStart checks that non-200/503 HTTP probe responses abort startup before runDiscord.
+func verifyRejectedProbeStopsStart(t *testing.T, status int) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+	}))
+	defer server.Close()
+
+	tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
+	corpusPath := setupTestCorpus(t)
+	envMap := map[string]string{
+		config.EnvTokenFile:    tokenPath,
+		config.EnvGuildID:      "42",
+		config.EnvCorpusDir:    corpusPath,
+		config.EnvModelBaseURL: server.URL,
+		config.EnvModelAlias:   "test-alias",
+		config.EnvModelPolicy:  "example-policy",
+	}
+
+	var out bytes.Buffer
+	var discordCalls int
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
+		runDiscord: func(_ context.Context, _ discord.BotConfig) error {
+			discordCalls++
+			return nil
+		},
+	}
+
+	err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps)
+	if err == nil {
+		t.Fatal("run expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "model start probe") {
+		t.Errorf("error %q should contain 'model start probe'", err.Error())
+	}
+	if !strings.Contains(err.Error(), fmt.Sprintf("status %d", status)) {
+		t.Errorf("error %q should contain 'status %d'", err.Error(), status)
+	}
+	if discordCalls != 0 {
+		t.Errorf("discordCalls = %d, want 0", discordCalls)
+	}
+	if strings.Contains(out.String(), "ready:") {
+		t.Errorf("output should not contain ready line, got: %q", out.String())
+	}
+}
+
 func TestRun_Negative_RejectedProbeStopsTheStart(t *testing.T) {
 	for _, status := range []int{http.StatusUnauthorized, http.StatusBadRequest} {
 		t.Run(fmt.Sprintf("status_%d", status), func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(status)
-			}))
-			defer server.Close()
-
-			tokenPath := writeSecret(t, "token", "distinctive-token-xyz")
-			corpusPath := setupTestCorpus(t)
-			envMap := map[string]string{
-				config.EnvTokenFile:    tokenPath,
-				config.EnvGuildID:      "42",
-				config.EnvCorpusDir:    corpusPath,
-				config.EnvModelBaseURL: server.URL,
-				config.EnvModelAlias:   "test-alias",
-				config.EnvModelPolicy:  "example-policy",
-			}
-
-			var out bytes.Buffer
-			var discordCalls int
-			deps := dependencies{
-				registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
-				runDiscord: func(_ context.Context, _ discord.BotConfig) error {
-					discordCalls++
-					return nil
-				},
-			}
-
-			err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps)
-			if err == nil {
-				t.Fatal("run expected error, got nil")
-			}
-			if !strings.Contains(err.Error(), "model start probe") {
-				t.Errorf("error %q should contain 'model start probe'", err.Error())
-			}
-			if !strings.Contains(err.Error(), fmt.Sprintf("status %d", status)) {
-				t.Errorf("error %q should contain 'status %d'", err.Error(), status)
-			}
-			if discordCalls != 0 {
-				t.Errorf("discordCalls = %d, want 0", discordCalls)
-			}
-			if strings.Contains(out.String(), "ready:") {
-				t.Errorf("output should not contain ready line, got: %q", out.String())
-			}
+			verifyRejectedProbeStopsStart(t, status)
 		})
 	}
 }
@@ -1178,6 +1224,55 @@ func fetchModelz(ctx context.Context, addr string) (string, error) {
 	return fmt.Sprintf("%d %s", resp.StatusCode, body), nil
 }
 
+// verifyHealthEndpointReportsModelState checks /modelz response status and body for a given probe status.
+func verifyHealthEndpointReportsModelState(t *testing.T, status int, want string) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if status == http.StatusOK {
+			w.Header().Set("x-litellm-applied-policies", "example-policy")
+		}
+		w.WriteHeader(status)
+	}))
+	defer server.Close()
+
+	var lc net.ListenConfig
+	probeLn, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := probeLn.Addr().String()
+	if closeErr := probeLn.Close(); closeErr != nil {
+		t.Fatalf("close probe listener: %v", closeErr)
+	}
+
+	envMap := map[string]string{
+		config.EnvTokenFile:    writeSecret(t, "token", "distinctive-token-xyz"),
+		config.EnvGuildID:      "42",
+		config.EnvCorpusDir:    setupTestCorpus(t),
+		config.EnvHealthAddr:   addr,
+		config.EnvModelBaseURL: server.URL,
+		config.EnvModelAlias:   "test-alias",
+		config.EnvModelPolicy:  "example-policy",
+	}
+	var got string
+	deps := dependencies{
+		registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
+		runDiscord: func(ctx context.Context, _ discord.BotConfig) error {
+			var fetchErr error
+			got, fetchErr = fetchModelz(ctx, addr)
+			return fetchErr
+		},
+	}
+
+	var out bytes.Buffer
+	if err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps); err != nil {
+		t.Fatalf("run = %v, want nil", err)
+	}
+	if got != want {
+		t.Errorf("/modelz = %q, want %q", got, want)
+	}
+}
+
 func TestRun_Positive_HealthEndpointReportsTheModelState(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -1189,50 +1284,7 @@ func TestRun_Positive_HealthEndpointReportsTheModelState(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				if tc.status == http.StatusOK {
-					w.Header().Set("x-litellm-applied-policies", "example-policy")
-				}
-				w.WriteHeader(tc.status)
-			}))
-			defer server.Close()
-
-			var lc net.ListenConfig
-			probeLn, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
-			if err != nil {
-				t.Fatalf("listen: %v", err)
-			}
-			addr := probeLn.Addr().String()
-			if closeErr := probeLn.Close(); closeErr != nil {
-				t.Fatalf("close probe listener: %v", closeErr)
-			}
-
-			envMap := map[string]string{
-				config.EnvTokenFile:    writeSecret(t, "token", "distinctive-token-xyz"),
-				config.EnvGuildID:      "42",
-				config.EnvCorpusDir:    setupTestCorpus(t),
-				config.EnvHealthAddr:   addr,
-				config.EnvModelBaseURL: server.URL,
-				config.EnvModelAlias:   "test-alias",
-				config.EnvModelPolicy:  "example-policy",
-			}
-			var got string
-			deps := dependencies{
-				registerCommands: func(_ context.Context, _ string, _ uint64, _ int) error { return nil },
-				runDiscord: func(ctx context.Context, _ discord.BotConfig) error {
-					var fetchErr error
-					got, fetchErr = fetchModelz(ctx, addr)
-					return fetchErr
-				},
-			}
-
-			var out bytes.Buffer
-			if err := run(context.Background(), nil, func(k string) string { return envMap[k] }, &out, deps); err != nil {
-				t.Fatalf("run = %v, want nil", err)
-			}
-			if got != tc.want {
-				t.Errorf("/modelz = %q, want %q", got, tc.want)
-			}
+			verifyHealthEndpointReportsModelState(t, tc.status, tc.want)
 		})
 	}
 }
@@ -1461,37 +1513,43 @@ func TestRun_Negative_ServerAndRegisterCommandsMutuallyExclusive(t *testing.T) {
 	}
 }
 
+// verifyServerUnknownModeError checks that an unknown server mode flag is rejected with usage error.
+func verifyServerUnknownModeError(t *testing.T, mode string) {
+	t.Helper()
+	var readCalls int
+	deps := dependencies{
+		readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
+			readCalls++
+			return nil, nil
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-server=" + mode}, validEnv(t), &out, deps)
+	if err == nil {
+		t.Fatal("run succeeded with an unknown server mode, want error")
+	}
+	if readCalls != 0 {
+		t.Errorf("readCalls = %d, want 0", readCalls)
+	}
+	want := fmt.Sprintf("invalid -server mode %q: must be plan, compare or apply=<plan digest>", mode)
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+	if out.Len() != 0 {
+		t.Errorf("output = %q, want none", out.String())
+	}
+
+	var errOut bytes.Buffer
+	if code := report(err, &errOut); code != 1 {
+		t.Errorf("report exit code = %d, want 1", code)
+	}
+}
+
 func TestRun_Negative_ServerUnknownModeListsValues(t *testing.T) {
 	for _, mode := range []string{"unknown", "apply", "PLAN", "plan ", "compare,plan"} {
 		t.Run(mode, func(t *testing.T) {
-			var readCalls int
-			deps := dependencies{
-				readServer: func(_ context.Context, _ string, _ uint64) (*serverplan.Snapshot, error) {
-					readCalls++
-					return nil, nil
-				},
-			}
-
-			var out bytes.Buffer
-			err := run(context.Background(), []string{"-server=" + mode}, validEnv(t), &out, deps)
-			if err == nil {
-				t.Fatal("run succeeded with an unknown server mode, want error")
-			}
-			if readCalls != 0 {
-				t.Errorf("readCalls = %d, want 0", readCalls)
-			}
-			want := fmt.Sprintf("invalid -server mode %q: must be plan, compare or apply=<plan digest>", mode)
-			if err.Error() != want {
-				t.Errorf("error = %q, want %q", err.Error(), want)
-			}
-			if out.Len() != 0 {
-				t.Errorf("output = %q, want none", out.String())
-			}
-
-			var errOut bytes.Buffer
-			if code := report(err, &errOut); code != 1 {
-				t.Errorf("report exit code = %d, want 1", code)
-			}
+			verifyServerUnknownModeError(t, mode)
 		})
 	}
 }
@@ -1642,6 +1700,39 @@ func TestRun_Positive_ServerCommandIsolation(t *testing.T) {
 	}
 }
 
+// verifyServerApplyInvalidDigestError checks that an invalid digest in -server=apply is rejected with usage error.
+func verifyServerApplyInvalidDigestError(t *testing.T, mode string) {
+	t.Helper()
+	var applyCalls int
+	deps := dependencies{
+		applyServer: func(_ context.Context, _ string, _ uint64, _ discord.ApplyInput, _ io.Writer) error {
+			applyCalls++
+			return nil
+		},
+	}
+
+	var out bytes.Buffer
+	err := run(context.Background(), []string{"-server=" + mode}, validEnv(t), &out, deps)
+	if err == nil {
+		t.Fatalf("run succeeded with invalid apply mode %q, want error", mode)
+	}
+	if applyCalls != 0 {
+		t.Errorf("applyCalls = %d, want 0", applyCalls)
+	}
+	want := fmt.Sprintf("invalid -server mode %q: apply needs the digest that -server=plan printed, as apply=sha256:<64 hex digits>", mode)
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+	if out.Len() != 0 {
+		t.Errorf("output = %q, want none", out.String())
+	}
+
+	var errOut bytes.Buffer
+	if code := report(err, &errOut); code != 1 {
+		t.Errorf("report exit code = %d, want 1", code)
+	}
+}
+
 func TestRun_Negative_ServerApplyInvalidDigest(t *testing.T) {
 	cases := []string{
 		"apply=",
@@ -1659,34 +1750,7 @@ func TestRun_Negative_ServerApplyInvalidDigest(t *testing.T) {
 	}
 	for _, mode := range cases {
 		t.Run(mode, func(t *testing.T) {
-			var applyCalls int
-			deps := dependencies{
-				applyServer: func(_ context.Context, _ string, _ uint64, _ discord.ApplyInput, _ io.Writer) error {
-					applyCalls++
-					return nil
-				},
-			}
-
-			var out bytes.Buffer
-			err := run(context.Background(), []string{"-server=" + mode}, validEnv(t), &out, deps)
-			if err == nil {
-				t.Fatalf("run succeeded with invalid apply mode %q, want error", mode)
-			}
-			if applyCalls != 0 {
-				t.Errorf("applyCalls = %d, want 0", applyCalls)
-			}
-			want := fmt.Sprintf("invalid -server mode %q: apply needs the digest that -server=plan printed, as apply=sha256:<64 hex digits>", mode)
-			if err.Error() != want {
-				t.Errorf("error = %q, want %q", err.Error(), want)
-			}
-			if out.Len() != 0 {
-				t.Errorf("output = %q, want none", out.String())
-			}
-
-			var errOut bytes.Buffer
-			if code := report(err, &errOut); code != 1 {
-				t.Errorf("report exit code = %d, want 1", code)
-			}
+			verifyServerApplyInvalidDigestError(t, mode)
 		})
 	}
 }

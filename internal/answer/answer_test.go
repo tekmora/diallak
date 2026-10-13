@@ -406,6 +406,33 @@ func TestAsk_Negative_BranchF_UncitedOrInvalidCitationsRefusal(t *testing.T) {
 	}
 }
 
+// verifyAnswerCitesSources runs Ask on pipeline and verifies answer kind and cited source numbers.
+func verifyAnswerCitesSources(t *testing.T, hits []retrieval.Hit, scripted string, wantSources []int) {
+	t.Helper()
+	ret := &stubRetriever{hits: hits}
+	gen := &fakeGenerator{scripted: scripted}
+	p, err := New(Config{Retriever: ret, Generator: gen})
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	ans, err := p.Ask(context.Background(), "Question?")
+	if err != nil {
+		t.Fatalf("Ask() failed: %v", err)
+	}
+	if ans.Kind != KindAnswer || ans.Reason != ReasonNone {
+		t.Fatalf("Outcome = %v/%v, want answer/none", ans.Kind, ans.Reason)
+	}
+	if len(ans.Sources) != len(wantSources) {
+		t.Fatalf("got %d sources, want %d", len(ans.Sources), len(wantSources))
+	}
+	for i, wantN := range wantSources {
+		if ans.Sources[i].N != wantN {
+			t.Errorf("Sources[%d].N = %d, want %d", i, ans.Sources[i].N, wantN)
+		}
+	}
+}
+
 func TestAsk_Positive_BranchG_ValidAnswerCitesSources(t *testing.T) {
 	hits := []retrieval.Hit{
 		sampleHit("doc1", "Doc One", "H1", "T1", "rev111111111111"),
@@ -437,28 +464,7 @@ func TestAsk_Positive_BranchG_ValidAnswerCitesSources(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ret := &stubRetriever{hits: hits}
-			gen := &fakeGenerator{scripted: tc.scripted}
-			p, err := New(Config{Retriever: ret, Generator: gen})
-			if err != nil {
-				t.Fatalf("New() failed: %v", err)
-			}
-
-			ans, err := p.Ask(context.Background(), "Question?")
-			if err != nil {
-				t.Fatalf("Ask() failed: %v", err)
-			}
-			if ans.Kind != KindAnswer || ans.Reason != ReasonNone {
-				t.Fatalf("Outcome = %v/%v, want answer/none", ans.Kind, ans.Reason)
-			}
-			if len(ans.Sources) != len(tc.wantSources) {
-				t.Fatalf("got %d sources, want %d", len(ans.Sources), len(tc.wantSources))
-			}
-			for i, wantN := range tc.wantSources {
-				if ans.Sources[i].N != wantN {
-					t.Errorf("Sources[%d].N = %d, want %d", i, ans.Sources[i].N, wantN)
-				}
-			}
+			verifyAnswerCitesSources(t, hits, tc.scripted, tc.wantSources)
 		})
 	}
 }
@@ -678,6 +684,64 @@ func TestPipeline_Positive_ConcurrentSafe(t *testing.T) {
 	}
 }
 
+// verifyRenderPositiveKindAnswer verifies rendered output for KindAnswer.
+func verifyRenderPositiveKindAnswer(t *testing.T, src1, src2 Source) {
+	t.Helper()
+	ans := Answer{
+		Kind:    KindAnswer,
+		Reason:  ReasonNone,
+		Text:    "This is the model generated text.",
+		Sources: []Source{src1, src2},
+	}
+	rendAns := Render(ans, RenderOptions{})
+	if !strings.HasPrefix(rendAns, LabelAnswer) {
+		t.Errorf("Render(KindAnswer) want prefix LabelAnswer, got: %s", rendAns)
+	}
+	if !strings.Contains(rendAns, "Sources:\n[1] Guide - Intro <https://github.com/repo/blob/rev/docs/intro.md> (revision abcdef123456)") {
+		t.Errorf("Render(KindAnswer) missing source 1 line: %s", rendAns)
+	}
+}
+
+// verifyRenderPositiveKindExcerpts verifies rendered output for KindExcerpts with and without model availability.
+func verifyRenderPositiveKindExcerpts(t *testing.T, src1 Source) {
+	t.Helper()
+	exc := Answer{
+		Kind:    KindExcerpts,
+		Reason:  ReasonNoModel,
+		Sources: []Source{src1},
+	}
+	rendExc := Render(exc, RenderOptions{})
+	if !strings.HasPrefix(rendExc, LabelExcerpts) {
+		t.Errorf("Render(KindExcerpts) want prefix LabelExcerpts, got: %s", rendExc)
+	}
+	if strings.Contains(rendExc, LabelModelUnavailable) {
+		t.Errorf("Render(KindExcerpts) should not contain LabelModelUnavailable: %s", rendExc)
+	}
+
+	excUnavail := Answer{
+		Kind:    KindExcerpts,
+		Reason:  ReasonModelUnavailable,
+		Sources: []Source{src1},
+	}
+	rendUnavail := Render(excUnavail, RenderOptions{})
+	if !strings.Contains(rendUnavail, LabelModelUnavailable) {
+		t.Errorf("Render(KindExcerpts) missing LabelModelUnavailable: %s", rendUnavail)
+	}
+}
+
+// verifyRenderPositiveKindRefusal verifies rendered output for KindRefusal.
+func verifyRenderPositiveKindRefusal(t *testing.T) {
+	t.Helper()
+	ref := Answer{
+		Kind:   KindRefusal,
+		Reason: ReasonNoSource,
+	}
+	wantRefusal := Refusal("") + "\n\n" + Footer("")
+	if Render(ref, RenderOptions{}) != wantRefusal {
+		t.Errorf("Render(KindRefusal) = %q, want %q", Render(ref, RenderOptions{}), wantRefusal)
+	}
+}
+
 func TestRender_Positive_AllKinds(t *testing.T) {
 	src1 := Source{
 		N:        1,
@@ -696,55 +760,9 @@ func TestRender_Positive_AllKinds(t *testing.T) {
 		Excerpt:  "Config excerpt text.",
 	}
 
-	// KindAnswer
-	ans := Answer{
-		Kind:    KindAnswer,
-		Reason:  ReasonNone,
-		Text:    "This is the model generated text.",
-		Sources: []Source{src1, src2},
-	}
-	rendAns := Render(ans, RenderOptions{})
-	if !strings.HasPrefix(rendAns, LabelAnswer) {
-		t.Errorf("Render(KindAnswer) want prefix LabelAnswer, got: %s", rendAns)
-	}
-	if !strings.Contains(rendAns, "Sources:\n[1] Guide - Intro <https://github.com/repo/blob/rev/docs/intro.md> (revision abcdef123456)") {
-		t.Errorf("Render(KindAnswer) missing source 1 line: %s", rendAns)
-	}
-
-	// KindExcerpts without model unavailable
-	exc := Answer{
-		Kind:    KindExcerpts,
-		Reason:  ReasonNoModel,
-		Sources: []Source{src1},
-	}
-	rendExc := Render(exc, RenderOptions{})
-	if !strings.HasPrefix(rendExc, LabelExcerpts) {
-		t.Errorf("Render(KindExcerpts) want prefix LabelExcerpts, got: %s", rendExc)
-	}
-	if strings.Contains(rendExc, LabelModelUnavailable) {
-		t.Errorf("Render(KindExcerpts) should not contain LabelModelUnavailable: %s", rendExc)
-	}
-
-	// KindExcerpts with model unavailable
-	excUnavail := Answer{
-		Kind:    KindExcerpts,
-		Reason:  ReasonModelUnavailable,
-		Sources: []Source{src1},
-	}
-	rendUnavail := Render(excUnavail, RenderOptions{})
-	if !strings.Contains(rendUnavail, LabelModelUnavailable) {
-		t.Errorf("Render(KindExcerpts) missing LabelModelUnavailable: %s", rendUnavail)
-	}
-
-	// KindRefusal
-	ref := Answer{
-		Kind:   KindRefusal,
-		Reason: ReasonNoSource,
-	}
-	wantRefusal := Refusal("") + "\n\n" + Footer("")
-	if Render(ref, RenderOptions{}) != wantRefusal {
-		t.Errorf("Render(KindRefusal) = %q, want %q", Render(ref, RenderOptions{}), wantRefusal)
-	}
+	verifyRenderPositiveKindAnswer(t, src1, src2)
+	verifyRenderPositiveKindExcerpts(t, src1)
+	verifyRenderPositiveKindRefusal(t)
 }
 
 func TestRender_Boundary_TrimmingOverMaxRenderRunes(t *testing.T) {
@@ -854,39 +872,49 @@ func TestRender_Positive_ModelWrittenAnswerFirstLineIsMarker(t *testing.T) {
 	}
 }
 
+type footerTestCase struct {
+	name string
+	ans  Answer
+}
+
+type footerPlaceCase struct {
+	desc       string
+	opt        RenderOptions
+	wantFooter string
+}
+
+// buildFooterFiveCases returns the 5 answer cases tested for footer placement.
+func buildFooterFiveCases(src Source) []footerTestCase {
+	return []footerTestCase{
+		{name: "case 1: answer", ans: Answer{Kind: KindAnswer, Text: "Answer text citing [1].", Sources: []Source{src}}},
+		{name: "case 2: excerpts normal", ans: Answer{Kind: KindExcerpts, Reason: ReasonNoModel, Sources: []Source{src}}},
+		{name: "case 3: excerpts with model unavailable", ans: Answer{Kind: KindExcerpts, Reason: ReasonModelUnavailable, Sources: []Source{src}}},
+		{name: "case 4: refusal", ans: Answer{Kind: KindRefusal, Reason: ReasonNoSource}},
+		{name: "case 5: unknown kind", ans: Answer{Kind: Kind("unknown_kind")}},
+	}
+}
+
+// verifyFooterIsLastLine verifies that rendered output ends with a blank line and the expected footer.
+func verifyFooterIsLastLine(t *testing.T, ans Answer, opt RenderOptions, wantFooter string) {
+	t.Helper()
+	rendered := Render(ans, opt)
+	if !strings.HasSuffix(rendered, "\n\n"+wantFooter) {
+		t.Fatalf("Render() output does not end with blank line and footer %q:\n%s", wantFooter, rendered)
+	}
+	lines := strings.Split(rendered, "\n")
+	lastLine := lines[len(lines)-1]
+	if lastLine != wantFooter {
+		t.Errorf("last line = %q, want %q", lastLine, wantFooter)
+	}
+	if len(lines) < 3 || lines[len(lines)-2] != "" {
+		t.Errorf("expected blank line before footer, got line: %q", lines[len(lines)-2])
+	}
+}
+
 func TestRender_Positive_FooterIsLastLineForAllFiveCases(t *testing.T) {
 	src := Source{N: 1, Title: "Doc", Heading: "H", URL: "https://example.com", Revision: "rev1", Excerpt: "text"}
-	cases := []struct {
-		name string
-		ans  Answer
-	}{
-		{
-			name: "case 1: answer",
-			ans:  Answer{Kind: KindAnswer, Text: "Answer text citing [1].", Sources: []Source{src}},
-		},
-		{
-			name: "case 2: excerpts normal",
-			ans:  Answer{Kind: KindExcerpts, Reason: ReasonNoModel, Sources: []Source{src}},
-		},
-		{
-			name: "case 3: excerpts with model unavailable",
-			ans:  Answer{Kind: KindExcerpts, Reason: ReasonModelUnavailable, Sources: []Source{src}},
-		},
-		{
-			name: "case 4: refusal",
-			ans:  Answer{Kind: KindRefusal, Reason: ReasonNoSource},
-		},
-		{
-			name: "case 5: unknown kind",
-			ans:  Answer{Kind: Kind("unknown_kind")},
-		},
-	}
-
-	places := []struct {
-		desc       string
-		opt        RenderOptions
-		wantFooter string
-	}{
+	cases := buildFooterFiveCases(src)
+	places := []footerPlaceCase{
 		{
 			desc:       "default place",
 			opt:        RenderOptions{},
@@ -902,18 +930,7 @@ func TestRender_Positive_FooterIsLastLineForAllFiveCases(t *testing.T) {
 	for _, c := range cases {
 		for _, p := range places {
 			t.Run(c.name+"_"+p.desc, func(t *testing.T) {
-				rendered := Render(c.ans, p.opt)
-				if !strings.HasSuffix(rendered, "\n\n"+p.wantFooter) {
-					t.Fatalf("Render() output does not end with blank line and footer %q:\n%s", p.wantFooter, rendered)
-				}
-				lines := strings.Split(rendered, "\n")
-				lastLine := lines[len(lines)-1]
-				if lastLine != p.wantFooter {
-					t.Errorf("last line = %q, want %q", lastLine, p.wantFooter)
-				}
-				if len(lines) < 3 || lines[len(lines)-2] != "" {
-					t.Errorf("expected blank line before footer, got line: %q", lines[len(lines)-2])
-				}
+				verifyFooterIsLastLine(t, c.ans, p.opt, p.wantFooter)
 			})
 		}
 	}
@@ -931,6 +948,71 @@ func TestAppendFooter_Positive(t *testing.T) {
 	}
 }
 
+// testRenderLimitLongAnswer verifies that a long answer with max sources renders under rune limits with footer.
+func testRenderLimitLongAnswer(t *testing.T, place64, wantFooter string) {
+	t.Helper()
+	sources := make([]Source, retrieval.MaxLimit)
+	for i := range sources {
+		sources[i] = Source{
+			N:        i + 1,
+			Title:    fmt.Sprintf("Title %d with long description", i+1),
+			Heading:  "Deep Subheading in Documentation",
+			URL:      fmt.Sprintf("https://github.com/tekmora/diallak/blob/rev/docs/section%d.md", i+1),
+			Revision: "abcdef1234567890",
+		}
+	}
+	longText := strings.Repeat("Long detailed answer text citing [1][2][3][4][5][6][7][8][9][10]. ", 50)
+	ans := Answer{
+		Kind:    KindAnswer,
+		Text:    longText,
+		Sources: sources,
+	}
+
+	result := Render(ans, RenderOptions{Place: place64})
+	runeCount := utf8.RuneCountInString(result)
+	if runeCount > DefaultMaxRenderRunes {
+		t.Fatalf("RuneCountInString = %d, exceeds DefaultMaxRenderRunes %d", runeCount, DefaultMaxRenderRunes)
+	}
+	if !strings.HasSuffix(result, "\n\n"+wantFooter) {
+		t.Fatalf("result does not end with full footer %q; tail is: %q", wantFooter, result[len(result)-len(wantFooter)-10:])
+	}
+	if !strings.HasPrefix(result, LabelAnswer) {
+		t.Fatalf("result does not start with LabelAnswer")
+	}
+}
+
+// testRenderLimitLongExcerpts verifies that long excerpts with max sources render under rune limits with footer.
+func testRenderLimitLongExcerpts(t *testing.T, place64, wantFooter string) {
+	t.Helper()
+	sources := make([]Source, retrieval.MaxLimit)
+	for i := range sources {
+		sources[i] = Source{
+			N:        i + 1,
+			Title:    fmt.Sprintf("Title %d with long description", i+1),
+			Heading:  "Deep Subheading in Documentation",
+			URL:      fmt.Sprintf("https://github.com/tekmora/diallak/blob/rev/docs/section%d.md", i+1),
+			Revision: "abcdef1234567890",
+			Excerpt:  strings.Repeat("Long excerpt line from section. ", 20),
+		}
+	}
+	exc := Answer{
+		Kind:    KindExcerpts,
+		Sources: sources,
+	}
+
+	result := Render(exc, RenderOptions{Place: place64})
+	runeCount := utf8.RuneCountInString(result)
+	if runeCount > DefaultMaxRenderRunes {
+		t.Fatalf("RuneCountInString = %d, exceeds DefaultMaxRenderRunes %d", runeCount, DefaultMaxRenderRunes)
+	}
+	if !strings.HasSuffix(result, "\n\n"+wantFooter) {
+		t.Fatalf("result does not end with full footer %q", wantFooter)
+	}
+	if !strings.HasPrefix(result, LabelExcerpts) {
+		t.Fatalf("result does not start with LabelExcerpts")
+	}
+}
+
 func TestRender_Boundary_LimitWith64RuneMultiBytePlace(t *testing.T) {
 	// 64 runes using multi-byte character (each rune is 3 bytes)
 	place64 := strings.Repeat("界", 64)
@@ -940,64 +1022,11 @@ func TestRender_Boundary_LimitWith64RuneMultiBytePlace(t *testing.T) {
 	wantFooter := Footer(place64)
 
 	t.Run("long answer with max sources", func(t *testing.T) {
-		sources := make([]Source, retrieval.MaxLimit)
-		for i := range sources {
-			sources[i] = Source{
-				N:        i + 1,
-				Title:    fmt.Sprintf("Title %d with long description", i+1),
-				Heading:  "Deep Subheading in Documentation",
-				URL:      fmt.Sprintf("https://github.com/tekmora/diallak/blob/rev/docs/section%d.md", i+1),
-				Revision: "abcdef1234567890",
-			}
-		}
-		longText := strings.Repeat("Long detailed answer text citing [1][2][3][4][5][6][7][8][9][10]. ", 50)
-		ans := Answer{
-			Kind:    KindAnswer,
-			Text:    longText,
-			Sources: sources,
-		}
-
-		result := Render(ans, RenderOptions{Place: place64})
-		runeCount := utf8.RuneCountInString(result)
-		if runeCount > DefaultMaxRenderRunes {
-			t.Fatalf("RuneCountInString = %d, exceeds DefaultMaxRenderRunes %d", runeCount, DefaultMaxRenderRunes)
-		}
-		if !strings.HasSuffix(result, "\n\n"+wantFooter) {
-			t.Fatalf("result does not end with full footer %q; tail is: %q", wantFooter, result[len(result)-len(wantFooter)-10:])
-		}
-		if !strings.HasPrefix(result, LabelAnswer) {
-			t.Fatalf("result does not start with LabelAnswer")
-		}
+		testRenderLimitLongAnswer(t, place64, wantFooter)
 	})
 
 	t.Run("long excerpts with max sources", func(t *testing.T) {
-		sources := make([]Source, retrieval.MaxLimit)
-		for i := range sources {
-			sources[i] = Source{
-				N:        i + 1,
-				Title:    fmt.Sprintf("Title %d with long description", i+1),
-				Heading:  "Deep Subheading in Documentation",
-				URL:      fmt.Sprintf("https://github.com/tekmora/diallak/blob/rev/docs/section%d.md", i+1),
-				Revision: "abcdef1234567890",
-				Excerpt:  strings.Repeat("Long excerpt line from section. ", 20),
-			}
-		}
-		exc := Answer{
-			Kind:    KindExcerpts,
-			Sources: sources,
-		}
-
-		result := Render(exc, RenderOptions{Place: place64})
-		runeCount := utf8.RuneCountInString(result)
-		if runeCount > DefaultMaxRenderRunes {
-			t.Fatalf("RuneCountInString = %d, exceeds DefaultMaxRenderRunes %d", runeCount, DefaultMaxRenderRunes)
-		}
-		if !strings.HasSuffix(result, "\n\n"+wantFooter) {
-			t.Fatalf("result does not end with full footer %q", wantFooter)
-		}
-		if !strings.HasPrefix(result, LabelExcerpts) {
-			t.Fatalf("result does not start with LabelExcerpts")
-		}
+		testRenderLimitLongExcerpts(t, place64, wantFooter)
 	})
 }
 
@@ -1079,7 +1108,9 @@ func TestAsk_Positive_SourceLinkTemplateConfigured(t *testing.T) {
 	}
 }
 
-func TestAsk_Positive_TopPassagesAndMinScore(t *testing.T) {
+// buildTestAuthIndex constructs an in-memory retrieval index with two authentication chunks.
+func buildTestAuthIndex(t *testing.T) *retrieval.Index {
+	t.Helper()
 	chunks := []corpus.Chunk{
 		{
 			ID:         "c1",
@@ -1104,42 +1135,58 @@ func TestAsk_Positive_TopPassagesAndMinScore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("retrieval.Build failed: %v", err)
 	}
+	return index
+}
+
+// testTopPassagesLimitSingleSource verifies that Limit: 1 constrains output to 1 source.
+func testTopPassagesLimitSingleSource(t *testing.T, index *retrieval.Index) {
+	t.Helper()
+	p, err := New(Config{
+		Retriever: index,
+		Options:   retrieval.Options{Limit: 1, MinScore: 0.10},
+	})
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+	ans, err := p.Ask(context.Background(), "token authentication")
+	if err != nil {
+		t.Fatalf("Ask() failed: %v", err)
+	}
+	if len(ans.Sources) != 1 {
+		t.Fatalf("len(ans.Sources) = %d, want 1", len(ans.Sources))
+	}
+}
+
+// testHighMinScoreRefusal verifies that high MinScore refuses questions below threshold.
+func testHighMinScoreRefusal(t *testing.T, index *retrieval.Index) {
+	t.Helper()
+	p, err := New(Config{
+		Retriever: index,
+		Options:   retrieval.Options{Limit: 3, MinScore: 0.90},
+	})
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+	ans, err := p.Ask(context.Background(), "token authentication postgresql")
+	if err != nil {
+		t.Fatalf("Ask() failed: %v", err)
+	}
+	if ans.Kind != KindRefusal {
+		t.Errorf("ans.Kind = %v, want KindRefusal", ans.Kind)
+	}
+	if ans.Reason != ReasonNoSource {
+		t.Errorf("ans.Reason = %v, want ReasonNoSource", ans.Reason)
+	}
+}
+
+func TestAsk_Positive_TopPassagesAndMinScore(t *testing.T) {
+	index := buildTestAuthIndex(t)
 
 	t.Run("top passages 1 limits to single source", func(t *testing.T) {
-		p, err := New(Config{
-			Retriever: index,
-			Options:   retrieval.Options{Limit: 1, MinScore: 0.10},
-		})
-		if err != nil {
-			t.Fatalf("New() failed: %v", err)
-		}
-		ans, err := p.Ask(context.Background(), "token authentication")
-		if err != nil {
-			t.Fatalf("Ask() failed: %v", err)
-		}
-		if len(ans.Sources) != 1 {
-			t.Fatalf("len(ans.Sources) = %d, want 1", len(ans.Sources))
-		}
+		testTopPassagesLimitSingleSource(t, index)
 	})
 
 	t.Run("high min score 0.90 refuses question that answers at 0.20", func(t *testing.T) {
-		p, err := New(Config{
-			Retriever: index,
-			Options:   retrieval.Options{Limit: 3, MinScore: 0.90},
-		})
-		if err != nil {
-			t.Fatalf("New() failed: %v", err)
-		}
-		ans, err := p.Ask(context.Background(), "token authentication postgresql")
-		if err != nil {
-			t.Fatalf("Ask() failed: %v", err)
-		}
-		if ans.Kind != KindRefusal {
-			t.Errorf("ans.Kind = %v, want KindRefusal", ans.Kind)
-		}
-		if ans.Reason != ReasonNoSource {
-			t.Errorf("ans.Reason = %v, want ReasonNoSource", ans.Reason)
-		}
+		testHighMinScoreRefusal(t, index)
 	})
-
 }
