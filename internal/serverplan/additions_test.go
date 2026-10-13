@@ -78,10 +78,28 @@ func TestCheck_Negative_NegativeMemberEntries(t *testing.T) {
 	}
 }
 
-func TestCompare_Positive_AccessMemberMatchedAndExtra(t *testing.T) {
-	def := loadDef(t)
-	snap := snapshotOf(t, def)
-	// Add MemberEntries to a matched channel (lounge)
+// findAccessMemberDiff finds a KindAccessMember diff for the given object.
+func findAccessMemberDiff(diffs []Difference, obj string) (Difference, int, bool) {
+	for i, d := range diffs {
+		if d.Kind == KindAccessMember && d.Object == obj {
+			return d, i, true
+		}
+	}
+	return Difference{}, -1, false
+}
+
+// hasAccessMemberDiffWithSubstring checks if any KindAccessMember diff object contains sub.
+func hasAccessMemberDiffWithSubstring(diffs []Difference, sub string) bool {
+	for _, d := range diffs {
+		if d.Kind == KindAccessMember && strings.Contains(d.Object, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+// configureAccessMemberSnapshot adjusts channel member entries for access member comparison testing.
+func configureAccessMemberSnapshot(snap *Snapshot) string {
 	var matchedChannelID string
 	for i := range snap.Channels {
 		if snap.Channels[i].Name == "lounge" {
@@ -90,60 +108,75 @@ func TestCompare_Positive_AccessMemberMatchedAndExtra(t *testing.T) {
 			break
 		}
 	}
-
-	// Add an extra channel with MemberEntries = 2
 	snap.Channels = append(snap.Channels, Channel{
 		Name:          "extra-channel",
 		Type:          "text",
 		Category:      "Community",
 		MemberEntries: 2,
 	})
+	return matchedChannelID
+}
+
+// assertMatchedAccessMember verifies KindAccessMember diff for the matched channel.
+func assertMatchedAccessMember(t *testing.T, diffs []Difference, matchedChannelID string) {
+	t.Helper()
+	d, _, found := findAccessMemberDiff(diffs, fmt.Sprintf("channels[%s]", matchedChannelID))
+	if !found {
+		t.Error("missing KindAccessMember for matched channel lounge")
+		return
+	}
+	if d.Detail != "entries for single members: 3" {
+		t.Errorf("matched detail = %q, want 'entries for single members: 3'", d.Detail)
+	}
+}
+
+// assertExtraAccessMember verifies KindAccessMember diff for the extra channel.
+func assertExtraAccessMember(t *testing.T, diffs []Difference) int {
+	t.Helper()
+	d, idx, found := findAccessMemberDiff(diffs, "server.channels[extra-channel]")
+	if !found {
+		t.Error("missing KindAccessMember for extra channel extra-channel")
+		return -1
+	}
+	if d.Detail != "entries for single members: 2" {
+		t.Errorf("extra detail = %q, want 'entries for single members: 2'", d.Detail)
+	}
+	return idx
+}
+
+// assertZeroAccessMemberAbsent verifies no KindAccessMember is emitted for zero-member channels.
+func assertZeroAccessMemberAbsent(t *testing.T, diffs []Difference) {
+	t.Helper()
+	if hasAccessMemberDiffWithSubstring(diffs, "rules") {
+		t.Error("found KindAccessMember for zero-member channel, want absent at 0")
+	}
+}
+
+// assertExtraAccessMemberOrder verifies the diff order preceding extra-channel access member diff.
+func assertExtraAccessMemberOrder(t *testing.T, diffs []Difference, extraIdx int) {
+	t.Helper()
+	if extraIdx > 0 {
+		prev := diffs[extraIdx-1]
+		if prev.Kind != KindChannelExtra || prev.Object != "server.channels[extra-channel]" {
+			t.Errorf("diff before access-member extra is %+v, want channel-extra server.channels[extra-channel]", prev)
+		}
+	}
+}
+
+func TestCompare_Positive_AccessMemberMatchedAndExtra(t *testing.T) {
+	def := loadDef(t)
+	snap := snapshotOf(t, def)
+	matchedChannelID := configureAccessMemberSnapshot(snap)
 
 	diffs, err := Compare(def, snap)
 	if err != nil {
 		t.Fatalf("Compare error: %v", err)
 	}
 
-	var foundMatched, foundExtra, foundZero bool
-	var matchedIdx, extraIdx int
-	for i, d := range diffs {
-		if d.Kind == KindAccessMember && d.Object == fmt.Sprintf("channels[%s]", matchedChannelID) {
-			foundMatched = true
-			matchedIdx = i
-			if d.Detail != "entries for single members: 3" {
-				t.Errorf("matched detail = %q, want 'entries for single members: 3'", d.Detail)
-			}
-		}
-		if d.Kind == KindAccessMember && d.Object == "server.channels[extra-channel]" {
-			foundExtra = true
-			extraIdx = i
-			if d.Detail != "entries for single members: 2" {
-				t.Errorf("extra detail = %q, want 'entries for single members: 2'", d.Detail)
-			}
-		}
-		if d.Kind == KindAccessMember && strings.Contains(d.Object, "rules") {
-			foundZero = true
-		}
-	}
-
-	if !foundMatched {
-		t.Error("missing KindAccessMember for matched channel lounge")
-	}
-	if !foundExtra {
-		t.Error("missing KindAccessMember for extra channel extra-channel")
-	}
-	if foundZero {
-		t.Error("found KindAccessMember for zero-member channel, want absent at 0")
-	}
-
-	// Verify order: extraIdx should be directly after server.channels[extra-channel] channel-extra
-	if foundExtra && extraIdx > 0 {
-		prev := diffs[extraIdx-1]
-		if prev.Kind != KindChannelExtra || prev.Object != "server.channels[extra-channel]" {
-			t.Errorf("diff before access-member extra is %+v, want channel-extra server.channels[extra-channel]", prev)
-		}
-	}
-	_ = matchedIdx
+	assertMatchedAccessMember(t, diffs, matchedChannelID)
+	extraIdx := assertExtraAccessMember(t, diffs)
+	assertZeroAccessMemberAbsent(t, diffs)
+	assertExtraAccessMemberOrder(t, diffs, extraIdx)
 }
 
 func TestPlan_Positive_AccessMemberIgnored(t *testing.T) {
