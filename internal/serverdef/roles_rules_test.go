@@ -269,7 +269,9 @@ func TestValidate_C7_EveryoneAndBotStateNeither(t *testing.T) {
 	})
 }
 
-func TestValidate_C8_NotificationConditions(t *testing.T) {
+// runNotificationNegativeRoleSubtests runs negative subtests for notification role fields.
+func runNotificationNegativeRoleSubtests(t *testing.T) {
+	t.Helper()
 	t.Run("negative assigned_by not choice", func(t *testing.T) {
 		def := valid(t)
 		addRole(def, Role{
@@ -310,7 +312,11 @@ func TestValidate_C8_NotificationConditions(t *testing.T) {
 			t.Errorf("missing finding %q; got %+v", want, findings)
 		}
 	})
+}
 
+// runNotificationNegativeAccessSubtests runs negative subtests for channel access and choice counts on notification roles.
+func runNotificationNegativeAccessSubtests(t *testing.T) {
+	t.Helper()
 	t.Run("negative channel access allow non-empty", func(t *testing.T) {
 		def := valid(t)
 		addRole(def, Role{
@@ -344,7 +350,11 @@ func TestValidate_C8_NotificationConditions(t *testing.T) {
 			t.Errorf("missing choice coverage finding; got %+v", findings)
 		}
 	})
+}
 
+// runNotificationPositiveSubtests runs positive subtests for notification and recognition roles.
+func runNotificationPositiveSubtests(t *testing.T) {
+	t.Helper()
 	t.Run("positive choice option grants notification", func(t *testing.T) {
 		def := valid(t)
 		addRole(def, Role{
@@ -375,6 +385,12 @@ func TestValidate_C8_NotificationConditions(t *testing.T) {
 	})
 }
 
+func TestValidate_C8_NotificationConditions(t *testing.T) {
+	runNotificationNegativeRoleSubtests(t)
+	runNotificationNegativeAccessSubtests(t)
+	runNotificationPositiveSubtests(t)
+}
+
 func TestValidate_C9_NotificationBelowBotRole(t *testing.T) {
 	def := valid(t)
 	addRole(def, Role{
@@ -391,52 +407,62 @@ func TestValidate_C9_NotificationBelowBotRole(t *testing.T) {
 	}
 }
 
+// verifyModeratorEmptyPermissions checks that empty permissions on moderator passes.
+func verifyModeratorEmptyPermissions(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	mod := roleOf(t, def, "moderator")
+	mod.Permissions = []string{}
+	findings := Validate(def)
+	for _, f := range findings {
+		if f.Code == CodeModerationOnly && f.Path == "roles[moderator].permissions" {
+			t.Errorf("unexpected moderator finding: %+v", f)
+		}
+	}
+}
+
+// verifyModeratorSinglePermission checks that one right produces exactly one finding.
+func verifyModeratorSinglePermission(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	mod := roleOf(t, def, "moderator")
+	mod.Permissions = []string{"VIEW_CHANNEL"}
+	findings := Validate(def)
+	if len(findings) != 1 {
+		t.Fatalf("expected exactly 1 finding, got %d: %+v", len(findings), findings)
+	}
+	wantMsg := "role kind moderator must hold no permission; VIEW_CHANNEL is the bot's to use"
+	f := findings[0]
+	if f.Code != CodeModerationOnly || f.Path != "roles[moderator].permissions" || f.Message != wantMsg {
+		t.Errorf("got finding %+v, want code %s, path %s, message %q",
+			f, CodeModerationOnly, "roles[moderator].permissions", wantMsg)
+	}
+}
+
+// verifyModeratorDoublePermission checks that two rights produce two findings.
+func verifyModeratorDoublePermission(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	mod := roleOf(t, def, "moderator")
+	mod.Permissions = []string{"VIEW_CHANNEL", "ADD_REACTIONS"}
+	findings := Validate(def)
+	if len(findings) != 2 {
+		t.Fatalf("expected exactly 2 findings, got %d: %+v", len(findings), findings)
+	}
+	wantMsg1 := "role kind moderator must hold no permission; VIEW_CHANNEL is the bot's to use"
+	wantMsg2 := "role kind moderator must hold no permission; ADD_REACTIONS is the bot's to use"
+	if findings[0].Code != CodeModerationOnly || findings[0].Path != "roles[moderator].permissions" || findings[0].Message != wantMsg1 {
+		t.Errorf("finding 0 = %+v, want %q", findings[0], wantMsg1)
+	}
+	if findings[1].Code != CodeModerationOnly || findings[1].Path != "roles[moderator].permissions" || findings[1].Message != wantMsg2 {
+		t.Errorf("finding 1 = %+v, want %q", findings[1], wantMsg2)
+	}
+}
+
 func TestValidate_ModeratorRolePermissions(t *testing.T) {
-	t.Run("positive empty permissions passes", func(t *testing.T) {
-		def := valid(t)
-		mod := roleOf(t, def, "moderator")
-		mod.Permissions = []string{}
-		findings := Validate(def)
-		for _, f := range findings {
-			if f.Code == CodeModerationOnly && f.Path == "roles[moderator].permissions" {
-				t.Errorf("unexpected moderator finding: %+v", f)
-			}
-		}
-	})
-
-	t.Run("negative one right produces exactly one finding", func(t *testing.T) {
-		def := valid(t)
-		mod := roleOf(t, def, "moderator")
-		mod.Permissions = []string{"VIEW_CHANNEL"}
-		findings := Validate(def)
-		if len(findings) != 1 {
-			t.Fatalf("expected exactly 1 finding, got %d: %+v", len(findings), findings)
-		}
-		wantMsg := "role kind moderator must hold no permission; VIEW_CHANNEL is the bot's to use"
-		f := findings[0]
-		if f.Code != CodeModerationOnly || f.Path != "roles[moderator].permissions" || f.Message != wantMsg {
-			t.Errorf("got finding %+v, want code %s, path %s, message %q",
-				f, CodeModerationOnly, "roles[moderator].permissions", wantMsg)
-		}
-	})
-
-	t.Run("boundary two rights produces two findings", func(t *testing.T) {
-		def := valid(t)
-		mod := roleOf(t, def, "moderator")
-		mod.Permissions = []string{"VIEW_CHANNEL", "ADD_REACTIONS"}
-		findings := Validate(def)
-		if len(findings) != 2 {
-			t.Fatalf("expected exactly 2 findings, got %d: %+v", len(findings), findings)
-		}
-		wantMsg1 := "role kind moderator must hold no permission; VIEW_CHANNEL is the bot's to use"
-		wantMsg2 := "role kind moderator must hold no permission; ADD_REACTIONS is the bot's to use"
-		if findings[0].Code != CodeModerationOnly || findings[0].Path != "roles[moderator].permissions" || findings[0].Message != wantMsg1 {
-			t.Errorf("finding 0 = %+v, want %q", findings[0], wantMsg1)
-		}
-		if findings[1].Code != CodeModerationOnly || findings[1].Path != "roles[moderator].permissions" || findings[1].Message != wantMsg2 {
-			t.Errorf("finding 1 = %+v, want %q", findings[1], wantMsg2)
-		}
-	})
+	t.Run("positive empty permissions passes", verifyModeratorEmptyPermissions)
+	t.Run("negative one right produces exactly one finding", verifyModeratorSinglePermission)
+	t.Run("boundary two rights produces two findings", verifyModeratorDoublePermission)
 }
 
 func TestValidate_ModeratorChannelAccess(t *testing.T) {

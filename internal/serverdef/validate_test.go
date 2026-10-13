@@ -85,56 +85,66 @@ func TestValidate_Negative_ChannelWithoutOwnerFails(t *testing.T) {
 	})
 }
 
+// verifyEveryoneBaseMentionAll verifies finding when everyone role has MENTION_EVERYONE base permission.
+func verifyEveryoneBaseMentionAll(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	for i, r := range def.Roles {
+		if r.ID == "everyone" {
+			def.Roles[i].Permissions = append(def.Roles[i].Permissions, "MENTION_EVERYONE")
+			break
+		}
+	}
+	findings := Validate(def)
+	if !hasCode(findings, CodeMentionEveryone) {
+		t.Errorf("everyone with base MENTION_EVERYONE missing code %s", CodeMentionEveryone)
+	}
+}
+
+// verifyEveryoneAllowChannelMentionAll verifies finding when everyone has MENTION_EVERYONE in a channel.
+func verifyEveryoneAllowChannelMentionAll(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	for i, ch := range def.Channels {
+		if ch.ID == "lounge" {
+			def.Channels[i].Access = append(def.Channels[i].Access, Access{
+				Role:  "everyone",
+				Allow: []string{"MENTION_EVERYONE"},
+				Deny:  []string{},
+			})
+			break
+		}
+	}
+	findings := Validate(def)
+	if !hasCode(findings, CodeMentionEveryone) {
+		t.Errorf("everyone allowed MENTION_EVERYONE in lounge missing code %s", CodeMentionEveryone)
+	}
+}
+
+// verifyRecognitionRoleMentionAll verifies finding when contributor role is allowed MENTION_EVERYONE.
+func verifyRecognitionRoleMentionAll(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	for i, ch := range def.Channels {
+		if ch.ID == "lounge" {
+			def.Channels[i].Access = append(def.Channels[i].Access, Access{
+				Role:  "contributor",
+				Allow: []string{"MENTION_EVERYONE"},
+				Deny:  []string{},
+			})
+			break
+		}
+	}
+	findings := Validate(def)
+	if !hasCode(findings, CodeMentionEveryone) {
+		t.Errorf("contributor allowed MENTION_EVERYONE missing code %s", CodeMentionEveryone)
+	}
+}
+
 func TestValidate_Negative_EveryoneMayMentionAllFails(t *testing.T) {
-	t.Run("everyone base permission", func(t *testing.T) {
-		def := valid(t)
-		for i, r := range def.Roles {
-			if r.ID == "everyone" {
-				def.Roles[i].Permissions = append(def.Roles[i].Permissions, "MENTION_EVERYONE")
-				break
-			}
-		}
-		findings := Validate(def)
-		if !hasCode(findings, CodeMentionEveryone) {
-			t.Errorf("everyone with base MENTION_EVERYONE missing code %s", CodeMentionEveryone)
-		}
-	})
-
-	t.Run("everyone allow in one channel", func(t *testing.T) {
-		def := valid(t)
-		for i, ch := range def.Channels {
-			if ch.ID == "lounge" {
-				def.Channels[i].Access = append(def.Channels[i].Access, Access{
-					Role:  "everyone",
-					Allow: []string{"MENTION_EVERYONE"},
-					Deny:  []string{},
-				})
-				break
-			}
-		}
-		findings := Validate(def)
-		if !hasCode(findings, CodeMentionEveryone) {
-			t.Errorf("everyone allowed MENTION_EVERYONE in lounge missing code %s", CodeMentionEveryone)
-		}
-	})
-
-	t.Run("recognition role allow", func(t *testing.T) {
-		def := valid(t)
-		for i, ch := range def.Channels {
-			if ch.ID == "lounge" {
-				def.Channels[i].Access = append(def.Channels[i].Access, Access{
-					Role:  "contributor",
-					Allow: []string{"MENTION_EVERYONE"},
-					Deny:  []string{},
-				})
-				break
-			}
-		}
-		findings := Validate(def)
-		if !hasCode(findings, CodeMentionEveryone) {
-			t.Errorf("contributor allowed MENTION_EVERYONE missing code %s", CodeMentionEveryone)
-		}
-	})
+	t.Run("everyone base permission", verifyEveryoneBaseMentionAll)
+	t.Run("everyone allow in one channel", verifyEveryoneAllowChannelMentionAll)
+	t.Run("recognition role allow", verifyRecognitionRoleMentionAll)
 }
 
 func TestValidate_Negative_AreaWithoutClosingRuleFails(t *testing.T) {
@@ -157,55 +167,65 @@ func TestValidate_Negative_AreaWithoutClosingRuleFails(t *testing.T) {
 	})
 }
 
+// verifyBotManageThreadsInTickets verifies finding when bot is allowed MANAGE_THREADS in tickets.
+func verifyBotManageThreadsInTickets(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	for i, ch := range def.Channels {
+		if ch.ID == "tickets" {
+			for j, acc := range ch.Access {
+				if acc.Role == "bot" {
+					def.Channels[i].Access[j].Allow = append(def.Channels[i].Access[j].Allow, "VIEW_CHANNEL", "MANAGE_THREADS")
+					def.Channels[i].Access[j].Deny = []string{}
+				}
+			}
+		}
+	}
+	findings := Validate(def)
+	if !hasCode(findings, CodeTicketThreadReader) {
+		t.Errorf("bot allowed MANAGE_THREADS in tickets missing code %s", CodeTicketThreadReader)
+	}
+}
+
+// verifyEveryoneManageThreadsInTickets verifies finding when everyone is allowed MANAGE_THREADS in tickets.
+func verifyEveryoneManageThreadsInTickets(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	for i, ch := range def.Channels {
+		if ch.ID == "tickets" {
+			for j, acc := range ch.Access {
+				if acc.Role == "everyone" {
+					def.Channels[i].Access[j].Allow = append(def.Channels[i].Access[j].Allow, "MANAGE_THREADS")
+				}
+			}
+		}
+	}
+	findings := Validate(def)
+	if !hasCode(findings, CodeTicketThreadReader) {
+		t.Errorf("everyone allowed MANAGE_THREADS in tickets missing code %s", CodeTicketThreadReader)
+	}
+}
+
+// verifyInterestBaseManageThreads verifies finding when interest role has MANAGE_THREADS base permission.
+func verifyInterestBaseManageThreads(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	for i, r := range def.Roles {
+		if r.ID == "interest-home-lab" {
+			def.Roles[i].Permissions = append(def.Roles[i].Permissions, "MANAGE_THREADS")
+			break
+		}
+	}
+	findings := Validate(def)
+	if !hasCode(findings, CodeTicketThreadReader) {
+		t.Errorf("interest role with base MANAGE_THREADS missing code %s in tickets", CodeTicketThreadReader)
+	}
+}
+
 func TestValidate_Negative_NonModeratorReadsTicketThreadsFails(t *testing.T) {
-	t.Run("bot allow MANAGE_THREADS in tickets", func(t *testing.T) {
-		def := valid(t)
-		for i, ch := range def.Channels {
-			if ch.ID == "tickets" {
-				for j, acc := range ch.Access {
-					if acc.Role == "bot" {
-						def.Channels[i].Access[j].Allow = append(def.Channels[i].Access[j].Allow, "VIEW_CHANNEL", "MANAGE_THREADS")
-						def.Channels[i].Access[j].Deny = []string{}
-					}
-				}
-			}
-		}
-		findings := Validate(def)
-		if !hasCode(findings, CodeTicketThreadReader) {
-			t.Errorf("bot allowed MANAGE_THREADS in tickets missing code %s", CodeTicketThreadReader)
-		}
-	})
-
-	t.Run("everyone allow MANAGE_THREADS in tickets", func(t *testing.T) {
-		def := valid(t)
-		for i, ch := range def.Channels {
-			if ch.ID == "tickets" {
-				for j, acc := range ch.Access {
-					if acc.Role == "everyone" {
-						def.Channels[i].Access[j].Allow = append(def.Channels[i].Access[j].Allow, "MANAGE_THREADS")
-					}
-				}
-			}
-		}
-		findings := Validate(def)
-		if !hasCode(findings, CodeTicketThreadReader) {
-			t.Errorf("everyone allowed MANAGE_THREADS in tickets missing code %s", CodeTicketThreadReader)
-		}
-	})
-
-	t.Run("interest role base permission MANAGE_THREADS", func(t *testing.T) {
-		def := valid(t)
-		for i, r := range def.Roles {
-			if r.ID == "interest-home-lab" {
-				def.Roles[i].Permissions = append(def.Roles[i].Permissions, "MANAGE_THREADS")
-				break
-			}
-		}
-		findings := Validate(def)
-		if !hasCode(findings, CodeTicketThreadReader) {
-			t.Errorf("interest role with base MANAGE_THREADS missing code %s in tickets", CodeTicketThreadReader)
-		}
-	})
+	t.Run("bot allow MANAGE_THREADS in tickets", verifyBotManageThreadsInTickets)
+	t.Run("everyone allow MANAGE_THREADS in tickets", verifyEveryoneManageThreadsInTickets)
+	t.Run("interest role base permission MANAGE_THREADS", verifyInterestBaseManageThreads)
 }
 
 func TestValidate_Negative_IDFormatAndUniquenessFails(t *testing.T) {
@@ -490,39 +510,46 @@ func TestValidate_Negative_RoleGrantFails(t *testing.T) {
 	})
 }
 
-func TestValidate_Negative_TicketShapeFails(t *testing.T) {
-	t.Run("tickets type voice", func(t *testing.T) {
-		def := valid(t)
-		for i, ch := range def.Channels {
-			if ch.ID == "tickets" {
-				def.Channels[i].Type = "voice"
-				break
-			}
+// verifyTicketShapeVoiceType verifies finding when tickets channel has voice type.
+func verifyTicketShapeVoiceType(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	for i, ch := range def.Channels {
+		if ch.ID == "tickets" {
+			def.Channels[i].Type = "voice"
+			break
 		}
-		findings := Validate(def)
-		if !hasCode(findings, CodeTicketShape) {
-			t.Errorf("tickets channel with voice type missing code %s", CodeTicketShape)
-		}
-	})
+	}
+	findings := Validate(def)
+	if !hasCode(findings, CodeTicketShape) {
+		t.Errorf("tickets channel with voice type missing code %s", CodeTicketShape)
+	}
+}
 
-	t.Run("tickets everyone allowed SEND_MESSAGES", func(t *testing.T) {
-		def := valid(t)
-		for i, ch := range def.Channels {
-			if ch.ID == "tickets" {
-				for j, acc := range ch.Access {
-					if acc.Role == "everyone" {
-						def.Channels[i].Access[j].Deny = []string{}
-						def.Channels[i].Access[j].Allow = append(def.Channels[i].Access[j].Allow, "SEND_MESSAGES")
-					}
+// verifyTicketShapeEveryoneSendMessages verifies finding when everyone is allowed SEND_MESSAGES in tickets.
+func verifyTicketShapeEveryoneSendMessages(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	for i, ch := range def.Channels {
+		if ch.ID == "tickets" {
+			for j, acc := range ch.Access {
+				if acc.Role == "everyone" {
+					def.Channels[i].Access[j].Deny = []string{}
+					def.Channels[i].Access[j].Allow = append(def.Channels[i].Access[j].Allow, "SEND_MESSAGES")
 				}
-				break
 			}
+			break
 		}
-		findings := Validate(def)
-		if !hasCode(findings, CodeTicketShape) {
-			t.Errorf("tickets everyone having SEND_MESSAGES missing code %s", CodeTicketShape)
-		}
-	})
+	}
+	findings := Validate(def)
+	if !hasCode(findings, CodeTicketShape) {
+		t.Errorf("tickets everyone having SEND_MESSAGES missing code %s", CodeTicketShape)
+	}
+}
+
+func TestValidate_Negative_TicketShapeFails(t *testing.T) {
+	t.Run("tickets type voice", verifyTicketShapeVoiceType)
+	t.Run("tickets everyone allowed SEND_MESSAGES", verifyTicketShapeEveryoneSendMessages)
 }
 
 func TestValidate_Negative_StaffVisibilityFails(t *testing.T) {
@@ -677,48 +704,113 @@ func TestValidate_Negative_AreaConditionFails(t *testing.T) {
 	}
 }
 
+// verifyBuiltAutomationWithoutRecord verifies finding when built automation has no record.
+func verifyBuiltAutomationWithoutRecord(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	for i, a := range def.Automation {
+		if a.ID == "ask-command" {
+			def.Automation[i].Record = ""
+			break
+		}
+	}
+	findings := Validate(def)
+	if !hasCode(findings, CodeAutomationRecord) {
+		t.Errorf("built bot automation without record missing code %s", CodeAutomationRecord)
+	}
+}
+
+// verifyRecordPathWithParentTraversal verifies finding when record path has parent traversal.
+func verifyRecordPathWithParentTraversal(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	for i, a := range def.Automation {
+		if a.ID == "ask-command" {
+			def.Automation[i].Record = "../docs/adr/0003.md"
+			break
+		}
+	}
+	findings := Validate(def)
+	if !hasCode(findings, CodeAutomationRecord) {
+		t.Errorf("record path with '..' missing code %s", CodeAutomationRecord)
+	}
+}
+
+// verifyPlannedBotAutomationWithoutNeedsRecord verifies finding when planned automation has needs_record false.
+func verifyPlannedBotAutomationWithoutNeedsRecord(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	for i, a := range def.Automation {
+		if a.ID == "area-lifecycle" {
+			def.Automation[i].NeedsRecord = false
+			break
+		}
+	}
+	findings := Validate(def)
+	if !hasCode(findings, CodeAutomationRecord) {
+		t.Errorf("planned bot automation without needs_record missing code %s", CodeAutomationRecord)
+	}
+}
+
 func TestValidate_Negative_AutomationRecordFails(t *testing.T) {
-	t.Run("built automation without record", func(t *testing.T) {
-		def := valid(t)
-		for i, a := range def.Automation {
-			if a.ID == "ask-command" {
-				def.Automation[i].Record = ""
-				break
-			}
-		}
-		findings := Validate(def)
-		if !hasCode(findings, CodeAutomationRecord) {
-			t.Errorf("built bot automation without record missing code %s", CodeAutomationRecord)
-		}
-	})
+	t.Run("built automation without record", verifyBuiltAutomationWithoutRecord)
+	t.Run("record path with parent traversal", verifyRecordPathWithParentTraversal)
+	t.Run("planned bot automation with needs_record false", verifyPlannedBotAutomationWithoutNeedsRecord)
+}
 
-	t.Run("record path with parent traversal", func(t *testing.T) {
-		def := valid(t)
-		for i, a := range def.Automation {
-			if a.ID == "ask-command" {
-				def.Automation[i].Record = "../docs/adr/0003.md"
-				break
-			}
+// verifyIDLength2Accepted verifies that ID of length 2 is accepted.
+func verifyIDLength2Accepted(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	def.Categories[0].ID = "ab"
+	for i := range def.Channels {
+		if def.Channels[i].Category == "start" {
+			def.Channels[i].Category = "ab"
 		}
-		findings := Validate(def)
-		if !hasCode(findings, CodeAutomationRecord) {
-			t.Errorf("record path with '..' missing code %s", CodeAutomationRecord)
-		}
-	})
+	}
+	findings := Validate(def)
+	if hasCode(findings, CodeID) {
+		t.Errorf("id length 2 refused with %s", CodeID)
+	}
+}
 
-	t.Run("planned bot automation with needs_record false", func(t *testing.T) {
-		def := valid(t)
-		for i, a := range def.Automation {
-			if a.ID == "area-lifecycle" {
-				def.Automation[i].NeedsRecord = false
-				break
-			}
+// verifyIDLength32Accepted verifies that ID of length 32 is accepted.
+func verifyIDLength32Accepted(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	longID := "a" + strings.Repeat("b", 31)
+	def.Categories[0].ID = longID
+	for i := range def.Channels {
+		if def.Channels[i].Category == "start" {
+			def.Channels[i].Category = longID
 		}
-		findings := Validate(def)
-		if !hasCode(findings, CodeAutomationRecord) {
-			t.Errorf("planned bot automation without needs_record missing code %s", CodeAutomationRecord)
-		}
-	})
+	}
+	findings := Validate(def)
+	if hasCode(findings, CodeID) {
+		t.Errorf("id length 32 refused with %s", CodeID)
+	}
+}
+
+// verifyIDLength1Refused verifies that ID of length 1 is refused.
+func verifyIDLength1Refused(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	def.Categories[0].ID = "a"
+	findings := Validate(def)
+	if !hasCode(findings, CodeID) {
+		t.Errorf("id length 1 accepted, want %s", CodeID)
+	}
+}
+
+// verifyIDLength33Refused verifies that ID of length 33 is refused.
+func verifyIDLength33Refused(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	def.Categories[0].ID = "a" + strings.Repeat("b", 32)
+	findings := Validate(def)
+	if !hasCode(findings, CodeID) {
+		t.Errorf("id length 33 accepted, want %s", CodeID)
+	}
 }
 
 func TestValidate_Boundary_IDLengths(t *testing.T) {
@@ -727,52 +819,10 @@ func TestValidate_Boundary_IDLengths(t *testing.T) {
 	// Len 2: accepted
 	// Len 32: accepted
 	// Len 33: refused
-	t.Run("id length 2 accepted", func(t *testing.T) {
-		def := valid(t)
-		def.Categories[0].ID = "ab"
-		for i := range def.Channels {
-			if def.Channels[i].Category == "start" {
-				def.Channels[i].Category = "ab"
-			}
-		}
-		findings := Validate(def)
-		if hasCode(findings, CodeID) {
-			t.Errorf("id length 2 refused with %s", CodeID)
-		}
-	})
-
-	t.Run("id length 32 accepted", func(t *testing.T) {
-		def := valid(t)
-		longID := "a" + strings.Repeat("b", 31)
-		def.Categories[0].ID = longID
-		for i := range def.Channels {
-			if def.Channels[i].Category == "start" {
-				def.Channels[i].Category = longID
-			}
-		}
-		findings := Validate(def)
-		if hasCode(findings, CodeID) {
-			t.Errorf("id length 32 refused with %s", CodeID)
-		}
-	})
-
-	t.Run("id length 1 refused", func(t *testing.T) {
-		def := valid(t)
-		def.Categories[0].ID = "a"
-		findings := Validate(def)
-		if !hasCode(findings, CodeID) {
-			t.Errorf("id length 1 accepted, want %s", CodeID)
-		}
-	})
-
-	t.Run("id length 33 refused", func(t *testing.T) {
-		def := valid(t)
-		def.Categories[0].ID = "a" + strings.Repeat("b", 32)
-		findings := Validate(def)
-		if !hasCode(findings, CodeID) {
-			t.Errorf("id length 33 accepted, want %s", CodeID)
-		}
-	})
+	t.Run("id length 2 accepted", verifyIDLength2Accepted)
+	t.Run("id length 32 accepted", verifyIDLength32Accepted)
+	t.Run("id length 1 refused", verifyIDLength1Refused)
+	t.Run("id length 33 refused", verifyIDLength33Refused)
 }
 
 func TestValidate_Boundary_TagNameLengths(t *testing.T) {

@@ -161,93 +161,112 @@ func TestBotRights_Negative_BotSeesTheTicketChannel(t *testing.T) {
 	})
 }
 
+// verifyBotPassesCommitted verifies that committed definition has no operator-only or moderation-only finding for bot.
+func verifyBotPassesCommitted(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	for _, f := range Validate(def) {
+		if strings.Contains(f.Path, "bot") && (f.Code == CodeOperatorOnly || f.Code == CodeModerationOnly) {
+			t.Errorf("committed definition produced finding %s for bot: %+v", f.Code, f)
+		}
+	}
+}
+
+// verifyBotManageChannels verifies findings when bot has MANAGE_CHANNELS.
+func verifyBotManageChannels(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	bot := roleOf(t, def, "bot")
+	bot.Permissions = append(bot.Permissions, "MANAGE_CHANNELS")
+	findings := Validate(def)
+	foundChannels := false
+	for _, f := range findings {
+		if f.Code == CodeOperatorOnly && strings.Contains(f.Path, "bot") {
+			if strings.Contains(f.Message, "MANAGE_CHANNELS") {
+				foundChannels = true
+			}
+			if strings.Contains(f.Message, "MANAGE_ROLES") {
+				t.Errorf("unexpected finding naming MANAGE_ROLES: %+v", f)
+			}
+			if strings.Contains(f.Message, "MANAGE_GUILD") {
+				t.Errorf("unexpected finding naming MANAGE_GUILD: %+v", f)
+			}
+		}
+	}
+	if !foundChannels {
+		t.Errorf("missing operator-only finding naming MANAGE_CHANNELS for bot: %+v", findings)
+	}
+}
+
+// verifyBotManageThreads verifies findings when bot has MANAGE_THREADS.
+func verifyBotManageThreads(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	bot := roleOf(t, def, "bot")
+	bot.Permissions = append(bot.Permissions, "MANAGE_THREADS")
+	findings := Validate(def)
+	foundThreads := false
+	for _, f := range findings {
+		if f.Code == CodeModerationOnly && strings.Contains(f.Path, "bot") {
+			if strings.Contains(f.Message, "MANAGE_THREADS") {
+				foundThreads = true
+			}
+			if strings.Contains(f.Message, "MANAGE_MESSAGES") {
+				t.Errorf("unexpected finding naming MANAGE_MESSAGES: %+v", f)
+			}
+			if strings.Contains(f.Message, "MODERATE_MEMBERS") {
+				t.Errorf("unexpected finding naming MODERATE_MEMBERS: %+v", f)
+			}
+		}
+	}
+	if !foundThreads {
+		t.Errorf("missing moderation-only finding naming MANAGE_THREADS for bot: %+v", findings)
+	}
+}
+
+// verifyModeratorManageRoles verifies operator-only finding when moderator has MANAGE_ROLES.
+func verifyModeratorManageRoles(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	mod := roleOf(t, def, "moderator")
+	mod.Permissions = append(mod.Permissions, "MANAGE_ROLES")
+	findings := Validate(def)
+	if !hasFinding(findings, CodeOperatorOnly, "channels[lounge].access[moderator]", "MANAGE_ROLES") {
+		t.Errorf("missing operator-only finding for moderator with MANAGE_ROLES: %+v", findings)
+	}
+}
+
+// verifyContributorManageMessages verifies moderation-only finding when contributor has MANAGE_MESSAGES.
+func verifyContributorManageMessages(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	contrib := roleOf(t, def, "contributor")
+	contrib.Permissions = append(contrib.Permissions, "MANAGE_MESSAGES")
+	findings := Validate(def)
+	if !hasFinding(findings, CodeModerationOnly, "channels[lounge].access[contributor]", "MANAGE_MESSAGES") {
+		t.Errorf("missing moderation-only finding for contributor with MANAGE_MESSAGES: %+v", findings)
+	}
+}
+
+// verifyGuideCodingModerateMembers verifies moderation-only finding when guide-coding has MODERATE_MEMBERS.
+func verifyGuideCodingModerateMembers(t *testing.T) {
+	t.Helper()
+	def := valid(t)
+	guide := roleOf(t, def, "guide-coding")
+	guide.Permissions = append(guide.Permissions, "MODERATE_MEMBERS")
+	findings := Validate(def)
+	if !hasFinding(findings, CodeModerationOnly, "channels[lounge].access[guide-coding]", "MODERATE_MEMBERS") {
+		t.Errorf("missing moderation-only finding for guide-coding with MODERATE_MEMBERS: %+v", findings)
+	}
+}
+
 func TestValidate_Boundary_BotPassesForItsFourRightsOnly(t *testing.T) {
-	t.Run("committed definition has no operator-only or moderation-only finding for bot", func(t *testing.T) {
-		def := valid(t)
-		for _, f := range Validate(def) {
-			if strings.Contains(f.Path, "bot") && (f.Code == CodeOperatorOnly || f.Code == CodeModerationOnly) {
-				t.Errorf("committed definition produced finding %s for bot: %+v", f.Code, f)
-			}
-		}
-	})
-
-	t.Run("bot + MANAGE_CHANNELS produces operator-only naming MANAGE_CHANNELS and none naming MANAGE_ROLES or MANAGE_GUILD", func(t *testing.T) {
-		def := valid(t)
-		bot := roleOf(t, def, "bot")
-		bot.Permissions = append(bot.Permissions, "MANAGE_CHANNELS")
-		findings := Validate(def)
-		foundChannels := false
-		for _, f := range findings {
-			if f.Code == CodeOperatorOnly && strings.Contains(f.Path, "bot") {
-				if strings.Contains(f.Message, "MANAGE_CHANNELS") {
-					foundChannels = true
-				}
-				if strings.Contains(f.Message, "MANAGE_ROLES") {
-					t.Errorf("unexpected finding naming MANAGE_ROLES: %+v", f)
-				}
-				if strings.Contains(f.Message, "MANAGE_GUILD") {
-					t.Errorf("unexpected finding naming MANAGE_GUILD: %+v", f)
-				}
-			}
-		}
-		if !foundChannels {
-			t.Errorf("missing operator-only finding naming MANAGE_CHANNELS for bot: %+v", findings)
-		}
-	})
-
-	t.Run("bot + MANAGE_THREADS produces moderation-only naming MANAGE_THREADS and none naming MANAGE_MESSAGES or MODERATE_MEMBERS", func(t *testing.T) {
-		def := valid(t)
-		bot := roleOf(t, def, "bot")
-		bot.Permissions = append(bot.Permissions, "MANAGE_THREADS")
-		findings := Validate(def)
-		foundThreads := false
-		for _, f := range findings {
-			if f.Code == CodeModerationOnly && strings.Contains(f.Path, "bot") {
-				if strings.Contains(f.Message, "MANAGE_THREADS") {
-					foundThreads = true
-				}
-				if strings.Contains(f.Message, "MANAGE_MESSAGES") {
-					t.Errorf("unexpected finding naming MANAGE_MESSAGES: %+v", f)
-				}
-				if strings.Contains(f.Message, "MODERATE_MEMBERS") {
-					t.Errorf("unexpected finding naming MODERATE_MEMBERS: %+v", f)
-				}
-			}
-		}
-		if !foundThreads {
-			t.Errorf("missing moderation-only finding naming MANAGE_THREADS for bot: %+v", findings)
-		}
-	})
-
-	t.Run("moderator + MANAGE_ROLES produces operator-only", func(t *testing.T) {
-		def := valid(t)
-		mod := roleOf(t, def, "moderator")
-		mod.Permissions = append(mod.Permissions, "MANAGE_ROLES")
-		findings := Validate(def)
-		if !hasFinding(findings, CodeOperatorOnly, "channels[lounge].access[moderator]", "MANAGE_ROLES") {
-			t.Errorf("missing operator-only finding for moderator with MANAGE_ROLES: %+v", findings)
-		}
-	})
-
-	t.Run("contributor + MANAGE_MESSAGES produces moderation-only", func(t *testing.T) {
-		def := valid(t)
-		contrib := roleOf(t, def, "contributor")
-		contrib.Permissions = append(contrib.Permissions, "MANAGE_MESSAGES")
-		findings := Validate(def)
-		if !hasFinding(findings, CodeModerationOnly, "channels[lounge].access[contributor]", "MANAGE_MESSAGES") {
-			t.Errorf("missing moderation-only finding for contributor with MANAGE_MESSAGES: %+v", findings)
-		}
-	})
-
-	t.Run("guide-coding + MODERATE_MEMBERS produces moderation-only", func(t *testing.T) {
-		def := valid(t)
-		guide := roleOf(t, def, "guide-coding")
-		guide.Permissions = append(guide.Permissions, "MODERATE_MEMBERS")
-		findings := Validate(def)
-		if !hasFinding(findings, CodeModerationOnly, "channels[lounge].access[guide-coding]", "MODERATE_MEMBERS") {
-			t.Errorf("missing moderation-only finding for guide-coding with MODERATE_MEMBERS: %+v", findings)
-		}
-	})
+	t.Run("committed definition has no operator-only or moderation-only finding for bot", verifyBotPassesCommitted)
+	t.Run("bot + MANAGE_CHANNELS produces operator-only naming MANAGE_CHANNELS and none naming MANAGE_ROLES or MANAGE_GUILD", verifyBotManageChannels)
+	t.Run("bot + MANAGE_THREADS produces moderation-only naming MANAGE_THREADS and none naming MANAGE_MESSAGES or MODERATE_MEMBERS", verifyBotManageThreads)
+	t.Run("moderator + MANAGE_ROLES produces operator-only", verifyModeratorManageRoles)
+	t.Run("contributor + MANAGE_MESSAGES produces moderation-only", verifyContributorManageMessages)
+	t.Run("guide-coding + MODERATE_MEMBERS produces moderation-only", verifyGuideCodingModerateMembers)
 }
 
 func TestValidate_Negative_AreaChannelBotCannotSee(t *testing.T) {
