@@ -97,6 +97,36 @@ func TestGate_Positive_StartNil(t *testing.T) {
 	}
 }
 
+// verifyGateStartUnavailableCase verifies gate behavior when probe returns an unavailable error.
+func verifyGateStartUnavailableCase(t *testing.T, probeErr error) {
+	t.Helper()
+	ep := &fakeEndpoint{probeErr: probeErr}
+	clock := newClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	g, err := NewGate(GateConfig{
+		Endpoint:      ep,
+		RetryInterval: 30 * time.Second,
+		Now:           clock.Now,
+	})
+	if err != nil {
+		t.Fatalf("NewGate unexpected error: %v", err)
+	}
+
+	if err := g.Start(context.Background()); err != nil {
+		t.Fatalf("Start unexpected error for unavailable: %v", err)
+	}
+	if got := g.State(); got != StateNotReady {
+		t.Errorf("state = %q, want %q", got, StateNotReady)
+	}
+
+	_, err = g.Complete(context.Background(), "sys", "usr")
+	if !errors.Is(err, ErrNotReady) {
+		t.Fatalf("Complete err = %v, want ErrNotReady", err)
+	}
+	if ep.completeCalls.Load() != 0 {
+		t.Errorf("complete calls = %d, want 0", ep.completeCalls.Load())
+	}
+}
+
 func TestGate_Positive_StartUnavailable(t *testing.T) {
 	cases := []struct {
 		name string
@@ -112,31 +142,7 @@ func TestGate_Positive_StartUnavailable(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ep := &fakeEndpoint{probeErr: tc.err}
-			clock := newClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-			g, err := NewGate(GateConfig{
-				Endpoint:      ep,
-				RetryInterval: 30 * time.Second,
-				Now:           clock.Now,
-			})
-			if err != nil {
-				t.Fatalf("NewGate unexpected error: %v", err)
-			}
-
-			if err := g.Start(context.Background()); err != nil {
-				t.Fatalf("Start unexpected error for unavailable: %v", err)
-			}
-			if got := g.State(); got != StateNotReady {
-				t.Errorf("state = %q, want %q", got, StateNotReady)
-			}
-
-			_, err = g.Complete(context.Background(), "sys", "usr")
-			if !errors.Is(err, ErrNotReady) {
-				t.Fatalf("Complete err = %v, want ErrNotReady", err)
-			}
-			if ep.completeCalls.Load() != 0 {
-				t.Errorf("complete calls = %d, want 0", ep.completeCalls.Load())
-			}
+			verifyGateStartUnavailableCase(t, tc.err)
 		})
 	}
 }
@@ -375,26 +381,9 @@ func (c *logCapture) String() string {
 	return c.buf.String()
 }
 
-func TestGate_Positive_OneLogLinePerStateChange(t *testing.T) {
-	var cap logCapture
-	logger := slog.New(slog.NewTextHandler(&cap, nil))
-	clock := newClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-	ep := &fakeEndpoint{probeErr: &StatusError{Code: 503}}
-
-	g, err := NewGate(GateConfig{
-		Endpoint:      ep,
-		Logger:        logger,
-		RetryInterval: 30 * time.Second,
-		Now:           clock.Now,
-	})
-	if err != nil {
-		t.Fatalf("NewGate: %v", err)
-	}
-
-	if err := g.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-
+// driveGateStateChanges drives state transitions between ready and not-ready states.
+func driveGateStateChanges(t *testing.T, g *Gate, ep *fakeEndpoint, clock *fakeClock) {
+	t.Helper()
 	for range 3 {
 		if _, callErr := g.Complete(context.Background(), "secret-system", "secret-user-question"); !errors.Is(callErr, ErrNotReady) {
 			t.Fatalf("expected ErrNotReady, got %v", callErr)
@@ -422,8 +411,11 @@ func TestGate_Positive_OneLogLinePerStateChange(t *testing.T) {
 	if _, callErr := g.Complete(context.Background(), "secret-system", "secret-user-question"); callErr == nil {
 		t.Fatal("expected 503 error, got nil")
 	}
+}
 
-	out := cap.String()
+// verifyGateOneLogLineOutput checks that captured log output contains expected transitions and no secrets.
+func verifyGateOneLogLineOutput(t *testing.T, out string) {
+	t.Helper()
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	if len(lines) != 3 {
 		t.Fatalf("expected 3 log lines, got %d:\n%s", len(lines), out)
@@ -441,6 +433,30 @@ func TestGate_Positive_OneLogLinePerStateChange(t *testing.T) {
 	if !strings.Contains(lines[2], "model not ready") {
 		t.Errorf("line 2 unexpected: %s", lines[2])
 	}
+}
+
+func TestGate_Positive_OneLogLinePerStateChange(t *testing.T) {
+	var cap logCapture
+	logger := slog.New(slog.NewTextHandler(&cap, nil))
+	clock := newClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	ep := &fakeEndpoint{probeErr: &StatusError{Code: 503}}
+
+	g, err := NewGate(GateConfig{
+		Endpoint:      ep,
+		Logger:        logger,
+		RetryInterval: 30 * time.Second,
+		Now:           clock.Now,
+	})
+	if err != nil {
+		t.Fatalf("NewGate: %v", err)
+	}
+
+	if err := g.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	driveGateStateChanges(t, g, ep, clock)
+	verifyGateOneLogLineOutput(t, cap.String())
 }
 
 func TestGate_Positive_RaceFree(t *testing.T) {
@@ -564,6 +580,36 @@ func TestGate_Negative_StartPolicyError(t *testing.T) {
 	}
 }
 
+// verifyGatePolicyLatchedCalls verifies that subsequent calls remain latched as policy failures without hitting endpoint.
+func verifyGatePolicyLatchedCalls(t *testing.T, g *Gate, clock *fakeClock, ep *fakeEndpoint) {
+	t.Helper()
+	for range 3 {
+		res, err := g.Complete(context.Background(), "s", "u")
+		if res != "" || !errors.Is(err, ErrPolicyMissing) {
+			t.Fatalf("latched Complete: res=%q, err=%v", res, err)
+		}
+	}
+	clock.Advance(time.Hour)
+	res, err := g.Complete(context.Background(), "s", "u")
+	if res != "" || !errors.Is(err, ErrPolicyMissing) {
+		t.Fatalf("after retry interval: res=%q, err=%v", res, err)
+	}
+	if ep.completeCalls.Load() != 1 {
+		t.Errorf("completeCalls = %d, want 1", ep.completeCalls.Load())
+	}
+}
+
+// verifyGatePolicyLatchesLog checks that log output records policy error without leaking policy names.
+func verifyGatePolicyLatchesLog(t *testing.T, out string) {
+	t.Helper()
+	if strings.Count(out, "model not ready") != 1 || !strings.Contains(out, "error_class=policy") || !strings.Contains(out, "applied=2") {
+		t.Errorf("log output unexpected: %s", out)
+	}
+	if strings.Contains(out, "unwanted1") || strings.Contains(out, "unwanted2") {
+		t.Errorf("log leaked policy name: %s", out)
+	}
+}
+
 func TestGate_Negative_PolicyLatches(t *testing.T) {
 	var logged bytes.Buffer
 	clock := newClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
@@ -588,27 +634,8 @@ func TestGate_Negative_PolicyLatches(t *testing.T) {
 	if g.State() != StateNotReady || g.Reason() != "policy" {
 		t.Fatalf("state=%q, reason=%q", g.State(), g.Reason())
 	}
-	for range 3 {
-		res, err = g.Complete(context.Background(), "s", "u")
-		if res != "" || !errors.Is(err, ErrPolicyMissing) {
-			t.Fatalf("latched Complete: res=%q, err=%v", res, err)
-		}
-	}
-	clock.Advance(time.Hour)
-	res, err = g.Complete(context.Background(), "s", "u")
-	if res != "" || !errors.Is(err, ErrPolicyMissing) {
-		t.Fatalf("after retry interval: res=%q, err=%v", res, err)
-	}
-	if ep.completeCalls.Load() != 1 {
-		t.Errorf("completeCalls = %d, want 1", ep.completeCalls.Load())
-	}
-	out := logged.String()
-	if strings.Count(out, "model not ready") != 1 || !strings.Contains(out, "error_class=policy") || !strings.Contains(out, "applied=2") {
-		t.Errorf("log output unexpected: %s", out)
-	}
-	if strings.Contains(out, "unwanted1") || strings.Contains(out, "unwanted2") {
-		t.Errorf("log leaked policy name: %s", out)
-	}
+	verifyGatePolicyLatchedCalls(t, g, clock, ep)
+	verifyGatePolicyLatchesLog(t, logged.String())
 }
 
 func TestGate_Boundary_ReasonEmptyWhenUnavailable(t *testing.T) {
