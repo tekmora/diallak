@@ -1,8 +1,11 @@
 """Run golangci-lint with the repository's .golangci.yml and fail on any finding.
 
 The self-test first lints a module planted at run time: a clean file, which must give no
-finding, and one defect for each of three linters and the gofmt formatter the configuration
-enables, which must each be reported by that linter or formatter. Only then is the result on the tracked code trusted.
+finding, and planted defects for linters and the gofmt formatter the configuration enables,
+which must each be reported by that linter or formatter. The clean file holds one function at
+each HISS-04 limit (cyclomatic 12, cognitive 15, 55 statements, 60 lines), and each planted
+complexity defect is one step over its limit, so both sides of every limit are checked. Only
+then is the result on the tracked code trusted.
 """
 
 import argparse
@@ -17,13 +20,41 @@ ISSUES_EXIT = 3
 MAX_REPORT_BYTES = 16 * 1024 * 1024
 LINT_TIMEOUT_SECONDS = 900
 
-CLEAN = """package planted
 
-// Sum adds two numbers.
-func Sum(a, b int) int {
-	return a + b
-}
-"""
+
+def branches(name, count):
+    """A function of count sequential ifs: cyclomatic complexity count + 1, cognitive count."""
+    body = "".join(f"\tif x == {i} {{\n\t\tx++\n\t}}\n" for i in range(count))
+    return f"// {name} counts.\nfunc {name}(x int) int {{\n{body}\treturn x\n}}\n"
+
+
+def nested(name, depth):
+    """A function of depth nested ifs: cognitive complexity 1 + 2 + ... + depth."""
+    opening = "".join("\t" * (i + 1) + f"if x > {i} {{\n" for i in range(depth))
+    closing = "".join("\t" * (i + 1) + "}\n" for i in reversed(range(depth)))
+    return f"// {name} counts.\nfunc {name}(x int) int {{\n{opening}" + "\t" * (depth + 1) + f"x++\n{closing}\treturn x\n}}\n"
+
+
+def statements(name, count):
+    """A function of count statements, one per line."""
+    body = "\tx++\n" * (count - 1)
+    return f"// {name} counts.\nfunc {name}(x int) int {{\n{body}\treturn x\n}}\n"
+
+
+def lines(name, count):
+    """A function of count lines between its braces and two statements."""
+    items = "".join(f"\t\t{i},\n" for i in range(count - 3))
+    return f"// {name} counts.\nfunc {name}(x int) int {{\n\tv := []int{{\n{items}\t}}\n\treturn x + len(v)\n}}\n"
+
+
+CLEAN = "\n".join([
+    "package planted\n",
+    "// Sum adds two numbers.\nfunc Sum(a, b int) int {\n\treturn a + b\n}\n",
+    branches("AtCyclomaticLimit", 11),
+    nested("AtCognitiveLimit", 5),
+    statements("AtStatementLimit", 55),
+    lines("AtLineLimit", 60),
+])
 
 # One file per linter, so that one finding cannot stand in for another.
 PLANTED = {
@@ -65,6 +96,12 @@ func Show(n int) string {
 	return fmt.Sprintf("%s", n)
 }
 """,
+    # One step over each HISS-04 limit. A key after an underscore names a
+    # second defect for the same linter.
+    "gocyclo": "package planted\n\n" + branches("OverCyclomaticLimit", 12),
+    "gocognit": "package planted\n\n" + nested("OverCognitiveLimit", 6),
+    "funlen": "package planted\n\n" + statements("OverStatementLimit", 56),
+    "funlen_lines": "package planted\n\n" + lines("OverLineLimit", 61),
 }
 
 
@@ -107,11 +144,12 @@ def self_test(golangci_lint, config):
         clean = findings(golangci_lint, planted_module(root, {"clean": CLEAN}), config)
     if clean:
         raise LintError(f"self-test 'clean': expected no finding, got {clean}")
-    for linter, text in PLANTED.items():
+    for planted, text in PLANTED.items():
+        linter = planted.partition("_")[0]
         with tempfile.TemporaryDirectory() as root:
-            found = findings(golangci_lint, planted_module(root, {"clean": CLEAN, linter: text}), config)
-        if not any(name == linter and Path(file).name == f"{linter}.go" for name, file, _ in found):
-            raise LintError(f"self-test '{linter}': the planted defect was not reported by {linter}; got {found}")
+            found = findings(golangci_lint, planted_module(root, {"clean": CLEAN, planted: text}), config)
+        if not any(name == linter and Path(file).name == f"{planted}.go" for name, file, _ in found):
+            raise LintError(f"self-test '{planted}': the planted defect was not reported by {linter}; got {found}")
     print(f"Lint self-test: the clean module and {len(PLANTED)} planted defects behaved as required")
 
 
