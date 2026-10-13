@@ -54,7 +54,8 @@ jobs:
       - name: Vet
         if: github.event.pull_request.draft != true
         run: go vet ./...
-      # The profile declares golangci-lint; .golangci.yml selects the linters.
+      # The profile declares golangci-lint; .golangci.yml selects the linters
+      # and the gofmt formatter.
       # The script lints planted defects first and fails unless each is found.
       - name: Lint
         if: github.event.pull_request.draft != true
@@ -132,3 +133,49 @@ jobs:
       - name: HISS audit
         if: github.event.pull_request.draft != true
         run: praetorctl audit
+      # REUSE lint (reuse.yml) runs the action below on the tree. These steps
+      # run the same pinned action on two roots planted from REUSE.toml: one
+      # clean, one with a file whose header names a licence missing from
+      # LICENSES/. The job fails unless the first passes and the second fails.
+      - name: Plant REUSE cases
+        if: github.event.pull_request.draft != true
+        shell: bash
+        run: |
+          set -euo pipefail
+          for case in clean missing; do
+            mkdir -p ".reuse-planted/$case/LICENSES"
+            cp REUSE.toml ".reuse-planted/$case/"
+            cp LICENSES/EUPL-1.2.txt ".reuse-planted/$case/LICENSES/"
+            printf 'plain text\n' > ".reuse-planted/$case/note.txt"
+          done
+          # The markers keep REUSE from reading the planted tag as this file's.
+          # REUSE-IgnoreStart
+          printf '// SPDX-License-Identifier: MIT\npackage planted\n' \
+            > .reuse-planted/missing/planted.go
+          # REUSE-IgnoreEnd
+      - name: REUSE lint on the clean case
+        id: reuse-clean
+        if: github.event.pull_request.draft != true
+        continue-on-error: true
+        # yamllint disable-line rule:line-length
+        uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5  # v6
+        with:
+          args: --root .reuse-planted/clean lint
+      - name: REUSE lint on the missing-licence case
+        id: reuse-missing
+        if: github.event.pull_request.draft != true
+        continue-on-error: true
+        # yamllint disable-line rule:line-length
+        uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5  # v6
+        with:
+          args: --root .reuse-planted/missing lint
+      - name: REUSE planted cases behaved as required
+        if: github.event.pull_request.draft != true
+        shell: bash
+        env:
+          CLEAN: ${{ steps.reuse-clean.outcome }}
+          MISSING: ${{ steps.reuse-missing.outcome }}
+        run: |
+          echo "clean case: $CLEAN, missing-licence case: $MISSING"
+          test "$CLEAN" = success
+          test "$MISSING" = failure
