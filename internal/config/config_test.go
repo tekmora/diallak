@@ -34,76 +34,94 @@ func validBaseEnv(t *testing.T) map[string]string {
 	}
 }
 
+// testLoadMinimalWithoutModel tests loading config with minimal settings and no model.
+func testLoadMinimalWithoutModel(t *testing.T) {
+	t.Helper()
+	cfg, err := Load(env(validBaseEnv(t)))
+	if err != nil {
+		t.Fatalf("Load = %v, want nil", err)
+	}
+	if cfg.Token != "secret-token" {
+		t.Errorf("Token = %q, want trimmed content", cfg.Token)
+	}
+	if cfg.GuildID != 123456789012345678 {
+		t.Errorf("GuildID = %d, want 123456789012345678", cfg.GuildID)
+	}
+	if cfg.CorpusDir != "/var/data/corpus" {
+		t.Errorf("CorpusDir = %q, want /var/data/corpus", cfg.CorpusDir)
+	}
+	if cfg.HasModel() {
+		t.Errorf("HasModel = true, want false")
+	}
+	if cfg.ModelKey != "" {
+		t.Errorf("ModelKey = %q, want empty", cfg.ModelKey)
+	}
+}
+
+// testLoadWithModelWithoutKey tests loading config with model configuration but no key.
+func testLoadWithModelWithoutKey(t *testing.T) {
+	t.Helper()
+	base := validBaseEnv(t)
+	base[EnvModelBaseURL] = "http://127.0.0.1:8000"
+	base[EnvModelAlias] = "router/test"
+	base[EnvModelPolicy] = "example-policy"
+
+	cfg, err := Load(env(base))
+	if err != nil {
+		t.Fatalf("Load = %v, want nil", err)
+	}
+	if !cfg.HasModel() {
+		t.Errorf("HasModel = false, want true")
+	}
+	if cfg.ModelBaseURL != "http://127.0.0.1:8000" {
+		t.Errorf("ModelBaseURL = %q, want http://127.0.0.1:8000", cfg.ModelBaseURL)
+	}
+	if cfg.ModelAlias != "router/test" {
+		t.Errorf("ModelAlias = %q, want router/test", cfg.ModelAlias)
+	}
+	if cfg.ModelPolicy != "example-policy" {
+		t.Errorf("ModelPolicy = %q, want example-policy", cfg.ModelPolicy)
+	}
+	if cfg.ModelKey != "" {
+		t.Errorf("ModelKey = %q, want empty", cfg.ModelKey)
+	}
+}
+
+// testLoadWithModelAndKeyFile tests loading config with model configuration and key file.
+func testLoadWithModelAndKeyFile(t *testing.T) {
+	t.Helper()
+	base := validBaseEnv(t)
+	base[EnvModelBaseURL] = "http://127.0.0.1:8000"
+	base[EnvModelAlias] = "router/test"
+	base[EnvModelPolicy] = "example-policy"
+	base[EnvModelKeyFile] = writeSecret(t, "key", "sk-endpoint-secret\n")
+
+	cfg, err := Load(env(base))
+	if err != nil {
+		t.Fatalf("Load = %v, want nil", err)
+	}
+	if !cfg.HasModel() {
+		t.Errorf("HasModel = false, want true")
+	}
+	if cfg.ModelPolicy != "example-policy" {
+		t.Errorf("ModelPolicy = %q, want example-policy", cfg.ModelPolicy)
+	}
+	if cfg.ModelKey != "sk-endpoint-secret" {
+		t.Errorf("ModelKey = %q, want sk-endpoint-secret", cfg.ModelKey)
+	}
+}
+
 func TestLoad_Positive_ReadsConfiguration(t *testing.T) {
 	t.Run("minimal without model", func(t *testing.T) {
-		cfg, err := Load(env(validBaseEnv(t)))
-		if err != nil {
-			t.Fatalf("Load = %v, want nil", err)
-		}
-		if cfg.Token != "secret-token" {
-			t.Errorf("Token = %q, want trimmed content", cfg.Token)
-		}
-		if cfg.GuildID != 123456789012345678 {
-			t.Errorf("GuildID = %d, want 123456789012345678", cfg.GuildID)
-		}
-		if cfg.CorpusDir != "/var/data/corpus" {
-			t.Errorf("CorpusDir = %q, want /var/data/corpus", cfg.CorpusDir)
-		}
-		if cfg.HasModel() {
-			t.Errorf("HasModel = true, want false")
-		}
-		if cfg.ModelKey != "" {
-			t.Errorf("ModelKey = %q, want empty", cfg.ModelKey)
-		}
+		testLoadMinimalWithoutModel(t)
 	})
 
 	t.Run("with model without key", func(t *testing.T) {
-		base := validBaseEnv(t)
-		base[EnvModelBaseURL] = "http://127.0.0.1:8000"
-		base[EnvModelAlias] = "router/test"
-		base[EnvModelPolicy] = "example-policy"
-
-		cfg, err := Load(env(base))
-		if err != nil {
-			t.Fatalf("Load = %v, want nil", err)
-		}
-		if !cfg.HasModel() {
-			t.Errorf("HasModel = false, want true")
-		}
-		if cfg.ModelBaseURL != "http://127.0.0.1:8000" {
-			t.Errorf("ModelBaseURL = %q, want http://127.0.0.1:8000", cfg.ModelBaseURL)
-		}
-		if cfg.ModelAlias != "router/test" {
-			t.Errorf("ModelAlias = %q, want router/test", cfg.ModelAlias)
-		}
-		if cfg.ModelPolicy != "example-policy" {
-			t.Errorf("ModelPolicy = %q, want example-policy", cfg.ModelPolicy)
-		}
-		if cfg.ModelKey != "" {
-			t.Errorf("ModelKey = %q, want empty", cfg.ModelKey)
-		}
+		testLoadWithModelWithoutKey(t)
 	})
 
 	t.Run("with model and key file", func(t *testing.T) {
-		base := validBaseEnv(t)
-		base[EnvModelBaseURL] = "http://127.0.0.1:8000"
-		base[EnvModelAlias] = "router/test"
-		base[EnvModelPolicy] = "example-policy"
-		base[EnvModelKeyFile] = writeSecret(t, "key", "sk-endpoint-secret\n")
-
-		cfg, err := Load(env(base))
-		if err != nil {
-			t.Fatalf("Load = %v, want nil", err)
-		}
-		if !cfg.HasModel() {
-			t.Errorf("HasModel = false, want true")
-		}
-		if cfg.ModelPolicy != "example-policy" {
-			t.Errorf("ModelPolicy = %q, want example-policy", cfg.ModelPolicy)
-		}
-		if cfg.ModelKey != "sk-endpoint-secret" {
-			t.Errorf("ModelKey = %q, want sk-endpoint-secret", cfg.ModelKey)
-		}
+		testLoadWithModelAndKeyFile(t)
 	})
 }
 
@@ -251,48 +269,66 @@ func TestConfig_Negative_RedactionHidesSecrets(t *testing.T) {
 	}
 }
 
+// testLoadSupportChannelUnset tests support channel default when unset.
+func testLoadSupportChannelUnset(t *testing.T) {
+	t.Helper()
+	cfg, err := Load(env(validBaseEnv(t)))
+	if err != nil {
+		t.Fatalf("Load = %v, want nil", err)
+	}
+	if cfg.SupportChannel != "" {
+		t.Errorf("SupportChannel = %q, want it empty", cfg.SupportChannel)
+	}
+}
+
+// testLoadSupportChannelEmpty tests support channel when set to empty string.
+func testLoadSupportChannelEmpty(t *testing.T) {
+	t.Helper()
+	base := validBaseEnv(t)
+	base[EnvSupportChannel] = ""
+	cfg, err := Load(env(base))
+	if err != nil {
+		t.Fatalf("Load = %v, want nil", err)
+	}
+	if cfg.SupportChannel != "" {
+		t.Errorf("SupportChannel = %q, want it empty", cfg.SupportChannel)
+	}
+}
+
+// testLoadSupportChannelConfigured tests support channel trimming and log serialization.
+func testLoadSupportChannelConfigured(t *testing.T) {
+	t.Helper()
+	base := validBaseEnv(t)
+	base[EnvSupportChannel] = "  #help-desk  "
+	cfg, err := Load(env(base))
+	if err != nil {
+		t.Fatalf("Load = %v, want nil", err)
+	}
+	if cfg.SupportChannel != "#help-desk" {
+		t.Errorf("SupportChannel = %q, want #help-desk", cfg.SupportChannel)
+	}
+	if !strings.Contains(cfg.String(), `SupportChannel:"#help-desk"`) {
+		t.Errorf("String() = %q, missing SupportChannel", cfg.String())
+	}
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	logger.Info("test", slog.Any("cfg", cfg))
+	if !strings.Contains(buf.String(), `"SupportChannel":"#help-desk"`) {
+		t.Errorf("LogValue() JSON = %q, missing SupportChannel", buf.String())
+	}
+}
+
 func TestLoad_Positive_SupportChannel(t *testing.T) {
 	t.Run("unset stays empty", func(t *testing.T) {
-		cfg, err := Load(env(validBaseEnv(t)))
-		if err != nil {
-			t.Fatalf("Load = %v, want nil", err)
-		}
-		if cfg.SupportChannel != "" {
-			t.Errorf("SupportChannel = %q, want it empty", cfg.SupportChannel)
-		}
+		testLoadSupportChannelUnset(t)
 	})
 
 	t.Run("empty string stays empty", func(t *testing.T) {
-		base := validBaseEnv(t)
-		base[EnvSupportChannel] = ""
-		cfg, err := Load(env(base))
-		if err != nil {
-			t.Fatalf("Load = %v, want nil", err)
-		}
-		if cfg.SupportChannel != "" {
-			t.Errorf("SupportChannel = %q, want it empty", cfg.SupportChannel)
-		}
+		testLoadSupportChannelEmpty(t)
 	})
 
 	t.Run("configured value is trimmed", func(t *testing.T) {
-		base := validBaseEnv(t)
-		base[EnvSupportChannel] = "  #help-desk  "
-		cfg, err := Load(env(base))
-		if err != nil {
-			t.Fatalf("Load = %v, want nil", err)
-		}
-		if cfg.SupportChannel != "#help-desk" {
-			t.Errorf("SupportChannel = %q, want #help-desk", cfg.SupportChannel)
-		}
-		if !strings.Contains(cfg.String(), `SupportChannel:"#help-desk"`) {
-			t.Errorf("String() = %q, missing SupportChannel", cfg.String())
-		}
-		var buf bytes.Buffer
-		logger := slog.New(slog.NewJSONHandler(&buf, nil))
-		logger.Info("test", slog.Any("cfg", cfg))
-		if !strings.Contains(buf.String(), `"SupportChannel":"#help-desk"`) {
-			t.Errorf("LogValue() JSON = %q, missing SupportChannel", buf.String())
-		}
+		testLoadSupportChannelConfigured(t)
 	})
 }
 
@@ -367,43 +403,55 @@ func TestLoad_Boundary_SupportChannelLength(t *testing.T) {
 	})
 }
 
+// testLoadAnswerPathDefaultsUnset tests zero-value defaults when answer path variables are unset.
+func testLoadAnswerPathDefaultsUnset(t *testing.T) {
+	t.Helper()
+	cfg, err := Load(env(validBaseEnv(t)))
+	if err != nil {
+		t.Fatalf("Load = %v, want nil", err)
+	}
+	if cfg.TopPassages != 0 || cfg.MinScore != 0.0 || cfg.QuestionMaxChars != 0 {
+		t.Errorf("unexpected passages=%d, minScore=%f, questionMax=%d",
+			cfg.TopPassages, cfg.MinScore, cfg.QuestionMaxChars)
+	}
+	if cfg.ExcerptChars != 0 || cfg.ReplyMaxChars != 0 || cfg.MaxConcurrentAsks != 0 {
+		t.Errorf("unexpected excerpt=%d, reply=%d, concurrent=%d",
+			cfg.ExcerptChars, cfg.ReplyMaxChars, cfg.MaxConcurrentAsks)
+	}
+	if cfg.AskTimeout != 0 || cfg.ModelTimeout != 0 || cfg.SourceLinkTemplate != "" {
+		t.Errorf("unexpected askTimeout=%v, modelTimeout=%v, linkTemplate=%q",
+			cfg.AskTimeout, cfg.ModelTimeout, cfg.SourceLinkTemplate)
+	}
+}
+
+// testLoadAnswerPathDefaultsEmpty tests zero-value defaults when answer path variables are empty strings.
+func testLoadAnswerPathDefaultsEmpty(t *testing.T) {
+	t.Helper()
+	base := validBaseEnv(t)
+	emptyVars := []string{
+		EnvTopPassages, EnvMinScore, EnvQuestionMaxChars,
+		EnvExcerptChars, EnvReplyMaxChars, EnvMaxConcurrentAsks,
+		EnvAskTimeout, EnvModelTimeout, EnvSourceLinkTemplate,
+	}
+	for _, v := range emptyVars {
+		base[v] = ""
+	}
+	cfg, err := Load(env(base))
+	if err != nil {
+		t.Fatalf("Load with empty optional variables = %v, want nil", err)
+	}
+	if cfg.TopPassages != 0 || cfg.MinScore != 0.0 || cfg.SourceLinkTemplate != "" {
+		t.Errorf("empty variables did not result in zero values: %+v", cfg)
+	}
+}
+
 func TestLoad_Positive_AnswerPathDefaults(t *testing.T) {
 	t.Run("unset variables remain zero values", func(t *testing.T) {
-		cfg, err := Load(env(validBaseEnv(t)))
-		if err != nil {
-			t.Fatalf("Load = %v, want nil", err)
-		}
-		if cfg.TopPassages != 0 || cfg.MinScore != 0.0 || cfg.QuestionMaxChars != 0 {
-			t.Errorf("unexpected passages=%d, minScore=%f, questionMax=%d",
-				cfg.TopPassages, cfg.MinScore, cfg.QuestionMaxChars)
-		}
-		if cfg.ExcerptChars != 0 || cfg.ReplyMaxChars != 0 || cfg.MaxConcurrentAsks != 0 {
-			t.Errorf("unexpected excerpt=%d, reply=%d, concurrent=%d",
-				cfg.ExcerptChars, cfg.ReplyMaxChars, cfg.MaxConcurrentAsks)
-		}
-		if cfg.AskTimeout != 0 || cfg.ModelTimeout != 0 || cfg.SourceLinkTemplate != "" {
-			t.Errorf("unexpected askTimeout=%v, modelTimeout=%v, linkTemplate=%q",
-				cfg.AskTimeout, cfg.ModelTimeout, cfg.SourceLinkTemplate)
-		}
+		testLoadAnswerPathDefaultsUnset(t)
 	})
 
 	t.Run("empty string variables remain zero values", func(t *testing.T) {
-		base := validBaseEnv(t)
-		emptyVars := []string{
-			EnvTopPassages, EnvMinScore, EnvQuestionMaxChars,
-			EnvExcerptChars, EnvReplyMaxChars, EnvMaxConcurrentAsks,
-			EnvAskTimeout, EnvModelTimeout, EnvSourceLinkTemplate,
-		}
-		for _, v := range emptyVars {
-			base[v] = ""
-		}
-		cfg, err := Load(env(base))
-		if err != nil {
-			t.Fatalf("Load with empty optional variables = %v, want nil", err)
-		}
-		if cfg.TopPassages != 0 || cfg.MinScore != 0.0 || cfg.SourceLinkTemplate != "" {
-			t.Errorf("empty variables did not result in zero values: %+v", cfg)
-		}
+		testLoadAnswerPathDefaultsEmpty(t)
 	})
 }
 
@@ -502,14 +550,38 @@ func TestLoad_Negative_MinScore(t *testing.T) {
 	}
 }
 
+type timeoutNegativeCase struct {
+	name      string
+	envVar    string
+	val       string
+	extraVars map[string]string
+	wantBoth  bool
+}
+
+// verifyNegativeTimeoutCase tests that invalid timeout configuration is rejected with expected errors.
+func verifyNegativeTimeoutCase(t *testing.T, tc timeoutNegativeCase) {
+	t.Helper()
+	base := validBaseEnv(t)
+	base[tc.envVar] = tc.val
+	for k, v := range tc.extraVars {
+		base[k] = v
+	}
+	_, err := Load(env(base))
+	if err == nil {
+		t.Fatalf("Load succeeded for %s, want error", tc.name)
+	}
+	if !strings.Contains(err.Error(), tc.envVar) {
+		t.Errorf("error %q does not contain %s", err.Error(), tc.envVar)
+	}
+	if tc.wantBoth {
+		if !strings.Contains(err.Error(), EnvModelTimeout) || !strings.Contains(err.Error(), EnvAskTimeout) {
+			t.Errorf("error %q does not contain both %s and %s", err.Error(), EnvModelTimeout, EnvAskTimeout)
+		}
+	}
+}
+
 func TestLoad_Negative_Timeouts(t *testing.T) {
-	cases := []struct {
-		name      string
-		envVar    string
-		val       string
-		extraVars map[string]string
-		wantBoth  bool
-	}{
+	cases := []timeoutNegativeCase{
 		{"ask invalid duration", EnvAskTimeout, "not-a-duration", nil, false},
 		{"ask negative", EnvAskTimeout, "-1s", nil, false},
 		{"ask zero", EnvAskTimeout, "0s", nil, false},
@@ -528,23 +600,7 @@ func TestLoad_Negative_Timeouts(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			base := validBaseEnv(t)
-			base[tc.envVar] = tc.val
-			for k, v := range tc.extraVars {
-				base[k] = v
-			}
-			_, err := Load(env(base))
-			if err == nil {
-				t.Fatalf("Load succeeded for %s, want error", tc.name)
-			}
-			if !strings.Contains(err.Error(), tc.envVar) {
-				t.Errorf("error %q does not contain %s", err.Error(), tc.envVar)
-			}
-			if tc.wantBoth {
-				if !strings.Contains(err.Error(), EnvModelTimeout) || !strings.Contains(err.Error(), EnvAskTimeout) {
-					t.Errorf("error %q does not contain both %s and %s", err.Error(), EnvModelTimeout, EnvAskTimeout)
-				}
-			}
+			verifyNegativeTimeoutCase(t, tc)
 		})
 	}
 }
@@ -648,50 +704,62 @@ func checkBoundaryInt(t *testing.T, envVar string, minVal, maxVal, belowMin, abo
 	}
 }
 
+// testLoadBoundaryAskTimeoutBounds tests valid and invalid boundaries for ask timeout.
+func testLoadBoundaryAskTimeoutBounds(t *testing.T) {
+	t.Helper()
+	base := validBaseEnv(t)
+	base[EnvAskTimeout] = "1s"
+	if _, err := Load(env(base)); err != nil {
+		t.Errorf("Load with ask timeout 1s = %v, want nil", err)
+	}
+	base[EnvAskTimeout] = "10m"
+	if _, err := Load(env(base)); err != nil {
+		t.Errorf("Load with ask timeout 10m = %v, want nil", err)
+	}
+	base[EnvAskTimeout] = "999ms"
+	if _, err := Load(env(base)); err == nil {
+		t.Errorf("Load with ask timeout 999ms succeeded, want error")
+	}
+	base[EnvAskTimeout] = "10m1s"
+	if _, err := Load(env(base)); err == nil {
+		t.Errorf("Load with ask timeout 10m1s succeeded, want error")
+	}
+}
+
+// testLoadBoundaryModelTimeoutBounds tests valid and invalid boundaries for model timeout.
+func testLoadBoundaryModelTimeoutBounds(t *testing.T) {
+	t.Helper()
+	base := validBaseEnv(t)
+	base[EnvModelTimeout] = "1s"
+	if _, err := Load(env(base)); err != nil {
+		t.Errorf("Load with model timeout 1s = %v, want nil", err)
+	}
+	base[EnvModelTimeout] = "59s"
+	if _, err := Load(env(base)); err != nil {
+		t.Errorf("Load with model timeout 59s = %v, want nil", err)
+	}
+	base[EnvModelTimeout] = "60s"
+	if _, err := Load(env(base)); err == nil {
+		t.Errorf("Load with model timeout 60s (equal to default ask) succeeded, want error")
+	}
+	base[EnvAskTimeout] = "6m"
+	base[EnvModelTimeout] = "5m"
+	if _, err := Load(env(base)); err != nil {
+		t.Errorf("Load with model timeout 5m = %v, want nil", err)
+	}
+	base[EnvModelTimeout] = "5m1s"
+	if _, err := Load(env(base)); err == nil {
+		t.Errorf("Load with model timeout 5m1s succeeded, want error")
+	}
+}
+
 func TestLoad_Boundary_TimeoutBounds(t *testing.T) {
 	t.Run("ask timeout bounds", func(t *testing.T) {
-		base := validBaseEnv(t)
-		base[EnvAskTimeout] = "1s"
-		if _, err := Load(env(base)); err != nil {
-			t.Errorf("Load with ask timeout 1s = %v, want nil", err)
-		}
-		base[EnvAskTimeout] = "10m"
-		if _, err := Load(env(base)); err != nil {
-			t.Errorf("Load with ask timeout 10m = %v, want nil", err)
-		}
-		base[EnvAskTimeout] = "999ms"
-		if _, err := Load(env(base)); err == nil {
-			t.Errorf("Load with ask timeout 999ms succeeded, want error")
-		}
-		base[EnvAskTimeout] = "10m1s"
-		if _, err := Load(env(base)); err == nil {
-			t.Errorf("Load with ask timeout 10m1s succeeded, want error")
-		}
+		testLoadBoundaryAskTimeoutBounds(t)
 	})
 
 	t.Run("model timeout bounds", func(t *testing.T) {
-		base := validBaseEnv(t)
-		base[EnvModelTimeout] = "1s"
-		if _, err := Load(env(base)); err != nil {
-			t.Errorf("Load with model timeout 1s = %v, want nil", err)
-		}
-		base[EnvModelTimeout] = "59s"
-		if _, err := Load(env(base)); err != nil {
-			t.Errorf("Load with model timeout 59s = %v, want nil", err)
-		}
-		base[EnvModelTimeout] = "60s"
-		if _, err := Load(env(base)); err == nil {
-			t.Errorf("Load with model timeout 60s (equal to default ask) succeeded, want error")
-		}
-		base[EnvAskTimeout] = "6m"
-		base[EnvModelTimeout] = "5m"
-		if _, err := Load(env(base)); err != nil {
-			t.Errorf("Load with model timeout 5m = %v, want nil", err)
-		}
-		base[EnvModelTimeout] = "5m1s"
-		if _, err := Load(env(base)); err == nil {
-			t.Errorf("Load with model timeout 5m1s succeeded, want error")
-		}
+		testLoadBoundaryModelTimeoutBounds(t)
 	})
 }
 
@@ -858,51 +926,75 @@ func TestLoad_Boundary_AskTimeoutLeavesRoomForTheModelTimeoutInEffect(t *testing
 	}
 }
 
+// testLoadHealthAddrUnset tests default HealthAddr when unset.
+func testLoadHealthAddrUnset(t *testing.T) {
+	t.Helper()
+	cfg, err := Load(env(validBaseEnv(t)))
+	if err != nil {
+		t.Fatalf("Load = %v, want nil", err)
+	}
+	if cfg.HealthAddr != "" {
+		t.Errorf("HealthAddr = %q, want empty", cfg.HealthAddr)
+	}
+}
+
+// testLoadHealthAddrIPv4 tests valid IPv4 HealthAddr.
+func testLoadHealthAddrIPv4(t *testing.T) {
+	t.Helper()
+	base := validBaseEnv(t)
+	base[EnvHealthAddr] = "127.0.0.1:8080"
+	cfg, err := Load(env(base))
+	if err != nil {
+		t.Fatalf("Load = %v, want nil", err)
+	}
+	if cfg.HealthAddr != "127.0.0.1:8080" {
+		t.Errorf("HealthAddr = %q, want 127.0.0.1:8080", cfg.HealthAddr)
+	}
+}
+
+// testLoadHealthAddrEmptyHost tests valid port-only HealthAddr.
+func testLoadHealthAddrEmptyHost(t *testing.T) {
+	t.Helper()
+	base := validBaseEnv(t)
+	base[EnvHealthAddr] = ":8080"
+	cfg, err := Load(env(base))
+	if err != nil {
+		t.Fatalf("Load = %v, want nil", err)
+	}
+	if cfg.HealthAddr != ":8080" {
+		t.Errorf("HealthAddr = %q, want :8080", cfg.HealthAddr)
+	}
+}
+
+// testLoadHealthAddrIPv6 tests valid IPv6 HealthAddr with brackets.
+func testLoadHealthAddrIPv6(t *testing.T) {
+	t.Helper()
+	base := validBaseEnv(t)
+	base[EnvHealthAddr] = "[::1]:8081"
+	cfg, err := Load(env(base))
+	if err != nil {
+		t.Fatalf("Load = %v, want nil", err)
+	}
+	if cfg.HealthAddr != "[::1]:8081" {
+		t.Errorf("HealthAddr = %q, want [::1]:8081", cfg.HealthAddr)
+	}
+}
+
 func TestLoad_Positive_HealthAddr(t *testing.T) {
 	t.Run("unset is empty", func(t *testing.T) {
-		cfg, err := Load(env(validBaseEnv(t)))
-		if err != nil {
-			t.Fatalf("Load = %v, want nil", err)
-		}
-		if cfg.HealthAddr != "" {
-			t.Errorf("HealthAddr = %q, want empty", cfg.HealthAddr)
-		}
+		testLoadHealthAddrUnset(t)
 	})
 
 	t.Run("valid IPv4 with port", func(t *testing.T) {
-		base := validBaseEnv(t)
-		base[EnvHealthAddr] = "127.0.0.1:8080"
-		cfg, err := Load(env(base))
-		if err != nil {
-			t.Fatalf("Load = %v, want nil", err)
-		}
-		if cfg.HealthAddr != "127.0.0.1:8080" {
-			t.Errorf("HealthAddr = %q, want 127.0.0.1:8080", cfg.HealthAddr)
-		}
+		testLoadHealthAddrIPv4(t)
 	})
 
 	t.Run("empty host with port", func(t *testing.T) {
-		base := validBaseEnv(t)
-		base[EnvHealthAddr] = ":8080"
-		cfg, err := Load(env(base))
-		if err != nil {
-			t.Fatalf("Load = %v, want nil", err)
-		}
-		if cfg.HealthAddr != ":8080" {
-			t.Errorf("HealthAddr = %q, want :8080", cfg.HealthAddr)
-		}
+		testLoadHealthAddrEmptyHost(t)
 	})
 
 	t.Run("IPv6 in brackets with port", func(t *testing.T) {
-		base := validBaseEnv(t)
-		base[EnvHealthAddr] = "[::1]:8081"
-		cfg, err := Load(env(base))
-		if err != nil {
-			t.Fatalf("Load = %v, want nil", err)
-		}
-		if cfg.HealthAddr != "[::1]:8081" {
-			t.Errorf("HealthAddr = %q, want [::1]:8081", cfg.HealthAddr)
-		}
+		testLoadHealthAddrIPv6(t)
 	})
 }
 
