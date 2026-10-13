@@ -1,8 +1,8 @@
 """Run golangci-lint with the repository's .golangci.yml and fail on any finding.
 
 The self-test first lints a module planted at run time: a clean file, which must give no
-finding, and one defect for each of three linters the configuration enables, which must
-each be reported by that linter. Only then is the result on the tracked code trusted.
+finding, and one defect for each of three linters and the gofmt formatter the configuration
+enables, which must each be reported by that linter or formatter. Only then is the result on the tracked code trusted.
 """
 
 import argparse
@@ -44,6 +44,16 @@ func Twice() int {
 	n = 2
 	n = 3
 	return n
+}
+""",
+    # gofmt runs as a formatter in .golangci.yml; it reports a file that
+    # gofmt would rewrite, here an indent of spaces and a binary expression
+    # without spaces.
+    "gofmt": """package planted
+
+// Add adds two numbers.
+func Add(a, b int) int {
+  return a+b
 }
 """,
     "govet": """package planted
