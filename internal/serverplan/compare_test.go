@@ -23,7 +23,16 @@ func loadDef(t *testing.T) *serverdef.Definition {
 	return def
 }
 
-func snapshotOf(t *testing.T, def *serverdef.Definition) *Snapshot {
+// boolVal returns the dereferenced boolean pointer value or false if nil.
+func boolVal(p *bool) bool {
+	if p == nil {
+		return false
+	}
+	return *p
+}
+
+// findSpecialRoles indexes definition roles and identifies bot and everyone roles.
+func findSpecialRoles(t *testing.T, def *serverdef.Definition) (map[string]serverdef.Role, *serverdef.Role, *serverdef.Role) {
 	t.Helper()
 	var botRole, everyoneRole *serverdef.Role
 	rolesByID := make(map[string]serverdef.Role, len(def.Roles))
@@ -39,45 +48,36 @@ func snapshotOf(t *testing.T, def *serverdef.Definition) *Snapshot {
 	if botRole == nil || everyoneRole == nil {
 		t.Fatalf("missing bot or everyone role in definition")
 	}
+	return rolesByID, botRole, everyoneRole
+}
 
+// buildSnapshotRoles converts definition roles into the snapshot role slice.
+func buildSnapshotRoles(t *testing.T, def *serverdef.Definition, rolesByID map[string]serverdef.Role, everyoneRole *serverdef.Role) []Role {
+	t.Helper()
 	snapRoles := make([]Role, 0, len(def.RoleOrder)+4)
 	for _, id := range def.RoleOrder {
 		r, ok := rolesByID[id]
 		if !ok {
 			t.Fatalf("role_order id %q not in roles", id)
 		}
-		var shownApart, mentionable bool
-		if r.ShownApart != nil {
-			shownApart = *r.ShownApart
-		}
-		if r.Mentionable != nil {
-			mentionable = *r.Mentionable
-		}
 		snapRoles = append(snapRoles, Role{
 			Name:        r.Name,
 			Everyone:    false,
 			Managed:     r.Kind == "bot",
-			ShownApart:  shownApart,
-			Mentionable: mentionable,
+			ShownApart:  boolVal(r.ShownApart),
+			Mentionable: boolVal(r.Mentionable),
 			Permissions: append([]string(nil), r.Permissions...),
 		})
 	}
 	for i := range def.Roles {
 		r := &def.Roles[i]
 		if r.Kind == "managed" {
-			var shownApart, mentionable bool
-			if r.ShownApart != nil {
-				shownApart = *r.ShownApart
-			}
-			if r.Mentionable != nil {
-				mentionable = *r.Mentionable
-			}
 			snapRoles = append(snapRoles, Role{
 				Name:        r.Name,
 				Everyone:    false,
 				Managed:     true,
-				ShownApart:  shownApart,
-				Mentionable: mentionable,
+				ShownApart:  boolVal(r.ShownApart),
+				Mentionable: boolVal(r.Mentionable),
 				Permissions: append([]string(nil), r.Permissions...),
 			})
 		}
@@ -88,17 +88,17 @@ func snapshotOf(t *testing.T, def *serverdef.Definition) *Snapshot {
 		Managed:     false,
 		Permissions: append([]string(nil), everyoneRole.Permissions...),
 	})
+	return snapRoles
+}
 
-	callerPerms := append([]string(nil), botRole.Permissions...)
-	callerPerms = append(callerPerms, everyoneRole.Permissions...)
-
+// buildSnapshotCategoriesAndChannels converts definition categories and channels.
+func buildSnapshotCategoriesAndChannels(def *serverdef.Definition, rolesByID map[string]serverdef.Role) ([]Category, []Channel) {
 	cats := make([]Category, 0, len(def.Categories))
 	catsByID := make(map[string]string, len(def.Categories))
 	for _, c := range def.Categories {
 		cats = append(cats, Category{Name: c.Name})
 		catsByID[c.ID] = c.Name
 	}
-
 	channels := make([]Channel, 0, len(def.Channels))
 	for _, ch := range def.Channels {
 		catName := catsByID[ch.Category]
@@ -118,6 +118,18 @@ func snapshotOf(t *testing.T, def *serverdef.Definition) *Snapshot {
 			Access:   access,
 		})
 	}
+	return cats, channels
+}
+
+func snapshotOf(t *testing.T, def *serverdef.Definition) *Snapshot {
+	t.Helper()
+	rolesByID, botRole, everyoneRole := findSpecialRoles(t, def)
+	snapRoles := buildSnapshotRoles(t, def, rolesByID, everyoneRole)
+
+	callerPerms := append([]string(nil), botRole.Permissions...)
+	callerPerms = append(callerPerms, everyoneRole.Permissions...)
+
+	cats, channels := buildSnapshotCategoriesAndChannels(def, rolesByID)
 
 	return &Snapshot{
 		Features: []string{"COMMUNITY", "NEWS"},
@@ -146,16 +158,68 @@ func TestCompare_Positive_ServerAsDefined(t *testing.T) {
 	}
 }
 
-func TestCompare_Negative_EachKind(t *testing.T) {
-	def := loadDef(t)
+type compareNegativeKindCase struct {
+	name       string
+	mutate     func(*Snapshot)
+	wantKind   string
+	wantObject string
+	wantWord   string
+}
 
-	tests := []struct {
-		name       string
-		mutate     func(*Snapshot)
-		wantKind   string
-		wantObject string
-		wantWord   string
-	}{
+// renameSnapshotRole renames a role and updates references across snapshot channels.
+func renameSnapshotRole(s *Snapshot, oldName, newName string) {
+	for i := range s.Roles {
+		if s.Roles[i].Name == oldName {
+			s.Roles[i].Name = newName
+		}
+	}
+	s.Caller.Role = newName
+	for i := range s.Channels {
+		for j := range s.Channels[i].Access {
+			if s.Channels[i].Access[j].Role == oldName {
+				s.Channels[i].Access[j].Role = newName
+			}
+		}
+	}
+}
+
+// updateEveryoneAccessOnRules applies a mutate function to @everyone access on the rules channel.
+func updateEveryoneAccessOnRules(s *Snapshot, fn func(a *Access)) {
+	for i := range s.Channels {
+		if s.Channels[i].Name != "rules" {
+			continue
+		}
+		for j := range s.Channels[i].Access {
+			if s.Channels[i].Access[j].Role == "@everyone" {
+				fn(&s.Channels[i].Access[j])
+			}
+		}
+	}
+}
+
+// filterOutChannel returns channels excluding the specified channel name.
+func filterOutChannel(channels []Channel, name string) []Channel {
+	newCh := make([]Channel, 0, len(channels)-1)
+	for _, ch := range channels {
+		if ch.Name != name {
+			newCh = append(newCh, ch)
+		}
+	}
+	return newCh
+}
+
+// setRolePermissions updates the permissions of a named role in the snapshot.
+func setRolePermissions(s *Snapshot, roleName string, perms []string) {
+	for i := range s.Roles {
+		if s.Roles[i].Name == roleName {
+			s.Roles[i].Permissions = perms
+		}
+	}
+}
+
+// compareNegativeKindRoleBasicCases returns negative role test cases for missing, ambiguous, and renamed roles.
+func compareNegativeKindRoleBasicCases() []compareNegativeKindCase {
+	return []compareNegativeKindCase{
 		{
 			name: "role-missing",
 			mutate: func(s *Snapshot) {
@@ -188,32 +252,22 @@ func TestCompare_Negative_EachKind(t *testing.T) {
 		{
 			name: "role-name",
 			mutate: func(s *Snapshot) {
-				for i := range s.Roles {
-					if s.Roles[i].Name == "Diallak" {
-						s.Roles[i].Name = "RenamedBot"
-					}
-				}
-				s.Caller.Role = "RenamedBot"
-				for i := range s.Channels {
-					for j := range s.Channels[i].Access {
-						if s.Channels[i].Access[j].Role == "Diallak" {
-							s.Channels[i].Access[j].Role = "RenamedBot"
-						}
-					}
-				}
+				renameSnapshotRole(s, "Diallak", "RenamedBot")
 			},
 			wantKind:   KindRoleName,
 			wantObject: "roles[bot]",
 			wantWord:   "RenamedBot",
 		},
+	}
+}
+
+// compareNegativeKindRolePermsCases returns negative role test cases for permissions and ordering.
+func compareNegativeKindRolePermsCases() []compareNegativeKindCase {
+	return []compareNegativeKindCase{
 		{
 			name: "role-permissions lacks",
 			mutate: func(s *Snapshot) {
-				for i := range s.Roles {
-					if s.Roles[i].Name == "Diallak" {
-						s.Roles[i].Permissions = []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS"} // lacks MANAGE_GUILD
-					}
-				}
+				setRolePermissions(s, "Diallak", []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS"})
 			},
 			wantKind:   KindRolePermissions,
 			wantObject: "roles[bot]",
@@ -222,11 +276,7 @@ func TestCompare_Negative_EachKind(t *testing.T) {
 		{
 			name: "role-permissions beyond",
 			mutate: func(s *Snapshot) {
-				for i := range s.Roles {
-					if s.Roles[i].Name == "Subject guide: coding" {
-						s.Roles[i].Permissions = []string{"VIEW_AUDIT_LOG"}
-					}
-				}
+				setRolePermissions(s, "Subject guide: coding", []string{"VIEW_AUDIT_LOG"})
 			},
 			wantKind:   KindRolePermissions,
 			wantObject: "roles[guide-coding]",
@@ -242,6 +292,12 @@ func TestCompare_Negative_EachKind(t *testing.T) {
 			wantObject: "role_order",
 			wantWord:   "server:",
 		},
+	}
+}
+
+// compareNegativeKindCategoryCases returns negative category test cases for Compare.
+func compareNegativeKindCategoryCases() []compareNegativeKindCase {
+	return []compareNegativeKindCase{
 		{
 			name: "category-missing",
 			mutate: func(s *Snapshot) {
@@ -266,16 +322,16 @@ func TestCompare_Negative_EachKind(t *testing.T) {
 			wantObject: "categories[staff]",
 			wantWord:   "2",
 		},
+	}
+}
+
+// compareNegativeKindChannelCases returns negative channel test cases for Compare.
+func compareNegativeKindChannelCases() []compareNegativeKindCase {
+	return []compareNegativeKindCase{
 		{
 			name: "channel-missing",
 			mutate: func(s *Snapshot) {
-				newCh := make([]Channel, 0, len(s.Channels)-1)
-				for _, ch := range s.Channels {
-					if ch.Name != "rules" {
-						newCh = append(newCh, ch)
-					}
-				}
-				s.Channels = newCh
+				s.Channels = filterOutChannel(s.Channels, "rules")
 			},
 			wantKind:   KindChannelMissing,
 			wantObject: "channels[rules]",
@@ -320,6 +376,12 @@ func TestCompare_Negative_EachKind(t *testing.T) {
 			wantObject: "channels[rules]",
 			wantWord:   "Community",
 		},
+	}
+}
+
+// compareNegativeKindAccessCases returns negative access test cases for Compare.
+func compareNegativeKindAccessCases() []compareNegativeKindCase {
+	return []compareNegativeKindCase{
 		{
 			name: "access-missing",
 			mutate: func(s *Snapshot) {
@@ -336,15 +398,9 @@ func TestCompare_Negative_EachKind(t *testing.T) {
 		{
 			name: "access-differs allow",
 			mutate: func(s *Snapshot) {
-				for i := range s.Channels {
-					if s.Channels[i].Name == "rules" {
-						for j := range s.Channels[i].Access {
-							if s.Channels[i].Access[j].Role == "@everyone" {
-								s.Channels[i].Access[j].Allow = append(s.Channels[i].Access[j].Allow, "SEND_MESSAGES")
-							}
-						}
-					}
-				}
+				updateEveryoneAccessOnRules(s, func(a *Access) {
+					a.Allow = append(a.Allow, "SEND_MESSAGES")
+				})
 			},
 			wantKind:   KindAccessDiffers,
 			wantObject: "channels[rules].access[everyone]",
@@ -353,21 +409,14 @@ func TestCompare_Negative_EachKind(t *testing.T) {
 		{
 			name: "access-differs deny",
 			mutate: func(s *Snapshot) {
-				for i := range s.Channels {
-					if s.Channels[i].Name == "rules" {
-						for j := range s.Channels[i].Access {
-							if s.Channels[i].Access[j].Role == "@everyone" {
-								s.Channels[i].Access[j].Deny = []string{"ATTACH_FILES"}
-							}
-						}
-					}
-				}
+				updateEveryoneAccessOnRules(s, func(a *Access) {
+					a.Deny = []string{"ATTACH_FILES"}
+				})
 			},
 			wantKind:   KindAccessDiffers,
 			wantObject: "channels[rules].access[everyone]",
 			wantWord:   "deny",
 		},
-
 		{
 			name: "access-extra",
 			mutate: func(s *Snapshot) {
@@ -385,6 +434,12 @@ func TestCompare_Negative_EachKind(t *testing.T) {
 			wantObject: "channels[rules].access[Operator]",
 			wantWord:   "",
 		},
+	}
+}
+
+// compareNegativeKindExtraCases returns negative extra entity test cases for Compare.
+func compareNegativeKindExtraCases() []compareNegativeKindCase {
+	return []compareNegativeKindCase{
 		{
 			name: "role-extra",
 			mutate: func(s *Snapshot) {
@@ -437,6 +492,112 @@ func TestCompare_Negative_EachKind(t *testing.T) {
 			wantWord:   "",
 		},
 	}
+}
+
+// assertCompareNegativeKindDiff verifies the single difference matches expected kind, object, and word.
+func assertCompareNegativeKindDiff(t *testing.T, d Difference, tc compareNegativeKindCase) {
+	t.Helper()
+	if d.Kind != tc.wantKind {
+		t.Errorf("Kind = %q, want %q", d.Kind, tc.wantKind)
+	}
+	if d.Object != tc.wantObject {
+		t.Errorf("Object = %q, want %q", d.Object, tc.wantObject)
+	}
+	if tc.wantWord != "" && !strings.Contains(d.Detail, tc.wantWord) {
+		t.Errorf("Detail %q does not contain word %q", d.Detail, tc.wantWord)
+	}
+}
+
+// runBoundaryVisibilityTicketsMissing verifies missing channel diff when channels are complete.
+func runBoundaryVisibilityTicketsMissing(t *testing.T, def *serverdef.Definition) {
+	t.Helper()
+	s := snapshotOf(t, def)
+	s.ChannelsComplete = true
+	s.Channels = filterOutChannel(s.Channels, "tickets")
+
+	diffs, err := Compare(def, s)
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	if diffs[0].Kind != KindChannelMissing || diffs[0].Object != "channels[tickets]" {
+		t.Errorf("unexpected diff: %+v", diffs[0])
+	}
+}
+
+// runBoundaryVisibilityTicketsHidden verifies channel-not-visible when tickets channel is hidden.
+func runBoundaryVisibilityTicketsHidden(t *testing.T, def *serverdef.Definition) {
+	t.Helper()
+	s := snapshotOf(t, def)
+	s.ChannelsComplete = false
+	s.Channels = filterOutChannel(s.Channels, "tickets")
+
+	diffs, err := Compare(def, s)
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	d := diffs[0]
+	if d.Kind != KindChannelNotVisible || d.Object != "channels[tickets]" {
+		t.Errorf("unexpected diff: %+v", d)
+	}
+	if d.Detail != "hidden from the bot by the definition" {
+		t.Errorf("Detail = %q, want 'hidden from the bot by the definition'", d.Detail)
+	}
+}
+
+// runBoundaryVisibilityLoungeHidden verifies channel-not-visible when lounge is missing or hidden.
+func runBoundaryVisibilityLoungeHidden(t *testing.T, def *serverdef.Definition) {
+	t.Helper()
+	s := snapshotOf(t, def)
+	s.ChannelsComplete = false
+	s.Channels = filterOutChannel(s.Channels, "lounge")
+
+	diffs, err := Compare(def, s)
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	d := diffs[0]
+	if d.Kind != KindChannelNotVisible || d.Object != "channels[lounge]" {
+		t.Errorf("unexpected diff: %+v", d)
+	}
+	if d.Detail != "missing or hidden" {
+		t.Errorf("Detail = %q, want 'missing or hidden'", d.Detail)
+	}
+}
+
+// runBoundaryVisibilityEmptyAccessEntry verifies that empty allow/deny access entries produce no diffs.
+func runBoundaryVisibilityEmptyAccessEntry(t *testing.T, def *serverdef.Definition) {
+	t.Helper()
+	s := snapshotOf(t, def)
+	s.Channels[0].Access = append(s.Channels[0].Access, Access{
+		Role:  "ExtraRole",
+		Allow: []string{},
+		Deny:  []string{},
+	})
+	diffs, err := Compare(def, s)
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(diffs) != 0 {
+		t.Fatalf("expected 0 differences, got %d: %+v", len(diffs), diffs)
+	}
+}
+
+func TestCompare_Negative_EachKind(t *testing.T) {
+	def := loadDef(t)
+	tests := append(compareNegativeKindRoleBasicCases(), compareNegativeKindRolePermsCases()...)
+	tests = append(tests, compareNegativeKindCategoryCases()...)
+	tests = append(tests, compareNegativeKindChannelCases()...)
+	tests = append(tests, compareNegativeKindAccessCases()...)
+	tests = append(tests, compareNegativeKindExtraCases()...)
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -449,16 +610,7 @@ func TestCompare_Negative_EachKind(t *testing.T) {
 			if len(diffs) != 1 {
 				t.Fatalf("expected exactly 1 difference, got %d: %+v", len(diffs), diffs)
 			}
-			d := diffs[0]
-			if d.Kind != tc.wantKind {
-				t.Errorf("Kind = %q, want %q", d.Kind, tc.wantKind)
-			}
-			if d.Object != tc.wantObject {
-				t.Errorf("Object = %q, want %q", d.Object, tc.wantObject)
-			}
-			if tc.wantWord != "" && !strings.Contains(d.Detail, tc.wantWord) {
-				t.Errorf("Detail %q does not contain word %q", d.Detail, tc.wantWord)
-			}
+			assertCompareNegativeKindDiff(t, diffs[0], tc)
 		})
 	}
 }
@@ -467,97 +619,19 @@ func TestCompare_Boundary_Visibility(t *testing.T) {
 	def := loadDef(t)
 
 	t.Run("tickets removed + complete -> channel-missing", func(t *testing.T) {
-		s := snapshotOf(t, def)
-		s.ChannelsComplete = true
-		newCh := make([]Channel, 0, len(s.Channels)-1)
-		for _, ch := range s.Channels {
-			if ch.Name != "tickets" {
-				newCh = append(newCh, ch)
-			}
-		}
-		s.Channels = newCh
-
-		diffs, err := Compare(def, s)
-		if err != nil {
-			t.Fatalf("Compare failed: %v", err)
-		}
-		if len(diffs) != 1 {
-			t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
-		}
-		if diffs[0].Kind != KindChannelMissing || diffs[0].Object != "channels[tickets]" {
-			t.Errorf("unexpected diff: %+v", diffs[0])
-		}
+		runBoundaryVisibilityTicketsMissing(t, def)
 	})
 
 	t.Run("tickets removed + not complete -> channel-not-visible hidden from the bot", func(t *testing.T) {
-		s := snapshotOf(t, def)
-		s.ChannelsComplete = false
-		newCh := make([]Channel, 0, len(s.Channels)-1)
-		for _, ch := range s.Channels {
-			if ch.Name != "tickets" {
-				newCh = append(newCh, ch)
-			}
-		}
-		s.Channels = newCh
-
-		diffs, err := Compare(def, s)
-		if err != nil {
-			t.Fatalf("Compare failed: %v", err)
-		}
-		if len(diffs) != 1 {
-			t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
-		}
-		d := diffs[0]
-		if d.Kind != KindChannelNotVisible || d.Object != "channels[tickets]" {
-			t.Errorf("unexpected diff: %+v", d)
-		}
-		if d.Detail != "hidden from the bot by the definition" {
-			t.Errorf("Detail = %q, want 'hidden from the bot by the definition'", d.Detail)
-		}
+		runBoundaryVisibilityTicketsHidden(t, def)
 	})
 
 	t.Run("lounge removed + not complete -> channel-not-visible missing or hidden", func(t *testing.T) {
-		s := snapshotOf(t, def)
-		s.ChannelsComplete = false
-		newCh := make([]Channel, 0, len(s.Channels)-1)
-		for _, ch := range s.Channels {
-			if ch.Name != "lounge" {
-				newCh = append(newCh, ch)
-			}
-		}
-		s.Channels = newCh
-
-		diffs, err := Compare(def, s)
-		if err != nil {
-			t.Fatalf("Compare failed: %v", err)
-		}
-		if len(diffs) != 1 {
-			t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
-		}
-		d := diffs[0]
-		if d.Kind != KindChannelNotVisible || d.Object != "channels[lounge]" {
-			t.Errorf("unexpected diff: %+v", d)
-		}
-		if d.Detail != "missing or hidden" {
-			t.Errorf("Detail = %q, want 'missing or hidden'", d.Detail)
-		}
+		runBoundaryVisibilityLoungeHidden(t, def)
 	})
 
 	t.Run("entry with empty allow and deny added -> 0 differences", func(t *testing.T) {
-		s := snapshotOf(t, def)
-		// Add empty entry to first channel
-		s.Channels[0].Access = append(s.Channels[0].Access, Access{
-			Role:  "ExtraRole",
-			Allow: []string{},
-			Deny:  []string{},
-		})
-		diffs, err := Compare(def, s)
-		if err != nil {
-			t.Fatalf("Compare failed: %v", err)
-		}
-		if len(diffs) != 0 {
-			t.Fatalf("expected 0 differences, got %d: %+v", len(diffs), diffs)
-		}
+		runBoundaryVisibilityEmptyAccessEntry(t, def)
 	})
 }
 
