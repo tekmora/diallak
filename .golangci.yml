@@ -14,7 +14,19 @@ linters:
     - ineffassign
     - bodyclose
     - noctx
+    # HISS-04: cyclomatic <= 12, cognitive <= 15, <= 60 lines and <= 55
+    # statements per function. Each linter reports above its limit.
+    - gocyclo
+    - gocognit
+    - funlen
   settings:
+    gocyclo:
+      min-complexity: 12
+    gocognit:
+      min-complexity: 15
+    funlen:
+      lines: 60
+      statements: 55
     errcheck:
       check-type-assertions: true
       check-blank: true
