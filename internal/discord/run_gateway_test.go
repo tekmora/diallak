@@ -206,7 +206,10 @@ func assertDeferredReply(t *testing.T, calls []gatewayCall, id uint64, want stri
 			id, got[0].method, got[0].path, got[0].body, callback)
 	}
 	edit := fmt.Sprintf("/webhooks/%d/interaction-token-%d/messages/@original", gatewayAppID, id)
-	content, _ := got[1].body["content"].(string)
+	content, ok := got[1].body["content"].(string)
+	if !ok {
+		t.Errorf("interaction %d: the edit holds no text content: %v", id, got[1].body)
+	}
 	if got[1].method != http.MethodPatch || got[1].path != edit || !strings.Contains(content, want) {
 		t.Errorf("interaction %d: second request %s %s with content %q, want PATCH %s containing %q",
 			id, got[1].method, got[1].path, content, edit, want)
