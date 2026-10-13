@@ -75,6 +75,45 @@ func positionPatches(t *testing.T, recorded []recordedCall) [][]positionEntry {
 	return res
 }
 
+// assertPositionPatches verifies the patches and audit reasons for a role order test.
+func assertPositionPatches(t *testing.T, recorded []recordedCall, want []positionEntry, wantReason string) {
+	t.Helper()
+	assertRequestCounts(t, recorded, 1, 1)
+	patches := positionPatches(t, recorded)
+	if len(patches) != 1 {
+		t.Fatalf("position updates = %d, want 1", len(patches))
+	}
+	if len(patches[0]) != len(want) {
+		t.Fatalf("position update = %+v, want %+v", patches[0], want)
+	}
+	for i := range want {
+		if patches[0][i] != want[i] {
+			t.Errorf("entry %d = %+v, want %+v", i, patches[0][i], want[i])
+		}
+	}
+	for _, call := range recorded {
+		expected := wantReason
+		if call.method == http.MethodGet {
+			expected = ""
+		}
+		if call.auditReason != expected {
+			t.Errorf("%s %s audit reason = %q, want %q", call.method, call.path, call.auditReason, expected)
+		}
+	}
+}
+
+// runRoleOrderSubtest executes one role order scenario and verifies its output.
+func runRoleOrderSubtest(t *testing.T, roles []fakeRole, want []positionEntry, wantReason string) {
+	t.Helper()
+	fake := newFakePlatform(t, orderGuildID, orderBotUserID, orderBotRoleID)
+	fake.roles = roles
+	err := runOrderChange(t, fake, roles, "operator, contributor, supporter", 10*time.Second)
+	if err != nil {
+		t.Fatalf("set-role-order error = %v, want nil", err)
+	}
+	assertPositionPatches(t, fake.getRecorded(), want, wantReason)
+}
+
 func TestApplySetRoleOrder_Positive_OnePatchWithEveryRoleBelow(t *testing.T) {
 	operator := fakeRole{id: 4001, name: "Operator"}
 	contributor := fakeRole{id: 6001, name: "Contributor"}
@@ -108,35 +147,7 @@ func TestApplySetRoleOrder_Positive_OnePatchWithEveryRoleBelow(t *testing.T) {
 	wantReason := orderAuditReason()
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			fake := newFakePlatform(t, orderGuildID, orderBotUserID, orderBotRoleID)
-			fake.roles = tc.roles
-			err := runOrderChange(t, fake, tc.roles, "operator, contributor, supporter", 10*time.Second)
-			if err != nil {
-				t.Fatalf("set-role-order error = %v, want nil", err)
-			}
-			recorded := fake.getRecorded()
-			assertRequestCounts(t, recorded, 1, 1)
-			patches := positionPatches(t, recorded)
-			if len(patches) != 1 {
-				t.Fatalf("position updates = %d, want 1", len(patches))
-			}
-			if len(patches[0]) != len(tc.want) {
-				t.Fatalf("position update = %+v, want %+v", patches[0], tc.want)
-			}
-			for i := range tc.want {
-				if patches[0][i] != tc.want[i] {
-					t.Errorf("entry %d = %+v, want %+v", i, patches[0][i], tc.want[i])
-				}
-			}
-			for _, call := range recorded {
-				want := wantReason
-				if call.method == http.MethodGet {
-					want = ""
-				}
-				if call.auditReason != want {
-					t.Errorf("%s %s audit reason = %q, want %q", call.method, call.path, call.auditReason, want)
-				}
-			}
+			runRoleOrderSubtest(t, tc.roles, tc.want, wantReason)
 		})
 	}
 }

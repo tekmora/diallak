@@ -108,35 +108,9 @@ func runDisplayChangeForCallsTest(
 	}
 }
 
-func TestServerApplyCalls_Positive_FullRunDisplayAndEntryChange(t *testing.T) {
-	ctx := context.Background()
-	const (
-		guildID   uint64 = 1001
-		botUserID uint64 = 2001
-		botRoleID uint64 = 3001
-	)
-	fakeToken := makeFakeToken(botUserID)
-	def, err := server.Definition()
-	if err != nil {
-		t.Fatalf("server.Definition: %v", err)
-	}
-	defDigest := server.DefinitionDigest()
-
-	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
-	srv := fake.server()
-	defer srv.Close()
-
-	opts := clientOptions{restURL: srv.URL}
-	runFirstSetUpForCallsTest(t, ctx, fakeToken, guildID, def, defDigest, opts)
-
-	snapAfter, err := readServerWithOptions(ctx, fakeToken, guildID, opts)
-	if err != nil {
-		t.Fatalf("readServerWithOptions after: %v", err)
-	}
-	if _, err = serverplan.Compare(def, snapAfter); err != nil {
-		t.Fatalf("Compare: %v", err)
-	}
-
+// mutateServerStateForDriftTest simulates client drag, role display change, and dropped channel overwrite.
+func mutateServerStateForDriftTest(t *testing.T, fake *fakePlatform) {
+	t.Helper()
 	// The operator sorts the roles in the client, which numbers them without
 	// gaps, and swaps two roles below the bot's: the run sorts them back.
 	fake.dragInClient(t, func(shown []fakeRole) []fakeRole {
@@ -167,9 +141,11 @@ func TestServerApplyCalls_Positive_FullRunDisplayAndEntryChange(t *testing.T) {
 	if !dropped {
 		t.Fatal("no channel of the local server holds an entry to drop")
 	}
-	runDisplayChangeForCallsTest(t, ctx, fakeToken, guildID, def, defDigest, opts)
+}
 
-	recorded := fake.getRecorded()
+// assertAllowedCallShapes verifies recorded calls match the allowed shapes allow-list.
+func assertAllowedCallShapes(t *testing.T, recorded []recordedCall) {
+	t.Helper()
 	outside := callsOutsideList(recorded)
 	if len(outside) != 0 {
 		t.Errorf("calls outside allow-list: %v", outside)
@@ -183,6 +159,41 @@ func TestServerApplyCalls_Positive_FullRunDisplayAndEntryChange(t *testing.T) {
 			t.Errorf("allow-list entry %q was made by no run", shape)
 		}
 	}
+}
+
+func TestServerApplyCalls_Positive_FullRunDisplayAndEntryChange(t *testing.T) {
+	ctx := context.Background()
+	const (
+		guildID   uint64 = 1001
+		botUserID uint64 = 2001
+		botRoleID uint64 = 3001
+	)
+	fakeToken := makeFakeToken(botUserID)
+	def, err := server.Definition()
+	if err != nil {
+		t.Fatalf("server.Definition: %v", err)
+	}
+	defDigest := server.DefinitionDigest()
+
+	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
+	srv := fake.server()
+	defer srv.Close()
+
+	opts := clientOptions{restURL: srv.URL}
+	runFirstSetUpForCallsTest(t, ctx, fakeToken, guildID, def, defDigest, opts)
+
+	snapAfter, err := readServerWithOptions(ctx, fakeToken, guildID, opts)
+	if err != nil {
+		t.Fatalf("readServerWithOptions after: %v", err)
+	}
+	if _, err = serverplan.Compare(def, snapAfter); err != nil {
+		t.Fatalf("Compare: %v", err)
+	}
+
+	mutateServerStateForDriftTest(t, fake)
+	runDisplayChangeForCallsTest(t, ctx, fakeToken, guildID, def, defDigest, opts)
+
+	assertAllowedCallShapes(t, fake.getRecorded())
 }
 
 func TestServerApplyCalls_Negative_SyntheticCallsOutsideList(t *testing.T) {
