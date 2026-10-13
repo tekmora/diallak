@@ -9,7 +9,7 @@ import (
 func TestUnwrap_Positive_ReturnsUnderlyingError(t *testing.T) {
 	base := errors.New("underlying transport failure")
 	te := &TransportError{Err: base}
-	if got := te.Unwrap(); got != base {
+	if got := te.Unwrap(); !errors.Is(got, base) {
 		t.Fatalf("Unwrap() = %v, want %v", got, base)
 	}
 }
@@ -17,8 +17,12 @@ func TestUnwrap_Positive_ReturnsUnderlyingError(t *testing.T) {
 func TestUnwrap_Negative_PreservesExactErrorIdentity(t *testing.T) {
 	base := errors.New("underlying network down")
 	te := &TransportError{Err: base}
-	if got := te.Unwrap(); got != base {
+	got := te.Unwrap()
+	if !errors.Is(got, base) {
 		t.Fatalf("Unwrap() = %v, want exact original %v", got, base)
+	}
+	if copyOfBase := errors.New(base.Error()); errors.Is(got, copyOfBase) {
+		t.Fatalf("Unwrap() = %v matches a different error with the same text", got)
 	}
 }
 

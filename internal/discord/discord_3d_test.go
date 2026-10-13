@@ -37,12 +37,10 @@ func TestRegisterCommands_Boundary_MaxQuestionRunesAllowed(t *testing.T) {
 	const guildID = 987654321098765432
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/applications/@me" {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprintf(w, `{"id":"%d","name":"diallak"}`, appID)
+			writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"diallak"}`, appID))
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte("[]"))
+		writeTestResponse(w, http.StatusOK, "[]")
 	}))
 	defer srv.Close()
 
