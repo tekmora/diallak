@@ -50,6 +50,12 @@
             "context": "governance (praetor)"
           },
           {
+            "context": "image (amd64)"
+          },
+          {
+            "context": "image (arm64)"
+          },
+          {
             "context": "REUSE lint"
           },
           {
