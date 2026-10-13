@@ -139,58 +139,76 @@ func rightsNamedAnywhere(def *serverdef.Definition) map[string]struct{} {
 	return named
 }
 
+// testDefinitionNoSendPollsCommitted verifies that committed definition has no SEND_POLLS.
+func testDefinitionNoSendPollsCommitted(t *testing.T) {
+	t.Helper()
+	def, err := Definition()
+	if err != nil {
+		t.Fatalf("Definition() error = %v", err)
+	}
+	named := rightsNamedAnywhere(def)
+	if _, ok := named["SEND_POLLS"]; ok {
+		t.Errorf("committed definition names SEND_POLLS in role permissions or channel allow")
+	}
+}
+
+// testDefinitionNoSendPollsOnEveryone verifies helper detects SEND_POLLS on everyone role.
+func testDefinitionNoSendPollsOnEveryone(t *testing.T) {
+	t.Helper()
+	def, err := Definition()
+	if err != nil {
+		t.Fatalf("Definition() error = %v", err)
+	}
+	rolesCopy := make([]serverdef.Role, len(def.Roles))
+	copy(rolesCopy, def.Roles)
+	for i, r := range rolesCopy {
+		if r.Kind == "everyone" {
+			rolesCopy[i].Permissions = append(append([]string{}, r.Permissions...), "SEND_POLLS")
+		}
+	}
+	copyDef := *def
+	copyDef.Roles = rolesCopy
+	named := rightsNamedAnywhere(&copyDef)
+	if _, ok := named["SEND_POLLS"]; !ok {
+		t.Errorf("rightsNamedAnywhere did not report SEND_POLLS when added to @everyone")
+	}
+}
+
+// testDefinitionNoSendPollsOnChannel verifies helper detects SEND_POLLS when allowed on a channel.
+func testDefinitionNoSendPollsOnChannel(t *testing.T) {
+	t.Helper()
+	def, err := Definition()
+	if err != nil {
+		t.Fatalf("Definition() error = %v", err)
+	}
+	if len(def.Channels) == 0 || len(def.Channels[0].Access) == 0 {
+		t.Fatal("first channel of the definition holds no entry")
+	}
+	channelsCopy := make([]serverdef.Channel, len(def.Channels))
+	copy(channelsCopy, def.Channels)
+	accessCopy := make([]serverdef.Access, len(channelsCopy[0].Access))
+	copy(accessCopy, channelsCopy[0].Access)
+	accessCopy[0].Allow = append(append([]string{}, accessCopy[0].Allow...), "SEND_POLLS")
+	channelsCopy[0].Access = accessCopy
+	copyDef := *def
+	copyDef.Channels = channelsCopy
+	if _, ok := rightsNamedAnywhere(&copyDef)["SEND_POLLS"]; !ok {
+		t.Errorf("rightsNamedAnywhere did not report SEND_POLLS allowed by an entry on a channel")
+	}
+}
+
 func TestDefinition_Boundary_NoSendPolls(t *testing.T) {
 	// members send no polls; a vote that counts runs through the wishes and polls path, ADR-0015
 	t.Run("committed definition names no SEND_POLLS", func(t *testing.T) {
-		def, err := Definition()
-		if err != nil {
-			t.Fatalf("Definition() error = %v", err)
-		}
-		named := rightsNamedAnywhere(def)
-		if _, ok := named["SEND_POLLS"]; ok {
-			t.Errorf("committed definition names SEND_POLLS in role permissions or channel allow")
-		}
+		testDefinitionNoSendPollsCommitted(t)
 	})
 
 	t.Run("helper reports SEND_POLLS when present on everyone", func(t *testing.T) {
-		def, err := Definition()
-		if err != nil {
-			t.Fatalf("Definition() error = %v", err)
-		}
-		rolesCopy := make([]serverdef.Role, len(def.Roles))
-		copy(rolesCopy, def.Roles)
-		for i, r := range rolesCopy {
-			if r.Kind == "everyone" {
-				rolesCopy[i].Permissions = append(append([]string{}, r.Permissions...), "SEND_POLLS")
-			}
-		}
-		copyDef := *def
-		copyDef.Roles = rolesCopy
-		named := rightsNamedAnywhere(&copyDef)
-		if _, ok := named["SEND_POLLS"]; !ok {
-			t.Errorf("rightsNamedAnywhere did not report SEND_POLLS when added to @everyone")
-		}
+		testDefinitionNoSendPollsOnEveryone(t)
 	})
 
 	t.Run("helper reports SEND_POLLS when an entry on a channel allows it", func(t *testing.T) {
-		def, err := Definition()
-		if err != nil {
-			t.Fatalf("Definition() error = %v", err)
-		}
-		if len(def.Channels) == 0 || len(def.Channels[0].Access) == 0 {
-			t.Fatal("first channel of the definition holds no entry")
-		}
-		channelsCopy := make([]serverdef.Channel, len(def.Channels))
-		copy(channelsCopy, def.Channels)
-		accessCopy := make([]serverdef.Access, len(channelsCopy[0].Access))
-		copy(accessCopy, channelsCopy[0].Access)
-		accessCopy[0].Allow = append(append([]string{}, accessCopy[0].Allow...), "SEND_POLLS")
-		channelsCopy[0].Access = accessCopy
-		copyDef := *def
-		copyDef.Channels = channelsCopy
-		if _, ok := rightsNamedAnywhere(&copyDef)["SEND_POLLS"]; !ok {
-			t.Errorf("rightsNamedAnywhere did not report SEND_POLLS allowed by an entry on a channel")
-		}
+		testDefinitionNoSendPollsOnChannel(t)
 	})
 }
 
@@ -265,6 +283,25 @@ func holdsAny(have, want []string) bool {
 	return false
 }
 
+// supporterChannelGaps returns gaps where a channel allows rights to id that honorary supporter does not hold.
+func supporterChannelGaps(def *serverdef.Definition, id string) []string {
+	var gaps []string
+	for _, ch := range def.Channels {
+		theirs := entryFor(ch, id)
+		if theirs == nil {
+			continue
+		}
+		ours := entryFor(ch, "honorary-supporter")
+		if ours == nil {
+			ours = &serverdef.Access{}
+		}
+		if !holdsAll(ours.Allow, theirs.Allow) || holdsAny(ours.Deny, theirs.Allow) {
+			gaps = append(gaps, "channels["+ch.ID+"].access")
+		}
+	}
+	return gaps
+}
+
 // supporterStandingGaps lists every place where the definition gives a supporter role something the
 // Honorary supporter role does not get: a right on the role, or what an entry on a channel allows. ADR-0016.
 func supporterStandingGaps(def *serverdef.Definition) []string {
@@ -282,19 +319,7 @@ func supporterStandingGaps(def *serverdef.Definition) []string {
 		if !holdsAll(honorary.Permissions, given.Permissions) {
 			gaps = append(gaps, "roles[honorary-supporter].permissions")
 		}
-		for _, ch := range def.Channels {
-			theirs := entryFor(ch, id)
-			if theirs == nil {
-				continue
-			}
-			ours := entryFor(ch, "honorary-supporter")
-			if ours == nil {
-				ours = &serverdef.Access{}
-			}
-			if !holdsAll(ours.Allow, theirs.Allow) || holdsAny(ours.Deny, theirs.Allow) {
-				gaps = append(gaps, "channels["+ch.ID+"].access")
-			}
-		}
+		gaps = append(gaps, supporterChannelGaps(def, id)...)
 	}
 	return gaps
 }
@@ -419,12 +444,9 @@ func TestDefinition_Negative_SupporterStandingRolesAndRights(t *testing.T) {
 	})
 }
 
-func TestDefinition_Positive_HonoraryAndThirdGuideRole(t *testing.T) {
-	// two roles the operator gives by hand, both above the bot's role, ADR-0016
-	def, err := Definition()
-	if err != nil {
-		t.Fatalf("Definition() error = %v", err)
-	}
+// verifyManualRoleAttributes checks name, kind, assignment, and permissions for honorary and guide roles.
+func verifyManualRoleAttributes(t *testing.T, def *serverdef.Definition) {
+	t.Helper()
 	names := map[string]string{
 		"honorary-supporter":         "Honorary supporter",
 		"guide-software-engineering": "Subject guide: software engineering",
@@ -442,6 +464,11 @@ func TestDefinition_Positive_HonoraryAndThirdGuideRole(t *testing.T) {
 			t.Errorf("role %s holds a right or states how it is shown", id)
 		}
 	}
+}
+
+// verifyManualRoleOrdering checks that honorary supporter and subject guide roles stand in the required positions.
+func verifyManualRoleOrdering(t *testing.T, def *serverdef.Definition) {
+	t.Helper()
 	place := make(map[string]int, len(def.RoleOrder))
 	for i, id := range def.RoleOrder {
 		place[id] = i
@@ -454,4 +481,14 @@ func TestDefinition_Positive_HonoraryAndThirdGuideRole(t *testing.T) {
 		t.Errorf("the three subject guide roles do not stand together: coding %d, video %d, software engineering %d",
 			place["guide-coding"], place["guide-video"], place["guide-software-engineering"])
 	}
+}
+
+func TestDefinition_Positive_HonoraryAndThirdGuideRole(t *testing.T) {
+	// two roles the operator gives by hand, both above the bot's role, ADR-0016
+	def, err := Definition()
+	if err != nil {
+		t.Fatalf("Definition() error = %v", err)
+	}
+	verifyManualRoleAttributes(t, def)
+	verifyManualRoleOrdering(t, def)
 }

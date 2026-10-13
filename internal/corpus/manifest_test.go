@@ -196,59 +196,71 @@ func TestLoadAll_Negative_Errors(t *testing.T) {
 	})
 }
 
+// testLoadManifestSourceCountLimits verifies manifest parsing at and beyond MaxSources limit.
+func testLoadManifestSourceCountLimits(t *testing.T) {
+	t.Helper()
+	var sourcesAtLimit []string
+	for i := 0; i < MaxSources; i++ {
+		sourcesAtLimit = append(sourcesAtLimit, fmt.Sprintf(
+			`{"directory": "dir%d", "repository": "repo/name%d", "revision": "rev", "paths": ["*.md"]}`, i, i))
+	}
+	jsonAtLimit := fmt.Sprintf(`{"version": 1, "sources": [%s]}`, strings.Join(sourcesAtLimit, ","))
+	fsys := fstest.MapFS{
+		ManifestName: &fstest.MapFile{Data: []byte(jsonAtLimit)},
+	}
+	m, err := LoadManifest(fsys)
+	if err != nil {
+		t.Fatalf("LoadManifest with MaxSources = %v, want nil", err)
+	}
+	if len(m.Sources) != MaxSources {
+		t.Errorf("len(m.Sources) = %d, want %d", len(m.Sources), MaxSources)
+	}
+
+	// MaxSources + 1
+	sourcesOver := append(sourcesAtLimit, fmt.Sprintf(
+		`{"directory": "dir%d", "repository": "repo/name%d", "revision": "rev", "paths": ["*.md"]}`, MaxSources, MaxSources))
+	jsonOver := fmt.Sprintf(`{"version": 1, "sources": [%s]}`, strings.Join(sourcesOver, ","))
+	fsysOver := fstest.MapFS{
+		ManifestName: &fstest.MapFile{Data: []byte(jsonOver)},
+	}
+	if _, err := LoadManifest(fsysOver); err == nil || !strings.Contains(err.Error(), "exceeding limit") {
+		t.Fatalf("LoadManifest over MaxSources = %v, want exceeding limit error", err)
+	}
+}
+
+// testLoadManifestFileSizeLimit verifies manifest parsing at and beyond MaxManifestBytes limit.
+func testLoadManifestFileSizeLimit(t *testing.T) {
+	t.Helper()
+	// Create padded valid JSON up to MaxManifestBytes
+	base := validManifestJSON()
+	paddingLen := MaxManifestBytes - len(base)
+	if paddingLen > 0 {
+		padded := base + strings.Repeat(" ", paddingLen)
+		fsys := fstest.MapFS{
+			ManifestName: &fstest.MapFile{Data: []byte(padded)},
+		}
+		if _, err := LoadManifest(fsys); err != nil {
+			t.Fatalf("LoadManifest at MaxManifestBytes = %v, want nil", err)
+		}
+	}
+
+	// Over limit
+	paddedOver := base + strings.Repeat(" ", MaxManifestBytes-len(base)+1)
+	fsysOver := fstest.MapFS{
+		ManifestName: &fstest.MapFile{Data: []byte(paddedOver)},
+	}
+	if _, err := LoadManifest(fsysOver); err == nil || !strings.Contains(err.Error(), "exceeds max size") {
+		t.Fatalf("LoadManifest over MaxManifestBytes = %v, want exceeds max size error", err)
+	}
+}
+
 func TestLoadManifest_Boundary_SizeAndSourceCount(t *testing.T) {
 	t.Run("source count limits", func(t *testing.T) {
-		var sourcesAtLimit []string
-		for i := 0; i < MaxSources; i++ {
-			sourcesAtLimit = append(sourcesAtLimit, fmt.Sprintf(
-				`{"directory": "dir%d", "repository": "repo/name%d", "revision": "rev", "paths": ["*.md"]}`, i, i))
-		}
-		jsonAtLimit := fmt.Sprintf(`{"version": 1, "sources": [%s]}`, strings.Join(sourcesAtLimit, ","))
-		fsys := fstest.MapFS{
-			ManifestName: &fstest.MapFile{Data: []byte(jsonAtLimit)},
-		}
-		m, err := LoadManifest(fsys)
-		if err != nil {
-			t.Fatalf("LoadManifest with MaxSources = %v, want nil", err)
-		}
-		if len(m.Sources) != MaxSources {
-			t.Errorf("len(m.Sources) = %d, want %d", len(m.Sources), MaxSources)
-		}
-
-		// MaxSources + 1
-		sourcesOver := append(sourcesAtLimit, fmt.Sprintf(
-			`{"directory": "dir%d", "repository": "repo/name%d", "revision": "rev", "paths": ["*.md"]}`, MaxSources, MaxSources))
-		jsonOver := fmt.Sprintf(`{"version": 1, "sources": [%s]}`, strings.Join(sourcesOver, ","))
-		fsysOver := fstest.MapFS{
-			ManifestName: &fstest.MapFile{Data: []byte(jsonOver)},
-		}
-		if _, err := LoadManifest(fsysOver); err == nil || !strings.Contains(err.Error(), "exceeding limit") {
-			t.Fatalf("LoadManifest over MaxSources = %v, want exceeding limit error", err)
-		}
+		testLoadManifestSourceCountLimits(t)
 	})
 
 	t.Run("manifest file size limit", func(t *testing.T) {
-		// Create padded valid JSON up to MaxManifestBytes
-		base := validManifestJSON()
-		paddingLen := MaxManifestBytes - len(base)
-		if paddingLen > 0 {
-			padded := base + strings.Repeat(" ", paddingLen)
-			fsys := fstest.MapFS{
-				ManifestName: &fstest.MapFile{Data: []byte(padded)},
-			}
-			if _, err := LoadManifest(fsys); err != nil {
-				t.Fatalf("LoadManifest at MaxManifestBytes = %v, want nil", err)
-			}
-		}
-
-		// Over limit
-		paddedOver := base + strings.Repeat(" ", MaxManifestBytes-len(base)+1)
-		fsysOver := fstest.MapFS{
-			ManifestName: &fstest.MapFile{Data: []byte(paddedOver)},
-		}
-		if _, err := LoadManifest(fsysOver); err == nil || !strings.Contains(err.Error(), "exceeds max size") {
-			t.Fatalf("LoadManifest over MaxManifestBytes = %v, want exceeds max size error", err)
-		}
+		testLoadManifestFileSizeLimit(t)
 	})
 }
 
