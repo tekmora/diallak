@@ -179,3 +179,55 @@ jobs:
           echo "clean case: $CLEAN, missing-licence case: $MISSING"
           test "$CLEAN" = success
           test "$MISSING" = failure
+
+  # Builds the image on a runner of each architecture it is released for and
+  # runs it there without a network or configuration: the binary must start
+  # and refuse to run without configuration, the image must run as 65532, and
+  # the files in the image and the binary must stay under the limits below.
+  # The script first plants a case for each check and fails unless each is
+  # reported. The limits are about 10 % over the amd64 build of 2026-10-13
+  # (13,459,649 and 11,092,128 bytes); raising one is a reviewed change.
+  image:
+    name: image (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-26.04
+          - arch: arm64
+            runner: ubuntu-26.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      ARCH: ${{ matrix.arch }}
+      MAX_IMAGE_BYTES: 14800000
+      MAX_BINARY_BYTES: 12200000
+    steps:
+      - name: Stop on a draft pull request
+        if: github.event.pull_request.draft == true
+        shell: bash
+        env:
+          TITLE: Gate not run on a draft
+          MESSAGE: >-
+            The gate did not run because the pull request is a draft.
+            It runs when the pull request is marked ready for review.
+        run: |
+          echo "::error title=$TITLE::$MESSAGE"
+          echo "$MESSAGE" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+      # yamllint disable-line rule:line-length
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        if: github.event.pull_request.draft != true
+        with:
+          persist-credentials: false
+      - name: Build the image
+        if: github.event.pull_request.draft != true
+        run: docker build --platform "linux/$ARCH" --tag diallak-smoke:ci .
+      - name: Run the image
+        if: github.event.pull_request.draft != true
+        run: >-
+          python3 -I tools/ci/image_smoke.py
+          --image diallak-smoke:ci --arch "$ARCH"
+          --max-image-bytes "$MAX_IMAGE_BYTES"
+          --max-binary-bytes "$MAX_BINARY_BYTES"
