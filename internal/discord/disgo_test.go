@@ -27,6 +27,31 @@ import (
 	"github.com/tekmora/diallak/internal/answer"
 )
 
+// assertCommandOptionProperties asserts option fields for buildCommandCreate.
+func assertCommandOptionProperties(t *testing.T, slashCmd discord.SlashCommandCreate) {
+	t.Helper()
+	if len(slashCmd.Options) != 1 {
+		t.Fatalf("options len = %d, want 1", len(slashCmd.Options))
+	}
+
+	opt, ok := slashCmd.Options[0].(discord.ApplicationCommandOptionString)
+	if !ok {
+		t.Fatalf("option 0 is not ApplicationCommandOptionString: %T", slashCmd.Options[0])
+	}
+	if opt.Name != OptionQuestion {
+		t.Errorf("option name = %q, want %q", opt.Name, OptionQuestion)
+	}
+	if !opt.Required {
+		t.Errorf("option required = false, want true")
+	}
+	if opt.MaxLength == nil || *opt.MaxLength != answer.MaxQuestionRunes {
+		t.Errorf("option max length = %v, want %d", opt.MaxLength, answer.MaxQuestionRunes)
+	}
+	if opt.Description == "" {
+		t.Errorf("option description is empty")
+	}
+}
+
 func TestBuildCommandCreate_Positive_Properties(t *testing.T) {
 	cmd := buildCommandCreate(0)
 
@@ -48,26 +73,8 @@ func TestBuildCommandCreate_Positive_Properties(t *testing.T) {
 	if slashCmd.Description != wantDesc {
 		t.Errorf("command description = %q, want %q", slashCmd.Description, wantDesc)
 	}
-	if len(slashCmd.Options) != 1 {
-		t.Fatalf("options len = %d, want 1", len(slashCmd.Options))
-	}
 
-	opt, ok := slashCmd.Options[0].(discord.ApplicationCommandOptionString)
-	if !ok {
-		t.Fatalf("option 0 is not ApplicationCommandOptionString: %T", slashCmd.Options[0])
-	}
-	if opt.Name != OptionQuestion {
-		t.Errorf("option name = %q, want %q", opt.Name, OptionQuestion)
-	}
-	if !opt.Required {
-		t.Errorf("option required = false, want true")
-	}
-	if opt.MaxLength == nil || *opt.MaxLength != answer.MaxQuestionRunes {
-		t.Errorf("option max length = %v, want %d", opt.MaxLength, answer.MaxQuestionRunes)
-	}
-	if opt.Description == "" {
-		t.Errorf("option description is empty")
-	}
+	assertCommandOptionProperties(t, slashCmd)
 }
 
 func TestBuildCommandCreate_Positive_CustomMaxQuestionLength(t *testing.T) {
@@ -225,13 +232,14 @@ func TestSanitizeToken_Positive_And_Negative(t *testing.T) {
 	}
 }
 
-func TestNewHandler_Negative_ValidationErrors(t *testing.T) {
-	asker := &fakeAsker{}
+type handlerValidationCase struct {
+	name string
+	cfg  HandlerConfig
+}
 
-	cases := []struct {
-		name string
-		cfg  HandlerConfig
-	}{
+// makeHandlerConcurrencyValidationCases builds validation cases for concurrency and basic settings.
+func makeHandlerConcurrencyValidationCases(asker Asker) []handlerValidationCase {
+	return []handlerValidationCase{
 		{
 			name: "nil asker",
 			cfg: HandlerConfig{
@@ -262,6 +270,12 @@ func TestNewHandler_Negative_ValidationErrors(t *testing.T) {
 				MaxConcurrent: 65,
 			},
 		},
+	}
+}
+
+// makeHandlerTimeoutValidationCases builds validation cases for timeout configurations.
+func makeHandlerTimeoutValidationCases(asker Asker) []handlerValidationCase {
+	return []handlerValidationCase{
 		{
 			name: "negative ask timeout",
 			cfg: HandlerConfig{
@@ -295,6 +309,11 @@ func TestNewHandler_Negative_ValidationErrors(t *testing.T) {
 			},
 		},
 	}
+}
+
+func TestNewHandler_Negative_ValidationErrors(t *testing.T) {
+	asker := &fakeAsker{}
+	cases := append(makeHandlerConcurrencyValidationCases(asker), makeHandlerTimeoutValidationCases(asker)...)
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -514,22 +533,15 @@ func TestRegisterCommands_NegativeControl_FailsIfTokenDerivedIDUsed(t *testing.T
 	assertRecordedCommandPath(t, copied, idA, idB, guildID)
 }
 
-func TestRegisterCommands_Negative_LookupFailuresFailClosed(t *testing.T) {
-	cleanupCh := make(chan struct{})
-	t.Cleanup(func() { close(cleanupCh) })
+type lookupFailureTestCase struct {
+	name    string
+	handler http.HandlerFunc
+	ctxFn   func() (context.Context, context.CancelFunc)
+}
 
-	const (
-		idA     uint64 = 111111111111111111
-		guildID uint64 = 333333333333333333
-	)
-	// NOTE: synthetic token for unit testing, not a real credential.
-	fakeToken := makeFakeToken(idA)
-
-	cases := []struct {
-		name    string
-		handler http.HandlerFunc
-		ctxFn   func() (context.Context, context.CancelFunc)
-	}{
+// makeLookupFailureCases returns negative test cases for command registration lookup failures.
+func makeLookupFailureCases(cleanupCh <-chan struct{}) []lookupFailureTestCase {
+	return []lookupFailureTestCase{
 		{
 			name: "status 401",
 			handler: func(w http.ResponseWriter, _ *http.Request) {
@@ -578,6 +590,19 @@ func TestRegisterCommands_Negative_LookupFailuresFailClosed(t *testing.T) {
 			},
 		},
 	}
+}
+
+func TestRegisterCommands_Negative_LookupFailuresFailClosed(t *testing.T) {
+	cleanupCh := make(chan struct{})
+	t.Cleanup(func() { close(cleanupCh) })
+
+	const (
+		idA     uint64 = 111111111111111111
+		guildID uint64 = 333333333333333333
+	)
+	// NOTE: synthetic token for unit testing, not a real credential.
+	fakeToken := makeFakeToken(idA)
+	cases := makeLookupFailureCases(cleanupCh)
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -865,9 +890,9 @@ func TestBuildCommandCreate_Boundary_DescriptionLengthWithinLimit(t *testing.T) 
 	}
 }
 
-func TestRun_Positive_ReportReadyCallback(t *testing.T) {
-	const appID uint64 = 777777777777777777
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// newAppGatewayMockServer creates an HTTP test server serving /applications/@me and /gateway endpoints.
+func newAppGatewayMockServer(appID uint64) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/applications/@me":
 			writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"diallak-app"}`, appID))
@@ -877,6 +902,32 @@ func TestRun_Positive_ReportReadyCallback(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
+}
+
+// waitRunWithOptionsExit waits for runWithOptions to exit cleanly after context cancellation.
+func waitRunWithOptionsExit(t *testing.T, errCh <-chan error) {
+	t.Helper()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("runWithOptions error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for runWithOptions to exit")
+	}
+}
+
+// assertReadyCalls verifies that ReportReady was called with true then false.
+func assertReadyCalls(t *testing.T, calls []bool) {
+	t.Helper()
+	if len(calls) != 2 || !calls[0] || calls[1] {
+		t.Errorf("calls = %v, want [true, false]", calls)
+	}
+}
+
+func TestRun_Positive_ReportReadyCallback(t *testing.T) {
+	const appID uint64 = 777777777777777777
+	srv := newAppGatewayMockServer(appID)
 	defer srv.Close()
 
 	handler, err := NewHandler(HandlerConfig{Asker: &fakeAsker{}, GuildID: 42})
@@ -927,35 +978,16 @@ func TestRun_Positive_ReportReadyCallback(t *testing.T) {
 	}
 
 	cancel()
-
-	select {
-	case err := <-errCh:
-		if err != nil {
-			t.Fatalf("runWithOptions error: %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("timeout waiting for runWithOptions to exit")
-	}
+	waitRunWithOptionsExit(t, errCh)
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(calls) != 2 || !calls[0] || calls[1] {
-		t.Errorf("calls = %v, want [true, false]", calls)
-	}
+	assertReadyCalls(t, calls)
 }
 
 func TestRun_Positive_ReportReadyNilCallback(t *testing.T) {
 	const appID uint64 = 777777777777777777
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/applications/@me":
-			writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"diallak-app"}`, appID))
-		case r.Method == http.MethodGet && (r.URL.Path == "/gateway" || r.URL.Path == "/gateway/bot"):
-			writeTestResponse(w, http.StatusOK, `{"url":"ws://127.0.0.1:0","shards":1}`)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
+	srv := newAppGatewayMockServer(appID)
 	defer srv.Close()
 
 	handler, err := NewHandler(HandlerConfig{Asker: &fakeAsker{}, GuildID: 42})
@@ -996,15 +1028,7 @@ func TestRun_Positive_ReportReadyNilCallback(t *testing.T) {
 	}
 
 	cancel()
-
-	select {
-	case err := <-errCh:
-		if err != nil {
-			t.Fatalf("runWithOptions error: %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("timeout waiting for runWithOptions to exit")
-	}
+	waitRunWithOptionsExit(t, errCh)
 }
 
 func TestRegisterCommands_Negative_TransportFailureLookupCurrentApplication(t *testing.T) {

@@ -24,6 +24,275 @@ type recordedReq struct {
 	path   string
 }
 
+type fixtureRoleTag struct {
+	BotID *string `json:"bot_id,omitempty"`
+}
+
+type fixtureAPIRole struct {
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Position    int             `json:"position"`
+	Permissions string          `json:"permissions"`
+	Managed     bool            `json:"managed"`
+	Hoist       bool            `json:"hoist"`
+	Mentionable bool            `json:"mentionable"`
+	Tags        *fixtureRoleTag `json:"tags,omitempty"`
+}
+
+type fixtureAPIGuild struct {
+	ID       string           `json:"id"`
+	Name     string           `json:"name"`
+	Features []string         `json:"features"`
+	Roles    []fixtureAPIRole `json:"roles"`
+}
+
+type fixtureAPIMember struct {
+	User struct {
+		ID string `json:"id"`
+	} `json:"user"`
+	RoleIDs []string `json:"roles"`
+}
+
+type fixtureAPIOverwrite struct {
+	ID    string `json:"id"`
+	Type  int    `json:"type"`
+	Allow string `json:"allow"`
+	Deny  string `json:"deny"`
+}
+
+type fixtureAPIChannel struct {
+	ID                   string                `json:"id"`
+	Name                 string                `json:"name"`
+	Type                 int                   `json:"type"`
+	ParentID             *string               `json:"parent_id,omitempty"`
+	Position             int                   `json:"position"`
+	PermissionOverwrites []fixtureAPIOverwrite `json:"permission_overwrites"`
+}
+
+// findDefRole finds a role by ID in the definition.
+func findDefRole(def *serverdef.Definition, id string) *serverdef.Role {
+	for i := range def.Roles {
+		if def.Roles[i].ID == id {
+			return &def.Roles[i]
+		}
+	}
+	return nil
+}
+
+// roleDisplayProperties extracts hoist and mentionable booleans from a definition role.
+func roleDisplayProperties(r *serverdef.Role) (bool, bool) {
+	var hoist, mentionable bool
+	if r.ShownApart != nil {
+		hoist = *r.ShownApart
+	}
+	if r.Mentionable != nil {
+		mentionable = *r.Mentionable
+	}
+	return hoist, mentionable
+}
+
+// appendRoleOrderRoles adds definition roles in role order to apiRoles.
+func appendRoleOrderRoles(t *testing.T, def *serverdef.Definition, botUserID, botRoleID uint64, nextRoleID *uint64, roleIDMap map[string]uint64, apiRoles *[]fixtureAPIRole) {
+	t.Helper()
+	for i, id := range def.RoleOrder {
+		defRole := findDefRole(def, id)
+		if defRole == nil {
+			t.Fatalf("role %s not found in def.Roles", id)
+		}
+		rID := *nextRoleID
+		*nextRoleID++
+		var tags *fixtureRoleTag
+		managed := false
+		if defRole.Kind == "bot" {
+			rID = botRoleID
+			bIDStr := strconv.FormatUint(botUserID, 10)
+			tags = &fixtureRoleTag{BotID: &bIDStr}
+			managed = true
+		}
+		roleIDMap[id] = rID
+
+		mask, maskErr := serverdefPermissionMask(defRole.Permissions)
+		if maskErr != nil {
+			t.Fatalf("PermissionMask: %v", maskErr)
+		}
+		hoist, mentionable := roleDisplayProperties(defRole)
+		*apiRoles = append(*apiRoles, fixtureAPIRole{
+			ID:          strconv.FormatUint(rID, 10),
+			Name:        defRole.Name,
+			Position:    len(def.RoleOrder) + 3 - i,
+			Permissions: strconv.FormatUint(mask, 10),
+			Managed:     managed,
+			Hoist:       hoist,
+			Mentionable: mentionable,
+			Tags:        tags,
+		})
+	}
+}
+
+// appendManagedRoles adds managed funding/booster roles to apiRoles.
+func appendManagedRoles(t *testing.T, def *serverdef.Definition, nextRoleID *uint64, roleIDMap map[string]uint64, apiRoles *[]fixtureAPIRole) {
+	t.Helper()
+	managedIDs := []string{"booster", "funding-ko-fi", "funding-patreon"}
+	for mIdx, mID := range managedIDs {
+		mRole := findDefRole(def, mID)
+		if mRole == nil {
+			t.Fatalf("managed role %s not found in def.Roles", mID)
+		}
+		rID := *nextRoleID
+		*nextRoleID++
+		roleIDMap[mID] = rID
+		hoist, mentionable := roleDisplayProperties(mRole)
+		*apiRoles = append(*apiRoles, fixtureAPIRole{
+			ID:          strconv.FormatUint(rID, 10),
+			Name:        mRole.Name,
+			Position:    len(managedIDs) - mIdx,
+			Permissions: "0",
+			Managed:     true,
+			Hoist:       hoist,
+			Mentionable: mentionable,
+		})
+	}
+}
+
+// appendEveryoneRole finds and adds the everyone role to apiRoles.
+func appendEveryoneRole(t *testing.T, def *serverdef.Definition, guildID uint64, roleIDMap map[string]uint64, apiRoles *[]fixtureAPIRole) {
+	t.Helper()
+	for rIdx := range def.Roles {
+		if def.Roles[rIdx].Kind == "everyone" {
+			roleIDMap[def.Roles[rIdx].ID] = guildID
+			mask, maskErr := serverdefPermissionMask(def.Roles[rIdx].Permissions)
+			if maskErr != nil {
+				t.Fatalf("PermissionMask everyone: %v", maskErr)
+			}
+			hoist, mentionable := roleDisplayProperties(&def.Roles[rIdx])
+			*apiRoles = append(*apiRoles, fixtureAPIRole{
+				ID:          strconv.FormatUint(guildID, 10),
+				Name:        def.Roles[rIdx].Name,
+				Position:    0,
+				Permissions: strconv.FormatUint(mask, 10),
+				Managed:     false,
+				Hoist:       hoist,
+				Mentionable: mentionable,
+			})
+			return
+		}
+	}
+}
+
+// buildFixtureGuildJSON serializes guild and role fixtures to JSON.
+func buildFixtureGuildJSON(t *testing.T, guildID uint64, apiRoles []fixtureAPIRole) string {
+	t.Helper()
+	g := fixtureAPIGuild{
+		ID:       strconv.FormatUint(guildID, 10),
+		Name:     "Test Hub",
+		Features: []string{"COMMUNITY", "NEWS"},
+		Roles:    apiRoles,
+	}
+	gBytes, err := json.Marshal(g)
+	if err != nil {
+		t.Fatalf("marshal guild: %v", err)
+	}
+	return string(gBytes)
+}
+
+// buildFixtureMemberJSON serializes bot member fixture to JSON.
+func buildFixtureMemberJSON(t *testing.T, botUserID, botRoleID uint64) string {
+	t.Helper()
+	var m fixtureAPIMember
+	m.User.ID = strconv.FormatUint(botUserID, 10)
+	m.RoleIDs = []string{strconv.FormatUint(botRoleID, 10)}
+	mBytes, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal member: %v", err)
+	}
+	return string(mBytes)
+}
+
+// apiChannelType maps server definition channel type string to Discord channel type integer.
+func apiChannelType(channelType string) int {
+	switch channelType {
+	case "text":
+		return 0
+	case "voice":
+		return 2
+	case "announcement":
+		return 5
+	case "forum":
+		return 15
+	default:
+		return 0
+	}
+}
+
+// buildChannelOverwrites creates fixtureAPIOverwrite entries for a channel's access list.
+func buildChannelOverwrites(t *testing.T, access []serverdef.Access, roleIDMap map[string]uint64) []fixtureAPIOverwrite {
+	t.Helper()
+	var overwrites []fixtureAPIOverwrite
+	for _, acc := range access {
+		rID := roleIDMap[acc.Role]
+		allowMask, err := serverdefPermissionMask(acc.Allow)
+		if err != nil {
+			t.Fatalf("permission mask allow: %v", err)
+		}
+		denyMask, err := serverdefPermissionMask(acc.Deny)
+		if err != nil {
+			t.Fatalf("permission mask deny: %v", err)
+		}
+		overwrites = append(overwrites, fixtureAPIOverwrite{
+			ID:    strconv.FormatUint(rID, 10),
+			Type:  0, // role
+			Allow: strconv.FormatUint(allowMask, 10),
+			Deny:  strconv.FormatUint(denyMask, 10),
+		})
+	}
+	return overwrites
+}
+
+// buildFixtureChannelsJSON serializes categories and channels to JSON.
+func buildFixtureChannelsJSON(t *testing.T, def *serverdef.Definition, roleIDMap map[string]uint64) string {
+	t.Helper()
+	var apiChannels []fixtureAPIChannel
+	nextChanID := uint64(7000)
+	catIDMap := make(map[string]string, len(def.Categories))
+
+	for i, c := range def.Categories {
+		cID := strconv.FormatUint(nextChanID, 10)
+		nextChanID++
+		catIDMap[c.ID] = cID
+		apiChannels = append(apiChannels, fixtureAPIChannel{
+			ID:                   cID,
+			Name:                 c.Name,
+			Type:                 4,
+			Position:             i,
+			PermissionOverwrites: []fixtureAPIOverwrite{},
+		})
+	}
+
+	for i, ch := range def.Channels {
+		chID := strconv.FormatUint(nextChanID, 10)
+		nextChanID++
+		var parentIDPtr *string
+		if parentIDStr := catIDMap[ch.Category]; parentIDStr != "" {
+			parentIDPtr = &parentIDStr
+		}
+		overwrites := buildChannelOverwrites(t, ch.Access, roleIDMap)
+		apiChannels = append(apiChannels, fixtureAPIChannel{
+			ID:                   chID,
+			Name:                 ch.Name,
+			Type:                 apiChannelType(ch.Type),
+			ParentID:             parentIDPtr,
+			Position:             i,
+			PermissionOverwrites: overwrites,
+		})
+	}
+
+	chBytes, err := json.Marshal(apiChannels)
+	if err != nil {
+		t.Fatalf("marshal channels: %v", err)
+	}
+	return string(chBytes)
+}
+
 // buildPlatformFixtureFromDef constructs Discord API JSON responses from server.Definition().
 func buildPlatformFixtureFromDef(t *testing.T, guildID uint64, botUserID uint64, botRoleID uint64) (
 	appJSON string,
@@ -39,262 +308,17 @@ func buildPlatformFixtureFromDef(t *testing.T, guildID uint64, botUserID uint64,
 
 	appJSON = fmt.Sprintf(`{"id":"9001","name":"diallak-app","bot":{"id":"%d","username":"diallak"}}`, botUserID)
 
-	// Roles
-	type roleTag struct {
-		BotID *string `json:"bot_id,omitempty"`
-	}
-	type apiRole struct {
-		ID          string   `json:"id"`
-		Name        string   `json:"name"`
-		Position    int      `json:"position"`
-		Permissions string   `json:"permissions"`
-		Managed     bool     `json:"managed"`
-		Hoist       bool     `json:"hoist"`
-		Mentionable bool     `json:"mentionable"`
-		Tags        *roleTag `json:"tags,omitempty"`
-	}
-
 	roleIDMap := make(map[string]uint64, len(def.Roles))
-	var apiRoles []apiRole
+	var apiRoles []fixtureAPIRole
 	nextRoleID := uint64(5000)
 
-	// Position assignments: roles in RoleOrder get descending positions above managed roles.
-	// Everyone role gets position 0 and ID = guildID.
-	for i, id := range def.RoleOrder {
-		var defRole *serverdef.Role
-		for rIdx := range def.Roles {
-			if def.Roles[rIdx].ID == id {
-				defRole = &def.Roles[rIdx]
-				break
-			}
-		}
-		if defRole == nil {
-			t.Fatalf("role %s not found in def.Roles", id)
-		}
-		rID := nextRoleID
-		nextRoleID++
-		var tags *roleTag
-		managed := false
-		if defRole.Kind == "bot" {
-			rID = botRoleID
-			bIDStr := strconv.FormatUint(botUserID, 10)
-			tags = &roleTag{BotID: &bIDStr}
-			managed = true
-		}
-		roleIDMap[id] = rID
+	appendRoleOrderRoles(t, def, botUserID, botRoleID, &nextRoleID, roleIDMap, &apiRoles)
+	appendManagedRoles(t, def, &nextRoleID, roleIDMap, &apiRoles)
+	appendEveryoneRole(t, def, guildID, roleIDMap, &apiRoles)
 
-		mask, maskErr := serverdefPermissionMask(defRole.Permissions)
-		if maskErr != nil {
-			t.Fatalf("PermissionMask: %v", maskErr)
-		}
-		var hoist, mentionable bool
-		if defRole.ShownApart != nil {
-			hoist = *defRole.ShownApart
-		}
-		if defRole.Mentionable != nil {
-			mentionable = *defRole.Mentionable
-		}
-		apiRoles = append(apiRoles, apiRole{
-			ID:          strconv.FormatUint(rID, 10),
-			Name:        defRole.Name,
-			Position:    len(def.RoleOrder) + 3 - i,
-			Permissions: strconv.FormatUint(mask, 10),
-			Managed:     managed,
-			Hoist:       hoist,
-			Mentionable: mentionable,
-			Tags:        tags,
-		})
-	}
-
-	// Managed roles below moderator
-	managedIDs := []string{"booster", "funding-ko-fi", "funding-patreon"}
-	for mIdx, mID := range managedIDs {
-		var mRole *serverdef.Role
-		for rIdx := range def.Roles {
-			if def.Roles[rIdx].ID == mID {
-				mRole = &def.Roles[rIdx]
-				break
-			}
-		}
-		if mRole == nil {
-			t.Fatalf("managed role %s not found in def.Roles", mID)
-		}
-		rID := nextRoleID
-		nextRoleID++
-		roleIDMap[mID] = rID
-		var hoist, mentionable bool
-		if mRole.ShownApart != nil {
-			hoist = *mRole.ShownApart
-		}
-		if mRole.Mentionable != nil {
-			mentionable = *mRole.Mentionable
-		}
-		apiRoles = append(apiRoles, apiRole{
-			ID:          strconv.FormatUint(rID, 10),
-			Name:        mRole.Name,
-			Position:    len(managedIDs) - mIdx,
-			Permissions: "0",
-			Managed:     true,
-			Hoist:       hoist,
-			Mentionable: mentionable,
-		})
-	}
-
-	// Everyone role
-	for rIdx := range def.Roles {
-		if def.Roles[rIdx].Kind == "everyone" {
-			roleIDMap[def.Roles[rIdx].ID] = guildID
-			mask, maskErr := serverdefPermissionMask(def.Roles[rIdx].Permissions)
-			if maskErr != nil {
-				t.Fatalf("PermissionMask everyone: %v", maskErr)
-			}
-			var hoist, mentionable bool
-			if def.Roles[rIdx].ShownApart != nil {
-				hoist = *def.Roles[rIdx].ShownApart
-			}
-			if def.Roles[rIdx].Mentionable != nil {
-				mentionable = *def.Roles[rIdx].Mentionable
-			}
-			apiRoles = append(apiRoles, apiRole{
-				ID:          strconv.FormatUint(guildID, 10),
-				Name:        def.Roles[rIdx].Name,
-				Position:    0,
-				Permissions: strconv.FormatUint(mask, 10),
-				Managed:     false,
-				Hoist:       hoist,
-				Mentionable: mentionable,
-			})
-			break
-		}
-	}
-
-	// Guild JSON
-	type apiGuild struct {
-		ID       string    `json:"id"`
-		Name     string    `json:"name"`
-		Features []string  `json:"features"`
-		Roles    []apiRole `json:"roles"`
-	}
-	g := apiGuild{
-		ID:       strconv.FormatUint(guildID, 10),
-		Name:     "Test Hub",
-		Features: []string{"COMMUNITY", "NEWS"},
-		Roles:    apiRoles,
-	}
-	gBytes, err := json.Marshal(g)
-	if err != nil {
-		t.Fatalf("marshal guild: %v", err)
-	}
-	guildJSON = string(gBytes)
-
-	// Member JSON
-	type apiMember struct {
-		User struct {
-			ID string `json:"id"`
-		} `json:"user"`
-		RoleIDs []string `json:"roles"`
-	}
-	m := apiMember{}
-	m.User.ID = strconv.FormatUint(botUserID, 10)
-	m.RoleIDs = []string{strconv.FormatUint(botRoleID, 10)}
-	mBytes, err := json.Marshal(m)
-	if err != nil {
-		t.Fatalf("marshal member: %v", err)
-	}
-	memberJSON = string(mBytes)
-
-	// Channels
-	type apiOverwrite struct {
-		ID    string `json:"id"`
-		Type  int    `json:"type"`
-		Allow string `json:"allow"`
-		Deny  string `json:"deny"`
-	}
-	type apiChannel struct {
-		ID                   string         `json:"id"`
-		Name                 string         `json:"name"`
-		Type                 int            `json:"type"`
-		ParentID             *string        `json:"parent_id,omitempty"`
-		Position             int            `json:"position"`
-		PermissionOverwrites []apiOverwrite `json:"permission_overwrites"`
-	}
-
-	var apiChannels []apiChannel
-	nextChanID := uint64(7000)
-	catIDMap := make(map[string]string, len(def.Categories))
-
-	// Categories (type 4)
-	for i, c := range def.Categories {
-		cID := strconv.FormatUint(nextChanID, 10)
-		nextChanID++
-		catIDMap[c.ID] = cID
-		apiChannels = append(apiChannels, apiChannel{
-			ID:                   cID,
-			Name:                 c.Name,
-			Type:                 4,
-			Position:             i,
-			PermissionOverwrites: []apiOverwrite{},
-		})
-	}
-
-	// Channels
-	for i, ch := range def.Channels {
-		chID := strconv.FormatUint(nextChanID, 10)
-		nextChanID++
-		var typeInt int
-		switch ch.Type {
-		case "text":
-			typeInt = 0
-		case "voice":
-			typeInt = 2
-		case "announcement":
-			typeInt = 5
-		case "forum":
-			typeInt = 15
-		default:
-			typeInt = 0
-		}
-
-		parentIDStr := catIDMap[ch.Category]
-		var parentIDPtr *string
-		if parentIDStr != "" {
-			parentIDPtr = &parentIDStr
-		}
-
-		var overwrites []apiOverwrite
-		for _, acc := range ch.Access {
-			rID := roleIDMap[acc.Role]
-			allowMask, err := serverdefPermissionMask(acc.Allow)
-			if err != nil {
-				t.Fatalf("permission mask allow: %v", err)
-			}
-			denyMask, err := serverdefPermissionMask(acc.Deny)
-			if err != nil {
-				t.Fatalf("permission mask deny: %v", err)
-			}
-			overwrites = append(overwrites, apiOverwrite{
-				ID:    strconv.FormatUint(rID, 10),
-				Type:  0, // role
-				Allow: strconv.FormatUint(allowMask, 10),
-				Deny:  strconv.FormatUint(denyMask, 10),
-			})
-		}
-
-		apiChannels = append(apiChannels, apiChannel{
-			ID:                   chID,
-			Name:                 ch.Name,
-			Type:                 typeInt,
-			ParentID:             parentIDPtr,
-			Position:             i,
-			PermissionOverwrites: overwrites,
-		})
-	}
-
-	chBytes, err := json.Marshal(apiChannels)
-	if err != nil {
-		t.Fatalf("marshal channels: %v", err)
-	}
-	channelsJSON = string(chBytes)
+	guildJSON = buildFixtureGuildJSON(t, guildID, apiRoles)
+	memberJSON = buildFixtureMemberJSON(t, botUserID, botRoleID)
+	channelsJSON = buildFixtureChannelsJSON(t, def, roleIDMap)
 
 	return appJSON, guildJSON, memberJSON, channelsJSON
 }
@@ -706,13 +730,15 @@ func TestReadServer_Positive_MemberOverwritesCounted(t *testing.T) {
 	}
 }
 
-func TestReadServer_Positive_ChannelsComplete_CutoffAndAdmin(t *testing.T) {
-	const (
-		guildID   uint64 = 1001
-		botUserID uint64 = 2001
-	)
-	appJSON := fmt.Sprintf(`{"id":"9001","bot":{"id":"%d"}}`, botUserID)
-	// Without admin: VIEW_CHANNEL (1024)
+type cutoffTestCase struct {
+	name      string
+	guildBody string
+	nowTime   time.Time
+	wantComp  bool
+}
+
+// makeCutoffAndAdminCases builds test cases for ChannelsComplete cutoff boundary checks.
+func makeCutoffAndAdminCases(guildID, botUserID uint64, cutoff time.Time) []cutoffTestCase {
 	noAdminGuild := fmt.Sprintf(`{
 		"id": "%d",
 		"roles": [
@@ -720,7 +746,6 @@ func TestReadServer_Positive_ChannelsComplete_CutoffAndAdmin(t *testing.T) {
 			{"id": "5001", "name": "BotRole", "position": 1, "permissions": "1024", "managed": true, "tags": {"bot_id": "%d"}}
 		]
 	}`, guildID, guildID, botUserID)
-	// With admin: ADMINISTRATOR (8)
 	adminGuild := fmt.Sprintf(`{
 		"id": "%d",
 		"roles": [
@@ -728,20 +753,8 @@ func TestReadServer_Positive_ChannelsComplete_CutoffAndAdmin(t *testing.T) {
 			{"id": "5001", "name": "BotRole", "position": 1, "permissions": "8", "managed": true, "tags": {"bot_id": "%d"}}
 		]
 	}`, guildID, guildID, botUserID)
-	memberJSON := fmt.Sprintf(`{"user":{"id":"%d"},"roles":["5001"]}`, botUserID)
-	channelsJSON := `[]`
 
-	cutoff, err := time.Parse(time.RFC3339, "2026-11-16T00:00:00Z")
-	if err != nil {
-		t.Fatalf("parse cutoff: %v", err)
-	}
-
-	cases := []struct {
-		name      string
-		guildBody string
-		nowTime   time.Time
-		wantComp  bool
-	}{
+	return []cutoffTestCase{
 		{
 			name:      "administrator after cutoff -> true",
 			guildBody: adminGuild,
@@ -761,7 +774,23 @@ func TestReadServer_Positive_ChannelsComplete_CutoffAndAdmin(t *testing.T) {
 			wantComp:  false,
 		},
 	}
+}
 
+func TestReadServer_Positive_ChannelsComplete_CutoffAndAdmin(t *testing.T) {
+	const (
+		guildID   uint64 = 1001
+		botUserID uint64 = 2001
+	)
+	appJSON := fmt.Sprintf(`{"id":"9001","bot":{"id":"%d"}}`, botUserID)
+	memberJSON := fmt.Sprintf(`{"user":{"id":"%d"},"roles":["5001"]}`, botUserID)
+	channelsJSON := `[]`
+
+	cutoff, err := time.Parse(time.RFC3339, "2026-11-16T00:00:00Z")
+	if err != nil {
+		t.Fatalf("parse cutoff: %v", err)
+	}
+
+	cases := makeCutoffAndAdminCases(guildID, botUserID, cutoff)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := newStandardServer(guildID, botUserID, appJSON, tc.guildBody, memberJSON, channelsJSON)
@@ -1305,31 +1334,29 @@ func TestReadServer_Boundary_BotRoleNameHeldTwice(t *testing.T) {
 	}
 }
 
-func TestReadServer_Boundary_UnknownBitsKeptByNumber(t *testing.T) {
-	const (
-		guildID   uint64 = 1001
-		botUserID uint64 = 2001
-	)
+type unknownBitsTestCase struct {
+	name          string
+	everyonePerms uint64
+	plainPerms    uint64
+	entryAllow    uint64
+	entryDeny     uint64
+	wantEveryone  []int
+	wantPlain     []int
+	wantAllow     []int
+	wantDeny      []int
+	wantPlainLen  int
+}
+
+// makeUnknownBitsCases constructs test cases covering known and unknown permission bits.
+func makeUnknownBitsCases(t *testing.T) []unknownBitsTestCase {
+	t.Helper()
 	bit47 := uint64(1) << 47
 	bits47and53 := bit47 | uint64(1)<<53
-	// Every permission the table names, and with it the highest bit a signed
-	// value can hold.
 	documented, err := serverdef.PermissionMask(serverdef.Permissions())
 	if err != nil {
 		t.Fatalf("PermissionMask: %v", err)
 	}
-	cases := []struct {
-		name          string
-		everyonePerms uint64
-		plainPerms    uint64
-		entryAllow    uint64
-		entryDeny     uint64
-		wantEveryone  []int
-		wantPlain     []int
-		wantAllow     []int
-		wantDeny      []int
-		wantPlainLen  int
-	}{
+	return []unknownBitsTestCase{
 		{"no unknown bit", 1024, 1024, 1024, 0, nil, nil, nil, nil, 1},
 		{"every documented bit", documented, documented, documented, 0, nil, nil, nil, nil, 52},
 		{"everyone role", bit47 | 1024, 1024, 0, 0, []int{47}, nil, nil, nil, 1},
@@ -1339,6 +1366,37 @@ func TestReadServer_Boundary_UnknownBitsKeptByNumber(t *testing.T) {
 		{"every side at once", bit47, bit47, bit47, bit47, []int{47}, []int{47}, []int{47}, []int{47}, 0},
 		{"highest bit of the value", 1024, documented | uint64(1)<<62, 0, 0, nil, []int{62}, nil, nil, 52},
 	}
+}
+
+// assertSnapshotUnknownBits verifies that unknown bits on roles and channel entries match expectations.
+func assertSnapshotUnknownBits(t *testing.T, snap *serverplan.Snapshot, tc unknownBitsTestCase) {
+	t.Helper()
+	// Roles from the highest: BotRole, Plain, @everyone.
+	plain, everyone := snap.Roles[1], snap.Roles[2]
+	entry := snap.Channels[0].Access[0]
+	if !reflect.DeepEqual(everyone.UnknownBits, tc.wantEveryone) {
+		t.Errorf("@everyone unknown bits = %v, want %v", everyone.UnknownBits, tc.wantEveryone)
+	}
+	if !reflect.DeepEqual(plain.UnknownBits, tc.wantPlain) {
+		t.Errorf("Plain unknown bits = %v, want %v", plain.UnknownBits, tc.wantPlain)
+	}
+	if len(plain.Permissions) != tc.wantPlainLen {
+		t.Errorf("Plain holds %d named permissions, want %d: %v", len(plain.Permissions), tc.wantPlainLen, plain.Permissions)
+	}
+	if !reflect.DeepEqual(entry.UnknownAllow, tc.wantAllow) {
+		t.Errorf("entry unknown allow = %v, want %v", entry.UnknownAllow, tc.wantAllow)
+	}
+	if !reflect.DeepEqual(entry.UnknownDeny, tc.wantDeny) {
+		t.Errorf("entry unknown deny = %v, want %v", entry.UnknownDeny, tc.wantDeny)
+	}
+}
+
+func TestReadServer_Boundary_UnknownBitsKeptByNumber(t *testing.T) {
+	const (
+		guildID   uint64 = 1001
+		botUserID uint64 = 2001
+	)
+	cases := makeUnknownBitsCases(t)
 	appJSON := fmt.Sprintf(`{"id":"9001","bot":{"id":"%d"}}`, botUserID)
 	memberJSON := fmt.Sprintf(`{"user":{"id":"%d"},"roles":["5002"]}`, botUserID)
 	for _, tc := range cases {
@@ -1362,24 +1420,7 @@ func TestReadServer_Boundary_UnknownBitsKeptByNumber(t *testing.T) {
 			if err := serverplan.Check(snap); err != nil {
 				t.Fatalf("snapshot does not pass its own check: %v", err)
 			}
-			// Roles from the highest: BotRole, Plain, @everyone.
-			plain, everyone := snap.Roles[1], snap.Roles[2]
-			entry := snap.Channels[0].Access[0]
-			if !reflect.DeepEqual(everyone.UnknownBits, tc.wantEveryone) {
-				t.Errorf("@everyone unknown bits = %v, want %v", everyone.UnknownBits, tc.wantEveryone)
-			}
-			if !reflect.DeepEqual(plain.UnknownBits, tc.wantPlain) {
-				t.Errorf("Plain unknown bits = %v, want %v", plain.UnknownBits, tc.wantPlain)
-			}
-			if len(plain.Permissions) != tc.wantPlainLen {
-				t.Errorf("Plain holds %d named permissions, want %d: %v", len(plain.Permissions), tc.wantPlainLen, plain.Permissions)
-			}
-			if !reflect.DeepEqual(entry.UnknownAllow, tc.wantAllow) {
-				t.Errorf("entry unknown allow = %v, want %v", entry.UnknownAllow, tc.wantAllow)
-			}
-			if !reflect.DeepEqual(entry.UnknownDeny, tc.wantDeny) {
-				t.Errorf("entry unknown deny = %v, want %v", entry.UnknownDeny, tc.wantDeny)
-			}
+			assertSnapshotUnknownBits(t, snap, tc)
 		})
 	}
 }
