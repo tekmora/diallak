@@ -73,6 +73,14 @@ is missing or out of range stops the start with a message that names it.
 - **One replica.** One token serves one gateway session
   ([ADR-0001](adr/0001-architecture-and-boundaries.md)). A new instance starts
   only after the old one has stopped: the deployment replaces, it does not roll.
+- **Upgrade.** A new release starts on the configuration of the release before
+  it, unchanged. It stops only where a breaking change says so in its
+  `Migration:` note: since v0.2.0 the host of `DIALLAK_SOURCE_LINK_TEMPLATE` is
+  written literally, and since v0.3.0 a model needs `DIALLAK_MODEL_POLICY`.
+  Configurations of v0.1.2 and v0.4.2 under
+  [`internal/config/testdata/upgrade`](../internal/config/testdata/upgrade)
+  hold this in a test ([`upgrade_test.go`](../internal/config/upgrade_test.go)).
+  Nothing else carries over: the bot stores no state (see "Database").
 - **Commands are registered by a separate run.** `diallak -register-commands`
   with the same environment sets the server's command list and exits. Starting
   the bot never does. It is the operator's act at the cutover, and it is needed
@@ -152,7 +160,7 @@ Nothing here is measured on a running bot: it has never run against Discord.
 | Fact | Value | How it was obtained |
 | :--- | :--- | :--- |
 | Binary | 11,092,128 bytes (`linux/amd64`), 10,289,312 bytes (`linux/arm64`) | Image builds of 2026-10-13, read by [`image_smoke.py`](../tools/ci/image_smoke.py), which fails above 12,200,000 bytes on every pull request |
-| Memory of building the index and answering the evaluation questions | 16.7 MiB peak | The evaluation test process over the fixture corpus (18 files, 44,616 bytes), 2026-10-10 |
+| Memory of building the index and answering the evaluation questions | 16.7 MiB peak for the whole test process; the work itself holds about 0.33 MB and allocates about 2 MB, and a test fails above 700,000 bytes held or 4,000,000 bytes allocated | The evaluation test process over the fixture corpus (18 files, 44,616 bytes), 2026-10-10; the heap figures and limits from `TestEvalMemory_Positive_UnderTheLimits` in `internal/eval/eval_memory_test.go`, 2026-10-13 |
 <!-- markdownlint-enable MD013 -->
 
 Starting values, chosen, not measured: a memory request of 64 MiB with a limit
