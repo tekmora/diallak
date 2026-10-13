@@ -309,7 +309,12 @@ Then it makes the changes in the order of the plan, one at a time.
 - **The first failure ends the run.** The error names the step, the action,
   the object and the cause, and no id; no later change is sent
   (`TestApplyServer_Negative_Failures`). The changes made before it stay. A
-  new `-server=plan` then shows what is left.
+  new `-server=plan` then shows what is left, exactly the changes from the
+  failed one on, and applying that plan finishes the server; the plan read
+  before the failure is refused
+  (`TestApplyServer_Positive_PlanAfterAFailureShowsWhatIsLeft`,
+  `TestApplyServer_Boundary_FailureOnTheFirstAndTheLastChange`,
+  `TestApplyServer_Negative_PlanReadBeforeAFailureIsRefused`).
 - **A cancelled run stops between two changes.** It sends no further change
   and still writes its last line
   (`TestApplyServer_Boundary_CancelledBetweenTwoChanges`).
