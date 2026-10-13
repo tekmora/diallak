@@ -165,20 +165,28 @@ func checkNamesAndTypes(s *Snapshot) []error {
 		}
 	}
 	for i := range s.Channels {
-		if strings.TrimSpace(s.Channels[i].Name) == "" {
-			errs = append(errs, fmt.Errorf("empty channel name at index %d", i))
-		}
-		if _, ok := allowedChannelTypes[s.Channels[i].Type]; !ok {
-			errs = append(errs, fmt.Errorf("unknown channel type %q in channel %q", s.Channels[i].Type, s.Channels[i].Name))
-		}
-		if s.Channels[i].MemberEntries < 0 {
-			errs = append(errs, fmt.Errorf("channel %q has negative member entries %d", s.Channels[i].Name, s.Channels[i].MemberEntries))
-		}
+		errs = append(errs, checkChannelShape(i, &s.Channels[i])...)
 	}
 	for i := range s.Features {
 		if strings.TrimSpace(s.Features[i]) == "" {
 			errs = append(errs, fmt.Errorf("empty feature name at index %d", i))
 		}
+	}
+	return errs
+}
+
+// checkChannelShape reports a blank name, an unknown type and a negative
+// member entry count of the channel at index i.
+func checkChannelShape(i int, ch *Channel) []error {
+	var errs []error
+	if strings.TrimSpace(ch.Name) == "" {
+		errs = append(errs, fmt.Errorf("empty channel name at index %d", i))
+	}
+	if _, ok := allowedChannelTypes[ch.Type]; !ok {
+		errs = append(errs, fmt.Errorf("unknown channel type %q in channel %q", ch.Type, ch.Name))
+	}
+	if ch.MemberEntries < 0 {
+		errs = append(errs, fmt.Errorf("channel %q has negative member entries %d", ch.Name, ch.MemberEntries))
 	}
 	return errs
 }

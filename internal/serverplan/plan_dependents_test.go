@@ -438,3 +438,35 @@ func TestPlan_Boundary_FirstReasonWins(t *testing.T) {
 		})
 	}
 }
+
+// An order step without room and without MANAGE_ROLES is refused for the
+// positions, the check that comes first; with room it is refused for the
+// right, which shows the caller in this case lacks it.
+func TestPlan_Boundary_TooFewPositionsBeforeLacksRight(t *testing.T) {
+	def := loadDef(t)
+	for _, tc := range []struct {
+		name       string
+		room       int
+		wantReason string
+	}{
+		{name: "no room", room: 0, wantReason: ReasonTooFewPositions},
+		{name: "room", room: 1, wantReason: ReasonLacksRight},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := raisedSnapshotOf(t, def)
+			below := swapBelowCaller(t, s)
+			s.Caller.Position = below + tc.room
+			s.Caller.Permissions = slices.DeleteFunc(s.Caller.Permissions, func(p string) bool {
+				return p == "MANAGE_ROLES" || p == "ADMINISTRATOR"
+			})
+			res, err := Plan(def, s)
+			if err != nil {
+				t.Fatalf("Plan failed: %v", err)
+			}
+			ref, ok := refusalFor(res, ActionSetRoleOrder, "role_order")
+			if !ok || ref.Reason != tc.wantReason {
+				t.Errorf("set-role-order = %+v (found %v), want reason %s", ref, ok, tc.wantReason)
+			}
+		})
+	}
+}
