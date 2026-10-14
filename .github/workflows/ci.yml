@@ -127,7 +127,7 @@ jobs:
       - name: Install praetorctl
         if: github.event.pull_request.draft != true
         env:
-          PRAETOR_REF: 3bbde07342bdece12c46f74b0ee2c1f51129478f
+          PRAETOR_REF: 74fa83437304d518881de57ce88e810010687949
         run: |
           go install "github.com/cordanaLLM/praetor/cmd/standardsctl@${PRAETOR_REF}"
           ln -s "$(go env GOPATH)/bin/standardsctl" "$(go env GOPATH)/bin/praetorctl"
