@@ -25,7 +25,7 @@ in both places at once
 Once published, it is linked from the bot's profile, from the
 [server rules](server-rules.md) and from the README of this repository.
 
-## Before the public launch
+## Legal research
 
-- What an imprint has to hold for this project is part of the legal research
-  that runs before the launch. This page follows its result.
+- What an imprint has to hold for this project is point 1 of the
+  [legal research](legal-research.md).
