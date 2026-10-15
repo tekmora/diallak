@@ -7,8 +7,8 @@ nothing of the forum yet.
 
 This page holds the entries those documents gain when the feature is built.
 The pull request that builds it moves each entry to its place and removes this
-page. It is not legal advice; the legal review reads these entries with the
-rest of the [privacy notice](privacy-notice.md).
+page. It is not legal advice; [Legal research](legal-research.md), points 7 to 9,
+has the findings on these entries.
 
 ## In short
 
@@ -154,16 +154,10 @@ Rule 5 gains one sentence after "check the sources it cites":
 
 ## Before launch
 
-- The legal research has judged three points, with the other points of the
-  privacy notice:
-  - whether legitimate interests carries the reading of text that was not
-    addressed to the bot;
-  - whether the guidelines text and the privacy notice inform a member in time
-    (Articles 13 and 21(4) of the GDPR);
-  - what follows when a post holds data of the kinds Article 9(1) lists.
-
-  The research on these points is in [Legal research](legal-research.md),
-  points 7 to 9.
+- The findings of [Legal research](legal-research.md), points 7 to 9, are
+  settled:
+  - the guidelines text names the right to object (#145);
+  - posts with data of the kinds Article 9(1) lists have an answer (#146).
 - The entries above are in their documents, and the privacy notice is
   published ([compliance](README.md), "Gates for the public launch").
 - The implementation passes the cases of ADR-0009.

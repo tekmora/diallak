@@ -9,9 +9,9 @@ legal advice. The operator reviews each one before it is used.
 | [Role under the EU AI Act](../adr/0006-ai-act-role.md) | Which role the project has and which duties follow | Accepted record; its gates for model-written answers are replaced by [ADR-0013](../adr/0013-guardrail-policy-and-receipt.md) |
 | [AI disclosure](ai-disclosure.md) | What the bot tells members about itself, and where | Draft |
 | [Data inventory](data-inventory.md) | What the bot receives, keeps, logs and passes on | Draft, checked against the code |
-| [Legal research](legal-research.md) | Findings and sources on the nine open legal points of the privacy notice and the support forum answer | Research note, not legal advice; not judged yet |
+| [Legal research](legal-research.md) | Findings and sources on the nine open legal points of the privacy notice and the support forum answer | Research note, not legal advice; not a launch gate |
 | [Imprint](imprint.md) | Who provides the bot and the server | Draft; the identity block is filled |
-| [Privacy notice](privacy-notice.md) | What members are told about their data, point by point of GDPR Article 13 | Draft; content decided by the operator, legal review before the public launch |
+| [Privacy notice](privacy-notice.md) | What members are told about their data, point by point of GDPR Article 13 | Draft; content decided by the operator |
 | [Record of processing](record-of-processing.md) | The record of processing activities that GDPR Article 30 asks for | Draft, built from the data inventory |
 | [Server rules](server-rules.md) | The short add-on to the code of conduct that a member reads when joining | Draft wording accepted; final once the code of conduct exists |
 | [Support forum answer](support-forum-answer.md) | The entries the documents above gain when the bot answers first in the support forum | Draft for a feature that is not built; [ADR-0009](../adr/0009-support-forum-first-answer.md) is its accepted record |
@@ -53,7 +53,6 @@ Nothing here is published to members before these are passed.
 <!-- markdownlint-disable MD013 -->
 | Gate | State |
 | :--- | :--- |
-| The legal research on the points the privacy notice and the imprint list is judged | Open; the research is in [Legal research](legal-research.md) |
 | The identity block is filled: name, address, e-mail | Passed; the address is a c/o address, no address service |
 | The ticket channel exists in the server, and a member can open a private thread there | Open; the operator creates it. The server rules and the privacy notice name it as the second path next to e-mail |
 | The imprint and the privacy notice are published and linked from the bot's profile, the server rules, the README and Discord's developer portal | Open |

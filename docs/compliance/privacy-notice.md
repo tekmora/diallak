@@ -1,8 +1,8 @@
 # Privacy notice
 
 Draft. It is not published to members yet, and it is not legal advice. The
-operator has decided its content; a legal review comes before the public launch
-and is listed at the end.
+operator has decided its content. The legal points it raises are researched in
+[Legal research](legal-research.md); that research is not a gate for the launch.
 
 This notice covers the bot Diallak in the community server. What Discord does
 with your data is covered by Discord's own privacy policy, not by this notice.
@@ -72,7 +72,8 @@ them to every command.
 
 The legitimate interest is to answer the question a member puts to the bot, in
 the server the bot is meant for. The bot asks for no consent. This basis is the
-operator's choice and is examined in the legal review before the public launch.
+operator's choice; [Legal research](legal-research.md), point 2, has the
+sources.
 
 The bot's logs hold no question, no answer and no member id. They record the
 outcome of a request, such as `answer` or `refusal`, and how long it took
@@ -196,11 +197,11 @@ deleted (Section 5(b)). The request path under "Your rights" is that way.
 Which parts move to the rented server, the bot alone or the model endpoint too.
 The block under "Where the bot runs" changes with the answer.
 
-## Before the public launch
+## Legal points researched
 
-A legal review examines what the operator has decided for this draft. The
-research on these points is in [Legal research](legal-research.md), points 1
-to 6:
+[Legal research](legal-research.md), points 1 to 6, has the findings and
+sources on what the operator has decided for this draft. The research is not a
+gate for the launch:
 
 - what the identity block and the imprint have to hold;
 - whether legitimate interests is the right legal basis;

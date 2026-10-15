@@ -1,7 +1,7 @@
 # Legal research: open points of the privacy notice and the forum answer
 
 This note examines the nine open points that the
-[privacy notice](privacy-notice.md) ("Before the public launch") and the
+[privacy notice](privacy-notice.md) ("Legal points researched") and the
 [support forum answer](support-forum-answer.md) ("Before launch") list. For each
 point it gives a finding, the sources it rests on and what would change in the
 drafts.
@@ -10,6 +10,11 @@ It is not legal advice. No lawyer was consulted: the project's direction is
 research instead of a lawyer until somebody funds the project. Every quotation
 below was compared word for word with a copy of its source fetched on
 2026-10-15. A statement no fetched source carries is marked **Unverified**.
+
+The research informs the drafts; it is not a gate for the launch. Three
+findings are tracked as issues for the support forum feature: the right to
+object in the guidelines text (#145), data of the kinds Article 9(1) lists in a
+post (#146) and the reply delivered through Discord (#147).
 
 <!-- markdownlint-disable MD013 -->
 | # | Point | Short finding | Confidence |
@@ -60,8 +65,8 @@ telemedium.
   angebotene digitale Dienste folgende Informationen, die leicht erkennbar und
   unmittelbar erreichbar sein müssen, ständig verfügbar zu halten"
 
-**Effect on the drafts.** [Imprint](imprint.md): its "Before the public launch"
-section can name MStV § 18(1) as the rule it follows.
+**Effect on the drafts.** [Imprint](imprint.md): its "Legal research" section
+can name MStV § 18(1) as the rule it follows.
 
 ## 2. Legitimate interests for `/ask`
 
