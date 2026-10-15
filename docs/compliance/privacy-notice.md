@@ -198,7 +198,9 @@ The block under "Where the bot runs" changes with the answer.
 
 ## Before the public launch
 
-A legal review examines what the operator has decided for this draft:
+A legal review examines what the operator has decided for this draft. The
+research on these points is in [Legal research](legal-research.md), points 1
+to 6:
 
 - what the identity block and the imprint have to hold;
 - whether legitimate interests is the right legal basis;
