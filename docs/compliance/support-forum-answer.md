@@ -161,6 +161,9 @@ Rule 5 gains one sentence after "check the sources it cites":
   - whether the guidelines text and the privacy notice inform a member in time
     (Articles 13 and 21(4) of the GDPR);
   - what follows when a post holds data of the kinds Article 9(1) lists.
+
+  The research on these points is in [Legal research](legal-research.md),
+  points 7 to 9.
 - The entries above are in their documents, and the privacy notice is
   published ([compliance](README.md), "Gates for the public launch").
 - The implementation passes the cases of ADR-0009.
