@@ -1,17 +1,15 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": [
-    "Updates arrive as pull requests and are merged by a person after CI; nothing merges on its own.",
-    "minimumReleaseAge: a release is proposed three days after it was published, so a release that is withdrawn in its first days never reaches a pull request.",
+    "github>plurano/horistes: the family preset holds the shared values (recommended base, sign-off, three days of waiting after a release, no merge by the bot); this file keeps only what is this repository's own.",
     "helpers:pinGitHubActionDigests: every action stays pinned to a commit, with the version in the comment beside it."
   ],
   "extends": [
-    "config:recommended",
+    "github>plurano/horistes",
     "helpers:pinGitHubActionDigests",
     ":dependencyDashboard",
     ":semanticCommits"
   ],
-  "minimumReleaseAge": "3 days",
   "postUpdateOptions": [
     "gomodTidy"
   ],
