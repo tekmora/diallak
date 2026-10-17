@@ -248,6 +248,7 @@ A refused change carries the first reason that holds, in this order.
 <!-- markdownlint-disable MD013 -->
 | Reason | Meaning |
 | :--- | :--- |
+| `made-by-hand` | The role grants `ADMINISTRATOR`; a person makes it and gives it its rights ([The Operator role](#the-operator-role)) |
 | `ambiguous-name` | A name the change rests on exists more than once on the server |
 | `type-differs` | The channel has another type; the path does not convert |
 | `not-visible` | The channel may exist hidden from the reader |
@@ -511,8 +512,10 @@ of them
 The plan cannot make this role. Creating a role needs every right the
 role gets ([What a plan holds](#what-a-plan-holds)), a bot gives a role only
 rights it holds itself, and the bot's role holds no `ADMINISTRATOR` at any
-step. ADR-0010 left open who makes the role ("Open points"). The tests of a
-first set-up start from a server that has it (`setupFreshServerFake` in
+step. [ADR-0017](adr/0017-administrator-role-made-by-hand.md) settles the
+point ADR-0010 left open: a role that grants `ADMINISTRATOR` is made by hand,
+never by the path. The tests of a first set-up start from a server that has
+it (`setupFreshServerFake` in
 [`server_apply_test.go`](../internal/discord/server_apply_test.go)).
 
 Two lines of `-server=compare` show that this is not done yet:
@@ -522,12 +525,15 @@ Two lines of `-server=compare` show that this is not done yet:
   the bot's role holds the right, for example from an invitation with another
   number. The operator takes it away first.
 
-Without the Operator role the tool does not stop by itself yet
-([#83](https://github.com/tekmora/diallak/issues/83)). `rights needed:` then
-names `ADMINISTRATOR`, because the plan holds `create-role roles[operator]`
-(`addRoleMissingCandidates` in [`plan.go`](../internal/serverplan/plan.go)).
-That list is not one to give the bot's role: make the role, then plan again.
-No test covers a server without the role.
+Without the Operator role the plan refuses `create-role roles[operator]` as
+`made-by-hand`, and the line says what to do: make the role by hand, with
+`ADMINISTRATOR`, above the bot's role. An Operator role without the right is
+refused the same way as `set-role-permissions roles[operator]`. Such a
+refusal needs no right of the bot's role, so `rights needed:` does not name
+`ADMINISTRATOR` because of it, and a plan with the refusal is not applied.
+Make or fix the role, then plan again (`TestPlan_Negative_MissingOperatorRoleIsMadeByHand`,
+`TestPlan_Boundary_OperatorRoleWithoutItsRightIsMadeByHand` in
+[`made_by_hand_test.go`](../internal/serverplan/made_by_hand_test.go)).
 
 ### What the tests of a first set-up cover
 
