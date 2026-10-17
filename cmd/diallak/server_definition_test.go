@@ -79,6 +79,9 @@ func TestServerDefinitionDoc_Negative_NamesEveryCodeAndCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load server definition: %v", err)
 	}
+	if def.Settings == nil {
+		t.Fatalf("the server definition holds no settings")
+	}
 	counts := []struct {
 		part  string
 		count string
@@ -91,6 +94,7 @@ func TestServerDefinitionDoc_Negative_NamesEveryCodeAndCount(t *testing.T) {
 		{"areas", strconv.Itoa(len(def.Areas))},
 		{"choices", strconv.Itoa(len(def.Choices.Questions)) + " questions"},
 		{"automation", strconv.Itoa(len(def.Automation))},
+		{"settings", strconv.Itoa(len(def.Settings.FilterRules)) + " filter rules and the verification level"},
 	}
 	for _, row := range counts {
 		pattern := "(?m)^\\| `" + row.part + "` \\| [^|]+ \\| " + regexp.QuoteMeta(row.count) + " \\|$"

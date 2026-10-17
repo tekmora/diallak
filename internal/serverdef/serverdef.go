@@ -123,6 +123,9 @@ const (
 	// CodeBotRights flags a bot role lacking one of the four bot rights, holding extra rights, or violating channel ceilings.
 	CodeBotRights = "bot-rights"
 
+	// CodeFilterRule flags a filter rule that breaks a limit of the platform or names a field its trigger or action does not read.
+	CodeFilterRule = "filter-rule"
+
 	// CodeRoleOrder flags a role order definition that is incomplete, duplicated, or misordered.
 	CodeRoleOrder = "role-order"
 )
@@ -148,6 +151,9 @@ type Definition struct {
 	Areas      []Area       `json:"areas"`
 	Choices    Choices      `json:"choices"`
 	Automation []Automation `json:"automation"`
+	// Settings holds the platform's filter rules and the verification level.
+	// Absent = nothing of it is compared or changed on the server.
+	Settings *Settings `json:"settings,omitempty"`
 }
 
 // Metric describes a trackable quantitative measurement on the server.

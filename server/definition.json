@@ -955,5 +955,74 @@
       "by": "platform",
       "state": "observed"
     }
-  ]
+  ],
+  "settings": {
+    "verification": {
+      "level": "medium",
+      "basis": "proposal",
+      "reasoning": "Chosen, not measured. A new account has to be older than five minutes before it can write, which stops an account made for one spam run. The level above it holds every new member back for ten minutes after joining, and Membership Screening already holds them until they completed the form."
+    },
+    "filter_rules": [
+      {
+        "id": "spam",
+        "name": "Spam",
+        "purpose": "Blocks messages the platform recognises as spam and writes each case into the moderators' queue.",
+        "basis": "proposal",
+        "reasoning": "Chosen, not measured. The platform's own spam detection, the first case of spam and obvious abuse that ADR-0005 leaves to the platform.",
+        "trigger": "spam",
+        "enabled": true,
+        "actions": [
+          {
+            "type": "block_message"
+          },
+          {
+            "type": "alert",
+            "channel": "mod-queue"
+          }
+        ]
+      },
+      {
+        "id": "mention-spam",
+        "name": "Mass mentions",
+        "purpose": "Blocks a message that mentions many members or roles at once, and a raid of such messages, and writes each case into the moderators' queue.",
+        "basis": "proposal",
+        "reasoning": "Chosen, not measured. Ten different mentions in one message is more than a question to a few people needs; the limit is corrected once the server has members.",
+        "trigger": "mention_spam",
+        "enabled": true,
+        "mention_limit": 10,
+        "raid_protection": true,
+        "actions": [
+          {
+            "type": "block_message"
+          },
+          {
+            "type": "alert",
+            "channel": "mod-queue"
+          }
+        ]
+      },
+      {
+        "id": "abuse-presets",
+        "name": "Slurs and sexual content",
+        "purpose": "Blocks messages with words from the platform's lists of slurs and of sexual content and writes each case into the moderators' queue.",
+        "basis": "proposal",
+        "reasoning": "Chosen, not measured. The two lists cover obvious abuse in the sense of ADR-0005. The list of swearing is left out: swearing alone is not abuse on this server, and a moderator handles a case of it.",
+        "trigger": "keyword_preset",
+        "enabled": true,
+        "presets": [
+          "slurs",
+          "sexual_content"
+        ],
+        "actions": [
+          {
+            "type": "block_message"
+          },
+          {
+            "type": "alert",
+            "channel": "mod-queue"
+          }
+        ]
+      }
+    ]
+  }
 }
