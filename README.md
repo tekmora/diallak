@@ -40,6 +40,9 @@ Community bot for the Lusoris Discord hub.
 - **Votes and wishes:** community polls whose results feed the projects'
   planning.
 - **Thanks to supporters:** a cosmetic role and a public credit in plain text.
+  The credit is on a page the operator keeps outside the repository, names
+  only with the supporter's consent, release notes link it and never name
+  anyone ([issue 125](https://github.com/tekmora/diallak/issues/125)).
   Nothing is sold: the perks are a thank-you only, there is no priority
   support, and early builds are announced to everybody.
 - **Answers from the docs:** a locally run model answers from the projects'
@@ -283,7 +286,8 @@ A release is cut in three steps:
 3. The tag starts [`release.yml`](.github/workflows/release.yml). It refuses a
    version that has no section in `CHANGELOG.md`, builds the container image
    `ghcr.io/tekmora/diallak:X.Y.Z`, and publishes the release. Its notes are
-   the changelog section, followed by the image by tag and by digest. There is
+   the changelog section, followed by the image by tag and by digest, and the
+   credits note linking the page from variable `CREDITS_URL`. There is
    no `latest` tag.
 
 The image is built in a reusable workflow of its own
@@ -297,9 +301,13 @@ on `main` is tagged `vX.Y.Z-rc.N`, with no changelog step. The workflow builds
 becomes the latest release. Its notes are the fragments in `changelog.d/` that
 are not yet in `CHANGELOG.md`
 ([`release-candidate-notes.sh`](.github/scripts/release-candidate-notes.sh)),
-followed by the image by tag and by digest.
+followed by the image by tag and by digest, and the credits note.
 
-Merging to `main` releases nothing; only a pushed tag does.
+Merging to `main` releases nothing; only a pushed tag does. Before its first
+release, a deployment sets repository variable `CREDITS_URL` (the https URL of
+the live credits page) and repository secret `SUPPORTER_NAMES` (the supporter
+names to refuse in release notes, one name per line). The release workflow
+stops if either is unset.
 
 ### Verifying a release
 
