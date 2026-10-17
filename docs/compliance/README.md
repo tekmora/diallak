@@ -36,9 +36,9 @@ says what became of each.
 <!-- markdownlint-disable MD013 -->
 | Gate | State |
 | :--- | :--- |
-| 1. The check for the guardrail policy, at the start and on every reply, and the receipt are in the code | Open: not built ([issue 63](https://github.com/tekmora/diallak/issues/63)) |
-| 2. Each has its planted case in the test suite | Open |
-| 3. The privacy notice, the data inventory and the AI disclosure say what the code does, and none says that personal data is masked without the limit of the masking | Open: they change in the same pull request as the code |
+| 1. The check for the guardrail policy, at the start and on every reply, and the receipt are in the code | Built ([issue 63](https://github.com/tekmora/diallak/issues/63)) |
+| 2. Each has its planted case in the test suite | Built: `internal/answer/answer_policy_test.go`, `cmd/diallak/main_test.go`, `internal/discord/receipt_test.go`, `internal/discord/receipt_gateway_test.go` |
+| 3. The privacy notice, the data inventory and the AI disclosure say what the code does, and none says that personal data is masked without the limit of the masking | Written; the operator checks them before model mode goes live |
 <!-- markdownlint-enable MD013 -->
 
 A deployment passes a gate of its own at every start: the bot does not run in

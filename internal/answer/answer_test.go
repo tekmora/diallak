@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/model"
 	"github.com/tekmora/diallak/internal/retrieval"
 )
 
@@ -32,16 +33,17 @@ type fakeGenerator struct {
 	calls    int
 	scripted string
 	err      error
+	trace    model.Trace
 }
 
-func (f *fakeGenerator) Complete(_ context.Context, _, _ string) (string, error) {
+func (f *fakeGenerator) CompleteTraced(_ context.Context, _, _ string) (string, model.Trace, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
 	if f.err != nil {
-		return "", f.err
+		return "", f.trace, f.err
 	}
-	return f.scripted, nil
+	return f.scripted, f.trace, nil
 }
 
 func (f *fakeGenerator) callCount() int {

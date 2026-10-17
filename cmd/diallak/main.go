@@ -302,7 +302,23 @@ func probeModel(ctx context.Context, gate *model.Gate) error {
 	return nil
 }
 
+// newReceipts holds receipts when the model is on: only then can text leave the bot (ADR-0013).
+func newReceipts(assembly *app.Assembly) (*discord.Receipts, error) {
+	if assembly.Model == nil {
+		return nil, nil
+	}
+	receipts, err := discord.NewReceipts(discord.ReceiptsConfig{})
+	if err != nil {
+		return nil, fmt.Errorf("create receipts: %w", err)
+	}
+	return receipts, nil
+}
+
 func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotConfig, error) {
+	receipts, err := newReceipts(assembly)
+	if err != nil {
+		return discord.BotConfig{}, err
+	}
 	handler, err := discord.NewHandler(discord.HandlerConfig{
 		Asker:            assembly.Pipeline,
 		GuildID:          cfg.GuildID,
@@ -311,6 +327,7 @@ func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotC
 		MaxConcurrent:    cfg.MaxConcurrentAsks,
 		AskTimeout:       cfg.AskTimeout,
 		RenderOptions:    assembly.RenderOptions,
+		Receipts:         receipts,
 	})
 	if err != nil {
 		return discord.BotConfig{}, fmt.Errorf("create discord handler: %w", err)

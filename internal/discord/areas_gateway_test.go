@@ -20,7 +20,8 @@ import (
 
 // The tests in this file start the bot as Run does, with the areas command, and hand its client
 // INTERACTION_CREATE frames as in run_gateway_test.go. The fake Discord serves the server's roles,
-// the role calls on the member, the interaction callback and the edit of the original response.
+// the role calls on the member, the interaction callback, the edit of the original response and the
+// direct message of a receipt.
 
 // areasCall is one request the fake Discord received, with the audit log reason it carried.
 type areasCall struct {
@@ -40,7 +41,8 @@ type areasMessage struct {
 	Flags      int    `json:"flags"`
 	Components []struct {
 		Components []struct {
-			Options []struct {
+			CustomID string `json:"custom_id"`
+			Options  []struct {
 				Default bool `json:"default"`
 			} `json:"options"`
 		} `json:"components"`
@@ -67,6 +69,9 @@ type areasFake struct {
 	mu      sync.Mutex
 	calls   []areasCall
 	answers chan struct{}
+	// directClosed refuses a direct message as Discord does when the member's direct messages
+	// are closed.
+	directClosed bool
 }
 
 func (f *areasFake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -103,17 +108,50 @@ func (f *areasFake) respond(w http.ResponseWriter, r *http.Request) error {
 	switch {
 	case (r.Method == http.MethodPut || r.Method == http.MethodDelete) && strings.HasPrefix(r.URL.Path, memberRoles):
 		w.WriteHeader(http.StatusNoContent)
-	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/interactions/"):
-		w.WriteHeader(http.StatusNoContent)
-		f.answers <- struct{}{}
+	case r.Method == http.MethodPost:
+		err = f.respondPost(w, r)
 	case r.Method == http.MethodPatch && strings.HasSuffix(r.URL.Path, "/messages/@original"):
-		_, err = fmt.Fprintf(w, `{"id":"1","channel_id":"2","type":0,"content":"","timestamp":"2026-10-17T00:00:00Z",`+
-			`"author":{"id":"%d","username":"diallak"}}`, gatewayAppID)
+		err = writeFakeMessage(w)
 		f.answers <- struct{}{}
 	default:
 		f.t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusNotFound)
 	}
+	return err
+}
+
+// respondPost answers the interaction callbacks and the direct message of a receipt.
+func (f *areasFake) respondPost(w http.ResponseWriter, r *http.Request) error {
+	switch {
+	case strings.HasPrefix(r.URL.Path, "/interactions/"):
+		w.WriteHeader(http.StatusNoContent)
+		f.answers <- struct{}{}
+		return nil
+	case r.URL.Path == "/users/@me/channels":
+		_, err := fmt.Fprintf(w, `{"id":"%d","type":1}`, receiptDirectChannelID)
+		return err
+	case r.URL.Path == fmt.Sprintf("/channels/%d/messages", receiptDirectChannelID):
+		return f.respondDirect(w)
+	default:
+		f.t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+		return nil
+	}
+}
+
+// respondDirect answers a direct message, or refuses it with code 50007 when directClosed is set.
+func (f *areasFake) respondDirect(w http.ResponseWriter) error {
+	if f.directClosed {
+		w.WriteHeader(http.StatusForbidden)
+		_, err := fmt.Fprint(w, `{"code":50007,"message":"Cannot send messages to this user"}`)
+		return err
+	}
+	return writeFakeMessage(w)
+}
+
+func writeFakeMessage(w http.ResponseWriter) error {
+	_, err := fmt.Fprintf(w, `{"id":"1","channel_id":"2","type":0,"content":"","timestamp":"2026-10-17T00:00:00Z",`+
+		`"author":{"id":"%d","username":"diallak"}}`, gatewayAppID)
 	return err
 }
 
@@ -200,21 +238,35 @@ func areasChangeFrame(t *testing.T, seq int, id uint64, customID string, values 
 func runAreasOverGateway(t *testing.T, wantAnswers int, frames ...[]byte) []areasCall {
 	t.Helper()
 	fake := &areasFake{t: t, answers: make(chan struct{}, 2*len(frames)+1)}
+	areas, err := NewAreasHandler(AreasConfig{
+		Definition: areasTestDefinition(), GuildID: areasGuildID, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatalf("NewAreasHandler: %v", err)
+	}
+	return runComponentsOverGateway(t, fake, BotConfig{Areas: areas}, wantAnswers, frames...)
+}
+
+// runComponentsOverGateway starts the bot as cfg sets it against fake, delivers the frames, waits for
+// wantAnswers callbacks and edits and stops the bot. It fills the token, the server and the logger,
+// and builds a handler without receipts when cfg.Handler is nil.
+func runComponentsOverGateway(t *testing.T, fake *areasFake, cfg BotConfig, wantAnswers int, frames ...[]byte) []areasCall {
+	t.Helper()
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
 
 	logger := slog.New(slog.DiscardHandler)
-	handler, err := NewHandler(HandlerConfig{
-		Asker: &fakeAsker{}, GuildID: areasGuildID, MaxConcurrent: 2,
-		AskTimeout: 5 * time.Second, ReplyTimeout: 5 * time.Second, Logger: logger,
-	})
-	if err != nil {
-		t.Fatalf("NewHandler: %v", err)
+	if cfg.Handler == nil {
+		handler, err := NewHandler(HandlerConfig{
+			Asker: &fakeAsker{}, GuildID: areasGuildID, MaxConcurrent: 2,
+			AskTimeout: 5 * time.Second, ReplyTimeout: 5 * time.Second, Logger: logger,
+		})
+		if err != nil {
+			t.Fatalf("NewHandler: %v", err)
+		}
+		cfg.Handler = handler
 	}
-	areas, err := NewAreasHandler(AreasConfig{Definition: areasTestDefinition(), GuildID: areasGuildID, Logger: logger})
-	if err != nil {
-		t.Fatalf("NewAreasHandler: %v", err)
-	}
+	cfg.Token, cfg.GuildID, cfg.Logger = makeFakeToken(gatewayAppID), areasGuildID, logger
 	opts := clientOptions{
 		restURL: srv.URL,
 		openGateway: func(_ context.Context, client *bot.Client, _ string) error {
@@ -236,7 +288,6 @@ func runAreasOverGateway(t *testing.T, wantAnswers int, frames ...[]byte) []area
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	cfg := BotConfig{Token: makeFakeToken(gatewayAppID), GuildID: areasGuildID, Handler: handler, Areas: areas, Logger: logger}
 	go func() { done <- runWithOptions(ctx, cfg, opts) }()
 
 	for range wantAnswers {

@@ -27,6 +27,8 @@ type fakeInteraction struct {
 	deferCalls int
 	replyCalls int
 	replies    []string
+	// receiptKeys holds the receipt key of each reply, "" for a reply without a button.
+	receiptKeys []string
 }
 
 func (f *fakeInteraction) GuildID() uint64 {
@@ -54,10 +56,11 @@ func (f *fakeInteraction) Defer(ctx context.Context) error {
 	return err
 }
 
-func (f *fakeInteraction) Reply(ctx context.Context, text string) error {
+func (f *fakeInteraction) Reply(ctx context.Context, text, receiptKey string) error {
 	f.mu.Lock()
 	f.replyCalls++
 	f.replies = append(f.replies, text)
+	f.receiptKeys = append(f.receiptKeys, receiptKey)
 	block := f.replyBlock
 	err := f.replyErr
 	f.mu.Unlock()

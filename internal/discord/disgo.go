@@ -217,7 +217,7 @@ func runWithOptions(ctx context.Context, cfg BotConfig, opts clientOptions) erro
 	}
 	d.dispatching.Store(false)
 
-	return shutdownClient(cfg, client, &d.areasRunning, cfg.ShutdownTimeout)
+	return shutdownClient(cfg, client, &d.componentsRunning, cfg.ShutdownTimeout)
 }
 
 func preGatewayStep(
@@ -495,12 +495,13 @@ func buildClient(
 
 // dispatcher hands each interaction the bot serves to a worker. The worker pool bound is
 // MaxConcurrent + 8 immediate busy replies, so the goroutines executing handlers stay bounded under
-// HISS-06 even during interaction surges; the areas command shares that bound.
+// HISS-06 even during interaction surges; the areas command and the receipt buttons share that bound.
 type dispatcher struct {
-	cfg          BotConfig
-	workerSem    chan struct{}
-	dispatching  atomic.Bool
-	areasRunning sync.WaitGroup
+	cfg         BotConfig
+	workerSem   chan struct{}
+	dispatching atomic.Bool
+	// componentsRunning counts the areas and receipt work the shutdown waits for.
+	componentsRunning sync.WaitGroup
 }
 
 func (d *dispatcher) handle(ctx context.Context, e *events.InteractionCreate) {
@@ -530,13 +531,22 @@ func (d *dispatcher) handleCommand(ctx context.Context, e *events.InteractionCre
 		d.run(func() { d.cfg.Handler.HandleAsk(ctx, adapter) })
 	case data.CommandName() == AreasCommandName && d.cfg.Areas != nil:
 		adapter := &areasAdapter{client: e.Client(), interaction: appCmd, respond: e.Respond, command: true}
-		d.runAreas(func() { d.cfg.Areas.HandleCommand(ctx, adapter) })
+		d.runTracked(func() { d.cfg.Areas.HandleCommand(ctx, adapter) })
 	default:
 		d.cfg.Logger.Debug("ignoring unknown command", slog.String("command", data.CommandName()))
 	}
 }
 
 func (d *dispatcher) handleComponent(ctx context.Context, e *events.InteractionCreate, comp discord.ComponentInteraction) {
+	if prefix, key, ok := receiptButton(comp); ok {
+		adapter := &receiptAdapter{client: e.Client(), interaction: comp, respond: e.Respond}
+		if prefix == receiptDirectCustomIDPrefix {
+			d.runTracked(func() { d.cfg.Handler.HandleReceiptDirect(ctx, adapter, key) })
+			return
+		}
+		d.runTracked(func() { d.cfg.Handler.HandleReceipt(ctx, adapter, key) })
+		return
+	}
 	customID, values, ok := areaChange(comp)
 	if !ok || d.cfg.Areas == nil {
 		d.cfg.Logger.Debug("ignoring component the bot does not serve")
@@ -544,13 +554,14 @@ func (d *dispatcher) handleComponent(ctx context.Context, e *events.InteractionC
 	}
 	adapter := &areasAdapter{client: e.Client(), interaction: comp, respond: e.Respond}
 	calls := restRoleCalls{rest: e.Client().Rest, guildID: snowflake.ID(d.cfg.GuildID)}
-	d.runAreas(func() { d.cfg.Areas.HandleChange(ctx, adapter, customID, values, calls) })
+	d.runTracked(func() { d.cfg.Areas.HandleChange(ctx, adapter, customID, values, calls) })
 }
 
-func (d *dispatcher) runAreas(work func()) {
-	d.areasRunning.Add(1)
-	if !d.run(func() { defer d.areasRunning.Done(); work() }) {
-		d.areasRunning.Done()
+// runTracked runs work on a worker and lets the shutdown wait for it.
+func (d *dispatcher) runTracked(work func()) {
+	d.componentsRunning.Add(1)
+	if !d.run(func() { defer d.componentsRunning.Done(); work() }) {
+		d.componentsRunning.Done()
 	}
 }
 
@@ -579,13 +590,13 @@ func openGatewayWithTimeout(ctx context.Context, client *bot.Client, token strin
 	return nil
 }
 
-func shutdownClient(cfg BotConfig, client *bot.Client, areasRunning *sync.WaitGroup, timeout time.Duration) error {
+func shutdownClient(cfg BotConfig, client *bot.Client, componentsRunning *sync.WaitGroup, timeout time.Duration) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	waitErr := cfg.Handler.Wait(shutdownCtx)
 	if waitErr == nil {
-		waitErr = waitGroup(shutdownCtx, areasRunning)
+		waitErr = waitGroup(shutdownCtx, componentsRunning)
 	}
 	client.Close(shutdownCtx)
 
@@ -632,11 +643,11 @@ func (a *interactionAdapter) Defer(ctx context.Context) error {
 	return a.respond(discord.InteractionResponseTypeDeferredCreateMessage, buildDeferPayload(), rest.WithCtx(ctx))
 }
 
-func (a *interactionAdapter) Reply(ctx context.Context, text string) error {
+func (a *interactionAdapter) Reply(ctx context.Context, text, receiptKey string) error {
 	_, err := a.client.Rest.UpdateInteractionResponse(
 		a.interaction.ApplicationID(),
 		a.interaction.Token(),
-		buildReplyPayload(text),
+		buildReplyPayload(text, receiptKey),
 		rest.WithCtx(ctx),
 	)
 	return err
@@ -684,12 +695,17 @@ func buildDeferPayload() discord.MessageCreate {
 	}
 }
 
-func buildReplyPayload(text string) discord.MessageUpdate {
+// buildReplyPayload is the reply with text and, for a non-empty receiptKey, the receipt button.
+func buildReplyPayload(text, receiptKey string) discord.MessageUpdate {
 	mentions := defaultAllowedMentions()
-	return discord.MessageUpdate{
+	update := discord.MessageUpdate{
 		Content:         &text,
 		AllowedMentions: &mentions,
 	}
+	if components := receiptComponents(receiptCustomIDPrefix, ReceiptButtonLabel, receiptKey); components != nil {
+		update.Components = &components
+	}
+	return update
 }
 
 func extractGuildID(id *snowflake.ID) uint64 {

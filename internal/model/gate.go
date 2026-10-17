@@ -12,7 +12,7 @@ import (
 
 // Endpoint specifies the model completion and probe operations needed by Gate.
 type Endpoint interface {
-	Complete(ctx context.Context, system, user string) (string, error)
+	CompleteTraced(ctx context.Context, system, user string) (string, Trace, error)
 	Probe(ctx context.Context) error
 }
 
@@ -111,10 +111,17 @@ func (g *Gate) Start(ctx context.Context) error {
 
 // Complete executes a model completion or gates it if the endpoint is not ready.
 func (g *Gate) Complete(ctx context.Context, system, user string) (string, error) {
+	res, _, err := g.CompleteTraced(ctx, system, user)
+	return res, err
+}
+
+// CompleteTraced is Complete, and it returns the trace of the request. A completion the gate
+// holds back returns the zero Trace: nothing was sent.
+func (g *Gate) CompleteTraced(ctx context.Context, system, user string) (string, Trace, error) {
 	g.mu.Lock()
 	if g.policyLatched {
 		g.mu.Unlock()
-		return "", ErrPolicyMissing
+		return "", Trace{}, ErrPolicyMissing
 	}
 	if g.ready {
 		g.mu.Unlock()
@@ -123,20 +130,20 @@ func (g *Gate) Complete(ctx context.Context, system, user string) (string, error
 	return g.completeNotReady(ctx, system, user)
 }
 
-func (g *Gate) completeReady(ctx context.Context, system, user string) (string, error) {
-	res, err := g.endpoint.Complete(ctx, system, user)
+func (g *Gate) completeReady(ctx context.Context, system, user string) (string, Trace, error) {
+	res, trace, err := g.endpoint.CompleteTraced(ctx, system, user)
 	if err == nil {
-		return res, nil
+		return res, trace, nil
 	}
 	// A reply without the policy is a fact about the endpoint, whatever
 	// became of the caller's context while its body was discarded.
 	if Classify(err) == ClassPolicy {
 		g.mu.Lock()
 		defer g.mu.Unlock()
-		return "", g.latchLocked(err)
+		return "", trace, g.latchLocked(err)
 	}
 	if ctx.Err() != nil {
-		return "", err
+		return "", trace, err
 	}
 	if Classify(err) == ClassUnavailable {
 		g.mu.Lock()
@@ -148,23 +155,23 @@ func (g *Gate) completeReady(ctx context.Context, system, user string) (string, 
 			g.logNotReady(err)
 		}
 	}
-	return "", err
+	return "", trace, err
 }
 
-func (g *Gate) completeNotReady(ctx context.Context, system, user string) (string, error) {
+func (g *Gate) completeNotReady(ctx context.Context, system, user string) (string, Trace, error) {
 	if g.policyLatched {
 		g.mu.Unlock()
-		return "", ErrPolicyMissing
+		return "", Trace{}, ErrPolicyMissing
 	}
 	now := g.now()
 	if g.trialInFlight || now.Before(g.nextTrial) {
 		g.mu.Unlock()
-		return "", ErrNotReady
+		return "", Trace{}, ErrNotReady
 	}
 	g.trialInFlight = true
 	g.mu.Unlock()
 
-	res, err := g.endpoint.Complete(ctx, system, user)
+	res, trace, err := g.endpoint.CompleteTraced(ctx, system, user)
 
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -176,19 +183,19 @@ func (g *Gate) completeNotReady(ctx context.Context, system, user string) (strin
 			g.ready = true
 			g.logger.Info("model ready")
 		}
-		return res, nil
+		return res, trace, nil
 	}
 
 	if Classify(err) == ClassPolicy {
-		return "", g.latchLocked(err)
+		return "", trace, g.latchLocked(err)
 	}
 
 	if ctx.Err() != nil {
-		return "", err
+		return "", trace, err
 	}
 
 	g.nextTrial = g.now().Add(g.retryInterval)
-	return "", err
+	return "", trace, err
 }
 
 // State reports the current readiness state ("ready" or "not ready").

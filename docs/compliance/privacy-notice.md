@@ -26,6 +26,10 @@ against the code.
   it. Other members can see the roles you hold.
 - Your question is held in memory until the reply is sent, and then it is gone.
 - The reply is visible only to you.
+- When your question left the bot, the reply has a button that shows you a
+  receipt: which guardrails and policies ran, where your text went and how
+  long it is kept. The bot holds that receipt in memory for 15 minutes. It
+  sends it as a direct message only when you press for that.
 - Your question is never used to train or evaluate a model
   ([ADR-0002](../adr/0002-data-and-compliance.md)).
 
@@ -69,7 +73,8 @@ No data protection officer is appointed.
 | The question you pass to `/ask` | Finding documentation passages and writing the reply | Legitimate interests, Article 6(1)(f) |
 | The id of the server the command came from | Refusing every server but the configured one | Legitimate interests, Article 6(1)(f) |
 | With `/areas`: your member id, the roles you hold, whether you have passed the server's screening, and the options you choose | Showing what you hold, giving and taking the roles you choose, refusing a member who has not passed screening | Legitimate interests, Article 6(1)(f) |
-| Other fields Discord sends with a command, such as your name and locale, and your member id and roles with `/ask` | None: the bot reads none of them and keeps none | Not used |
+| When you press the receipt's direct message button: your member id | Sending the receipt to you as a direct message, for that one request | Legitimate interests, Article 6(1)(f) |
+| Other fields Discord sends with a command or a button press, such as your name and locale, and your member id and roles with `/ask` | None: the bot reads none of them and keeps none | Not used |
 <!-- markdownlint-enable MD013 -->
 
 The question and the options you choose come from you. The other fields come
@@ -83,7 +88,8 @@ sources.
 
 The bot's logs hold no question, no answer and no member id. They record the
 outcome of a request, such as `answer` or `refusal`, and how long it took; for
-`/areas`, which role was given or taken and whether that worked
+`/areas`, which role was given or taken and whether that worked; for a
+receipt, whether it was shown or sent
 ([data inventory](data-inventory.md), "What the bot logs").
 
 ## Who receives your data
@@ -94,7 +100,8 @@ outcome of a request, such as `answer` or `refusal`, and how long it took; for
   `/areas` Discord also receives the role change, with a fixed reason that says
   it was your own choice. Discord shows the role to the other members and keeps
   an entry in the server's audit log for 45 days, visible to roles that may
-  view that log.
+  view that log. When you press for it, Discord also receives your receipt as
+  a direct message to you.
 - **The model endpoint** receives your question and the documentation passages
   that were found, in model mode only. The operator runs that endpoint. It
   receives no member id and no name
@@ -105,6 +112,12 @@ Model mode is switched off in the live server until the gates of
 [ADR-0013](../adr/0013-guardrail-policy-and-receipt.md) are passed. Until
 then your question leaves the bot only as far as the reply needs it: the reply
 holds documentation text, not your question.
+
+The endpoint runs guardrails on your question before the model sees it. They
+can mask or change parts of the text, personal data among them, but they do
+not find everything, and the bot does not see what they changed. The receipt
+therefore names the guardrails that ran and never says that your data was
+masked.
 
 ## Where the bot runs
 
@@ -133,6 +146,8 @@ provider, the country of its data centre and the agreement that binds it.
 | The answer, in the endpoint's cache (model mode only) | At most 60 minutes, in memory only. The cache finds an entry by a hash of the request, so it holds the answer but not your question. The bot sends no member id: another member who sends the identical question within that time gets the same answer |
 | A blocked question, in the endpoint's log (model mode only) | When a filter of the endpoint blocks a question, one log line holds the fragment that matched, never the whole question. The line is deleted after about 74 hours at most |
 | The endpoint's record of a request (model mode only) | 30 days. The record holds figures about the request only: which key and which model, how many tokens, and when. It holds no question and no answer |
+| The receipt of a reply, in the bot | In memory for 15 minutes, for at most 1000 replies at once, and lost on a restart. It holds the names of the guardrails and policies, the time, and whether the model's answer was shown; no text of yours and no member id |
+| Your member id, when you press for the receipt as a direct message | In memory until the direct message is sent |
 | Log lines of the bot, which hold no personal data | 30 days |
 <!-- markdownlint-enable MD013 -->
 

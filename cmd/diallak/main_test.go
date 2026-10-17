@@ -146,7 +146,7 @@ func (*wrongServerInteraction) GuildID() uint64             { return 7 }
 func (*wrongServerInteraction) Question() string            { return "unused" }
 func (*wrongServerInteraction) Defer(context.Context) error { return nil }
 
-func (w *wrongServerInteraction) Reply(_ context.Context, text string) error {
+func (w *wrongServerInteraction) Reply(_ context.Context, text, _ string) error {
 	w.replies = append(w.replies, text)
 	return nil
 }

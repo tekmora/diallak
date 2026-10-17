@@ -137,14 +137,14 @@ type scriptedStep struct {
 
 func (e *scriptedEndpoint) Probe(_ context.Context) error { return nil }
 
-func (e *scriptedEndpoint) Complete(_ context.Context, _, _ string) (string, error) {
+func (e *scriptedEndpoint) CompleteTraced(_ context.Context, _, _ string) (string, Trace, error) {
 	i := int(e.calls.Add(1)) - 1
 	if i >= len(e.steps) {
-		return "", errors.New("call beyond the script")
+		return "", Trace{}, errors.New("call beyond the script")
 	}
 	e.entered <- i
 	<-e.steps[i].release
-	return e.steps[i].res, e.steps[i].err
+	return e.steps[i].res, Trace{Sent: true}, e.steps[i].err
 }
 
 type completeResult struct {

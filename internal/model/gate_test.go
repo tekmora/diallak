@@ -40,6 +40,7 @@ type fakeEndpoint struct {
 	probeErr      error
 	completeRes   string
 	completeErr   error
+	completeTrace Trace
 	onComplete    func()
 }
 
@@ -48,12 +49,12 @@ func (f *fakeEndpoint) Probe(_ context.Context) error {
 	return f.probeErr
 }
 
-func (f *fakeEndpoint) Complete(_ context.Context, _, _ string) (string, error) {
+func (f *fakeEndpoint) CompleteTraced(_ context.Context, _, _ string) (string, Trace, error) {
 	f.completeCalls.Add(1)
 	if f.onComplete != nil {
 		f.onComplete()
 	}
-	return f.completeRes, f.completeErr
+	return f.completeRes, f.completeTrace, f.completeErr
 }
 
 func TestGate_Positive_NewGateAndFirstComplete(t *testing.T) {

@@ -10,7 +10,8 @@ The state below is the code on `main`. Each row names where it can be checked.
 
 The bot stores nothing about members. It handles a question, or a member's
 choice of area roles, in memory for the length of one request, and its logs
-carry no question, no answer and no member id.
+carry no question, no answer and no member id. For 15 minutes it holds the
+receipt of a reply: names of guardrails and policies, never the member's text.
 
 ## What the bot receives
 
@@ -22,7 +23,9 @@ carry no question, no answer and no member id.
 | For `/areas` and its menus: the member's id, the roles the member holds and whether the member has still to pass the server's screening | Discord, with the command or the menu change | Selecting the roles the member holds, working out which roles to give or take, addressing the two role calls, refusing a member in screening | In memory until the reply is sent |
 | For a menu change of `/areas`: the options the member chose | Discord, with the menu change | Checking them against the options of the definition and giving or taking the roles | In memory until the reply is sent |
 | The server's roles: id and name of each | Discord, read at start and again for each menu change | Finding the role of each option by name | In memory until the next read |
-| Other fields Discord sends with a command, such as the member's name and locale, and the member's id and roles with `/ask` | Discord, with the command | Nothing: the bot reads none of them | Not kept |
+| A press of a receipt button: the random key in the button | Discord, with the button press | Finding the receipt the bot holds | Not kept beyond the answer |
+| A press of the receipt's direct message button: the member's id | Discord, with the button press | Opening the direct message to that member, for that one request | In memory until the direct message is sent |
+| Other fields Discord sends with a command or a button press, such as the member's name and locale, and the member's id and roles with `/ask` | Discord, with the command | Nothing: the bot reads none of them | Not kept |
 <!-- markdownlint-enable MD013 -->
 
 Check: the adapter reads the server id and the question, and uses the handle
@@ -31,7 +34,10 @@ Discord issues for replying to that one command
 `interactionAdapter`). For `/areas` the adapter reads the server id, the
 member's id, roles and screening flag, and the chosen options
 ([`internal/discord/disgo_areas.go`](../../internal/discord/disgo_areas.go),
-`areasAdapter`). The gateway session requests no intent, so no message,
+`areasAdapter`). For a receipt button it reads the key in the button, and the
+member's id only to open the direct message
+([`internal/discord/disgo_receipt.go`](../../internal/discord/disgo_receipt.go),
+`receiptAdapter`). The gateway session requests no intent, so no message,
 member or presence event reaches the bot (`gatewayIntents` in the same file).
 When it is switched on, the health listener answers the deployment's probes.
 It reads no request body, writes no log line per request and holds no member
@@ -39,7 +45,21 @@ data ([`internal/health`](../../internal/health/health.go)).
 
 ## What the bot stores
 
-Nothing. It has no database and writes no file.
+Nothing on disk. It has no database and writes no file.
+
+In memory it holds one receipt per reply for which text left the bot
+([ADR-0013](../adr/0013-guardrail-policy-and-receipt.md)): the names of the
+guardrails and policies the gateway named in its reply headers, whether the
+reply named the deployment's policy, the time, and whether the model's answer
+was shown. It holds no text of the member and no member id; the key is random
+and carried in the button. A receipt is held for 15 minutes, at most 1000 at
+once with the oldest going first, and a restart empties the store.
+
+Check: `Receipts` in
+[`internal/discord/receipt.go`](../../internal/discord/receipt.go);
+`TestReceipts_Boundary_ReceiptIsHeldForExactlyFifteenMinutes` and
+`TestReceipts_Boundary_OldestGoesFirstAtTheMaximum` in
+[`internal/discord`](../../internal/discord/receipt_test.go).
 
 ## What the bot logs
 
@@ -52,6 +72,7 @@ Nothing. It has no database and writes no file.
 | A change of the model's state, with the class of the failure and the status code when there is one | `model not ready`, `status`, `503` | No |
 | Duration | `1.2s` | No |
 | For `/areas`: the role of the definition, whether it was given or taken, the outcome, the error class of a failed call, the reason of a refusal | `interest-games`, `given`, `ok`, `not-an-option` | No |
+| For a receipt: the outcome, and the error class of a failed call | `shown`, `gone`, `sent`, `closed`, `failure` | No |
 | At start: number of sources and passages, each source with its revision, whether a model is configured, the model alias | `lusoris/SnatchArr@9e70c2e03d22` | No |
 | Name of a command or numeric type of an interaction the bot does not serve, at debug level only | `other` | No |
 | Type of a recovered program fault | `string` | No |
@@ -87,6 +108,8 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
 | :--- | :--- | :--- |
 | Discord | The reply, visible only to the member who asked | Every request |
 | Discord | A role given to or taken from the member, with the fixed reason `The member's own choice through /areas` | Each menu change of `/areas`, one call per role that changes |
+| Discord | The receipt, visible only to the member who pressed its button | Each press of a receipt button |
+| Discord | The receipt as a direct message to the member who pressed for it | Only when the member presses the direct message button; never on the bot's own |
 | The model endpoint the operator configures | The question and the retrieved documentation passages | Model mode only |
 | The model endpoint the operator configures | One fixed word, to learn whether the endpoint answers | Model mode only, once at start |
 <!-- markdownlint-enable MD013 -->
@@ -97,7 +120,10 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
   blocked question, is listed in the [privacy notice](privacy-notice.md),
   "How long data is kept".
 - In excerpt mode the question goes nowhere: the reply holds documentation text,
-  not the question.
+  not the question, and carries no receipt button.
+- The endpoint's guardrails can mask or change the text before the model. They
+  do not find everything, and the bot does not see their result, so no
+  document and no receipt says that personal data is masked.
 
 Check: the request body is built in
 [`internal/model`](../../internal/model/model.go) from the prompt alone; the
