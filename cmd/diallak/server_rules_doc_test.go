@@ -47,3 +47,25 @@ func TestServerRules_Negative_NoTextWaitsForTheCodeOfConduct(t *testing.T) {
 		}
 	}
 }
+
+// The operator accepted the code of conduct and kept the points it does not cover as additions
+// for the server only. The rules no longer call any part of it proposed, name the additions as
+// decided, and leave no open point on either question.
+func TestServerRules_Positive_DecidedAdditionsAndAcceptedCodeOfConduct(t *testing.T) {
+	rules := readDoc(t, "docs/compliance/server-rules.md")
+	for _, stale := range []string{"proposed", "Our Pledge", "decides whether they become"} {
+		if strings.Contains(rules, stale) {
+			t.Errorf("the server rules still say %q", stale)
+		}
+	}
+	start := strings.Index(rules, "additions for the server only")
+	end := strings.Index(rules, "## How the rules are applied")
+	if start < 0 || end < start {
+		t.Fatal("the server rules do not name the additions for the server")
+	}
+	for _, addition := range []string{"gory or shocking", "No spam", "No scams", "pirated software", "Nothing illegal"} {
+		if !strings.Contains(rules[start:end], addition) {
+			t.Errorf("the additions for the server lack %q", addition)
+		}
+	}
+}

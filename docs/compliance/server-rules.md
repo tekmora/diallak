@@ -2,10 +2,9 @@
 
 Draft. It is not published to members yet. The operator has accepted the eight
 rules as draft wording. The organisation's
-[code of conduct](https://github.com/tekmora/.github/blob/main/CODE_OF_CONDUCT.md) now
-exists; its section "Our Pledge" is proposed wording that the operator has not
-accepted yet. The rules become final when the operator accepts them together
-with the code of conduct.
+[code of conduct](https://github.com/tekmora/.github/blob/main/CODE_OF_CONDUCT.md)
+exists, and the operator has accepted it. The rules become final when the
+operator accepts them.
 
 The operator decided the shape: one code of conduct holds the rules of conduct
 for all spaces of the organisation, and the server rules are a short add-on for
@@ -60,8 +59,10 @@ covers these points of that list:
 - No impersonation of another person, a moderator or a project.
 - No advertising.
 
-These points of the list are not in the code of conduct, so they stay with
-the server and hold here in addition to it:
+The operator decided that the points of the list the code of conduct does
+not cover stay here, as additions for the server only. The code of conduct
+stays the shared base of every space; on the server these hold in addition to
+it:
 
 - No gory or shocking content.
 - No spam: no unsolicited invitations, no repeated posts.
@@ -91,10 +92,6 @@ Where the code of conduct lives is recorded in
 [ADR-0008](../adr/0008-code-of-conduct-place.md): once per organisation, not in
 this repository.
 
-## Open points
+## Open point
 
-- The operator accepts or changes the section "Our Pledge" of the code of
-  conduct, which is proposed wording.
-- The points that stay with the server, listed above, are not yet in the
-  rules a member reads: the operator decides whether they become a rule of
-  their own here or move into the code of conduct.
+The operator accepts the rules as final.
