@@ -136,8 +136,8 @@ type planContext struct {
 	raised        bool
 	botRoleID     string
 	callerIdx     int
-	callerPerms   map[string]struct{}
-	hasAdmin      bool
+	rights        heldRights
+	everyoneID    string
 	diffs         []Difference
 	ambiguous     map[string]struct{}
 	acceptedRoles []string
@@ -202,12 +202,6 @@ func newPlanContext(def *serverdef.Definition, s *Snapshot, diffs []Difference) 
 			break
 		}
 	}
-	callerPerms := make(map[string]struct{}, len(s.Caller.Permissions))
-	for _, p := range s.Caller.Permissions {
-		callerPerms[p] = struct{}{}
-	}
-	_, hasAdmin := callerPerms["ADMINISTRATOR"]
-
 	ambiguous := make(map[string]struct{}, len(diffs))
 	for _, d := range diffs {
 		if d.Kind == KindRoleAmbiguous || d.Kind == KindCategoryAmbiguous || d.Kind == KindChannelAmbiguous {
@@ -218,17 +212,17 @@ func newPlanContext(def *serverdef.Definition, s *Snapshot, diffs []Difference) 
 	p, q := computeRoleOrderPQ(def, s, botID)
 
 	return &planContext{
-		def:         def,
-		snap:        s,
-		raised:      Raised(def, s),
-		botRoleID:   botID,
-		callerIdx:   callerIdx,
-		callerPerms: callerPerms,
-		hasAdmin:    hasAdmin,
-		diffs:       diffs,
-		ambiguous:   ambiguous,
-		pOrder:      p,
-		qOrder:      q,
+		def:        def,
+		snap:       s,
+		raised:     Raised(def, s),
+		botRoleID:  botID,
+		callerIdx:  callerIdx,
+		rights:     newHeldRights(s, callerIdx),
+		everyoneID: everyoneID(def),
+		diffs:      diffs,
+		ambiguous:  ambiguous,
+		pOrder:     p,
+		qOrder:     q,
 	}
 }
 
@@ -293,6 +287,9 @@ func (ctx *planContext) evaluateCandidate(c candidate) {
 
 	if c.action == ActionCreateRole && c.roleID != "" {
 		ctx.acceptedRoles = append(ctx.acceptedRoles, c.roleID)
+	}
+	if c.action == ActionSetRolePermissions && c.roleID != "" && c.roleID == ctx.everyoneID {
+		ctx.rights.setEveryone(step, everyoneRole(ctx.def).Permissions)
 	}
 }
 
@@ -583,19 +580,11 @@ func checkRoleOrderAboveCaller(ctx *planContext) (string, string) {
 	return "", ""
 }
 
+// checkLacksRight tests c against the rights the caller holds after the
+// steps accepted before it.
 func (ctx *planContext) checkLacksRight(c candidate) (string, string) {
-	if ctx.hasAdmin || len(c.needs) == 0 {
-		return "", ""
-	}
-	var lacking []string
-	for _, n := range c.needs {
-		if _, ok := ctx.callerPerms[n]; !ok {
-			lacking = append(lacking, n)
-		}
-	}
-	if len(lacking) > 0 {
-		sort.Strings(lacking)
-		return ReasonLacksRight, strings.Join(lacking, ", ")
+	if detail, lacks := ctx.rights.lacking(c.needs); lacks {
+		return ReasonLacksRight, detail
 	}
 	return "", ""
 }
