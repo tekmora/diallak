@@ -190,5 +190,5 @@ func TestApplyServer_Boundary_CancelledBetweenTwoChanges(t *testing.T) {
 	if out.String() != want {
 		t.Errorf("output = %q, want %q", out.String(), want)
 	}
-	assertRequestCounts(t, fx.fake.getRecorded(), 4, 1)
+	assertRequestCounts(t, fx.fake.getRecorded(), 5, 1)
 }

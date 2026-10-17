@@ -312,5 +312,8 @@ func newServerSnapshot(def *serverdef.Definition, botRights, everyone []string) 
 		Categories:       []serverplan.Category{},
 		Channels:         []serverplan.Channel{},
 		ChannelsComplete: true,
+		// A new server checks no member, holds no filter rule, and lets the bot read its rules with MANAGE_GUILD.
+		VerificationLevel: "none",
+		FilterRulesRead:   slices.Contains(botRights, "MANAGE_GUILD"),
 	}
 }

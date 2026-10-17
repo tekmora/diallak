@@ -51,9 +51,9 @@ and applying one plan. None of it was run against Discord
   The file proposes three filter rules and a verification level for the
   operator to read before anything is applied
   ([Filter rules and verification level](#filter-rules-and-verification-level)).
-  The validator checks them against the platform's limits; comparing and
-  applying them is not built yet
-  ([#90](https://github.com/tekmora/diallak/issues/90)).
+  The validator checks them against the platform's limits; plan and apply
+  compare and set them ([Applying the server definition](server-apply.md)),
+  not yet tried against Discord.
 - **Members send no polls.** No role and no entry on a channel gives the
   right `SEND_POLLS`; this is wanted, not an omission (ADR-0015,
   `TestDefinition_Boundary_NoSendPolls`).
@@ -161,7 +161,7 @@ does the same for the fourth.
 | `MANAGE_ROLES` | Manage Roles | Giving and taking the Supporter roles and the Contributor role; giving and taking the area roles a member chooses with `/areas` ([ADR-0011](adr/0011-area-roles-from-member-choice.md)); opening and closing an area by the entry of its role on its channel |
 | `MANAGE_MESSAGES` | Manage Messages | Deleting a message when a moderator acts through the bot |
 | `MODERATE_MEMBERS` | Time Out Members | Timing a member out when a moderator acts through the bot |
-| `MANAGE_GUILD` | Manage Server | Comparing and applying the platform's filter rules and the server's verification level as data of the definition. Decided; the data and its validator are built, comparing and applying are not, and until they are no call of the tool needs the right ([#90](https://github.com/tekmora/diallak/issues/90)) |
+| `MANAGE_GUILD` | Manage Server | Comparing and applying the platform's filter rules and the server's verification level as data of the definition. The data, its validator, compare and apply are built; the tool calls the filter rules and the one change of the server that sets the level, and nothing else the right opens ([Applying the server definition](server-apply.md)) |
 <!-- markdownlint-enable MD013 -->
 
 The labels are the English ones of Discord's settings; the German ones, and
@@ -245,7 +245,8 @@ block message and the exemptions, read in
 `developers/resources/auto-moderation.mdx` of `discord/discord-api-docs` at
 commit `37148620d232`. The five verification levels are read in
 `developers/resources/guild.mdx` of the same commit. None of it was tried
-against Discord.
+against Discord. The names the tool reads and writes for each number are in
+[`server_read_settings.go`](../internal/discord/server_read_settings.go).
 
 ## Who does what
 

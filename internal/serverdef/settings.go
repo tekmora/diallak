@@ -1,5 +1,7 @@
 package serverdef
 
+import "slices"
+
 // Limits of the platform's filter rules, read in Discord's developer documentation,
 // repository discord/discord-api-docs at commit 37148620d232,
 // developers/resources/auto-moderation.mdx.
@@ -95,3 +97,12 @@ type FilterAction struct {
 	// Message is the text a member is shown when their message is blocked.
 	Message string `json:"message,omitempty"`
 }
+
+// VerificationLevels returns the verification levels a definition may name, lowest first.
+func VerificationLevels() []string { return slices.Clone(verificationLevels) }
+
+// FilterTriggers returns the triggers a filter rule may name.
+func FilterTriggers() []string { return slices.Clone(filterTriggers) }
+
+// FilterActionTypes returns the actions a filter rule may name.
+func FilterActionTypes() []string { return slices.Clone(filterActionTypes) }

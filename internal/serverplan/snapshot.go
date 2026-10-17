@@ -18,6 +18,38 @@ type Snapshot struct {
 	Categories       []Category `json:"categories"`
 	Channels         []Channel  `json:"channels"`
 	ChannelsComplete bool       `json:"channels_complete"`
+	// VerificationLevel is the server's verification level by the
+	// definition's names; "" = not read.
+	VerificationLevel string `json:"verification_level,omitempty"`
+	// FilterRulesRead reports whether the filter rules were read. Reading
+	// them needs MANAGE_GUILD; FilterRules is empty when they were not.
+	FilterRulesRead bool         `json:"filter_rules_read,omitempty"`
+	FilterRules     []FilterRule `json:"filter_rules,omitempty"`
+}
+
+// FilterRule is one of the server's filter rules, its roles and channels by
+// name. A trigger or an action the definition cannot name reads as "other".
+type FilterRule struct {
+	Name           string         `json:"name"`
+	Trigger        string         `json:"trigger"`
+	Enabled        bool           `json:"enabled"`
+	Keywords       []string       `json:"keywords,omitempty"`
+	Patterns       []string       `json:"patterns,omitempty"`
+	Presets        []string       `json:"presets,omitempty"`
+	AllowList      []string       `json:"allow_list,omitempty"`
+	MentionLimit   int            `json:"mention_limit,omitempty"`
+	RaidProtection bool           `json:"raid_protection,omitempty"`
+	Actions        []FilterAction `json:"actions"`
+	ExemptRoles    []string       `json:"exempt_roles,omitempty"`
+	ExemptChannels []string       `json:"exempt_channels,omitempty"`
+}
+
+// FilterAction is one action of a server's filter rule; Channel is a name.
+type FilterAction struct {
+	Type           string `json:"type"`
+	Channel        string `json:"channel,omitempty"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
+	Message        string `json:"message,omitempty"`
 }
 
 // Caller identifies the inspecting identity, its role, and its effective permissions.
@@ -106,6 +138,7 @@ func Check(s *Snapshot) error {
 	}
 	errs = append(errs, checkNamesAndTypes(s)...)
 	errs = append(errs, checkPermissions(s)...)
+	errs = append(errs, checkSettings(s)...)
 	return errors.Join(errs...)
 }
 
