@@ -1,9 +1,8 @@
 # Moderator guide
 
-Draft. The commands it names are proposed in
-[ADR-0021](adr/0021-moderation-commands-and-trail.md) and not built yet, and
-the operator has not accepted the wording, the lengths of a timeout or the
-cases that go to the operator.
+The commands it names are decided in
+[ADR-0021](adr/0021-moderation-commands-and-trail.md). Until the bot serves
+them, only the operator moderates.
 
 This guide is for the people who hold the Moderator role on the server. It
 says what you may remove, how long a timeout may be, when a case goes to the

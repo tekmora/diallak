@@ -84,3 +84,34 @@ func (v *validator) checkBotTicketChannels(botRole *Role) {
 		}
 	}
 }
+
+// checkTrail keeps one trail channel, a staff channel whose history the bot reads: the bot lists
+// its own lines there to delete them after the retention (ADR-0021).
+func (v *validator) checkTrail() {
+	botRole := findRoleByKind(v.def.Roles, "bot")
+	trails := 0
+	for _, ch := range v.def.Channels {
+		if ch.Trail {
+			trails++
+		}
+	}
+	for _, ch := range v.def.Channels {
+		if !ch.Trail {
+			continue
+		}
+		path := fmt.Sprintf("channels[%s]", ch.ID)
+		if trails > 1 {
+			v.add(CodeTrail, path+".trail", "the definition holds more than one trail channel")
+		}
+		if !ch.Staff {
+			v.add(CodeTrail, path+".trail", "a trail channel must be a staff channel")
+		}
+		if botRole == nil {
+			continue
+		}
+		if _, ok := Effective(v.def, botRole.ID, ch.ID)["READ_MESSAGE_HISTORY"]; !ok {
+			v.add(CodeTrail, fmt.Sprintf("%s.access[%s]", path, botRole.ID),
+				"bot in the trail channel lacks READ_MESSAGE_HISTORY")
+		}
+	}
+}

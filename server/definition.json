@@ -592,6 +592,7 @@
       "owner": "operator",
       "opens": "start",
       "staff": true,
+      "trail": true,
       "access": [
         {"role": "everyone", "allow": [], "deny": ["VIEW_CHANNEL"]},
         {"role": "moderator", "allow": ["VIEW_CHANNEL"], "deny": ["SEND_MESSAGES"]},

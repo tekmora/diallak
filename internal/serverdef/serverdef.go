@@ -96,6 +96,9 @@ const (
 	// CodeStaffVisibility flags visibility of staff channels granted to unauthorized roles.
 	CodeStaffVisibility = "staff-visibility"
 
+	// CodeTrail flags a trail channel that is not the one staff channel whose history the bot reads.
+	CodeTrail = "trail"
+
 	// CodeFirstAnswer flags a first_answer channel deviating from forum and bot requirements.
 	CodeFirstAnswer = "first-answer"
 
@@ -201,8 +204,10 @@ type Channel struct {
 	FirstAnswer    bool     `json:"first_answer,omitempty"`
 	PrivateThreads bool     `json:"private_threads,omitempty"`
 	Staff          bool     `json:"staff,omitempty"`
-	Tags           []Tag    `json:"tags,omitempty"`
-	Area           string   `json:"area,omitempty"`
+	// Trail marks the staff channel that holds the lines of the moderation commands (ADR-0021).
+	Trail bool   `json:"trail,omitempty"`
+	Tags  []Tag  `json:"tags,omitempty"`
+	Area  string `json:"area,omitempty"`
 }
 
 // Tag defines a selectable tag within a forum channel.

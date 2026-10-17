@@ -28,6 +28,6 @@ record that supersedes it.
 | [0017](0017-administrator-role-made-by-hand.md) | 2026-10-17 | A role that grants Administrator is made by hand | Accepted |
 | [0018](0018-forum-guidelines-name-the-right-to-object.md) | 2026-10-17 | The forum guidelines name the right to object | Accepted |
 | [0019](0019-news-posts.md) | 2026-10-17 | News posts | Accepted |
-| [0020](0020-forum-answers-only-opted-in-posts.md) | 2026-10-17 | The forum answer reads only posts a member opted in | Proposed |
-| [0021](0021-moderation-commands-and-trail.md) | 2026-10-17 | The moderation commands and their trail | Proposed |
+| [0020](0020-forum-answers-only-opted-in-posts.md) | 2026-10-17 | The forum answer reads only posts a member opted in | Accepted |
+| [0021](0021-moderation-commands-and-trail.md) | 2026-10-17 | The moderation commands and their trail | Accepted |
 <!-- markdownlint-enable MD013 -->
