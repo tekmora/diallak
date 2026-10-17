@@ -355,7 +355,7 @@ only check is the SHA-256 the release page shows.
 ## Develop
 
 ```bash
-make verify-all   # context check, audit, build and tests
+make verify-all   # context check, audit, lint, build and tests
 ```
 
 The retrieval evaluation runs with the tests. To see its numbers for the

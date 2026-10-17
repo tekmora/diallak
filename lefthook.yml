@@ -70,5 +70,8 @@ pre-push:
       run: sh .config/lefthook/engine.sh flavor audit .
     audit:
       run: sh .config/lefthook/engine.sh audit
+    # Repository-owned: the CI lint step (Makefile verify-lints).
+    lint:
+      run: make verify-lints
     gate:
       run: sh .config/lefthook/engine.sh gate run --path=. --admit-unsupported
