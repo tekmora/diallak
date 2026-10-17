@@ -223,15 +223,16 @@ func TestPlan_Boundary_AmbiguousNameLeavesTheRestAlone(t *testing.T) {
 	}
 }
 
-// operatorMissing is the server as defined without the Operator role, read by a
-// caller that holds ADMINISTRATOR and may therefore create that role.
-func operatorMissing(t *testing.T, def *serverdef.Definition) *Snapshot {
+// moderatorMissing is the server as defined without the Moderator role, the
+// highest role the plan may create, read by a caller that holds ADMINISTRATOR
+// and may therefore create it.
+func moderatorMissing(t *testing.T, def *serverdef.Definition) *Snapshot {
 	t.Helper()
 	s := snapshotOf(t, def)
-	if s.Roles[0].Name != "Operator" {
-		t.Fatalf("first role = %q, want Operator", s.Roles[0].Name)
+	if s.Roles[1].Name != "Moderator" {
+		t.Fatalf("second role = %q, want Moderator", s.Roles[1].Name)
 	}
-	s.Roles = s.Roles[1:]
+	s.Roles = slices.Delete(s.Roles, 1, 2)
 	for i := range s.Roles {
 		if s.Roles[i].Name == s.Caller.Role {
 			s.Roles[i].Permissions = append(s.Roles[i].Permissions, "ADMINISTRATOR")
@@ -243,14 +244,14 @@ func operatorMissing(t *testing.T, def *serverdef.Definition) *Snapshot {
 
 func TestPlan_Negative_CreatedRoleAboveARoleAboveTheCaller(t *testing.T) {
 	def := loadDef(t)
-	s := operatorMissing(t, def)
+	s := moderatorMissing(t, def)
 
 	res, err := Plan(def, s)
 	if err != nil {
 		t.Fatalf("Plan failed: %v", err)
 	}
-	if !changeFor(res, ActionCreateRole, "roles[operator]") {
-		t.Fatalf("create-role roles[operator] not accepted: %+v", res.Refused)
+	if !changeFor(res, ActionCreateRole, "roles[moderator]") {
+		t.Fatalf("create-role roles[moderator] not accepted: %+v", res.Refused)
 	}
 	// The definition places the created role first, above roles that stand above
 	// the caller: the caller cannot sort those.
@@ -279,7 +280,7 @@ func callerOnTop(s *Snapshot, free int) {
 // runBoundaryCreatedRoleOneFreePosition verifies role ordering when there is one free position.
 func runBoundaryCreatedRoleOneFreePosition(t *testing.T, def *serverdef.Definition) {
 	t.Helper()
-	s := operatorMissing(t, def)
+	s := moderatorMissing(t, def)
 	callerOnTop(s, 1)
 	res, err := Plan(def, s)
 	if err != nil {
@@ -305,17 +306,17 @@ func runBoundaryCreatedRoleOneFreePosition(t *testing.T, def *serverdef.Definiti
 // runBoundaryCreatedRoleNoFreePosition verifies role ordering refusal when there is no free position.
 func runBoundaryCreatedRoleNoFreePosition(t *testing.T, def *serverdef.Definition) {
 	t.Helper()
-	s := operatorMissing(t, def)
+	s := moderatorMissing(t, def)
 	callerOnTop(s, 0)
 	res, err := Plan(def, s)
 	if err != nil {
 		t.Fatalf("Plan failed: %v", err)
 	}
-	if !changeFor(res, ActionCreateRole, "roles[operator]") {
-		t.Fatalf("create-role roles[operator] not accepted: %+v", res.Refused)
+	if !changeFor(res, ActionCreateRole, "roles[moderator]") {
+		t.Fatalf("create-role roles[moderator] not accepted: %+v", res.Refused)
 	}
 	ref, ok := refusalFor(res, ActionSetRoleOrder, "role_order")
-	want := fmt.Sprintf("%d roles would stand below position %d; create operator by hand at the definition's place",
+	want := fmt.Sprintf("%d roles would stand below position %d; create moderator by hand at the definition's place",
 		s.Caller.Position, s.Caller.Position)
 	if !ok || ref.Reason != ReasonTooFewPositions || ref.Detail != want {
 		t.Errorf("set-role-order = %+v (found %v), want %s with %q", ref, ok, ReasonTooFewPositions, want)
@@ -472,14 +473,25 @@ func firstReasonWinsCasesPart2(t *testing.T, def *serverdef.Definition) []firstR
 			wantAction: ActionSetRolePermissions, wantObject: "roles[moderator]", wantReason: ReasonManagedRole,
 		},
 		{
-			name: "above-caller before lacks-right",
+			name: "made-by-hand before above-caller",
 			setup: func() *Snapshot {
 				s := raisedSnapshotOf(t, def)
-				// The caller holds no ADMINISTRATOR and the role stands above it.
+				// The role grants ADMINISTRATOR and stands above the caller.
 				setRolePerms(s, "Operator")
 				return s
 			},
-			wantAction: ActionSetRolePermissions, wantObject: "roles[operator]", wantReason: ReasonAboveCaller,
+			wantAction: ActionSetRolePermissions, wantObject: "roles[operator]", wantReason: ReasonMadeByHand,
+		},
+		{
+			name: "above-caller before lacks-right",
+			setup: func() *Snapshot {
+				s := raisedSnapshotOf(t, def)
+				// The caller holds no MANAGE_ROLES and the role stands above it.
+				setRolePerms(s, "Moderator", "MANAGE_MESSAGES")
+				s.Caller.Permissions = slices.DeleteFunc(s.Caller.Permissions, func(p string) bool { return p == "MANAGE_ROLES" })
+				return s
+			},
+			wantAction: ActionSetRolePermissions, wantObject: "roles[moderator]", wantReason: ReasonAboveCaller,
 		},
 	}
 }

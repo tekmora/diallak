@@ -50,6 +50,9 @@ const (
 	// ReasonTooFewPositions indicates the order step would number more roles
 	// below the caller's role than positions stand free below it.
 	ReasonTooFewPositions = "too-few-positions"
+	// ReasonMadeByHand indicates the role grants ADMINISTRATOR: a person makes
+	// it and gives it its rights by hand, never the plan (ADR-0017).
+	ReasonMadeByHand = "made-by-hand"
 	// ReasonLacksRight indicates the caller lacks permissions required for the change.
 	ReasonLacksRight = "lacks-right"
 	// ReasonUnknownBits indicates an entry has bits set that the permission
@@ -266,10 +269,15 @@ func (ctx *planContext) generateAndEvaluateCandidates() {
 
 func (ctx *planContext) evaluateCandidate(c candidate) {
 	if reason, detail := ctx.checkRefusal(c); reason != "" {
+		needs := c.needs
+		if reason == ReasonMadeByHand {
+			// A person makes the change; the bot's role needs none of its rights.
+			needs = nil
+		}
 		ctx.refused = append(ctx.refused, Refusal{
 			Action: c.action,
 			Object: c.object,
-			Needs:  c.needs,
+			Needs:  needs,
 			Reason: reason,
 			Detail: detail,
 		})
@@ -305,6 +313,9 @@ var refusalChecks = [...]func(*planContext, candidate) (string, string){
 }
 
 func (ctx *planContext) checkRefusal(c candidate) (string, string) {
+	if r, d := ctx.checkMadeByHand(c); r != "" {
+		return r, d
+	}
 	if r := ctx.checkShapeRefusal(c); r != "" {
 		return r, ""
 	}
@@ -342,6 +353,33 @@ func (ctx *planContext) defChannel(id string) *serverdef.Channel {
 		}
 	}
 	return nil
+}
+
+func (ctx *planContext) defRole(id string) *serverdef.Role {
+	for i := range ctx.def.Roles {
+		if ctx.def.Roles[i].ID == id {
+			return &ctx.def.Roles[i]
+		}
+	}
+	return nil
+}
+
+// checkMadeByHand refuses to create a role that grants ADMINISTRATOR or to
+// set its rights: a bot gives a role only rights it holds itself, and the
+// bot's role holds ADMINISTRATOR at no step (ADR-0017). It comes before every
+// other refusal, so that the line says what a person has to do.
+func (ctx *planContext) checkMadeByHand(c candidate) (string, string) {
+	if (c.action != ActionCreateRole && c.action != ActionSetRolePermissions) || c.roleID == "" {
+		return "", ""
+	}
+	r := ctx.defRole(c.roleID)
+	if r == nil || !slices.Contains(r.Permissions, "ADMINISTRATOR") {
+		return "", ""
+	}
+	if c.action == ActionCreateRole {
+		return ReasonMadeByHand, "make the role by hand, with ADMINISTRATOR, above the bot's role"
+	}
+	return ReasonMadeByHand, "give the role its rights by hand, ADMINISTRATOR among them"
 }
 
 func (ctx *planContext) isAmbiguous(object string) bool {

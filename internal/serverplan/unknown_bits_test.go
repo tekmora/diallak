@@ -482,16 +482,16 @@ func runBoundaryUnknownBitsRoleAboveCallerStaysRefused(t *testing.T) {
 	t.Helper()
 	def := loadDef(t)
 	s := raisedSnapshotOf(t, def)
-	r := roleNamed(t, s, "Operator")
-	r.Permissions, r.UnknownBits = []string{}, []int{47}
+	r := roleNamed(t, s, "Moderator")
+	r.Permissions, r.UnknownBits = []string{"VIEW_AUDIT_LOG"}, []int{47}
 	res, err := Plan(def, s)
 	if err != nil {
 		t.Fatalf("Plan failed: %v", err)
 	}
-	if changeFor(res, ActionSetRolePermissions, "roles[operator]") {
+	if changeFor(res, ActionSetRolePermissions, "roles[moderator]") {
 		t.Error("change planned for a role above the caller")
 	}
-	ref, ok := refusalFor(res, ActionSetRolePermissions, "roles[operator]")
+	ref, ok := refusalFor(res, ActionSetRolePermissions, "roles[moderator]")
 	if !ok || ref.Reason != ReasonAboveCaller {
 		t.Errorf("refusal = %+v (found %v), want reason %s", ref, ok, ReasonAboveCaller)
 	}

@@ -419,41 +419,6 @@ func TestPlan_Positive_RaisedFirstSetUp(t *testing.T) {
 	verifyRaisedFirstSetupRights(t, res.Rights())
 }
 
-// runRaisedLacksRightWithoutOperator tests missing operator role produces lacks-right refusal.
-func runRaisedLacksRightWithoutOperator(t *testing.T, def *serverdef.Definition) {
-	t.Helper()
-	s := raisedFirstSetupSnapshot()
-	s.Roles = s.Roles[1:]
-
-	res, err := Plan(def, s)
-	if err != nil {
-		t.Fatalf("Plan failed: %v", err)
-	}
-	if len(res.Refused) != 1 {
-		t.Fatalf("expected exactly 1 refusal, got %d: %+v", len(res.Refused), res.Refused)
-	}
-	ref := res.Refused[0]
-	if ref.Action != ActionCreateRole || ref.Object != "roles[operator]" || ref.Reason != ReasonLacksRight || !strings.Contains(ref.Detail, "ADMINISTRATOR") {
-		t.Errorf("unexpected refusal: %+v", ref)
-	}
-}
-
-// runRaisedLacksRightWithAdministrator tests caller with ADMINISTRATOR has zero refusals.
-func runRaisedLacksRightWithAdministrator(t *testing.T, def *serverdef.Definition) {
-	t.Helper()
-	s := raisedFirstSetupSnapshot()
-	s.Roles = s.Roles[1:]
-	s.Caller.Permissions = append(s.Caller.Permissions, "ADMINISTRATOR")
-
-	res, err := Plan(def, s)
-	if err != nil {
-		t.Fatalf("Plan failed: %v", err)
-	}
-	if len(res.Refused) != 0 {
-		t.Fatalf("expected 0 refused, got %d: %+v", len(res.Refused), res.Refused)
-	}
-}
-
 // snapshotWithoutCallerPerm returns a raised first setup snapshot missing a specific caller permission.
 func snapshotWithoutCallerPerm(perm string) *Snapshot {
 	s := raisedFirstSetupSnapshot()
@@ -504,14 +469,6 @@ func runRaisedLacksRightWithoutManageChannels(t *testing.T, def *serverdef.Defin
 
 func TestPlan_Negative_RaisedLacksRight(t *testing.T) {
 	def := loadDef(t)
-
-	t.Run("without Operator role -> create-role roles[operator] refused lacks-right ADMINISTRATOR", func(t *testing.T) {
-		runRaisedLacksRightWithoutOperator(t, def)
-	})
-
-	t.Run("caller with ADMINISTRATOR -> 0 refused", func(t *testing.T) {
-		runRaisedLacksRightWithAdministrator(t, def)
-	})
 
 	t.Run("caller without MANAGE_CHANNELS -> every create-category and create-channel refused lacks-right", func(t *testing.T) {
 		runRaisedLacksRightWithoutManageChannels(t, def)
