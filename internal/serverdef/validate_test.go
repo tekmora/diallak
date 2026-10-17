@@ -591,7 +591,7 @@ func TestValidate_Negative_FirstAnswerFails(t *testing.T) {
 		def := valid(t)
 		for i, ch := range def.Channels {
 			if ch.ID == "lounge" {
-				def.Channels[i].Tags = []Tag{{Name: "Tag", OptOut: false, Moderated: false}}
+				def.Channels[i].Tags = []Tag{{Name: "Tag", OptIn: false, Moderated: false}}
 				break
 			}
 		}

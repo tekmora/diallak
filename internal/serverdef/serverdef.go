@@ -210,10 +210,11 @@ type Channel struct {
 	Area  string `json:"area,omitempty"`
 }
 
-// Tag defines a selectable tag within a forum channel.
+// Tag defines a selectable tag within a forum channel. OptIn marks the tag a member sets to ask
+// for the automated first answer (ADR-0020).
 type Tag struct {
 	Name      string `json:"name"`
-	OptOut    bool   `json:"opt_out"`
+	OptIn     bool   `json:"opt_in"`
 	Moderated bool   `json:"moderated"`
 }
 

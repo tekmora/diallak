@@ -392,11 +392,11 @@
       "opens": "start",
       "first_answer": true,
       "tags": [
-        {"name": "No automated reply", "opt_out": true, "moderated": false},
-        {"name": "Español", "opt_out": false, "moderated": false},
-        {"name": "Français", "opt_out": false, "moderated": false},
-        {"name": "Deutsch", "opt_out": false, "moderated": false},
-        {"name": "Italiano", "opt_out": false, "moderated": false}
+        {"name": "Automated answer", "opt_in": true, "moderated": false},
+        {"name": "Español", "opt_in": false, "moderated": false},
+        {"name": "Français", "opt_in": false, "moderated": false},
+        {"name": "Deutsch", "opt_in": false, "moderated": false},
+        {"name": "Italiano", "opt_in": false, "moderated": false}
       ],
       "access": [
         {
@@ -856,7 +856,7 @@
     },
     {
       "id": "support-first-answer",
-      "what": "Reads the first message of a new post in the support forum and replies first with excerpts, unless the post carries the opt-out tag.",
+      "what": "Reads the first message of a new post in the support forum and replies first with excerpts, only when the member set the opt-in tag at its creation (ADR-0020).",
       "by": "bot",
       "state": "decided",
       "record": "docs/adr/0009-support-forum-first-answer.md"

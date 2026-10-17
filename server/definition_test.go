@@ -492,3 +492,49 @@ func TestDefinition_Positive_HonoraryAndThirdGuideRole(t *testing.T) {
 	verifyManualRoleAttributes(t, def)
 	verifyManualRoleOrdering(t, def)
 }
+
+// ADR-0020: the support forum carries one opt-in tag, which every member can set; the opt-out tag
+// of ADR-0009 is gone.
+func TestDefinition_Positive_SupportForumHasTheOptInTag(t *testing.T) {
+	def, err := Definition()
+	if err != nil {
+		t.Fatalf("Definition() error = %v, want nil", err)
+	}
+	var optIn []serverdef.Tag
+	for _, ch := range def.Channels {
+		optIn = append(optIn, checkChannelOptInTags(t, ch)...)
+	}
+	if len(optIn) != 1 || optIn[0].Name != "Automated answer" || optIn[0].Moderated {
+		t.Errorf("opt-in tags = %+v, want one 'Automated answer' that every member can set", optIn)
+	}
+}
+
+// checkChannelOptInTags returns the opt-in tags of ch and reports an opt-in tag outside the support
+// forum and the opt-out tag of ADR-0009.
+func checkChannelOptInTags(t *testing.T, ch serverdef.Channel) []serverdef.Tag {
+	t.Helper()
+	var optIn []serverdef.Tag
+	for _, tag := range ch.Tags {
+		if tag.Name == "No automated reply" {
+			t.Errorf("channels[%s] still carries the opt-out tag of ADR-0009", ch.ID)
+		}
+		if !tag.OptIn {
+			continue
+		}
+		if ch.ID != "support" {
+			t.Errorf("channels[%s] carries an opt-in tag, want only the support forum", ch.ID)
+		}
+		optIn = append(optIn, tag)
+	}
+	return optIn
+}
+
+func TestDefinition_Negative_OptOutKeyRefused(t *testing.T) {
+	withOptOut := strings.Replace(definitionJSON, `"opt_in": true`, `"opt_out": true`, 1)
+	if withOptOut == definitionJSON {
+		t.Fatal("string replace for opt_in did not change text")
+	}
+	if _, err := serverdef.Load(strings.NewReader(withOptOut)); err == nil || !strings.Contains(err.Error(), "opt_out") {
+		t.Errorf("Load with the opt_out key error = %v, want error holding 'opt_out'", err)
+	}
+}

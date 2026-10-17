@@ -129,7 +129,7 @@ Each finding has a code, a path into the file and a message.
 | `rule-shape` | A rule with a value below 1, a window outside 1 to 365 days, or a subject that does not exist |
 | `area-channel` | An area without a channel, an area channel that every member sees, or one its own role or the bot does not see |
 | `area-condition` | A language room without the condition that someone who reads the language watches it |
-| `first-answer` | A support forum without exactly one opt-out tag that every member can set, or in which the bot cannot read and reply |
+| `first-answer` | A support forum without exactly one opt-in tag (`opt_in`) that every member can set, or in which the bot cannot read and reply |
 | `staff-visibility` | A moderators' channel that a role other than operator, moderator or bot can see |
 | `trail` | More than one trail channel, the channel that holds the lines of the moderation commands; a trail channel that is not a moderators' channel; a trail channel whose history the bot cannot read, since the bot lists its own lines there to delete them |
 | `moderator-visibility` | A channel that a moderator cannot see |
