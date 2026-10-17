@@ -1,0 +1,2 @@
+type: added
+title: 'The server definition holds the platform''s filter rules and the verification level as data, checked against Discord''s limits, with a proposal for the operator to read before the first apply'

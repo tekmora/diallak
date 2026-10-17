@@ -47,6 +47,13 @@ and applying one plan. None of it was run against Discord
   times a member out through a command of the bot, and every such act lands
   in the moderators' log channel. Those commands are not built yet; until
   they are, only the operator can do either (ADR-0015).
+- **The platform's filter rules and the verification level are data.**
+  The file proposes three filter rules and a verification level for the
+  operator to read before anything is applied
+  ([Filter rules and verification level](#filter-rules-and-verification-level)).
+  The validator checks them against the platform's limits; comparing and
+  applying them is not built yet
+  ([#90](https://github.com/tekmora/diallak/issues/90)).
 - **Members send no polls.** No role and no entry on a channel gives the
   right `SEND_POLLS`; this is wanted, not an omission (ADR-0015,
   `TestDefinition_Boundary_NoSendPolls`).
@@ -79,6 +86,7 @@ after the definition and a file over one mebibyte are refused
 | `areas` | The rooms that open at a threshold, each with an opening and a closing rule | 8 |
 | `choices` | The questions the bot's areas command offers and the role each option gives | 3 questions |
 | `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 16 |
+| `settings` | The platform's filter rules and the server's verification level; absent, nothing of it is compared or changed | 3 filter rules and the verification level |
 <!-- markdownlint-enable MD013 -->
 
 A role or a rule carries `"basis": "decided"` or `"basis": "proposal"`. Decided
@@ -131,6 +139,7 @@ Each finding has a code, a path into the file and a message.
 | `nothing-attaches` | A permission on a recognition, interest, language, notification or managed role; a channel entry that allows something to a recognition or notification role |
 | `role-grant` | A role assigned by the wrong party, such as a member's choice handing out the moderator role, or a managed role not assigned by the platform or an integration; an interest, language or notification role that is not the option of exactly one question; an option that gives a role of another kind; a notification role that does not state `mentionable: true`; `mentionable` on a managed role; `shown_apart` or `mentionable` on the bot's role or on the role every member holds |
 | `choice-limit` | A question with more than 25 options, or an option title longer than 100 characters |
+| `filter-rule` | More rules of one trigger than a server may hold; a field the rule's trigger or the action's type does not read; a keyword rule without keywords or patterns, a preset rule without presets; a list or an entry over the platform's limit; a mention limit outside 1 to 50; a rule without an action or with one action twice; an alert without a channel or into a channel that is not a staff channel; a timeout on a trigger other than keyword or mention spam, or outside one second to four weeks; a block message over 150 characters; more than 20 exempt roles or 50 exempt channels, or one listed twice; two rules with one name |
 | `automation-record` | Something the bot or the platform does without a decision record, a planned bot feature not marked as needing one, or the state `observed` on anything but the platform or together with a record |
 | `id`, `text`, `enum`, `ref`, `version`, `singleton`, `permission-name`, `access-shape` | Malformed ids, empty texts, unknown values, references to nothing or to a managed role from a channel entry or an area, a wrong version, a missing or doubled base role, unknown or doubled permissions |
 <!-- markdownlint-enable MD013 -->
@@ -152,7 +161,7 @@ does the same for the fourth.
 | `MANAGE_ROLES` | Manage Roles | Giving and taking the Supporter roles and the Contributor role; giving and taking the area roles a member chooses with `/areas` ([ADR-0011](adr/0011-area-roles-from-member-choice.md)); opening and closing an area by the entry of its role on its channel |
 | `MANAGE_MESSAGES` | Manage Messages | Deleting a message when a moderator acts through the bot |
 | `MODERATE_MEMBERS` | Time Out Members | Timing a member out when a moderator acts through the bot |
-| `MANAGE_GUILD` | Manage Server | Comparing and applying the platform's filter rules and the server's verification level as data of the definition. Decided, not built: until then no call of the tool needs the right ([#90](https://github.com/tekmora/diallak/issues/90)) |
+| `MANAGE_GUILD` | Manage Server | Comparing and applying the platform's filter rules and the server's verification level as data of the definition. Decided; the data and its validator are built, comparing and applying are not, and until they are no call of the tool needs the right ([#90](https://github.com/tekmora/diallak/issues/90)) |
 <!-- markdownlint-enable MD013 -->
 
 The labels are the English ones of Discord's settings; the German ones, and
@@ -201,6 +210,42 @@ denied the ticket channel and has no entry on the announcement channel.
   from Discord's documentation and not tried (`"verified": false`).
 - **Closing hides a room.** It does not delete it, so that opening it again
   brings its history back.
+
+## Filter rules and verification level
+
+`settings` holds what [ADR-0015](adr/0015-moderator-without-rights-and-server-settings-as-data.md)
+makes data: the platform's own filter rules and the server's verification
+level. Every value in it is a proposal (`"basis": "proposal"`), chosen and not
+measured; the reasoning stands next to each in the file. The operator reads
+them before the first apply.
+
+<!-- markdownlint-disable MD013 -->
+| Rule | Trigger | Catches | Actions |
+| :--- | :--- | :--- | :--- |
+| `spam` | `spam` | What the platform recognises as spam | Block the message; alert in `mod-queue` |
+| `mention-spam` | `mention_spam` | A message with more than 10 different mentions, and a raid of such messages | Block the message; alert in `mod-queue` |
+| `abuse-presets` | `keyword_preset` | Words from the platform's lists of slurs and of sexual content | Block the message; alert in `mod-queue` |
+<!-- markdownlint-enable MD013 -->
+
+- **Verification level `medium`:** an account has to be older than five
+  minutes before it can write. Membership Screening already holds a new member
+  back until they completed the form.
+- **No rule times a member out** and none blocks their interactions. ADR-0005
+  leaves spam and obvious abuse to the platform; every further step is a
+  moderator's, through the bot.
+- **The swearing list is left out.** Swearing alone is not abuse on this
+  server.
+- **The alert goes into the moderators' queue by the rule itself** (ADR-0005).
+  The validator refuses an alert into a channel that is not a staff channel,
+  since the alert carries the flagged message.
+
+The limits the validator holds are Discord's: rules per trigger and server,
+list lengths and entry lengths, the mention limit, the timeout length, the
+block message and the exemptions, read in
+`developers/resources/auto-moderation.mdx` of `discord/discord-api-docs` at
+commit `37148620d232`. The five verification levels are read in
+`developers/resources/guild.mdx` of the same commit. None of it was tried
+against Discord.
 
 ## Who does what
 
