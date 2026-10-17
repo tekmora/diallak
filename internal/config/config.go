@@ -19,6 +19,7 @@ import (
 
 	"github.com/tekmora/diallak/internal/answer"
 	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/ghapp"
 	"github.com/tekmora/diallak/internal/model"
 	"github.com/tekmora/diallak/internal/retrieval"
 )
@@ -77,9 +78,15 @@ const (
 	// EnvNewsGitHubTokenFile names the optional variable holding the path of a read-only GitHub
 	// token file for the advisory reads. It needs EnvNewsStateFile.
 	EnvNewsGitHubTokenFile = "DIALLAK_NEWS_GITHUB_TOKEN_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
+	// EnvDiscussionsAppClientID names the optional variable holding the GitHub App client ID.
+	EnvDiscussionsAppClientID = "DIALLAK_DISCUSSIONS_APP_CLIENT_ID"
+	// EnvDiscussionsAppKeyFile names the optional variable holding the path of the GitHub App RSA key.
+	EnvDiscussionsAppKeyFile = "DIALLAK_DISCUSSIONS_APP_KEY_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
 
 	// MaxTokenBytes bounds secret files (both bot token and model key).
 	MaxTokenBytes = 4096
+	// MaxKeyFileBytes bounds secret files for GitHub App RSA private keys.
+	MaxKeyFileBytes = 16384
 	// MaxSupportChannelRunes is the maximum allowed length of the support channel name in runes.
 	MaxSupportChannelRunes = 64
 
@@ -168,6 +175,11 @@ type Config struct {
 	// NewsGitHubToken is the optional read-only GitHub token of the advisory reads. It is never
 	// logged and is left out of JSON encodings.
 	NewsGitHubToken string `json:"-"`
+	// DiscussionsAppClientID is the GitHub App client ID for reading repository discussions.
+	DiscussionsAppClientID string
+	// DiscussionsAppKey is the private key PEM text of the GitHub App. It is never logged
+	// and is left out of JSON encodings.
+	DiscussionsAppKey string `json:"-"`
 }
 
 // HasModel reports whether a model endpoint is configured.
@@ -185,14 +197,20 @@ func (c Config) HasNews() bool {
 	return c.NewsStateFile != ""
 }
 
+// HasDiscussions reports whether the discussions reading function is configured.
+func (c Config) HasDiscussions() bool {
+	return c.DiscussionsAppClientID != "" && c.DiscussionsAppKey != "" && c.HasNews()
+}
+
 // String returns a redacted representation of Config. Token, ModelKey and NewsGitHubToken are
 // never printed.
 func (c Config) String() string {
-	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelGuardrail:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d, NewsStateFile:%q, NewsGitHubToken:%q}",
+	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelGuardrail:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d, NewsStateFile:%q, NewsGitHubToken:%q, DiscussionsAppClientID:%q, DiscussionsAppKey:%q}",
 		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, c.ModelPolicy, c.ModelGuardrail, redactSecret(c.ModelKey), c.CorpusDir, c.SupportChannel,
 		c.TopPassages, c.MinScore, c.QuestionMaxChars, c.ExcerptChars, c.ReplyMaxChars, c.MaxConcurrentAsks,
 		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate, c.HealthAddr, c.TrailRetention,
-		c.ForumChannelID, c.ForumOptInTagID, c.NewsStateFile, redactSecret(c.NewsGitHubToken))
+		c.ForumChannelID, c.ForumOptInTagID, c.NewsStateFile, redactSecret(c.NewsGitHubToken),
+		c.DiscussionsAppClientID, redactSecret(c.DiscussionsAppKey))
 }
 
 // GoString returns a redacted representation of Config for Go syntax formatting.
@@ -227,6 +245,8 @@ func (c Config) LogValue() slog.Value {
 		slog.Uint64("ForumOptInTagID", c.ForumOptInTagID),
 		slog.String("NewsStateFile", c.NewsStateFile),
 		slog.String("NewsGitHubToken", redactSecret(c.NewsGitHubToken)),
+		slog.String("DiscussionsAppClientID", c.DiscussionsAppClientID),
+		slog.String("DiscussionsAppKey", redactSecret(c.DiscussionsAppKey)),
 	)
 }
 
@@ -273,7 +293,7 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	return Config{
+	cfg := Config{
 		Token:              token,
 		GuildID:            guild,
 		ModelBaseURL:       m.baseURL,
@@ -294,11 +314,9 @@ func Load(getenv func(string) string) (Config, error) {
 		SourceLinkTemplate: linkTmpl,
 		HealthAddr:         healthAddr,
 		TrailRetention:     retention,
-		ForumChannelID:     feat.forumChannel,
-		ForumOptInTagID:    feat.forumTag,
-		NewsStateFile:      feat.newsState,
-		NewsGitHubToken:    feat.newsToken,
-	}, nil
+	}
+	feat.set(&cfg)
+	return cfg, nil
 }
 
 // parseDiscordAccess reads the id of the one server the bot serves and the bot token.
@@ -330,9 +348,17 @@ func parseHealthAndRetention(getenv func(string) string) (string, time.Duration,
 type features struct {
 	forumChannel, forumTag uint64
 	newsState, newsToken   string
+	discClientID, discKey  string
 }
 
-// parseFeatures reads the support forum's and the news function's settings.
+// set copies the features' settings into c.
+func (f features) set(c *Config) {
+	c.ForumChannelID, c.ForumOptInTagID = f.forumChannel, f.forumTag
+	c.NewsStateFile, c.NewsGitHubToken = f.newsState, f.newsToken
+	c.DiscussionsAppClientID, c.DiscussionsAppKey = f.discClientID, f.discKey
+}
+
+// parseFeatures reads the support forum's, the news function's, and discussions settings.
 func parseFeatures(getenv func(string) string) (features, error) {
 	var f features
 	var err error
@@ -340,6 +366,9 @@ func parseFeatures(getenv func(string) string) (features, error) {
 		return features{}, err
 	}
 	if f.newsState, f.newsToken, err = parseNews(getenv); err != nil {
+		return features{}, err
+	}
+	if f.discClientID, f.discKey, err = parseDiscussions(getenv, f.newsState != ""); err != nil {
 		return features{}, err
 	}
 	return f, nil
@@ -385,6 +414,69 @@ func parseNews(getenv func(string) string) (string, string, error) {
 		return "", "", fmt.Errorf("%s: %w", EnvNewsGitHubTokenFile, err)
 	}
 	return state, token, nil
+}
+
+func parseDiscussions(getenv func(string) string, hasNews bool) (string, string, error) {
+	clientID := getenv(EnvDiscussionsAppClientID)
+	keyFile := getenv(EnvDiscussionsAppKeyFile)
+	if clientID == "" && keyFile == "" {
+		return "", "", nil
+	}
+	if clientID == "" {
+		return "", "", fmt.Errorf("%s is set but %s is not", EnvDiscussionsAppKeyFile, EnvDiscussionsAppClientID)
+	}
+	if keyFile == "" {
+		return "", "", fmt.Errorf("%s is set but %s is not", EnvDiscussionsAppClientID, EnvDiscussionsAppKeyFile)
+	}
+	if !hasNews {
+		return "", "", fmt.Errorf("%s is set but %s is not", EnvDiscussionsAppClientID, EnvNewsStateFile)
+	}
+	if !validDiscussionsClientID(clientID) {
+		return "", "", fmt.Errorf("%s must be 1 to 64 alphanumeric characters or dots: %q", EnvDiscussionsAppClientID, clientID)
+	}
+	keyPEM, err := readKeyFile(keyFile)
+	if err != nil {
+		return "", "", fmt.Errorf("%s: %w", EnvDiscussionsAppKeyFile, err)
+	}
+	return clientID, keyPEM, nil
+}
+
+func readKeyFile(path string) (string, error) {
+	secret, err := readSecretFileLimit(path, EnvDiscussionsAppKeyFile, "discussions key", MaxKeyFileBytes)
+	if err != nil {
+		return "", err
+	}
+	if _, err := ghapp.ParseKey([]byte(secret)); err != nil {
+		return "", fmt.Errorf("parse discussions key: %w", err)
+	}
+	return secret, nil
+}
+
+func isAllowedClientIDChar(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z':
+		return true
+	case c >= 'A' && c <= 'Z':
+		return true
+	case c >= '0' && c <= '9':
+		return true
+	case c == '.':
+		return true
+	default:
+		return false
+	}
+}
+
+func validDiscussionsClientID(s string) bool {
+	if s == "" || len(s) > 64 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if !isAllowedClientIDChar(s[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // parseHealthAddr validates the optional listen address of the health listener. The host is
@@ -492,7 +584,12 @@ func parseSnowflake(raw, envVar string) (uint64, error) {
 	return id, nil
 }
 
-func readSecretFile(path, envVar, description string) (secret string, err error) {
+func readSecretFile(path, envVar, description string) (string, error) {
+	return readSecretFileLimit(path, envVar, description, MaxTokenBytes)
+}
+
+// readSecretFileLimit reads a secret file of at most limit bytes.
+func readSecretFileLimit(path, envVar, description string, limit int64) (secret string, err error) {
 	if path == "" {
 		return "", fmt.Errorf("%s is not set", envVar)
 	}
@@ -505,12 +602,12 @@ func readSecretFile(path, envVar, description string) (secret string, err error)
 			err = errors.Join(err, fmt.Errorf("close %s file: %w", description, closeErr))
 		}
 	}()
-	data, err := io.ReadAll(io.LimitReader(file, MaxTokenBytes+1))
+	data, err := io.ReadAll(io.LimitReader(file, limit+1))
 	if err != nil {
 		return "", fmt.Errorf("read %s file: %w", description, err)
 	}
-	if len(data) > MaxTokenBytes {
-		return "", fmt.Errorf("%s file is larger than %d bytes", description, MaxTokenBytes)
+	if int64(len(data)) > limit {
+		return "", fmt.Errorf("%s file is larger than %d bytes", description, limit)
 	}
 	secret = strings.TrimSpace(string(data))
 	if secret == "" {

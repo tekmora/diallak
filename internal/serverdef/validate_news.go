@@ -15,6 +15,7 @@ func (v *validator) checkNews() {
 		return
 	}
 	checkNewsRepositories(v, n.Repositories)
+	checkNewsDiscussions(v, n.DiscussionsChannel)
 
 	if len(n.Feeds) > MaxNewsFeeds {
 		v.add(CodeNews, "news.feeds", fmt.Sprintf("%d feeds, at most %d", len(n.Feeds), MaxNewsFeeds))
@@ -88,4 +89,20 @@ func checkAnnouncementBot(v *validator, ch string) {
 func httpsAddress(raw string) bool {
 	u, err := url.Parse(raw)
 	return err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil
+}
+
+func checkNewsDiscussions(v *validator, chID string) {
+	if chID == "" {
+		return
+	}
+	ch := findChannel(v.def.Channels, chID)
+	if ch == nil {
+		v.add(CodeNews, "news.discussions_channel",
+			fmt.Sprintf("discussions channel %q is not a channel of the definition", chID))
+		return
+	}
+	if ch.Type != "text" {
+		v.add(CodeNews, "news.discussions_channel",
+			fmt.Sprintf("discussions channel %q has type %q, want text", chID, ch.Type))
+	}
 }

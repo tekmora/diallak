@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"time"
+
+	"github.com/tekmora/diallak/internal/ghapp"
 )
 
 const (
@@ -35,6 +37,8 @@ const (
 	// SourceAdvisories is an own repository's list of published security advisories, announced
 	// as it happens.
 	SourceAdvisories
+	// SourceDiscussions is a repository's new discussions, posted as they happen.
+	SourceDiscussions
 )
 
 // Source is one address the news function reads.
@@ -69,16 +73,19 @@ type Places struct {
 	// Channels maps the server definition's channel id to the Discord id of a channel that exists
 	// on the server. A channel that is missing is not open.
 	Channels map[string]string
+	// Discussions is the Discord id of the channel where discussion posts go.
+	Discussions string
 }
 
 // Runner reads the sources when they are due, announces own releases and advisories, holds the
 // other feeds' items for the digests, and posts the digests once a day.
 type Runner struct {
-	Store     Store
-	Reader    *Reader
-	Announcer Announcer
-	Poster    Poster
-	Sources   []Source
+	Store       Store
+	Reader      *Reader
+	Discussions DiscussionReader
+	Announcer   Announcer
+	Poster      Poster
+	Sources     []Source
 	// ReadPlaces reads the server's places; it is called only in a round that reads a source.
 	ReadPlaces func(ctx context.Context) (Places, error)
 	Logger     *slog.Logger
@@ -139,6 +146,10 @@ func (r *Runner) Round(ctx context.Context, nextDigest time.Time) (wake, digest 
 // read reads src once, keeps its result and sends its new items to their place. A failed read is
 // tried again after the source's interval or the server's back-off, whichever is longer.
 func (r *Runner) read(ctx context.Context, src Source, places Places, now time.Time) {
+	if src.Kind == SourceDiscussions {
+		r.readDiscussions(ctx, src, places, now)
+		return
+	}
 	prev := r.Store.Feed(src.ID).Validators
 	var res Result
 	var err error
@@ -180,6 +191,60 @@ func (r *Runner) read(ctx context.Context, src Source, places Places, now time.T
 		n := HoldForPlace(r.Store, ch, open, items, now)
 		r.logger().Info("news: held", slog.String("source", src.ID), slog.Int("held", n),
 			slog.Int("dropped", len(items)-n))
+	}
+}
+
+func (r *Runner) readDiscussions(ctx context.Context, src Source, places Places, now time.Time) {
+	if r.Discussions == nil {
+		r.logger().Warn("news: discussions reader is nil", slog.String("source", src.ID))
+		return
+	}
+	items, err := r.Discussions.ReadDiscussions(ctx)
+	if err != nil {
+		wait := src.Interval
+		var se *StatusError
+		var gse *ghapp.StatusError
+		if errors.As(err, &se) {
+			wait = max(wait, se.RetryAfter)
+		} else if errors.As(err, &gse) {
+			wait = max(wait, gse.RetryAfter)
+		}
+		r.Store.SetNextRead(src.ID, now.Add(wait))
+		r.logger().Warn("news: read discussions failed", slog.String("source", src.ID), slog.Any("error", err),
+			slog.Duration("next_read_in", wait))
+		return
+	}
+	r.Store.SetNextRead(src.ID, now.Add(src.Interval))
+	fresh := r.Store.Record(src.ID, Result{Items: items}, now)
+	if len(fresh) == 0 {
+		return
+	}
+	r.postDiscussions(ctx, src.ID, places.Discussions, fresh)
+}
+
+func (r *Runner) postDiscussions(ctx context.Context, feedID, channelID string, items []Item) {
+	if !discordID(channelID) {
+		for i := range items {
+			r.Store.Forget(feedID, items[i].ID)
+		}
+		r.logger().Warn("news: discussions place is not a Discord id", slog.String("channel", channelID))
+		return
+	}
+	for i := len(items) - 1; i >= 0; i-- {
+		it := items[i]
+		repo := discussionRepo(it.Link)
+		msg, ok := DiscussionMessage(repo, it)
+		if !ok {
+			r.logger().Warn("news: discussion post too long", slog.String("link", it.Link))
+			continue
+		}
+		postCtx, cancel := context.WithTimeout(ctx, PostTimeout)
+		err := r.Poster.PostDigest(postCtx, channelID, msg)
+		cancel()
+		if err != nil {
+			r.Store.Forget(feedID, it.ID)
+			r.logger().Warn("news: discussion post failed", slog.String("link", it.Link), slog.Any("error", err))
+		}
 	}
 }
 

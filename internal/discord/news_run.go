@@ -72,6 +72,11 @@ func readNewsPlaces(ctx context.Context, restClient rest.Rest, guildID uint64, n
 			places.Channels[id] = ch.String()
 		}
 	}
+	if names.Discussions != "" {
+		if ch, err := idx.lookupChannel(names.Discussions); err == nil {
+			places.Discussions = ch.String()
+		}
+	}
 	return places, nil
 }
 

@@ -69,6 +69,23 @@ the bot token.
 Which interface of GitHub serves discussions is verified against GitHub's
 current documentation when the bridge is built. The result is recorded here.
 
+Result, checked on 2026-10-17 while building the bridge (issue #99):
+
+- The bot reads discussions through the GraphQL API (`POST /graphql` on
+  `api.github.com`), which documents the `discussions` connection of a
+  repository with each discussion's category. The call needs authentication;
+  an unauthenticated request is refused.
+- The REST path for a repository's discussions answers, but it is not part of
+  GitHub's published REST description, so the bot does not use it. The Atom
+  feed of a repository's discussions carries no category, so it cannot tell
+  Q&A and Ideas apart.
+- The credential is a GitHub App: the bot signs a short-lived token with the
+  app's private key, asks for an installation token limited to reading
+  discussions and metadata, and reads the installation's repositories. Only
+  the public ones with Discussions switched on are listed, at most ten.
+  Check: [`internal/ghapp`](../../internal/ghapp/ghapp.go) and
+  [`internal/news/discussions.go`](../../internal/news/discussions.go).
+
 ### A refusal offers a discussion
 
 When the bot has to refuse a question, it offers a prefilled link that opens a
@@ -110,6 +127,10 @@ made here and are accepted with this record:
 
 ## Open decisions
 
-This is settled with the unit that builds the bridge:
+None. The one that was open is settled with the unit that built the bridge
+(issue #99):
 
-- How often the bot looks for new discussions.
+- The bot looks for new discussions every 15 minutes, as often as it reads the
+  advisories (`DiscussionInterval` in
+  [`internal/news/discussions.go`](../../internal/news/discussions.go)).
+  Source: chosen, not measured.

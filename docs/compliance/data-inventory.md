@@ -93,10 +93,12 @@ With `DIALLAK_NEWS_STATE_FILE` set, the news function keeps one JSON file
 ([ADR-0019](../adr/0019-news-posts.md), point 8): per source the
 validators of the last read and the time of the next one; the key of each item
 already posted or dropped, for 30 days; and the title and address of each feed
-item waiting for its channel's digest, until the digest is posted. All of it
+item waiting for its channel's digest, until the digest is posted. With the
+Discussions bridge on, the key of each discussion already posted or seen joins
+them, under the same retention; the discussion's title is not stored. All of it
 comes from public feeds and GitHub. It holds nothing a member wrote and no
-member id. The optional GitHub token is read from its file at start, held in
-memory only, never written and never logged.
+member id. The optional GitHub token and the bridge's app key are read from
+their files at start, held in memory only, never written and never logged.
 
 Check: `stateFile` and `HeldItem` in
 [`internal/news/store.go`](../../internal/news/store.go); `KeyRetention` in the
@@ -207,6 +209,8 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
 | Discord | A post in the announcement channel for a release or a published advisory of an own repository, mentioning the release role and no member | News on, each new release or advisory |
 | Discord | A digest of a feed's new items in its area channel, mentioning no one | News on, at most once a day per channel |
 | GitHub (`github.com`, `api.github.com`) | Requests for the releases feed and the published advisories of each own repository; with the token configured, the token to `api.github.com` only | News on, every 10 and 15 minutes |
+| GitHub (`api.github.com`) | The app's signed token and installation token; the request for the installation's repositories and one query per public repository with Discussions for its newest discussions | Bridge on, every 15 minutes |
+| Discord | A post in the channel named by `news.discussions_channel` with a new discussion's repository, category, title, link and date, mentioning no one; the discussion's author is not named | Bridge on, each new Q&A or Ideas discussion |
 | The hosts of the definition's feeds | Requests for the feed, with the validators of the last read | News on and feeds listed, once an hour each |
 | The model endpoint the operator configures | The question and the retrieved documentation passages | Model mode only |
 | The model endpoint the operator configures | One fixed word, to learn whether the endpoint answers | Model mode only, once at start |
@@ -269,5 +273,7 @@ These will add entries here when they are built:
 
 - Support tickets, which need stored state. Their retention is decided: 30 days
   after a ticket is closed, as a default that configuration can change.
-- Reading GitHub Discussions ([ADR-0004](../adr/0004-community-questions.md)).
+- Discussions as a source of answers
+  ([ADR-0004](../adr/0004-community-questions.md)); the bridge that posts new
+  discussions is built (issue #99).
 - Supporter roles.

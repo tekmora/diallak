@@ -221,6 +221,7 @@ var builtCode = map[string]string{
 	"moderation-queue":     "internal/discord/moderation.go",
 	"area-choices":         "internal/discord/areas.go",
 	"server-settings":      "internal/discord/server_apply_settings.go",
+	"discussions-bridge":   "internal/news/discussions.go",
 }
 
 func TestDefinition_Negative_BotAutomationStateMatchesCode(t *testing.T) {

@@ -230,3 +230,63 @@ func TestValidate_Negative_NewsNeedsReleaseRole(t *testing.T) {
 		t.Errorf("findings %+v, want one naming %s", newsFindings(Validate(def)), ReleaseRole)
 	}
 }
+
+func TestNewsNames_Positive_DiscussionsChannel(t *testing.T) {
+	def := valid(t)
+	def.News.DiscussionsChannel = "ai-news-tools"
+	got, ok := def.NewsNames()
+	if !ok || got.Discussions != channelOf(t, def, "ai-news-tools").Name {
+		t.Errorf("NewsNames().Discussions = %q, %v; want %q", got.Discussions, ok, channelOf(t, def, "ai-news-tools").Name)
+	}
+	def.News.DiscussionsChannel = ""
+	got, ok = def.NewsNames()
+	if !ok || got.Discussions != "" {
+		t.Errorf("NewsNames().Discussions when unset = %q, %v; want empty", got.Discussions, ok)
+	}
+}
+
+func TestValidate_Positive_DiscussionsChannel(t *testing.T) {
+	def := valid(t)
+	def.News.DiscussionsChannel = "ai-news-tools"
+	if got := newsFindings(Validate(def)); len(got) != 0 {
+		t.Errorf("Validate() with valid text discussions channel findings = %+v", got)
+	}
+}
+
+func TestValidate_Negative_DiscussionsChannelRefused(t *testing.T) {
+	cases := []struct {
+		name, chID, wantPart string
+	}{
+		{"unknown id", "nonexistent-channel", "not a channel of the definition"},
+		{"announcement type", "announcements", "want text"},
+		{"forum type", "support", "want text"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			def := valid(t)
+			def.News.DiscussionsChannel = tc.chID
+			findings := newsFindings(Validate(def))
+			found := false
+			for _, f := range findings {
+				if f.Path == "news.discussions_channel" && strings.Contains(f.Message, tc.wantPart) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("%s: findings = %+v, want news.discussions_channel containing %q", tc.name, findings, tc.wantPart)
+			}
+		})
+	}
+}
+
+// The shipped definition posts the bridge into the lounge, a text channel (ledger diallak-99-channel).
+func TestNews_Positive_ShippedDiscussionsChannelIsLounge(t *testing.T) {
+	def := valid(t)
+	if def.News.DiscussionsChannel != "lounge" {
+		t.Fatalf("news.discussions_channel = %q, want lounge", def.News.DiscussionsChannel)
+	}
+	if ch := channelOf(t, def, "lounge"); ch.Type != "text" {
+		t.Errorf("lounge type = %q, want text", ch.Type)
+	}
+}

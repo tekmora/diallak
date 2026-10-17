@@ -864,9 +864,9 @@
     },
     {
       "id": "discussions-bridge",
-      "what": "Shows new discussions of the listed repositories on the server with a link back.",
+      "what": "Shows each new Q&A or Ideas discussion of the public repositories its GitHub App can read in the lounge, with a link back.",
       "by": "bot",
-      "state": "decided",
+      "state": "built",
       "record": "docs/adr/0004-community-questions.md"
     },
     {
@@ -1029,6 +1029,7 @@
   },
   "news": {
     "repositories": ["tekmora/diallak", "tekmora/epitrop"],
-    "feeds": []
+    "feeds": [],
+    "discussions_channel": "lounge"
   }
 }
