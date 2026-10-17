@@ -502,31 +502,47 @@ func TestDefinition_Positive_SupportForumHasTheOptInTag(t *testing.T) {
 	}
 	var optIn []serverdef.Tag
 	for _, ch := range def.Channels {
-		optIn = append(optIn, checkChannelOptInTags(t, ch)...)
+		tags, findings := channelOptInTags(ch)
+		for _, f := range findings {
+			t.Error(f)
+		}
+		optIn = append(optIn, tags...)
 	}
 	if len(optIn) != 1 || optIn[0].Name != "Automated answer" || optIn[0].Moderated {
 		t.Errorf("opt-in tags = %+v, want one 'Automated answer' that every member can set", optIn)
 	}
 }
 
-// checkChannelOptInTags returns the opt-in tags of ch and reports an opt-in tag outside the support
-// forum and the opt-out tag of ADR-0009.
-func checkChannelOptInTags(t *testing.T, ch serverdef.Channel) []serverdef.Tag {
-	t.Helper()
+// channelOptInTags returns the opt-in tags of ch, with a finding for an opt-in tag outside the
+// support forum and for the opt-out tag of ADR-0009.
+func channelOptInTags(ch serverdef.Channel) ([]serverdef.Tag, []string) {
 	var optIn []serverdef.Tag
+	var findings []string
 	for _, tag := range ch.Tags {
 		if tag.Name == "No automated reply" {
-			t.Errorf("channels[%s] still carries the opt-out tag of ADR-0009", ch.ID)
+			findings = append(findings, fmt.Sprintf("channels[%s] still carries the opt-out tag of ADR-0009", ch.ID))
 		}
 		if !tag.OptIn {
 			continue
 		}
 		if ch.ID != "support" {
-			t.Errorf("channels[%s] carries an opt-in tag, want only the support forum", ch.ID)
+			findings = append(findings, fmt.Sprintf("channels[%s] carries an opt-in tag, want only the support forum", ch.ID))
 		}
 		optIn = append(optIn, tag)
 	}
-	return optIn
+	return optIn, findings
+}
+
+// The check above refuses an opt-in tag outside the support forum and the old opt-out tag.
+func TestDefinition_Negative_OptInTagOutsideSupportReported(t *testing.T) {
+	ch := serverdef.Channel{ID: "general", Tags: []serverdef.Tag{
+		{Name: "Automated answer", OptIn: true},
+		{Name: "No automated reply"},
+	}}
+	tags, findings := channelOptInTags(ch)
+	if len(tags) != 1 || len(findings) != 2 {
+		t.Errorf("channelOptInTags(general) = %d tags, findings %q; want 1 tag and 2 findings", len(tags), findings)
+	}
 }
 
 func TestDefinition_Negative_OptOutKeyRefused(t *testing.T) {
