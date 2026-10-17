@@ -3,6 +3,8 @@
 - **Status**: Accepted
 - **Date**: 2026-10-11
 - **Authors**: Maintainers
+- **Amended by**: [ADR-0022](0022-embeddings-for-paraphrased-questions.md),
+  "Data and compliance"
 
 ## Context
 
@@ -53,6 +55,8 @@ the guardrails and policies from the reply headers. A receipt that shows "the
 text as processed" while telephone numbers and addresses slip through would
 tell a member that their data was masked when part of it was not. The route
 that returns the masked text opens for the bot after the masking is remedied.
+Amended by [ADR-0022](0022-embeddings-for-paraphrased-questions.md): the key
+also reaches the embeddings route once the operator grants it.
 
 Nothing of this was measured from this repository. The bot assumes none of it:
 the start checks what the bot depends on (see "The start proves the policy").
@@ -112,6 +116,9 @@ find.
 A reply for which text left the bot carries one button. That holds for a
 model-written answer and for an excerpt reply after a failed model call. A
 reply in excerpt mode has no button, because nothing was sent anywhere.
+Amended by [ADR-0022](0022-embeddings-for-paraphrased-questions.md): an
+excerpt reply whose question went to the embedding endpoint carries the button,
+and the receipt names that endpoint where it says where the text went.
 
 Pressing the button shows a receipt to that member only. It holds:
 

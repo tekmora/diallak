@@ -1,6 +1,6 @@
 # ADR-0022: Embeddings for paraphrased questions
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-17
 - **Authors**: Maintainers
 - **Amends**: [ADR-0003](0003-answer-pipeline.md), "Retrieval decides whether
@@ -55,8 +55,19 @@ reach a listed source. The test logs the top hit of every miss.
 
 ## Decision
 
-We propose hybrid retrieval, combining the existing in-memory lexical index
-with semantic embeddings for documentation chunks.
+Retrieval is hybrid: the existing in-memory lexical index is combined with
+semantic embeddings for documentation chunks.
+
+### On-premises embeddings only
+
+Embeddings come from a model that runs on the operator's own hardware, reached
+through the operator's gateway by its alias. A hosted embedding service is
+never used.
+
+- Configuration names a gateway alias, never a hosted model name.
+- The start refuses a configuration whose embedding base URL points to a
+  hosted service, and the bot does not run with it. A test plants such a base
+  URL and must see the start refuse it.
 
 ### Embedding endpoint from configuration
 
@@ -65,8 +76,8 @@ OpenAI-compatible `/v1/embeddings` API, following the structure of the
 chat generation endpoint
 ([`internal/model/model.go`](../../internal/model/model.go)):
 
-- Configuration sets a base URL and an alias via proposed names
-  `DIALLAK_EMBED_BASE_URL` and `DIALLAK_EMBED_ALIAS`.
+- Configuration sets a base URL and an alias in `DIALLAK_EMBED_BASE_URL` and
+  `DIALLAK_EMBED_ALIAS`.
 - Code never contains a model name; the alias is whatever identifier the local
   endpoint routes on.
 - When an endpoint requires authentication, the credential is read from a file
@@ -97,7 +108,8 @@ chat generation endpoint
 ### Fallback and failure handling
 
 - **Not configured**: When `DIALLAK_EMBED_BASE_URL` and `DIALLAK_EMBED_ALIAS`
-  are not set, the pipeline operates in lexical-only mode, as today.
+  are not set, retrieval is keyword only, as today, and the output says that
+  it was keyword only: the start log names the mode, and so does the reply.
 - **Configured but failing**: When the embedding endpoint fails or times out,
   retrieval falls back to lexical matching for that question. In accordance
   with ADR-0003's rule against silent fallbacks, the failure is counted and
@@ -174,16 +186,27 @@ chat generation endpoint
   measured paraphrase questions fail to retrieve any sources, leading to
   unnecessary refusals for valid member questions.
 
-## Open for the operator
+## Open points
 
-- **Accept or reject**: Whether to proceed with implementing hybrid retrieval
-  and local embeddings.
-- **Model selection**: Which local embedding model the alias routes to (for
-  example, an open-weights embedding model such as `bge-small-en-v1.5`).
-- **Gateway route**: Whether the bot's key may reach the embeddings route of
-  the operator's gateway.
-- **Misses threshold**: Whether `MaxParaphraseMisses = 3` remains the permanent
-  threshold for future corpus evaluations.
+- Which on-premises embedding model the alias routes to is a choice of the
+  gateway, not of this repository.
+- The rights of the bot's gateway key on the embeddings route are computed by
+  the deployment and granted by the operator.
+- Whether `MaxParaphraseMisses = 3` stays the threshold for later corpora.
+
+## Decided in this record
+
+The operator accepted the record on 2026-10-17 with a constraint
+(paraphrased): embeddings come only from an on-premises model behind the
+gateway alias, and configuration refuses a hosted one; when embeddings are not
+configured or are down, retrieval is keyword only and the output says so; the
+refusal rule and the evaluation bars (28 of 32 answerable, 5 of 6 off-topic
+refused) stay as they are. ADR-0002 and ADR-0013 carry a note where this
+record changes them.
+
+These choices were made here: the names of the configuration keys, vectors in
+memory instead of a vector store, a semantic threshold chosen from a sweep,
+and the first version without retries.
 
 ## References
 
@@ -192,5 +215,6 @@ chat generation endpoint
 - [ADR-0013: Guardrail policy and receipt](0013-guardrail-policy-and-receipt.md).
 - [Data inventory](../compliance/data-inventory.md).
 - Issue 124: <https://github.com/tekmora/diallak/issues/124>.
+- Implementation: <https://github.com/tekmora/diallak/issues/189>.
 - SnatchArr evaluation test data:
   [`internal/eval` README](../../internal/eval/testdata/snatcharr/README.md).

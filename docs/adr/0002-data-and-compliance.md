@@ -3,6 +3,8 @@
 - **Status**: Accepted
 - **Date**: 2026-10-10
 - **Authors**: Maintainers
+- **Amended by**: [ADR-0022](0022-embeddings-for-paraphrased-questions.md),
+  "Data and compliance"
 
 ## Context
 
@@ -29,7 +31,10 @@ Text from Discord is used to answer the request at hand, and for nothing else.
 - It is never collected into an evaluation set. Evaluation questions are written
   from the documentation ([ADR-0003](0003-answer-pipeline.md)).
 - It is sent to one place only: the model endpoint named in configuration. That
-  endpoint must not keep or train on what it receives.
+  endpoint must not keep or train on what it receives. Amended by
+  [ADR-0022](0022-embeddings-for-paraphrased-questions.md): the question also
+  goes to the on-premises embedding endpoint named in configuration, under the
+  same rule.
 
 ### Store as little as possible
 
