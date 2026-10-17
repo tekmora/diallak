@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Sample news</title>
+    <link>https://example.org/</link>
+    <description>A recorded RSS 2.0 feed for tests.</description>
+    <item>
+      <title>First &lt;b&gt;release&lt;/b&gt;   is out</title>
+      <link>https://example.org/posts/1</link>
+      <guid isPermaLink="false">example-1</guid>
+      <pubDate>Fri, 16 Oct 2026 08:30:00 +0200</pubDate>
+    </item>
+    <item>
+      <title>No guid, no date</title>
+      <link>https://example.org/posts/2</link>
+    </item>
+    <item>
+      <title>Plain http is left out</title>
+      <link>http://example.org/posts/3</link>
+      <guid>example-3</guid>
+    </item>
+    <item>
+      <title>A script address is left out</title>
+      <link>javascript:alert(1)</link>
+      <guid>example-4</guid>
+    </item>
+    <item>
+      <title>   </title>
+      <link>https://example.org/posts/5</link>
+      <guid>example-5</guid>
+    </item>
+  </channel>
+</rss>
