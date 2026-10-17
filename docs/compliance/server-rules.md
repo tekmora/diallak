@@ -30,11 +30,13 @@ linked when someone provides it and is marked as a translation.
 6. **Report security problems privately**, as [SECURITY.md](../../SECURITY.md)
    describes, not in a public channel.
 7. **Moderators may remove content and time members out.** People decide every
-   unclear case, never the bot alone. To appeal, write to the e-mail address in
-   the [imprint](imprint.md): that is the binding path, and it works when you
-   can no longer reach the server. A private thread in the ticket channel,
+   unclear case, never the bot alone. Moderators follow the
+   [moderator guide](../moderator-guide.md), and every act is recorded with
+   its reason. To object to an act, write to the e-mail address in the
+   [imprint](imprint.md): that is the binding path, and it works when you can
+   no longer reach the server. A private thread in the ticket channel,
    addressed to the operator, is accepted too. Moderators who manage threads
-   can see such a thread.
+   can see such a thread. The operator decides the objection.
 8. **Discord's own rules apply.** You must follow Discord's Terms of Service
    and Community Guidelines and meet Discord's minimum age for your country.
    The server has no mature content and no age-restricted channel.
