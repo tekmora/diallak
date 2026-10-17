@@ -197,7 +197,7 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 		return nil, errors.New("invalid model guardrail: 1 to 128 characters of letters, digits and \"._:/-\"")
 	}
 
-	timeout, err := validateTimeout(cfg.Timeout)
+	timeout, err := ResolveTimeout(cfg.Timeout, DefaultTimeout, MaxTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -254,12 +254,14 @@ func ValidateBaseURL(rawURL string) error {
 	return nil
 }
 
-func validateTimeout(d time.Duration) (time.Duration, error) {
+// ResolveTimeout returns def for a zero d, d itself inside (0, maxTimeout], and an error
+// otherwise. The embedding client shares it.
+func ResolveTimeout(d, def, maxTimeout time.Duration) (time.Duration, error) {
 	if d == 0 {
-		return DefaultTimeout, nil
+		return def, nil
 	}
-	if d < 0 || d > MaxTimeout {
-		return 0, fmt.Errorf("timeout %v outside (0, %v]", d, MaxTimeout)
+	if d < 0 || d > maxTimeout {
+		return 0, fmt.Errorf("timeout %v outside (0, %v]", d, maxTimeout)
 	}
 	return d, nil
 }

@@ -153,7 +153,7 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 		return nil, fmt.Errorf("invalid embedding alias %q", cfg.Alias)
 	}
 
-	timeout, err := validateTimeout(cfg.Timeout)
+	timeout, err := model.ResolveTimeout(cfg.Timeout, DefaultTimeout, MaxTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -176,16 +176,6 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 		timeout:    timeout,
 		httpClient: client,
 	}, nil
-}
-
-func validateTimeout(d time.Duration) (time.Duration, error) {
-	if d == 0 {
-		return DefaultTimeout, nil
-	}
-	if d < 0 || d > MaxTimeout {
-		return 0, fmt.Errorf("timeout %v outside (0, %v]", d, MaxTimeout)
-	}
-	return d, nil
 }
 
 // Host returns the host of the embedding endpoint.
