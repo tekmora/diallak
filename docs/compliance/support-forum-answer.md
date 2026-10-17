@@ -141,6 +141,7 @@ New rows for "Where the notice appears". The texts are accepted with ADR-0009.
 | Place | Text | State |
 | :--- | :--- | :--- |
 | Guidelines of the support forum, shown before a member posts | "The automated assistant reads the first message of a new post and may reply first with excerpts from the documentation. It reads nothing else here. To keep it away from a post, add the tag 'No automated reply' when you create it. More is in the privacy notice." | Accepted with ADR-0009, set by the operator |
+| Guidelines of the support forum, a paragraph of its own after the text above | "You can object at any time to the assistant reading your posts here: write to the e-mail address in the privacy notice, or open a private thread in the ticket channel. The privacy notice explains this under 'Your right to object'." | Proposed with [ADR-0018](../adr/0018-forum-guidelines-name-the-right-to-object.md), set by the operator |
 | First line of a reply in the support forum | "Automated excerpts from the documentation. No AI model wrote this reply." | In the code, used by `/ask` today |
 | Last line of a reply in the support forum | "Automated first reply. A person can help here in this post." | Accepted with ADR-0009, not in the code |
 <!-- markdownlint-enable MD013 -->
@@ -156,7 +157,8 @@ Rule 5 gains one sentence after "check the sources it cites":
 
 - The findings of [Legal research](legal-research.md), points 7 to 9, are
   settled:
-  - the guidelines text names the right to object (#145);
+  - the guidelines text names the right to object (#145; the sentence is
+    proposed in ADR-0018 and settled when that record is accepted);
   - posts with data of the kinds Article 9(1) lists have an answer (#146).
 - The entries above are in their documents, and the privacy notice is
   published ([compliance](README.md), "Gates for the public launch").
