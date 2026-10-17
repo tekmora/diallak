@@ -87,7 +87,21 @@ data ([`internal/health`](../../internal/health/health.go)).
 
 ## What the bot stores
 
-Nothing on disk. It has no database and writes no file.
+Nothing on disk, unless the news function is on. It has no database.
+
+With `DIALLAK_NEWS_STATE_FILE` set, the news function keeps one JSON file
+([ADR-0019](../adr/0019-news-posts.md), point 8): per source the
+validators of the last read and the time of the next one; the key of each item
+already posted or dropped, for 30 days; and the title and address of each feed
+item waiting for its channel's digest, until the digest is posted. All of it
+comes from public feeds and GitHub. It holds nothing a member wrote and no
+member id. The optional GitHub token is read from its file at start, held in
+memory only, never written and never logged.
+
+Check: `stateFile` and `HeldItem` in
+[`internal/news/store.go`](../../internal/news/store.go); `KeyRetention` in the
+same file; the token's redaction in `LogValue` of
+[`internal/config`](../../internal/config/config.go).
 
 In memory it holds one receipt per reply for which text left the bot
 ([ADR-0013](../adr/0013-guardrail-policy-and-receipt.md)): the names of the
@@ -190,12 +204,19 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
 | Discord | The deletion of a trail line of the bot's own past the retention | Once a day |
 | Discord | A public reply in a post of the support forum, with excerpts from the documentation, mentioning no one | A new opted-in post for which a passage is found; at most one reply per post |
 | Discord | The receipt as a direct message to the member who pressed for it | Only when the member presses the direct message button; never on the bot's own |
+| Discord | A post in the announcement channel for a release or a published advisory of an own repository, mentioning the release role and no member | News on, each new release or advisory |
+| Discord | A digest of a feed's new items in its area channel, mentioning no one | News on, at most once a day per channel |
+| GitHub (`github.com`, `api.github.com`) | Requests for the releases feed and the published advisories of each own repository; with the token configured, the token to `api.github.com` only | News on, every 10 and 15 minutes |
+| The hosts of the definition's feeds | Requests for the feed, with the validators of the last read | News on and feeds listed, once an hour each |
 | The model endpoint the operator configures | The question and the retrieved documentation passages | Model mode only |
 | The model endpoint the operator configures | One fixed word, to learn whether the endpoint answers | Model mode only, once at start |
 | The model endpoint's masking route | The question as the member wrote it, before anything goes to the model | Only with `DIALLAK_MODEL_GUARDRAIL` set, every request in model mode |
 | The model endpoint's masking route | One fixed sentence with an invented address, to learn whether the masking works | Only with `DIALLAK_MODEL_GUARDRAIL` set, at start and before each retry |
 <!-- markdownlint-enable MD013 -->
 
+- The news reads carry no member data: their requests are built from the
+  definition and the stored validators alone
+  ([`internal/news`](../../internal/news/fetch.go)).
 - The model endpoint receives no member id and no name.
 - It must not keep or train on what it receives (ADR-0002). The operator runs
   it. What it holds for a time anyway, a cached answer and a log line about a

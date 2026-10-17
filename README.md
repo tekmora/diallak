@@ -116,6 +116,8 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 | `DIALLAK_HEALTH_ADDR` | no | Listen address "host:port" for health probes; off by default |
 | `DIALLAK_FORUM_CHANNEL_ID` | with the tag | Id of the support forum whose new opted-in posts get a first reply; the forum answer is off without it |
 | `DIALLAK_FORUM_OPT_IN_TAG_ID` | with the forum | Id of the forum's tag "Automated answer"; only a post that carries it from its creation is read |
+| `DIALLAK_NEWS_STATE_FILE` | no | Absolute path of the file in which the news function keeps what it has posted; the news function is off without it |
+| `DIALLAK_NEWS_GITHUB_TOKEN_FILE` | no, with the state file | Path of the file that holds a read-only GitHub token, sent only to `api.github.com` for the advisory reads; without it those reads go unauthenticated |
 | `DIALLAK_TRAIL_RETENTION` | no | How long a line of the moderation trail stays, as a Go duration from `24h` to `8760h`; default 90 days |
 <!-- markdownlint-enable MD013 -->
 

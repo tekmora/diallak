@@ -101,7 +101,9 @@ type BotConfig struct {
 	Moderation *ModerationHandler
 	// Forum answers opted-in posts of the support forum. Nil leaves the gateway session without
 	// any intent and handles no thread event (ADR-0009 case 1).
-	Forum           *ForumHandler
+	Forum *ForumHandler
+	// News runs the news function while the bot runs. Nil leaves it off; it then reads nothing.
+	News            *NewsConfig
 	Logger          *slog.Logger
 	ShutdownTimeout time.Duration
 	// ReportReady reports whether the bot is ready to serve. It is called with true
@@ -238,6 +240,13 @@ func runWithOptions(ctx context.Context, cfg BotConfig, opts clientOptions) erro
 		go func() {
 			defer d.componentsRunning.Done()
 			sweepTrail(ctx, client.Rest, cfg, opts)
+		}()
+	}
+	if cfg.News != nil {
+		d.componentsRunning.Add(1)
+		go func() {
+			defer d.componentsRunning.Done()
+			runNews(ctx, client.Rest, cfg, opts)
 		}()
 	}
 	if cfg.ReportReady != nil {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -22,9 +23,31 @@ const (
 	apiVersion = "2026-03-10"
 )
 
-// advisoryHeaders are the request headers of an advisory read. It sends no token (ADR-0019,
-// point 1).
+// apiHost is the only host an advisory read sends the API token to.
+const apiHost = "api.github.com"
+
+// advisoryHeaders are the request headers of an advisory read without a token (ADR-0019, point
+// 1).
 var advisoryHeaders = http.Header{"Accept": {advisoryAccept}, "X-Github-Api-Version": {apiVersion}}
+
+// UseAPIToken makes advisory reads to GitHub's API host send token, a read-only token that lifts
+// the shared budget of 60 unauthenticated requests an hour (issue #180). No other read sends it,
+// and Go's client drops it on a redirect to another host. An empty token sends none.
+func (r *Reader) UseAPIToken(token string) {
+	r.apiToken = token
+}
+
+// advisoryRequestHeaders returns the headers of an advisory read of address, with the token when
+// address is on the API host.
+func (r *Reader) advisoryRequestHeaders(address string) http.Header {
+	u, err := url.Parse(address)
+	if r.apiToken == "" || err != nil || u.Host != r.apiHost {
+		return advisoryHeaders
+	}
+	h := advisoryHeaders.Clone()
+	h.Set("Authorization", "Bearer "+r.apiToken)
+	return h
+}
 
 // ReleasesAddress returns the Atom feed of repo's releases; repo is "owner/name".
 func ReleasesAddress(repo string) string {
@@ -44,7 +67,7 @@ func (r *Reader) FetchAdvisories(ctx context.Context, address string, prev Valid
 	if err := ValidFeedAddress(address); err != nil {
 		return Result{}, err
 	}
-	data, res, err := r.get(ctx, address, prev, advisoryHeaders)
+	data, res, err := r.get(ctx, address, prev, r.advisoryRequestHeaders(address))
 	if err != nil || res.NotModified {
 		return res, err
 	}

@@ -60,3 +60,39 @@ func (d *Definition) AnnouncementChannel() (channel string, ok bool) {
 	}
 	return channel, true
 }
+
+// ReleaseRole is the id of the role that the posts of own releases and advisories mention.
+const ReleaseRole = "notify-releases"
+
+// NewsNames are the server names of the news places, by which the bot finds them on the server.
+type NewsNames struct {
+	// Announcement is the name of the announcement channel.
+	Announcement string
+	// Role is the name of the release role.
+	Role string
+	// Channels maps the id of each feed's channel to the channel's name.
+	Channels map[string]string
+}
+
+// NewsNames returns the names of the news places. ok is false unless the definition has exactly one
+// announcement channel and the release role.
+func (d *Definition) NewsNames() (names NewsNames, ok bool) {
+	id, ok := d.AnnouncementChannel()
+	if !ok {
+		return NewsNames{}, false
+	}
+	role := findRole(d.Roles, ReleaseRole)
+	if role == nil {
+		return NewsNames{}, false
+	}
+	names = NewsNames{Announcement: findChannel(d.Channels, id).Name, Role: role.Name, Channels: map[string]string{}}
+	if d.News == nil {
+		return names, true
+	}
+	for _, f := range d.News.Feeds {
+		if ch, ok := d.FeedChannel(f.ID); ok {
+			names.Channels[ch] = findChannel(d.Channels, ch).Name
+		}
+	}
+	return names, true
+}

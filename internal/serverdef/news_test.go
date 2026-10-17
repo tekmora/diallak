@@ -175,3 +175,58 @@ func TestValidate_Boundary_NewsLimits(t *testing.T) {
 		t.Errorf("the last feed has place %q, %v", got, ok)
 	}
 }
+
+// Issue #180: the bot finds the news places on the server by the names the definition gives them.
+func TestNewsNames_Positive_PlacesByName(t *testing.T) {
+	def := valid(t)
+	def.News = &News{
+		Repositories: []string{"tekmora/diallak"},
+		Feeds:        []NewsFeed{{ID: "ai", URL: "https://example.org/ai.xml", Area: "ai-news-tools"}},
+	}
+	got, ok := def.NewsNames()
+	if !ok {
+		t.Fatal("NewsNames() not ok")
+	}
+	if got.Announcement != "announcements" || got.Role != "Notify: releases" {
+		t.Errorf("NewsNames() = %+v, want the announcement channel and the release role by name", got)
+	}
+	if name := got.Channels["ai-news-tools"]; name != channelOf(t, def, "ai-news-tools").Name || len(got.Channels) != 1 {
+		t.Errorf("NewsNames().Channels = %v, want only the feed's channel by name", got.Channels)
+	}
+}
+
+func TestNewsNames_Negative_MissingPlace(t *testing.T) {
+	def := valid(t)
+	def.Roles = slices.DeleteFunc(def.Roles, func(r Role) bool { return r.ID == ReleaseRole })
+	if _, ok := def.NewsNames(); ok {
+		t.Error("NewsNames() ok without the release role")
+	}
+	def = valid(t)
+	for i := range def.Channels {
+		if def.Channels[i].Type == "announcement" {
+			def.Channels[i].Type = "text"
+		}
+	}
+	if _, ok := def.NewsNames(); ok {
+		t.Error("NewsNames() ok without an announcement channel")
+	}
+	def = valid(t)
+	def.News = nil
+	if got, ok := def.NewsNames(); !ok || len(got.Channels) != 0 {
+		t.Errorf("NewsNames() without a news block = %+v, %v; want the places and no feed channel", got, ok)
+	}
+}
+
+// Own repositories need the release role their posts mention.
+func TestValidate_Negative_NewsNeedsReleaseRole(t *testing.T) {
+	def := valid(t)
+	def.Roles = slices.DeleteFunc(def.Roles, func(r Role) bool { return r.ID == ReleaseRole })
+	def.RoleOrder = slices.DeleteFunc(def.RoleOrder, func(id string) bool { return id == ReleaseRole })
+	found := false
+	for _, f := range newsFindings(Validate(def)) {
+		found = found || strings.Contains(f.Message, ReleaseRole)
+	}
+	if !found {
+		t.Errorf("findings %+v, want one naming %s", newsFindings(Validate(def)), ReleaseRole)
+	}
+}

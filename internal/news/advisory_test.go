@@ -135,3 +135,74 @@ func limitedServer(t *testing.T) (*Reader, *httptest.Server) {
 	r.now = func() time.Time { return now }
 	return r, srv
 }
+
+// authServer records the Authorization header of every request and answers an empty advisory list.
+func authServer(t *testing.T) (*httptest.Server, *[]string) {
+	t.Helper()
+	var got []string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, r.Header.Get("Authorization"))
+		if _, err := w.Write([]byte("[]")); err != nil {
+			t.Errorf("write body: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &got
+}
+
+// tokenReader returns a Reader of srv that holds token and takes srv for the API host.
+func tokenReader(srv *httptest.Server, token string) *Reader {
+	r := testReader(srv)
+	r.apiHost = srv.Listener.Addr().String()
+	r.UseAPIToken(token)
+	return r
+}
+
+// The token goes with an advisory read to the API host.
+func TestFetchAdvisories_Positive_TokenSentToAPIHost(t *testing.T) {
+	srv, got := authServer(t)
+	if _, err := tokenReader(srv, "tok-1").FetchAdvisories(testContext(t), srv.URL+"/a", Validators{}); err != nil {
+		t.Fatalf("FetchAdvisories() error = %v", err)
+	}
+	if len(*got) != 1 || (*got)[0] != "Bearer tok-1" {
+		t.Fatalf("Authorization = %q, want the token", *got)
+	}
+}
+
+// The token never goes to another host, nor with a feed read, and an empty token sends none.
+func TestFetchAdvisories_Negative_TokenKeptFromOtherReads(t *testing.T) {
+	srv, got := authServer(t)
+	other := testReader(srv)
+	other.UseAPIToken("tok-1")
+	if _, err := other.FetchAdvisories(testContext(t), srv.URL+"/a", Validators{}); err != nil {
+		t.Fatalf("FetchAdvisories() other host error = %v", err)
+	}
+	// The feed read fails to parse the advisory list; only its request headers matter here.
+	if _, err := tokenReader(srv, "tok-1").Fetch(testContext(t), srv.URL+"/feed", Validators{}); err == nil {
+		t.Fatal("Fetch() of the advisory list parsed as a feed")
+	}
+	if _, err := tokenReader(srv, "").FetchAdvisories(testContext(t), srv.URL+"/a", Validators{}); err != nil {
+		t.Fatalf("FetchAdvisories() empty token error = %v", err)
+	}
+	if len(*got) != 3 || (*got)[0] != "" || (*got)[1] != "" || (*got)[2] != "" {
+		t.Fatalf("Authorization = %q, want none", *got)
+	}
+}
+
+// The token does not change the shared advisory headers of later reads.
+func TestFetchAdvisories_Boundary_TokenLeavesSharedHeaders(t *testing.T) {
+	srv, _ := authServer(t)
+	if _, err := tokenReader(srv, "tok-1").FetchAdvisories(testContext(t), srv.URL+"/a", Validators{}); err != nil {
+		t.Fatalf("FetchAdvisories() error = %v", err)
+	}
+	if _, ok := advisoryHeaders["Authorization"]; ok {
+		t.Fatal("advisoryHeaders holds the token")
+	}
+}
+
+// A new Reader takes GitHub's API host.
+func TestNewReader_Boundary_APIHost(t *testing.T) {
+	if got := NewReader(nil).apiHost; got != "api.github.com" {
+		t.Fatalf("apiHost = %q, want api.github.com", got)
+	}
+}
