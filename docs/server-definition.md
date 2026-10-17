@@ -281,7 +281,9 @@ stays empty until the operator names the sources for AI and video news.
 The `automation` part names the party for each task and its state: built,
 decided, planned, or observed on the server.
 
-- **The bot, built:** the `/ask` command; the `/areas` command, which gives
+- **The bot, built:** the `/ask` command; the `/bug` command, which answers
+  with a prefilled new-issue link of the repository in `bug_reports` for the
+  member to submit ([ADR-0001](adr/0001-architecture-and-boundaries.md)); the `/areas` command, which gives
   and takes the interest, language and notification roles from the member's
   own choice ([ADR-0011](adr/0011-area-roles-from-member-choice.md)); and
   what a moderator does through the bot, `Remove message` and `/timeout`,
