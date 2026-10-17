@@ -1,0 +1,3 @@
+type: added
+title: Release notes link the credits page from repository variable CREDITS_URL and refuse supporter names from secret SUPPORTER_NAMES
+issue: '#125'

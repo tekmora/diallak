@@ -32,6 +32,11 @@ checked. A value that was not measured says so.
 | Visibility | Public: a pull needs no login | `crane digest ghcr.io/tekmora/diallak:0.1.1` without credentials returned the digest above on 2026-10-11 |
 <!-- markdownlint-enable MD013 -->
 
+Before its first release, a deployment sets repository variable `CREDITS_URL`
+(the address of the credits page) and repository secret `SUPPORTER_NAMES` (the
+supporter names to refuse in release notes, one name per line) for the release
+workflow ([README](../README.md), "A release is cut in three steps").
+
 The root filesystem can be read-only and no temporary directory is needed. The
 only file the bot writes is the news state file, when the news function is on;
 it lies on a writable volume that user `65532` owns, and the bot replaces it

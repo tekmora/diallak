@@ -69,17 +69,38 @@ jobs:
       - name: Require release notes for the version
         env:
           TAG: ${{ steps.tag.outputs.tag }}
+          CREDITS_URL: ${{ vars.CREDITS_URL }}
+          SUPPORTER_NAMES: ${{ secrets.SUPPORTER_NAMES }}
         run: |
+          failed=no
+          if [ -z "$CREDITS_URL" ]; then
+            echo "::error::CREDITS_URL is unset"
+            failed=yes
+          fi
+          if [ -z "$SUPPORTER_NAMES" ]; then
+            echo "::error::SUPPORTER_NAMES is unset"
+            failed=yes
+          fi
+          if [ "$failed" = yes ]; then
+            exit 1
+          fi
           v=${TAG#v}
+          notes="$RUNNER_TEMP/notes.md"
+          names="$RUNNER_TEMP/supporter-names.txt"
+          touch "$names"
+          chmod 600 "$names"
+          trap 'rm -f "$notes" "$names"' EXIT
+          printf '%s\n' "$SUPPORTER_NAMES" > "$names"
           case "$TAG" in
             *-rc.*)
               sh .github/scripts/release-candidate-notes.sh "$v" changelog.d \
-                > /dev/null
+                > "$notes"
               ;;
             *)
-              sh .github/scripts/release-notes.sh "$v" CHANGELOG.md > /dev/null
+              sh .github/scripts/release-notes.sh "$v" CHANGELOG.md > "$notes"
               ;;
           esac
+          sh .github/scripts/release-notes-names.sh "$notes" "$names"
 
   image:
     name: image
@@ -113,7 +134,8 @@ jobs:
           merge-multiple: true
           path: sbom
       # The notes are the changelog section plus the image by tag and by
-      # digest, so a deployment finds the digest to pin on the release page.
+      # digest, so a deployment finds the digest to pin on the release page,
+      # and the credits note linking CREDITS_URL.
       # A rebuild of an existing tag keeps its release, rewrites the notes
       # with the new digest and replaces the SBOMs. The scripts come from the
       # tag: a tag from before 0.1.2 has no image note, and its release page
@@ -125,7 +147,21 @@ jobs:
           TAG: ${{ needs.meta.outputs.tag }}
           IMAGE: ghcr.io/${{ github.repository }}
           DIGEST: ${{ needs.image.outputs.digest }}
+          CREDITS_URL: ${{ vars.CREDITS_URL }}
+          SUPPORTER_NAMES: ${{ secrets.SUPPORTER_NAMES }}
         run: |
+          failed=no
+          if [ -z "$CREDITS_URL" ]; then
+            echo "::error::CREDITS_URL is unset"
+            failed=yes
+          fi
+          if [ -z "$SUPPORTER_NAMES" ]; then
+            echo "::error::SUPPORTER_NAMES is unset"
+            failed=yes
+          fi
+          if [ "$failed" = yes ]; then
+            exit 1
+          fi
           v=${TAG#v}
           flags=
           case "$TAG" in
@@ -146,6 +182,14 @@ jobs:
           else
             echo "::warning::$TAG has no image note script: no digest in notes"
           fi
+          sh .github/scripts/release-credits-note.sh "$CREDITS_URL" >> notes.md
+          names="$RUNNER_TEMP/supporter-names.txt"
+          touch "$names"
+          chmod 600 "$names"
+          trap 'rm -f "$names"' EXIT
+          printf '%s\n' "$SUPPORTER_NAMES" > "$names"
+          sh .github/scripts/release-notes-names.sh notes.md "$names"
+          rm -f "$names"
           if ! gh release view "$TAG" > /dev/null 2>&1; then
             # $flags holds whole options and is split on purpose.
             # shellcheck disable=SC2086
