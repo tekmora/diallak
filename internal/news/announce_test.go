@@ -100,13 +100,63 @@ func TestAnnounce_Positive_ReleasePostedAndCrossposted(t *testing.T) {
 }
 
 // A pre-release is a release of its own and is posted like one.
-func TestAnnounce_Positive_PreReleasePosted(t *testing.T) {
+// A pre-release is announced to everybody, marked as an early build (issue #98; ADR-0014: early
+// builds are announced in a channel every member reads).
+func TestAnnounce_Positive_PreReleaseIsAnEarlyBuild(t *testing.T) {
 	s := primedStore(t)
 	a := &fakeAnnouncer{}
-	it := release("v0.5.0-rc.1", storeNow)
+	it := release("v0.5.0-rc.1", time.Time{})
 	announce(t, s, a, KindRelease, s.Record("f", Result{Items: []Item{it}}, storeNow))
-	if len(a.posts) != 1 || !strings.Contains(a.posts[0].content, "(<"+it.Link+">)") {
-		t.Fatalf("posts = %+v, want one linking %s", a.posts, it.Link)
+	want := "<@&" + testRole + "> New early build of **tekmora/diallak**: [v0.5.0\\-rc.1](<" + it.Link + ">)"
+	if len(a.posts) != 1 || a.posts[0].content != want {
+		t.Fatalf("posts = %+v, want one %q", a.posts, want)
+	}
+}
+
+// The release that follows an early build is a release again.
+func TestAnnounce_Positive_ReleaseAfterEarlyBuild(t *testing.T) {
+	s := primedStore(t)
+	a := &fakeAnnouncer{}
+	announce(t, s, a, KindRelease, s.Record("f", Result{Items: []Item{release("v0.5.0-rc.1", time.Time{})}}, storeNow))
+	final := release("v0.5.0", time.Time{})
+	announce(t, s, a, KindRelease, s.Record("f", Result{Items: []Item{final, release("v0.5.0-rc.1", time.Time{})}}, storeNow))
+	if len(a.posts) != 2 {
+		t.Fatalf("posts = %+v, want the early build and then the release", a.posts)
+	}
+	if !strings.Contains(a.posts[0].content, "New early build of") || !strings.Contains(a.posts[1].content, "New release of") ||
+		!strings.Contains(a.posts[1].content, "[v0.5.0]") {
+		t.Fatalf("posts = %q, want an early build, then the release v0.5.0", []string{a.posts[0].content, a.posts[1].content})
+	}
+}
+
+// Only a SemVer pre-release suffix makes an early build: a hyphen in build metadata does not, and
+// a link that names no tag is a release.
+func TestEarlyBuild_Boundary_TagShapes(t *testing.T) {
+	base := "https://github.com/" + testRepo + "/releases/tag/"
+	for link, want := range map[string]bool{
+		base + "v1.0.0":                false,
+		base + "v1.0.0-rc.1":           true,
+		base + "1.0.0-alpha":           true,
+		base + "v1.0.0%2Bbuild-5":      false,
+		base + "v1.0.0+build-5":        false,
+		base + "v1.0.0-beta%2Bexp.sha": true,
+		base + "v1.0.0-":               false,
+		base:                           false,
+		"https://github.com/" + testRepo + "/releases": false,
+		"https://example.org/v1.0.0-rc.1":              false,
+	} {
+		if got := earlyBuild(Item{Link: link}); got != want {
+			t.Errorf("earlyBuild(%q) = %v, want %v", link, got, want)
+		}
+	}
+}
+
+// An advisory is never an early build, whatever its link holds.
+func TestAnnouncement_Negative_AdvisoryIsNoEarlyBuild(t *testing.T) {
+	it := Item{Title: "x", Link: "https://github.com/" + testRepo + "/releases/tag/v1.0.0-rc.1"}
+	got, _ := Announcement(KindAdvisory, testRepo, testRole, it)
+	if !strings.Contains(got, "Security advisory for") {
+		t.Fatalf("Announcement() = %q, want an advisory", got)
 	}
 }
 
