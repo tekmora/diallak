@@ -107,6 +107,10 @@ func validateChangeObject(def *serverdef.Definition, c serverplan.Change) error 
 		return validateChannelChange(def, c)
 	case "set-access":
 		return validateAccessChange(def, c)
+	case serverplan.ActionSetVerificationLevel:
+		return validateVerificationChange(def, c)
+	case serverplan.ActionCreateFilterRule, serverplan.ActionSetFilterRule:
+		return validateFilterRuleChange(def, c)
 	default:
 		return fmt.Errorf("step %d %s %s: unsupported action", c.Step, c.Action, c.Object)
 	}
@@ -321,6 +325,12 @@ func executeSingleChange(
 		return applyMoveChannel(callCtx, client, in.Definition, c.Object, idx, auditReason)
 	case "set-access":
 		return applySetAccess(callCtx, client, in.Definition, c.Object, idx, auditReason)
+	case serverplan.ActionSetVerificationLevel:
+		return applySetVerificationLevel(callCtx, client, guildID, in.Definition, auditReason)
+	case serverplan.ActionCreateFilterRule:
+		return applyCreateFilterRule(callCtx, client, guildID, in.Definition, c.Object, idx, auditReason)
+	case serverplan.ActionSetFilterRule:
+		return applySetFilterRule(callCtx, client, guildID, in.Definition, c.Object, idx, auditReason)
 	default:
 		return fmt.Errorf("unsupported action %q", c.Action)
 	}

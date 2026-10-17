@@ -120,6 +120,10 @@ func Actions() []string {
 		ActionSetAccess,
 		ActionConvertChannel,
 		ActionResolveName,
+		ActionSetVerificationLevel,
+		ActionCreateFilterRule,
+		ActionSetFilterRule,
+		ActionConvertFilterRule,
 	}
 }
 
@@ -130,6 +134,7 @@ type candidate struct {
 	detail       string
 	roleID       string
 	channelID    string
+	ruleID       string
 	isNotVisible bool
 }
 
@@ -265,6 +270,7 @@ func (ctx *planContext) generateAndEvaluateCandidates() {
 	ctx.addMoveChannelCandidates()
 	ctx.addAccessCandidates()
 	ctx.addConvertAndResolveCandidates()
+	ctx.addSettingsCandidates()
 }
 
 func (ctx *planContext) evaluateCandidate(c candidate) {
@@ -337,6 +343,9 @@ func (ctx *planContext) checkShapeRefusal(c candidate) string {
 	if c.action == ActionConvertChannel {
 		return ReasonTypeDiffers
 	}
+	if c.action == ActionConvertFilterRule {
+		return ReasonTriggerDiffers
+	}
 	if c.isNotVisible {
 		return ReasonNotVisible
 	}
@@ -389,8 +398,12 @@ func (ctx *planContext) isAmbiguous(object string) bool {
 
 // namesAmbiguous reports whether a candidate rests on a name the server holds
 // more than once: its own role or channel, the category a channel is created in
-// or moved to, or a role named by an entry of a channel that is created.
+// or moved to, a role named by an entry of a channel that is created, or a role
+// or channel a filter rule names.
 func (ctx *planContext) namesAmbiguous(c candidate) bool {
+	if c.ruleID != "" {
+		return ctx.ruleNamesAmbiguous(c.ruleID)
+	}
 	if c.roleID != "" && ctx.isAmbiguous(fmt.Sprintf("roles[%s]", c.roleID)) {
 		return true
 	}
@@ -420,6 +433,9 @@ func (ctx *planContext) entryRoleAmbiguous(ch *serverdef.Channel) bool {
 }
 
 func (ctx *planContext) isAllowedInOwnMode(c candidate) bool {
+	if isSettingsAction(c.action) {
+		return true
+	}
 	if c.action != ActionSetAccess {
 		return false
 	}

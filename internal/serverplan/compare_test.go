@@ -131,8 +131,12 @@ func snapshotOf(t *testing.T, def *serverdef.Definition) *Snapshot {
 
 	cats, channels := buildSnapshotCategoriesAndChannels(def, rolesByID)
 
+	level, rules := serverSettingsOf(t, def)
 	return &Snapshot{
-		Features: []string{"COMMUNITY", "NEWS"},
+		VerificationLevel: level,
+		FilterRulesRead:   true,
+		FilterRules:       rules,
+		Features:          []string{"COMMUNITY", "NEWS"},
 		Caller: Caller{
 			Role: botRole.Name,
 			// Numbered without gaps: one more than the roles below the bot's.

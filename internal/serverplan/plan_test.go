@@ -18,63 +18,32 @@ func raiseBotRole(t *testing.T, s *Snapshot, extraPerm string) {
 }
 
 func raisedFirstSetupSnapshot() *Snapshot {
-	callerPerms := []string{
-		"MANAGE_ROLES",
-		"MANAGE_MESSAGES",
-		"MODERATE_MEMBERS",
-		"MANAGE_GUILD",
-		"MANAGE_CHANNELS",
-		"CREATE_PRIVATE_THREADS",
-		"CONNECT",
-		// everyone permissions
-		"VIEW_CHANNEL",
-		"SEND_MESSAGES",
-		"SEND_MESSAGES_IN_THREADS",
-		"CREATE_PUBLIC_THREADS",
-		"READ_MESSAGE_HISTORY",
-		"ADD_REACTIONS",
-		"EMBED_LINKS",
-		"ATTACH_FILES",
-		"USE_APPLICATION_COMMANDS",
-		"SPEAK",
+	botPerms := []string{
+		"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_GUILD",
+		"MANAGE_CHANNELS", "CREATE_PRIVATE_THREADS", "CONNECT",
 	}
-
+	everyonePerms := []string{
+		"VIEW_CHANNEL", "SEND_MESSAGES", "SEND_MESSAGES_IN_THREADS", "CREATE_PUBLIC_THREADS",
+		"READ_MESSAGE_HISTORY", "ADD_REACTIONS", "EMBED_LINKS", "ATTACH_FILES",
+		"USE_APPLICATION_COMMANDS", "SPEAK",
+	}
 	return &Snapshot{
 		Features: []string{"COMMUNITY", "NEWS"},
 		Caller: Caller{
 			Role:        "Diallak",
 			Position:    1,
-			Permissions: callerPerms,
+			Permissions: slices.Concat(botPerms, everyonePerms),
 		},
 		Roles: []Role{
-			{Name: "Operator", Everyone: false, Managed: false, Permissions: []string{"ADMINISTRATOR"}},
-			{
-				Name:        "Diallak",
-				Everyone:    false,
-				Managed:     true,
-				Permissions: []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_GUILD", "MANAGE_CHANNELS", "CREATE_PRIVATE_THREADS", "CONNECT"},
-			},
-			{
-				Name:     "@everyone",
-				Everyone: true,
-				Managed:  false,
-				Permissions: []string{
-					"VIEW_CHANNEL",
-					"SEND_MESSAGES",
-					"SEND_MESSAGES_IN_THREADS",
-					"CREATE_PUBLIC_THREADS",
-					"READ_MESSAGE_HISTORY",
-					"ADD_REACTIONS",
-					"EMBED_LINKS",
-					"ATTACH_FILES",
-					"USE_APPLICATION_COMMANDS",
-					"SPEAK",
-				},
-			},
+			{Name: "Operator", Permissions: []string{"ADMINISTRATOR"}},
+			{Name: "Diallak", Managed: true, Permissions: botPerms},
+			{Name: "@everyone", Everyone: true, Permissions: everyonePerms},
 		},
-		Categories:       []Category{},
-		Channels:         []Channel{},
-		ChannelsComplete: true,
+		Categories:        []Category{},
+		Channels:          []Channel{},
+		ChannelsComplete:  true,
+		VerificationLevel: "none",
+		FilterRulesRead:   true,
 	}
 }
 
@@ -356,7 +325,13 @@ func checkRaisedFirstSetupAction(t *testing.T, action string, phase *int) {
 		}
 		*phase = 3
 	case ActionCreateChannel:
+		if *phase > 4 {
+			t.Errorf("create-channel in phase %d", *phase)
+		}
 		*phase = 4
+	case ActionSetVerificationLevel, ActionCreateFilterRule:
+		// A rule's alert goes to a channel created before it.
+		*phase = 5
 	default:
 		t.Errorf("unexpected action %q", action)
 	}
@@ -389,6 +364,7 @@ func verifyRaisedFirstSetupRights(t *testing.T, rights []string) {
 		"CREATE_PRIVATE_THREADS",
 		"CREATE_PUBLIC_THREADS",
 		"MANAGE_CHANNELS",
+		"MANAGE_GUILD",
 		"MANAGE_ROLES",
 		"READ_MESSAGE_HISTORY",
 		"SEND_MESSAGES",
@@ -851,8 +827,8 @@ func TestPlan_Boundary_ExtrasAreLeftAlone(t *testing.T) {
 
 func TestPlan_Boundary_ClosedActionList(t *testing.T) {
 	actions := Actions()
-	if len(actions) != 10 {
-		t.Fatalf("len(Actions()) = %d, want 10", len(actions))
+	if len(actions) != 14 {
+		t.Fatalf("len(Actions()) = %d, want 14", len(actions))
 	}
 	actionSet := make(map[string]struct{}, len(actions))
 	for _, a := range actions {

@@ -14,8 +14,9 @@ read before. Every test talks to a local server that answers as Discord does.
 
 - **Snapshot:** what a server looks like, as data: roles from the highest to
   the lowest, categories, channels with their permission entries, the server's
-  features, and which role, rights and position the caller holds. It holds
-  names only, never an id of the platform.
+  features, the verification level and the filter rules, and which role,
+  rights and position the caller holds. It holds names only, never an id of
+  the platform.
 - **Compare** reports every difference between the definition and a snapshot
   and changes neither.
 - **Plan** turns the differences into an ordered list of changes. Each change
@@ -26,8 +27,9 @@ read before. Every test talks to a local server that answers as Discord does.
 - **Apply** reads the server again, plans again, and makes the changes only
   when the digest is the one it was given and the plan holds no refusal. It
   stops at the first failure.
-- **Reading** the server takes four read requests under the bot's identity and
-  gives a snapshot.
+- **Reading** the server takes four read requests under the bot's identity,
+  a fifth for the filter rules when the bot holds `MANAGE_GUILD`, and gives a
+  snapshot.
 - **The path deletes nothing.** What the server has and the definition does
   not is reported and left alone.
 
@@ -67,8 +69,8 @@ the binary ([`server/definition.go`](../server/definition.go)).
   covers exactly the text above its own line (`serverplan.Digest`), so it
   changes when the plan changes and when the definition changes
   (`server.DefinitionDigest`). It changes nothing; the test
-  `TestReadServer_Positive_FourRequestsInOrderAndNothingElse` holds the reader
-  to four `GET` requests.
+  `TestReadServer_Positive_FiveRequestsInOrderAndNothingElse` holds the reader
+  to five `GET` requests.
 - **`-server=compare`** reads the server and prints `mode: own` or
   `mode: raised`, the number of differences, and one line per difference.
   `raised` means the bot's role holds a permission the definition does not
@@ -102,8 +104,9 @@ rate limit.
 
 `discord.ReadServer`
 ([`server_read.go`](../internal/discord/server_read.go)) asks for the
-application, the server with its roles, the bot's own membership and the list
-of channels, in that order, and stops at the first failure.
+application, the server with its roles, the bot's own membership, the list
+of channels and the filter rules, in that order, and stops at the first
+failure.
 
 - **The caller** is the role Discord manages for this bot, and its rights are
   the union of the rights of every role the bot holds.
@@ -125,6 +128,19 @@ of channels, in that order, and stops at the first failure.
   read of release 0.2.0 stopped on bit 47 of a role. Such a bit gives the
   caller no right the plan counts
   (`TestReadServer_Boundary_UnknownBitGivesTheCallerNoRight`).
+- **The filter rules** are read only when the bot's roles hold `MANAGE_GUILD`
+  or `ADMINISTRATOR`; Discord asks for `MANAGE_GUILD` for every access to them
+  ([ADR-0015](adr/0015-moderator-without-rights-and-server-settings-as-data.md)).
+  Without it the snapshot marks them as not read and the reader sends no
+  fifth request (`TestReadServer_Negative_RulesNotReadWithoutManageGuild` in
+  [`server_read_settings_test.go`](../internal/discord/server_read_settings_test.go)).
+  The verification level comes with the server.
+- **Numbers become names.** The level, a rule's trigger, its presets and its
+  actions are read by name from Discord's developer documentation. A trigger,
+  preset or action the table does not name is kept as `other`; a level it
+  does not name is left empty, and the plan sets the level. A channel a rule
+  names that the bot cannot see has no name, so the rule differs and the plan
+  sets it (`TestReadServer_Boundary_UnknownNumbers`).
 - **Errors name no id.** A failed request is reported with its step and its
   cause; the address, which holds the server's id and the bot user's id, is
   dropped, and the token is replaced
@@ -182,6 +198,12 @@ administrator rights cannot tell a missing channel from a hidden one.
 | `role-extra`, `category-extra`, `channel-extra` | The server has something the definition does not |
 | `feature-missing` | The definition has an announcement channel and the server lacks the feature `NEWS` |
 | `unknown-permission-bits` | A role or a permission entry of the server has a bit set that the table does not name. Reported with the server's own names and the numbers of the bits, for objects the definition does not hold too |
+| `verification-level`, `verification-not-read` | The server's verification level differs from the definition's, or the read holds none |
+| `filter-rules-not-read` | The definition states filter rules and the read could not list them: the bot lacks `MANAGE_GUILD` |
+| `filter-rule-missing`, `filter-rule-ambiguous` | A rule of the definition has no match by name on the server, or more than one |
+| `filter-rule-trigger` | A rule has another trigger on the server |
+| `filter-rule-differs` | A rule differs in a field that can change: enabled, keywords, patterns, allow list, presets, mention limit, raid protection, actions or exemptions |
+| `filter-rule-extra` | The server has a rule the definition does not |
 <!-- markdownlint-enable MD013 -->
 
 A raised bot role shows up here: while the operator has given it more rights or
@@ -202,7 +224,10 @@ The list of actions is closed (`serverplan.Actions`), and none of them deletes.
 | `create-channel` | A missing channel, created together with its entries | `MANAGE_CHANNELS` and every permission its entries name |
 | `move-channel` | A channel in another category | `MANAGE_CHANNELS` |
 | `set-access` | A permission entry that is absent or differs | `MANAGE_ROLES` and every permission the entry names |
-| `convert-channel`, `resolve-name` | A channel of another type; an ambiguous name | Always refused: a person has to settle these |
+| `set-verification-level` | A server with another verification level | `MANAGE_GUILD` |
+| `create-filter-rule` | A missing filter rule, created with its actions and exemptions | `MANAGE_GUILD`, and `MODERATE_MEMBERS` for a rule that times a member out |
+| `set-filter-rule` | A filter rule that differs. The change sends every field except the trigger | The same as `create-filter-rule` |
+| `convert-channel`, `convert-filter-rule`, `resolve-name` | A channel of another type; a filter rule with another trigger; an ambiguous name | Always refused: a person has to settle these |
 <!-- markdownlint-enable MD013 -->
 
 The plan never holds a change to the caller's own role. Its rights, its name
@@ -249,10 +274,11 @@ A refused change carries the first reason that holds, in this order.
 | Reason | Meaning |
 | :--- | :--- |
 | `made-by-hand` | The role grants `ADMINISTRATOR`; a person makes it and gives it its rights ([The Operator role](#the-operator-role)) |
-| `ambiguous-name` | A name the change rests on exists more than once on the server |
+| `ambiguous-name` | A name the change rests on exists more than once on the server: a role, a category, a channel or a filter rule |
 | `type-differs` | The channel has another type; the path does not convert |
-| `not-visible` | The channel may exist hidden from the reader |
-| `outside-own-changes` | The bot's role is not raised, and the change is not the entry of an area's role on that area's channel |
+| `trigger-differs` | The filter rule has another trigger; Discord changes no trigger of a rule, and the path deletes nothing |
+| `not-visible` | The channel may exist hidden from the reader, or the read could not see the filter rules or the level |
+| `outside-own-changes` | The bot's role is not raised, and the change is neither the entry of an area's role on that area's channel nor a server setting |
 | `missing-feature` | The server lacks the feature the channel type needs |
 | `managed-role` | The platform or an integration manages the server role |
 | `unknown-permission-bits` | The permission entry the change would replace has a bit set that the table does not name. The change sends the whole entry and would clear it |
@@ -285,8 +311,11 @@ Discord's permissions reference does not say whether a write that clears such
 a bit takes effect. The compare after the apply shows it: a bit that is still
 set is reported again as `unknown-permission-bits`.
 
-With its four rights the bot may plan one kind of change only: the entry of
-an area's role on that area's channel, which is how an area opens and closes.
+With its four rights the bot may plan two kinds of change only: the entry of
+an area's role on that area's channel, which is how an area opens and closes,
+and the server settings, the verification level and the filter rules, which
+it changes with the `MANAGE_GUILD` it holds for good
+([ADR-0015](adr/0015-moderator-without-rights-and-server-settings-as-data.md)).
 Everything else waits for a run in which the operator has raised the bot's
 role.
 
@@ -294,7 +323,7 @@ role.
 
 `discord.ApplyServer`
 ([`server_apply.go`](../internal/discord/server_apply.go)) reads the server
-with the same four requests as the reader, plans, and then checks three things
+with the same requests as the reader, plans, and then checks three things
 before it sends a single change. A run without a token, a server id, a
 definition or one of the two digests ends before the first request
 (`TestApplyServer_Negative_InputRefusedBeforeAnyRequest`).
@@ -309,7 +338,7 @@ definition or one of the two digests ends before the first request
    applied in part (`TestVerifyApplyGates_Boundary_OneRefusalIsEnough`). The
    refusal has to be settled first: by the operator on the server, or by a
    change of the definition.
-3. **Every change is one it knows.** An action outside the seven that change
+3. **Every change is one it knows.** An action outside the ten that change
    something, or an object the definition does not hold, ends the run
    (`TestVerifyApplyGates_Negative_ChangeOutsideTheDefinition`).
 
@@ -338,9 +367,13 @@ Then it makes the changes in the order of the plan, one at a time.
   repeats on a rate limit only.
 - **Nothing is deleted.** The file holds no delete request, and a test fails
   when one appears (`TestApplyServer_Boundary_Unit`).
-- **Not set at all:** channel topics, forum tags and filter rules. The
-  definition names them; compare does not read them and apply does not write
-  them.
+- **Not set at all:** channel topics and forum tags. The definition names
+  them; compare does not read them and apply does not write them.
+- **Filter rules are found by name.** A rule the run creates is kept by the
+  id Discord returns, so a later change in the same run finds it; a change of
+  a rule that is held other than once ends the run
+  (`TestApplyServer_Positive_SettingsApplied` in
+  [`server_apply_settings_test.go`](../internal/discord/server_apply_settings_test.go)).
 
 The output is one line per change and a last line that is always written:
 
@@ -416,15 +449,15 @@ by hand.
      `CREATE_PRIVATE_THREADS`. The run needs six more, and the bot has those
      as a member through `@everyone`.
    - Three more are rights the definition gives the bot's role for good:
-     `MANAGE_MESSAGES`, `MODERATE_MEMBERS` and `MANAGE_GUILD`. No change of
-     the run needs them. The address carries them because the plan never
-     holds a change to the bot's own role
-     ([What a plan holds](#what-a-plan-holds)).
+     `MANAGE_MESSAGES`, `MODERATE_MEMBERS` and `MANAGE_GUILD`. The address
+     carries them because the plan never holds a change to the bot's own
+     role ([What a plan holds](#what-a-plan-holds)).
 
-   `MANAGE_GUILD` is held for a function that is decided and not built:
-   server settings as data
+   `MANAGE_GUILD` sets the server settings: the verification level and the
+   filter rules
    ([ADR-0015](adr/0015-moderator-without-rights-and-server-settings-as-data.md)).
-   Until it is built the tool makes no call that needs the right
+   Of what the right opens, the tool reads and writes the filter rules and
+   sets the level, and makes no other call
    (`TestServerApplyCalls_Positive_FullRunDisplayAndEntryChange`). Discord
    describes the address in its
    [page on authorisation](https://discord.com/developers/docs/topics/oauth2),
@@ -559,7 +592,8 @@ address that the run needs and those a member has.
   page does not state ([Not built, not tried](#not-built-not-tried)).
 - `TestApplyServer_Boundary_EveryNamedRightIsNeeded`: with any one of the
   named rights left out, the plan holds a refusal as `lacks-right` and the
-  apply run sends no change.
+  apply run sends no change. Without `MANAGE_GUILD` the read cannot see the
+  filter rules, so their changes are refused as `not-visible`.
 - `TestApplyServer_Boundary_FirstSetUpAndTheChannelListDate`: on 2026-11-16
   the same rights are no longer enough. The list of channels is then whole
   only for a reader with `ADMINISTRATOR`
@@ -674,5 +708,10 @@ What the table does not settle:
   creation was refused is not refused with it. The apply step does not need
   that settled, because it refuses a plan with any refusal.
 - Compared today: roles, their order, how a role is shown where the
-  definition states it, categories, channels and permission entries. Not compared and not applied yet: forum tags, filter rules and
-  channel topics.
+  definition states it, categories, channels, permission entries, the
+  verification level and the filter rules. Not compared and not applied yet:
+  forum tags and channel topics.
+- Not tried: that Discord accepts the filter rules as the tool sends them.
+  The client library sends every field of a rule's trigger and of an action,
+  empty lists and zeros for the fields a trigger does not use; the spam
+  trigger is sent without any. The local server takes them as they come.

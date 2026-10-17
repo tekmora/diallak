@@ -86,13 +86,19 @@ func (fx setupFixture) apply(t *testing.T, day string, in ApplyInput) (string, e
 }
 
 // ownPlanRights is the first step of a first set-up: the plan made with the
-// bot's own rights changes nothing and names the rights the set-up needs.
+// bot's own rights changes no role and no channel, and names the rights the
+// set-up needs. The server settings are the bot's own changes (ADR-0015).
 func (fx setupFixture) ownPlanRights(t *testing.T) (rights []string, refused []serverplan.Refusal) {
 	t.Helper()
 	own, _ := fx.plan(t, setupDay)
-	if own.Raised || len(own.Changes) != 0 || len(own.Refused) == 0 {
-		t.Fatalf("plan with the bot's own rights: raised %t, %d changes, %d refused; want not raised, 0 changes, refusals",
-			own.Raised, len(own.Changes), len(own.Refused))
+	if own.Raised || len(own.Refused) == 0 {
+		t.Fatalf("plan with the bot's own rights: raised %t, %d refused; want not raised, refusals",
+			own.Raised, len(own.Refused))
+	}
+	for _, c := range own.Changes {
+		if !slices.Contains(settingsActions, c.Action) {
+			t.Errorf("plan with the bot's own rights holds %s %s, want settings changes only", c.Action, c.Object)
+		}
 	}
 	for _, r := range own.Refused {
 		if r.Reason != serverplan.ReasonOutsideOwnChanges {
@@ -184,7 +190,10 @@ func assertRefusalsBecameChanges(t *testing.T, refused []serverplan.Refusal, cha
 	t.Helper()
 	planned := make(map[string]bool, len(changes))
 	for _, c := range changes {
-		planned[c.Action+" "+c.Object] = true
+		// The settings are changes of the first plan already, not refusals.
+		if !slices.Contains(settingsActions, c.Action) {
+			planned[c.Action+" "+c.Object] = true
+		}
 	}
 	for _, r := range refused {
 		if !planned[r.Action+" "+r.Object] {
@@ -356,6 +365,10 @@ func assertPlanRefusedWithoutRight(t *testing.T, fx setupFixture, rights []strin
 		t.Fatalf("no refusal without %s: the list names a right the set-up does not need", without)
 	}
 	for _, r := range result.Refused {
+		// Without MANAGE_GUILD the read cannot see the filter rules.
+		if without == "MANAGE_GUILD" && r.Reason == serverplan.ReasonNotVisible && slices.Contains(settingsActions, r.Action) {
+			continue
+		}
 		if r.Reason != serverplan.ReasonLacksRight || !slices.Contains(strings.Split(r.Detail, ", "), without) {
 			t.Errorf("%s %s refused as %q (%q), want %q naming %s",
 				r.Action, r.Object, r.Reason, r.Detail, serverplan.ReasonLacksRight, without)
@@ -371,7 +384,12 @@ func assertPlanRefusedWithoutRight(t *testing.T, fx setupFixture, rights []strin
 	if out != "" {
 		t.Errorf("output = %q, want none", out)
 	}
-	assertRequestCounts(t, fx.fake.getRecorded(), 4, 0)
+	// Without MANAGE_GUILD the read leaves the filter rules out.
+	reads := 5
+	if without == "MANAGE_GUILD" {
+		reads = 4
+	}
+	assertRequestCounts(t, fx.fake.getRecorded(), reads, 0)
 }
 
 func TestApplyServer_Boundary_EveryNamedRightIsNeeded(t *testing.T) {
