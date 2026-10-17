@@ -1,0 +1,2 @@
+type: added
+title: 'A release candidate tag vX.Y.Z-rc.N publishes a prerelease that is never the latest release, with the image tag X.Y.Z-rc.N only and notes from the changelog fragments'

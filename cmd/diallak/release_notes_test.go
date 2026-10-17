@@ -35,3 +35,41 @@ func TestReleaseWorkflow_Negative_NotesNameTheImageDigest(t *testing.T) {
 		}
 	}
 }
+
+// A release candidate vX.Y.Z-rc.N is published for a test only: its release is a prerelease that
+// never becomes the latest release, its notes come from the fragments the changelog does not hold
+// yet, and a final version keeps its changelog section as the source of its notes. This test keeps
+// those parts in the release workflow.
+func TestReleaseWorkflow_Negative_CandidateIsPrereleaseNotLatest(t *testing.T) {
+	workflow, err := os.ReadFile("../../.github/workflows/release.yml")
+	if err != nil {
+		t.Fatalf("read workflow: %v", err)
+	}
+	parts := []struct{ missing, pattern string }{
+		{
+			"a candidate tag does not start the workflow",
+			`(?m)^\s+- 'v\[0-9\]\+\.\[0-9\]\+\.\[0-9\]\+-rc\.\[0-9\]\+'$`,
+		},
+		{
+			"the tag check does not accept a candidate and nothing else",
+			`(?m)^\s+re='\^v\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+\(-rc\\\.\[0-9\]\+\)\?\$'\n\s+if ! printf '%s' "\$TAG" \| grep -Eq "\$re"; then$`,
+		},
+		{
+			"a candidate's notes do not come from the fragments",
+			`(?m)^\s+sh \.github/scripts/release-candidate-notes\.sh "\$v" changelog\.d \\\n\s+> notes\.md$`,
+		},
+		{
+			"a candidate is not created as a prerelease that is not the latest",
+			`(?m)^\s+flags='--prerelease --latest=false'$`,
+		},
+		{
+			"the release is not created with the flags",
+			`(?m)^\s+gh release create "\$TAG" --verify-tag --title "\$TAG" \$flags \\$`,
+		},
+	}
+	for _, part := range parts {
+		if !regexp.MustCompile(part.pattern).Match(workflow) {
+			t.Errorf("%s", part.missing)
+		}
+	}
+}
