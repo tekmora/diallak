@@ -1,6 +1,6 @@
 # ADR-0018: The forum guidelines name the right to object
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-17
 - **Authors**: Maintainers
 - **Amends**: [ADR-0009](0009-support-forum-first-answer.md), "The label"
