@@ -1027,7 +1027,7 @@
     ]
   },
   "news": {
-    "repositories": [],
+    "repositories": ["tekmora/diallak", "tekmora/epitrop"],
     "feeds": []
   }
 }

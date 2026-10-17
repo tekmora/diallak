@@ -87,7 +87,7 @@ after the definition and a file over one mebibyte are refused
 | `choices` | The questions the bot's areas command offers and the role each option gives | 3 questions |
 | `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 16 |
 | `settings` | The platform's filter rules and the server's verification level; absent, nothing of it is compared or changed | 3 filter rules and the verification level |
-| `news` | Own repositories, whose releases and advisories go to the announcement channel, and the other feeds, each with the area it serves; read by the bot, not applied to the server | 0 repositories and 0 feeds |
+| `news` | Own repositories, whose releases and advisories go to the announcement channel, and the other feeds, each with the area it serves; read by the bot, not applied to the server | 2 repositories and 0 feeds |
 <!-- markdownlint-enable MD013 -->
 
 A role or a rule carries `"basis": "decided"` or `"basis": "proposal"`. Decided
@@ -268,8 +268,9 @@ The part `news` says where the news function posts
   with the next day's news (`HoldForPlace` in
   [`internal/news`](../internal/news)).
 
-A feed or a repository is added by a pull request to this file. Both lists are
-empty until such a pull request names them.
+A feed or a repository is added by a pull request to this file. The own
+repositories are `tekmora/diallak` and `tekmora/epitrop`; the list of feeds
+stays empty until the operator names the sources for AI and video news.
 
 ## Who does what
 

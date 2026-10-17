@@ -2,6 +2,7 @@ package serverdef
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -47,6 +48,13 @@ func TestValidate_Positive_CommittedNewsBlock(t *testing.T) {
 	}
 	if got := newsFindings(Validate(def)); len(got) != 0 {
 		t.Errorf("the committed news block has findings %+v", got)
+	}
+	want := []string{"tekmora/diallak", "tekmora/epitrop"}
+	if !slices.Equal(def.News.Repositories, want) {
+		t.Errorf("own repositories = %v, want %v", def.News.Repositories, want)
+	}
+	if len(def.News.Feeds) != 0 {
+		t.Errorf("feeds = %+v; the operator has named no source yet", def.News.Feeds)
 	}
 }
 
