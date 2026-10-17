@@ -17,6 +17,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -431,5 +432,44 @@ func TestDo_Negative_AuthorizationNeverSentToOtherHost(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "does not match base host") {
 			t.Errorf("Do(%q) error = %v, want error naming host mismatch", target, err)
 		}
+	}
+}
+
+func TestSlowDown_Boundary_ServerRules(t *testing.T) {
+	now := time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC)
+	date := func(d time.Duration) string { return now.Add(d).Format(http.TimeFormat) }
+	unix := func(d time.Duration) string { return strconv.FormatInt(now.Add(d).Unix(), 10) }
+	for _, tc := range []struct {
+		name string
+		code int
+		h    map[string]string
+		want time.Duration
+	}{
+		{"429 delay-seconds", 429, map[string]string{"Retry-After": "120"}, 2 * time.Minute},
+		{"503 http date", 503, map[string]string{"Retry-After": date(10 * time.Minute)}, 10 * time.Minute},
+		{"403 primary limit until reset", 403, map[string]string{"X-Ratelimit-Remaining": "0", "X-Ratelimit-Reset": unix(30 * time.Minute)}, 30 * time.Minute},
+		{"Retry-After wins over the reset", 429, map[string]string{"Retry-After": "300", "X-Ratelimit-Remaining": "0", "X-Ratelimit-Reset": unix(time.Hour)}, 5 * time.Minute},
+		{"429 without a time waits the minimum", 429, nil, MinBackoff},
+		{"429 unreadable Retry-After waits the minimum", 429, map[string]string{"Retry-After": "soon"}, MinBackoff},
+		{"remaining 0 without a reset waits the minimum", 403, map[string]string{"X-Ratelimit-Remaining": "0"}, MinBackoff},
+		{"403 without limit headers is no slow-down", 403, nil, 0},
+		{"404 ignores Retry-After", 404, map[string]string{"Retry-After": "120"}, 0},
+		{"500 is no slow-down", 500, nil, 0},
+		{"Retry-After 0 waits the minimum", 429, map[string]string{"Retry-After": "0"}, MinBackoff},
+		{"a date in the past waits the minimum", 503, map[string]string{"Retry-After": date(-time.Hour)}, MinBackoff},
+		{"a reset in the past waits the minimum", 429, map[string]string{"X-Ratelimit-Remaining": "0", "X-Ratelimit-Reset": unix(-time.Hour)}, MinBackoff},
+		{"MaxBackoff exactly", 429, map[string]string{"Retry-After": "86400"}, MaxBackoff},
+		{"more than MaxBackoff is capped", 429, map[string]string{"Retry-After": "86401"}, MaxBackoff},
+		{"a delay beyond 32 bits is unreadable", 429, map[string]string{"Retry-After": "99999999999"}, MinBackoff},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := http.Header{}
+			for k, v := range tc.h {
+				h.Set(k, v)
+			}
+			if got := SlowDown(tc.code, h, now); got != tc.want {
+				t.Fatalf("SlowDown(%d, %v) = %v, want %v", tc.code, tc.h, got, tc.want)
+			}
+		})
 	}
 }
