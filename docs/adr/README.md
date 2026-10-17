@@ -31,4 +31,5 @@ record that supersedes it.
 | [0020](0020-forum-answers-only-opted-in-posts.md) | 2026-10-17 | The forum answer reads only posts a member opted in | Accepted |
 | [0021](0021-moderation-commands-and-trail.md) | 2026-10-17 | The moderation commands and their trail | Accepted |
 | [0022](0022-embeddings-for-paraphrased-questions.md) | 2026-10-17 | Embeddings for paraphrased questions | Accepted |
+| [0023](0023-contributor-agreement-beside-the-eupl.md) | 2026-10-17 | Contributor agreement beside the EUPL | Accepted |
 <!-- markdownlint-enable MD013 -->
