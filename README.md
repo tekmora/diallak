@@ -260,6 +260,14 @@ The image is built in a reusable workflow of its own
 and `linux/arm64`. The workflow also signs it with cosign, attests its build
 provenance and writes one SBOM per platform; both are attached to the release.
 
+A release candidate is cut for a test before a version: the merged commit
+on `main` is tagged `vX.Y.Z-rc.N`, with no changelog step. The workflow builds
+`ghcr.io/tekmora/diallak:X.Y.Z-rc.N` only and publishes a prerelease that never
+becomes the latest release. Its notes are the fragments in `changelog.d/` that
+are not yet in `CHANGELOG.md`
+([`release-candidate-notes.sh`](.github/scripts/release-candidate-notes.sh)),
+followed by the image by tag and by digest.
+
 Merging to `main` releases nothing; only a pushed tag does.
 
 ### Verifying a release

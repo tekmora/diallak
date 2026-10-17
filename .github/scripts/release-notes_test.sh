@@ -78,6 +78,76 @@ if sh "$note" ghcr.io/example/app 0.1.0 > /dev/null 2>&1; then
   fail "image note accepts a missing argument"
 fi
 
+# A release candidate X.Y.Z-rc.N carries the image tag of its full version.
+got=$(sh "$note" ghcr.io/example/app 0.5.0-rc.1 "$digest") ||
+  fail "image note refuses a release candidate"
+# shellcheck disable=SC2016
+case "$got" in
+  *'`ghcr.io/example/app:0.5.0-rc.1`'*) ;;
+  *) fail "image note does not name the release candidate tag" ;;
+esac
+nl='
+'
+for version in 0.5.0-rc 0.5.0-rc. 0.5.0-rc.x 0.5.0-beta.1 0.5.0-rc.1.2 \
+  0.5-rc.1 0.5.0rc.1 "0.5.0-rc.1${nl}x"; do
+  if sh "$note" ghcr.io/example/app "$version" "$digest" > /dev/null 2>&1; then
+    fail "image note accepts version '$version'"
+  fi
+done
+
+# release-candidate-notes.sh prints the notes of a release candidate from the
+# fragments not yet rendered into the changelog, grouped by type in the order
+# of Keep a Changelog. It must refuse every version that is not X.Y.Z-rc.N, a
+# missing or empty fragment folder, an unknown type and a fragment without a
+# title.
+rc=.github/scripts/release-candidate-notes.sh
+frag="$dir/changelog.d"
+mkdir "$frag"
+printf '%s\n' 'type: fixed' "title: 'Fix the bot''s thing'" > "$frag/A-fix.yaml"
+printf '%s\n' 'type: added' "title: 'Add one'" > "$frag/B-add.yaml"
+printf '%s\n' 'type: added' 'title: Add two' > "$frag/C-add.yaml"
+want=$(printf '%s\n' \
+  'Release candidate 0.5.0-rc.1, for testing only. It is not a release: the' \
+  'changes below are not yet in CHANGELOG.md.' '' \
+  '### Added' '' '- Add one' '- Add two' '' \
+  '### Fixed' '' "- Fix the bot's thing")
+got=$(sh "$rc" 0.5.0-rc.1 "$frag") || fail "candidate notes exit non-zero"
+[ "$got" = "$want" ] || fail "candidate notes print the wrong text"
+for version in 0.5.0 v0.5.0-rc.1 0.5.0-rc 0.5.0-rc.x 0.5.0-beta.1 \
+  0.5-rc.1 '0.5.0-rc.1 x' "0.5.0-rc.1${nl}x" ''; do
+  if sh "$rc" "$version" "$frag" > /dev/null 2>&1; then
+    fail "candidate notes accept version '$version'"
+  fi
+done
+# The two refusals below name their reason, so that the release run says why
+# it stopped.
+mkdir "$dir/empty"
+if err=$(sh "$rc" 0.5.0-rc.1 "$dir/empty" 2>&1 > /dev/null); then
+  fail "candidate notes accept an empty fragment folder"
+fi
+case "$err" in
+  *"holds no fragment"*) ;;
+  *) fail "candidate notes do not say the folder holds no fragment" ;;
+esac
+if err=$(sh "$rc" 0.5.0-rc.1 "$dir/none" 2>&1 > /dev/null); then
+  fail "candidate notes accept a missing fragment folder"
+fi
+case "$err" in
+  *"no such folder"*) ;;
+  *) fail "candidate notes do not say the folder is missing" ;;
+esac
+if sh "$rc" 0.5.0-rc.1 > /dev/null 2>&1; then
+  fail "candidate notes accept a missing argument"
+fi
+printf '%s\n' 'type: improved' "title: 'x'" > "$frag/D-bad.yaml"
+if sh "$rc" 0.5.0-rc.1 "$frag" > /dev/null 2>&1; then
+  fail "candidate notes accept an unknown type"
+fi
+printf '%s\n' 'type: added' > "$frag/D-bad.yaml"
+if sh "$rc" 0.5.0-rc.1 "$frag" > /dev/null 2>&1; then
+  fail "candidate notes accept a fragment without a title"
+fi
+
 if [ "$failures" -ne 0 ]; then
   echo "release-notes self-test: $failures failure(s)" >&2
   exit 1
