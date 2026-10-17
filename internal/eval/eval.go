@@ -179,9 +179,6 @@ func Overlap(question string, chunks []corpus.Chunk, sources []string) float64 {
 	for _, tok := range qTokens {
 		qDistinct[tok] = struct{}{}
 	}
-	if len(qDistinct) == 0 {
-		return 0
-	}
 
 	srcSet := make(map[string]struct{}, len(sources))
 	for _, s := range sources {
