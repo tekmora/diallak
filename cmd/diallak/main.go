@@ -314,6 +314,27 @@ func newReceipts(assembly *app.Assembly) (*discord.Receipts, error) {
 	return receipts, nil
 }
 
+// newForum builds the first answer in the support forum when it is configured (ADR-0009,
+// ADR-0020). It answers with excerpts only, whatever the model settings are.
+func newForum(cfg config.Config, assembly *app.Assembly) (*discord.ForumHandler, error) {
+	if !cfg.HasForum() {
+		return nil, nil
+	}
+	forum, err := discord.NewForumHandler(discord.ForumConfig{
+		Asker:            assembly.Pipeline,
+		ChannelID:        cfg.ForumChannelID,
+		OptInTagID:       cfg.ForumOptInTagID,
+		MaxConcurrent:    cfg.MaxConcurrentAsks,
+		Timeout:          cfg.AskTimeout,
+		QuestionMaxChars: cfg.QuestionMaxChars,
+		Logger:           slog.Default(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create forum handler: %w", err)
+	}
+	return forum, nil
+}
+
 func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotConfig, error) {
 	receipts, err := newReceipts(assembly)
 	if err != nil {
@@ -353,12 +374,17 @@ func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotC
 	if err != nil {
 		return discord.BotConfig{}, fmt.Errorf("create moderation handler: %w", err)
 	}
+	forum, err := newForum(cfg, assembly)
+	if err != nil {
+		return discord.BotConfig{}, err
+	}
 	return discord.BotConfig{
 		Token:      cfg.Token,
 		GuildID:    cfg.GuildID,
 		Handler:    handler,
 		Areas:      areas,
 		Moderation: moderation,
+		Forum:      forum,
 		Logger:     slog.Default(),
 	}, nil
 }

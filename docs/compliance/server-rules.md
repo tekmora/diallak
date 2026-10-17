@@ -25,7 +25,9 @@ linked when someone provides it and is marked as a translation.
    forum: open a private thread in the ticket channel.
 4. **Keep to the topic of a channel.**
 5. **The assistant is automated.** Its replies say so and can be wrong: check
-   the sources it cites. Do not put secrets or personal data into a question.
+   the sources it cites. In the support forum it reads the first message of a
+   new post and may reply first, when the post carries the tag "Automated
+   answer". Do not put secrets or personal data into a question.
    What it does with a question is in the [privacy notice](privacy-notice.md).
 6. **Report security problems privately**, as [SECURITY.md](../../SECURITY.md)
    describes, not in a public channel.

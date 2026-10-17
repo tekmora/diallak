@@ -62,6 +62,12 @@ const (
 	EnvHealthAddr = "DIALLAK_HEALTH_ADDR"
 	// EnvTrailRetention names the optional variable setting how long a moderation trail line stays.
 	EnvTrailRetention = "DIALLAK_TRAIL_RETENTION"
+	// EnvForumChannelID names the optional variable holding the snowflake of the support forum the
+	// bot answers new posts in.
+	EnvForumChannelID = "DIALLAK_FORUM_CHANNEL_ID"
+	// EnvForumOptInTagID names the variable holding the snowflake of the forum tag a member sets to
+	// ask for the automated answer. It is required when EnvForumChannelID is set.
+	EnvForumOptInTagID = "DIALLAK_FORUM_OPT_IN_TAG_ID"
 
 	// MaxTokenBytes bounds secret files (both bot token and model key).
 	MaxTokenBytes = 4096
@@ -138,6 +144,12 @@ type Config struct {
 	// TrailRetention is how long a line of the moderation trail stays before the bot deletes it.
 	// It is 0 when the variable is not set; discord then uses its built-in default of 90 days.
 	TrailRetention time.Duration
+	// ForumChannelID is the support forum whose new opted-in posts get a first answer. It is 0 when
+	// the variable is not set; the forum answer is then off.
+	ForumChannelID uint64
+	// ForumOptInTagID is the forum tag that asks for the automated answer. It is set exactly when
+	// ForumChannelID is set.
+	ForumOptInTagID uint64
 }
 
 // HasModel reports whether a model endpoint is configured.
@@ -145,12 +157,18 @@ func (c Config) HasModel() bool {
 	return c.ModelBaseURL != "" && c.ModelAlias != ""
 }
 
+// HasForum reports whether the first answer in the support forum is configured.
+func (c Config) HasForum() bool {
+	return c.ForumChannelID != 0
+}
+
 // String returns a redacted representation of Config. Token and ModelKey are never printed.
 func (c Config) String() string {
-	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v}",
+	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d}",
 		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, c.ModelPolicy, redactSecret(c.ModelKey), c.CorpusDir, c.SupportChannel,
 		c.TopPassages, c.MinScore, c.QuestionMaxChars, c.ExcerptChars, c.ReplyMaxChars, c.MaxConcurrentAsks,
-		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate, c.HealthAddr, c.TrailRetention)
+		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate, c.HealthAddr, c.TrailRetention,
+		c.ForumChannelID, c.ForumOptInTagID)
 }
 
 // GoString returns a redacted representation of Config for Go syntax formatting.
@@ -180,6 +198,8 @@ func (c Config) LogValue() slog.Value {
 		slog.String("SourceLinkTemplate", c.SourceLinkTemplate),
 		slog.String("HealthAddr", c.HealthAddr),
 		slog.Duration("TrailRetention", c.TrailRetention),
+		slog.Uint64("ForumChannelID", c.ForumChannelID),
+		slog.Uint64("ForumOptInTagID", c.ForumOptInTagID),
 	)
 }
 
@@ -194,11 +214,7 @@ func redactSecret(s string) string {
 // unreadable, empty or oversized secret file, an invalid corpus directory, or invalid
 // model configuration is an error.
 func Load(getenv func(string) string) (Config, error) {
-	guild, err := parseGuildID(getenv(EnvGuildID))
-	if err != nil {
-		return Config{}, err
-	}
-	token, err := readSecretFile(getenv(EnvTokenFile), EnvTokenFile, "token")
+	guild, token, err := parseDiscordAccess(getenv)
 	if err != nil {
 		return Config{}, err
 	}
@@ -222,11 +238,11 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	healthAddr, err := parseHealthAddr(getenv(EnvHealthAddr))
+	healthAddr, retention, err := parseHealthAndRetention(getenv)
 	if err != nil {
 		return Config{}, err
 	}
-	retention, err := parseOptionalDuration(getenv(EnvTrailRetention), EnvTrailRetention, MinTrailRetention, MaxTrailRetention)
+	forumChannel, forumTag, err := parseForum(getenv)
 	if err != nil {
 		return Config{}, err
 	}
@@ -250,7 +266,53 @@ func Load(getenv func(string) string) (Config, error) {
 		SourceLinkTemplate: linkTmpl,
 		HealthAddr:         healthAddr,
 		TrailRetention:     retention,
+		ForumChannelID:     forumChannel,
+		ForumOptInTagID:    forumTag,
 	}, nil
+}
+
+// parseDiscordAccess reads the id of the one server the bot serves and the bot token.
+func parseDiscordAccess(getenv func(string) string) (uint64, string, error) {
+	guild, err := parseGuildID(getenv(EnvGuildID))
+	if err != nil {
+		return 0, "", err
+	}
+	token, err := readSecretFile(getenv(EnvTokenFile), EnvTokenFile, "token")
+	if err != nil {
+		return 0, "", err
+	}
+	return guild, token, nil
+}
+
+func parseHealthAndRetention(getenv func(string) string) (string, time.Duration, error) {
+	healthAddr, err := parseHealthAddr(getenv(EnvHealthAddr))
+	if err != nil {
+		return "", 0, err
+	}
+	retention, err := parseOptionalDuration(getenv(EnvTrailRetention), EnvTrailRetention, MinTrailRetention, MaxTrailRetention)
+	if err != nil {
+		return "", 0, err
+	}
+	return healthAddr, retention, nil
+}
+
+// parseForum reads the support forum and its opt-in tag. Neither set means the forum answer is off.
+// One without the other is an error: the forum answer never runs without the opt-in tag (ADR-0009
+// case 18, ADR-0020), and a tag without a forum would be a setting that does nothing.
+func parseForum(getenv func(string) string) (uint64, uint64, error) {
+	rawChannel, rawTag := getenv(EnvForumChannelID), getenv(EnvForumOptInTagID)
+	if rawChannel == "" && rawTag == "" {
+		return 0, 0, nil
+	}
+	channel, err := parseSnowflake(rawChannel, EnvForumChannelID)
+	if err != nil {
+		return 0, 0, err
+	}
+	tag, err := parseSnowflake(rawTag, EnvForumOptInTagID)
+	if err != nil {
+		return 0, 0, err
+	}
+	return channel, tag, nil
 }
 
 // parseHealthAddr validates the optional listen address of the health listener. The host is
@@ -332,15 +394,20 @@ func parseModelConfig(getenv func(string) string) (string, string, string, strin
 }
 
 func parseGuildID(raw string) (uint64, error) {
+	return parseSnowflake(raw, EnvGuildID)
+}
+
+// parseSnowflake reads a required, non-zero decimal snowflake from the variable envVar.
+func parseSnowflake(raw, envVar string) (uint64, error) {
 	if raw == "" {
-		return 0, fmt.Errorf("%s is not set", EnvGuildID)
+		return 0, fmt.Errorf("%s is not set", envVar)
 	}
 	id, err := strconv.ParseUint(raw, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("%s is not a decimal snowflake: %w", EnvGuildID, err)
+		return 0, fmt.Errorf("%s is not a decimal snowflake: %w", envVar, err)
 	}
 	if id == 0 {
-		return 0, fmt.Errorf("%s must not be zero", EnvGuildID)
+		return 0, fmt.Errorf("%s must not be zero", envVar)
 	}
 	return id, nil
 }

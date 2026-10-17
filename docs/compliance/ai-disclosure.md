@@ -23,8 +23,12 @@ The reading behind it is in [ADR-0006](../adr/0006-ai-act-role.md).
 | First line of a model-written reply | "AI-generated answer. It can be wrong: check the sources below." | In the code |
 | First line of an excerpt reply | "Automated excerpts from the documentation. No AI model wrote this reply." | In the code |
 | Second line when the model failed | "The AI model is unavailable right now, so these are excerpts only." | In the code |
-| Last line of every reply | "Automated reply. A person can help in the support channel." | In the code |
+| Last line of every other reply | "Automated reply. A person can help in the support channel." | In the code |
 | Last line of a receipt | "This receipt is automated." | In the code |
+| Guidelines of the support forum, shown before a member posts | "The automated assistant reads a new post only when you add the tag 'Automated answer' when you create it. It then reads the first message and may reply first with excerpts from the documentation. It reads nothing else here. Do not ask for it on a post that holds health data or other sensitive data, or data about other people. More is in the privacy notice." | Accepted with [ADR-0020](../adr/0020-forum-answers-only-opted-in-posts.md), set by the operator |
+| Guidelines of the support forum, a paragraph of its own after the text above | "You can object at any time to the assistant reading your posts here: write to the e-mail address in the privacy notice, or open a private thread in the ticket channel. The privacy notice explains this under 'Your right to object'." | Accepted with [ADR-0018](../adr/0018-forum-guidelines-name-the-right-to-object.md), set by the operator |
+| First line of a reply in the support forum | "Automated excerpts from the documentation. No AI model wrote this reply." | In the code |
+| Last line of a reply in the support forum | "Automated first reply. A person can help here in this post." | In the code |
 | The bot's profile text | "Automated assistant of this community. It answers from project documentation and can be wrong." | Proposed, set by the operator |
 <!-- markdownlint-enable MD013 -->
 
@@ -61,6 +65,10 @@ The approved texts are fixed by constants and formatting functions:
 - Replies rendered through `Render` in
   [`internal/answer`](../../internal/answer/answer.go) append the footer as the
   final line across all answer kinds.
+- A reply in the support forum is rendered through `RenderForum` in
+  [`internal/answer`](../../internal/answer/answer.go): `LabelExcerpts` first
+  and constant `FooterForum` last, which names the post itself as the place
+  where a person helps. The support channel setting does not change it.
 - The optional setting `DIALLAK_SUPPORT_CHANNEL` replaces the words "the support
   channel" in the footer and in the refusal. It accepts printable text of at
   most 64 characters without "@"
@@ -80,6 +88,11 @@ Every text is pinned by tests to prevent accidental edits:
   `TestHandler_Positive_FooterIsLastLineForAdapterTexts` in
   [`internal/discord`](../../internal/discord/discord_test.go) verify that the
   footer is the last line of every reply.
+- `TestRenderForum_Positive_FirstAndLastLine` and
+  `TestRenderForum_Boundary_LimitKeepsTheFooter` in
+  [`internal/answer`](../../internal/answer/forum_test.go) pin the forum
+  footer and verify that it stays the last line when the reply is cut to
+  Discord's limit.
 - `TestReceiptText_Positive_RepliedReceiptNamesGuardrailsPoliciesAndRetention`
   in [`internal/discord`](../../internal/discord/receipt_test.go) verifies that
   a receipt carries the automated notice.

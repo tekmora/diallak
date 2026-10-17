@@ -1,0 +1,2 @@
+type: added
+title: The forum answer is switched on by setting DIALLAK_FORUM_CHANNEL_ID and DIALLAK_FORUM_OPT_IN_TAG_ID together; it stays off without them, and the privacy notice, data inventory, record of processing, AI disclosure and server rules now describe it
