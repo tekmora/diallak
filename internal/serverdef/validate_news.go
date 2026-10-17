@@ -9,6 +9,11 @@ import (
 // repositoryRegexp matches "owner/name" with GitHub's characters for both parts.
 var repositoryRegexp = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$`)
 
+// ValidRepository reports whether s matches "owner/name" with GitHub's characters for both parts.
+func ValidRepository(s string) bool {
+	return repositoryRegexp.MatchString(s)
+}
+
 func (v *validator) checkNews() {
 	n := v.def.News
 	if n == nil {
@@ -59,7 +64,7 @@ func checkNewsRepositories(v *validator, repos []string) {
 	seen := make(map[string]struct{}, len(repos))
 	for _, r := range repos {
 		p := fmt.Sprintf("news.repositories[%s]", r)
-		if !repositoryRegexp.MatchString(r) {
+		if !ValidRepository(r) {
 			v.add(CodeNews, p, fmt.Sprintf("repository %q is not owner/name", r))
 		}
 		if _, ok := seen[r]; ok {

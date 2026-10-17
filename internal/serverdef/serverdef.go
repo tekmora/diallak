@@ -134,6 +134,9 @@ const (
 
 	// CodeNews flags a news feed or repository the news function cannot read or place (ADR-0019).
 	CodeNews = "news"
+
+	// CodeBugReports flags a bug reports repository that does not match owner/name.
+	CodeBugReports = "bug-reports"
 )
 
 // Finding represents one declarative rule infraction in a server definition.
@@ -163,6 +166,15 @@ type Definition struct {
 	// News lists what the news function reads and the area each feed serves (ADR-0019).
 	// Absent = the definition names no news.
 	News *News `json:"news,omitempty"`
+	// BugReports names the repository a bug report link opens a new issue in.
+	// Absent = the definition names no bug reports repository.
+	BugReports *BugReports `json:"bug_reports,omitempty"`
+}
+
+// BugReports configures the repository a bug report link opens a new issue in.
+type BugReports struct {
+	// Repository is the repository a bug report link opens a new issue in, "owner/name".
+	Repository string `json:"repository"`
 }
 
 // Metric describes a trackable quantitative measurement on the server.

@@ -389,8 +389,8 @@ func assertCommandOptionMaxLength(t *testing.T, body []byte, want int) {
 	if err := json.Unmarshal(body, &payload); err != nil {
 		t.Fatalf("payload %q does not parse: %v", body, err)
 	}
-	if len(payload) != 4 || len(payload[0].Options) != 1 {
-		t.Fatalf("payload %q is not the ask command with one option, then areas, Remove message and timeout", body)
+	if len(payload) != 5 || len(payload[0].Options) != 1 {
+		t.Fatalf("payload %q is not the ask command with one option, then areas, Remove message, timeout and bug", body)
 	}
 	if got := payload[0].Options[0].MaxLength; got != want {
 		t.Fatalf("max_length = %d, want %d", got, want)

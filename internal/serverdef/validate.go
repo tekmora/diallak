@@ -54,6 +54,7 @@ func Validate(def *Definition) []Finding {
 	v.checkAutomationRecords()
 	v.checkSettings()
 	v.checkNews()
+	v.checkBugReports()
 
 	sort.Slice(v.findings, func(i, j int) bool {
 		if v.findings[i].Path != v.findings[j].Path {
