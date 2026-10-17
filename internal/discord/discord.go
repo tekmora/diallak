@@ -300,7 +300,7 @@ func (h *Handler) executeAskAndReply(ctx context.Context, in Interaction, q stri
 		slog.String("reason", string(ans.Reason)),
 		slog.Duration("duration", time.Since(start)),
 	)
-	key := h.receiptKeyFor(ans.Trace, ans.Kind == answer.KindAnswer)
+	key := h.receiptKeyFor(ans.Trace, ans.Embed, ans.Kind == answer.KindAnswer)
 	h.sendReply(ctx, in, answer.Render(ans, h.renderOptions), key)
 }
 

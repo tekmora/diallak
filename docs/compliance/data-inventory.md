@@ -220,12 +220,17 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
 | The model endpoint the operator configures | One fixed word, to learn whether the endpoint answers | Model mode only, once at start |
 | The model endpoint's masking route | The question as the member wrote it, before anything goes to the model | Only with `DIALLAK_MODEL_GUARDRAIL` set, every request in model mode |
 | The model endpoint's masking route | One fixed sentence with an invented address, to learn whether the masking works | Only with `DIALLAK_MODEL_GUARDRAIL` set, at start and before each retry |
+| The embedding endpoint the operator configures | The question text, at most once per question, not kept by the bot | Hybrid retrieval mode only |
 <!-- markdownlint-enable MD013 -->
 
 - The news reads carry no member data: their requests are built from the
   definition and the stored validators alone
   ([`internal/news`](../../internal/news/fetch.go)).
 - The model endpoint receives no member id and no name.
+- The embedding endpoint receives no member id and no name, and receives the
+  question text at most once per question. It must not keep or train on what it
+  receives ([ADR-0002](../adr/0002-data-and-compliance.md),
+  [ADR-0022](../adr/0022-embeddings-for-paraphrased-questions.md)).
 - It must not keep or train on what it receives (ADR-0002). The operator runs
   it. What it holds for a time anyway, a cached answer and a log line about a
   blocked question, is listed in the [privacy notice](privacy-notice.md),
@@ -234,8 +239,12 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
   model settings are: posts are answered with excerpts only
   (`TestExcerpts_Positive_NeverCallsTheGenerator` in
   [`internal/answer`](../../internal/answer/forum_test.go)).
-- In excerpt mode the question goes nowhere: the reply holds documentation text,
-  not the question, and carries no receipt button.
+- The embedding endpoint receives nothing from the support forum either: posts
+  are searched by keyword only (`TestExcerpts_KeywordRetrieverOnly` in
+  [`internal/answer`](../../internal/answer/answer_test.go)).
+- In excerpt mode the question goes nowhere unless hybrid retrieval is
+  configured: with embeddings configured, the question goes to the
+  embedding endpoint once, and the reply carries the receipt button.
 - The endpoint's guardrails can mask or change the text before the model. They
   do not find everything. Without the bot's own masking the bot does not see
   their result, so no document and no receipt says that personal data is

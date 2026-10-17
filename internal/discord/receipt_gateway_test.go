@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tekmora/diallak/internal/embed"
 )
 
 // The tests in this file press the receipt buttons over the gateway, as areas_gateway_test.go does
@@ -33,7 +35,7 @@ func runReceiptsOverGateway(t *testing.T, fake *areasFake, wantAnswers int, fram
 	if err != nil {
 		t.Fatalf("NewReceipts: %v", err)
 	}
-	key, err := receipts.put(repliedTrace, true)
+	key, err := receipts.put(repliedTrace, embed.Trace{}, true)
 	if err != nil {
 		t.Fatalf("put: %v", err)
 	}

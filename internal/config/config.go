@@ -19,6 +19,7 @@ import (
 
 	"github.com/tekmora/diallak/internal/answer"
 	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/embed"
 	"github.com/tekmora/diallak/internal/ghapp"
 	"github.com/tekmora/diallak/internal/model"
 	"github.com/tekmora/diallak/internal/retrieval"
@@ -40,6 +41,16 @@ const (
 	EnvModelGuardrail = "DIALLAK_MODEL_GUARDRAIL"
 	// EnvModelKeyFile names the variable holding the path of the optional model API key file.
 	EnvModelKeyFile = "DIALLAK_MODEL_KEY_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
+	// EnvEmbedBaseURL names the variable holding the base URL of the embedding endpoint.
+	EnvEmbedBaseURL = "DIALLAK_EMBED_BASE_URL"
+	// EnvEmbedAlias names the variable holding the embedding routing alias.
+	EnvEmbedAlias = "DIALLAK_EMBED_ALIAS"
+	// EnvEmbedKeyFile names the variable holding the path of the optional embedding API key file.
+	EnvEmbedKeyFile = "DIALLAK_EMBED_KEY_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
+	// EnvEmbedTimeout names the optional variable setting the embedding request timeout.
+	EnvEmbedTimeout = "DIALLAK_EMBED_TIMEOUT"
+	// EnvEmbedMinSimilarity names the optional variable setting the minimum similarity threshold.
+	EnvEmbedMinSimilarity = "DIALLAK_EMBED_MIN_SIMILARITY"
 	// EnvCorpusDir names the variable holding the absolute path of the documentation corpus directory.
 	EnvCorpusDir = "DIALLAK_CORPUS_DIR"
 	// EnvSupportChannel names the optional variable naming where a person helps.
@@ -125,6 +136,19 @@ type Config struct {
 	// ModelKey is the optional API key for the model endpoint. It is never logged and is left out
 	// of JSON encodings.
 	ModelKey string `json:"-"`
+	// EmbedBaseURL is the base URL of the OpenAI-compatible embedding endpoint.
+	EmbedBaseURL string
+	// EmbedAlias is the routing name passed in embedding requests.
+	EmbedAlias string
+	// EmbedKey is the optional API key for the embedding endpoint. It is never logged and is left out
+	// of JSON encodings.
+	EmbedKey string `json:"-"`
+	// EmbedTimeout is the maximum duration for embedding requests to the embedding endpoint.
+	// It is 0 when the variable is not set; embed then uses its built-in default.
+	EmbedTimeout time.Duration
+	// EmbedMinSimilarity is the minimum cosine similarity threshold for semantic retrieval hits.
+	// It is 0 when the variable is not set; retrieval then uses its built-in default.
+	EmbedMinSimilarity float64
 	// CorpusDir is the absolute path to the local directory holding the corpus manifest and sources.
 	CorpusDir string
 	// SupportChannel names where a person helps, as replies word it. It is empty when the
@@ -187,6 +211,11 @@ func (c Config) HasModel() bool {
 	return c.ModelBaseURL != "" && c.ModelAlias != ""
 }
 
+// HasEmbed reports whether an embedding endpoint is configured.
+func (c Config) HasEmbed() bool {
+	return c.EmbedBaseURL != "" && c.EmbedAlias != ""
+}
+
 // HasForum reports whether the first answer in the support forum is configured.
 func (c Config) HasForum() bool {
 	return c.ForumChannelID != 0
@@ -202,11 +231,13 @@ func (c Config) HasDiscussions() bool {
 	return c.DiscussionsAppClientID != "" && c.DiscussionsAppKey != "" && c.HasNews()
 }
 
-// String returns a redacted representation of Config. Token, ModelKey and NewsGitHubToken are
+// String returns a redacted representation of Config. Token, ModelKey, EmbedKey and NewsGitHubToken are
 // never printed.
 func (c Config) String() string {
-	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelGuardrail:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d, NewsStateFile:%q, NewsGitHubToken:%q, DiscussionsAppClientID:%q, DiscussionsAppKey:%q}",
-		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, c.ModelPolicy, c.ModelGuardrail, redactSecret(c.ModelKey), c.CorpusDir, c.SupportChannel,
+	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelGuardrail:%q, ModelKey:%q, EmbedBaseURL:%q, EmbedAlias:%q, EmbedKey:%q, EmbedTimeout:%v, EmbedMinSimilarity:%g, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d, NewsStateFile:%q, NewsGitHubToken:%q, DiscussionsAppClientID:%q, DiscussionsAppKey:%q}",
+		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, c.ModelPolicy, c.ModelGuardrail, redactSecret(c.ModelKey),
+		c.EmbedBaseURL, c.EmbedAlias, redactSecret(c.EmbedKey), c.EmbedTimeout, c.EmbedMinSimilarity,
+		c.CorpusDir, c.SupportChannel,
 		c.TopPassages, c.MinScore, c.QuestionMaxChars, c.ExcerptChars, c.ReplyMaxChars, c.MaxConcurrentAsks,
 		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate, c.HealthAddr, c.TrailRetention,
 		c.ForumChannelID, c.ForumOptInTagID, c.NewsStateFile, redactSecret(c.NewsGitHubToken),
@@ -228,6 +259,11 @@ func (c Config) LogValue() slog.Value {
 		slog.String("ModelPolicy", c.ModelPolicy),
 		slog.String("ModelGuardrail", c.ModelGuardrail),
 		slog.String("ModelKey", redactSecret(c.ModelKey)),
+		slog.String("EmbedBaseURL", c.EmbedBaseURL),
+		slog.String("EmbedAlias", c.EmbedAlias),
+		slog.String("EmbedKey", redactSecret(c.EmbedKey)),
+		slog.Duration("EmbedTimeout", c.EmbedTimeout),
+		slog.Float64("EmbedMinSimilarity", c.EmbedMinSimilarity),
 		slog.String("CorpusDir", c.CorpusDir),
 		slog.String("SupportChannel", c.SupportChannel),
 		slog.Int("TopPassages", c.TopPassages),
@@ -273,6 +309,10 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	emb, err := parseEmbedConfig(getenv)
+	if err != nil {
+		return Config{}, err
+	}
 	supportChannel, err := parseSupportChannel(getenv(EnvSupportChannel))
 	if err != nil {
 		return Config{}, err
@@ -296,11 +336,6 @@ func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
 		Token:              token,
 		GuildID:            guild,
-		ModelBaseURL:       m.baseURL,
-		ModelAlias:         m.alias,
-		ModelPolicy:        m.policy,
-		ModelGuardrail:     m.guardrail,
-		ModelKey:           m.key,
 		CorpusDir:          corpusDir,
 		SupportChannel:     supportChannel,
 		TopPassages:        passages,
@@ -315,6 +350,8 @@ func Load(getenv func(string) string) (Config, error) {
 		HealthAddr:         healthAddr,
 		TrailRetention:     retention,
 	}
+	m.set(&cfg)
+	emb.set(&cfg)
 	feat.set(&cfg)
 	return cfg, nil
 }
@@ -523,6 +560,14 @@ type modelSettings struct {
 	baseURL, alias, policy, guardrail, key string
 }
 
+func (m modelSettings) set(c *Config) {
+	c.ModelBaseURL = m.baseURL
+	c.ModelAlias = m.alias
+	c.ModelPolicy = m.policy
+	c.ModelGuardrail = m.guardrail
+	c.ModelKey = m.key
+}
+
 func parseModelConfig(getenv func(string) string) (modelSettings, error) {
 	m := modelSettings{
 		baseURL:   getenv(EnvModelBaseURL),
@@ -563,6 +608,74 @@ func parseModelConfig(getenv func(string) string) (modelSettings, error) {
 		m.key = readKey
 	}
 	return m, nil
+}
+
+// embedSettings are the embedding variables as parseEmbedConfig read them.
+type embedSettings struct {
+	baseURL, alias, key string
+	timeout             time.Duration
+	minSimilarity       float64
+}
+
+func (e embedSettings) set(c *Config) {
+	c.EmbedBaseURL = e.baseURL
+	c.EmbedAlias = e.alias
+	c.EmbedKey = e.key
+	c.EmbedTimeout = e.timeout
+	c.EmbedMinSimilarity = e.minSimilarity
+}
+
+func parseEmbedConfig(getenv func(string) string) (embedSettings, error) {
+	e := embedSettings{
+		baseURL: getenv(EnvEmbedBaseURL),
+		alias:   getenv(EnvEmbedAlias),
+	}
+	keyFile := getenv(EnvEmbedKeyFile)
+
+	hasBase := e.baseURL != ""
+	if hasBase != (e.alias != "") {
+		return embedSettings{}, fmt.Errorf("%s and %s must both be set or both be unset", EnvEmbedBaseURL, EnvEmbedAlias)
+	}
+	if !hasBase {
+		for _, name := range []string{EnvEmbedKeyFile, EnvEmbedTimeout, EnvEmbedMinSimilarity} {
+			if getenv(name) != "" {
+				return embedSettings{}, fmt.Errorf("%s is set but no embedding endpoint is configured", name)
+			}
+		}
+		return embedSettings{}, nil
+	}
+
+	if err := model.ValidateBaseURL(e.baseURL); err != nil {
+		return embedSettings{}, fmt.Errorf("%s: %w", EnvEmbedBaseURL, err)
+	}
+	if err := embed.OnPremises(e.baseURL); err != nil {
+		return embedSettings{}, fmt.Errorf("%s: %w", EnvEmbedBaseURL, err)
+	}
+	if !model.ValidAlias(e.alias) {
+		return embedSettings{}, fmt.Errorf("%s must match ^[A-Za-z0-9._:/-]{1,128}$", EnvEmbedAlias)
+	}
+
+	if keyFile != "" {
+		readKey, err := readSecretFile(keyFile, EnvEmbedKeyFile, "embedding key")
+		if err != nil {
+			return embedSettings{}, err
+		}
+		e.key = readKey
+	}
+
+	timeout, err := parseOptionalDuration(getenv(EnvEmbedTimeout), EnvEmbedTimeout, embed.MinTimeout, embed.MaxTimeout)
+	if err != nil {
+		return embedSettings{}, err
+	}
+	e.timeout = timeout
+
+	minSim, err := parseOptionalFloat(getenv(EnvEmbedMinSimilarity), EnvEmbedMinSimilarity, 0.0, 1.0)
+	if err != nil {
+		return embedSettings{}, err
+	}
+	e.minSimilarity = minSim
+
+	return e, nil
 }
 
 func parseGuildID(raw string) (uint64, error) {

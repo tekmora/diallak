@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/tekmora/diallak/internal/embed"
 	"github.com/tekmora/diallak/internal/model"
 )
 
@@ -102,6 +103,7 @@ var ErrDirectClosed = errors.New("the member's direct messages are closed")
 // receiptEntry is what the bot holds for one reply with a button: no text of the member.
 type receiptEntry struct {
 	trace model.Trace
+	embed embed.Trace
 	shown bool
 	at    time.Time
 }
@@ -154,7 +156,7 @@ func NewReceipts(cfg ReceiptsConfig) (*Receipts, error) {
 }
 
 // put holds the receipt of a reply and returns the key its button carries.
-func (r *Receipts) put(trace model.Trace, shown bool) (string, error) {
+func (r *Receipts) put(trace model.Trace, emb embed.Trace, shown bool) (string, error) {
 	raw := make([]byte, receiptKeyBytes)
 	if _, err := io.ReadFull(r.random, raw); err != nil {
 		return "", fmt.Errorf("read receipt key: %w", err)
@@ -169,7 +171,7 @@ func (r *Receipts) put(trace model.Trace, shown bool) (string, error) {
 		delete(r.entries, r.order[0])
 		r.order = r.order[1:]
 	}
-	r.entries[key] = receiptEntry{trace: trace, shown: shown, at: now}
+	r.entries[key] = receiptEntry{trace: trace, embed: emb, shown: shown, at: now}
 	r.order = append(r.order, key)
 	return key, nil
 }
@@ -198,6 +200,21 @@ func (r *Receipts) dropLocked(now time.Time) {
 	r.order = r.order[n:]
 }
 
+// writeReceiptModel writes what the model endpoint did with the question.
+func writeReceiptModel(b *strings.Builder, e receiptEntry) {
+	switch {
+	case e.trace.Replied:
+		fmt.Fprintf(b, "Guardrails that ran: %s.\n", receiptNames(e.trace.Guardrails))
+		fmt.Fprintf(b, "Policies that applied: %s.\n", receiptNames(e.trace.Policies))
+		if e.trace.PolicyMissing {
+			b.WriteString(textReceiptPolicyMissing + "\n")
+		}
+		b.WriteString(textReceiptCaveat + "\n")
+	case e.trace.Sent:
+		b.WriteString(textReceiptNoReply + "\n")
+	}
+}
+
 // receiptText is the receipt the member sees, built from what the bot holds only.
 func receiptText(e receiptEntry) string {
 	var b strings.Builder
@@ -209,27 +226,19 @@ func receiptText(e receiptEntry) string {
 	case mask != nil:
 		writeMasked(&b, *mask)
 	}
-	switch {
-	case mask != nil && mask.Failed:
-	case e.trace.Replied:
-		fmt.Fprintf(&b, "Guardrails that ran: %s.\n", receiptNames(e.trace.Guardrails))
-		fmt.Fprintf(&b, "Policies that applied: %s.\n", receiptNames(e.trace.Policies))
-		if e.trace.PolicyMissing {
-			b.WriteString(textReceiptPolicyMissing + "\n")
-		}
-		b.WriteString(textReceiptCaveat + "\n")
-	default:
-		b.WriteString(textReceiptNoReply + "\n")
+	if mask == nil || !mask.Failed {
+		writeReceiptModel(&b, e)
 	}
 	if e.shown {
 		b.WriteString("The model's answer was shown to you.\n")
 	} else {
 		b.WriteString("No text of the model was shown to you.\n")
 	}
+	b.WriteString(receiptWhere(e) + "\n")
 	if mask != nil {
-		b.WriteString(textReceiptMaskWhere + "\n" + textReceiptMaskKept + "\n")
+		b.WriteString(textReceiptMaskKept + "\n")
 	} else {
-		b.WriteString(textReceiptWhere + "\n" + textReceiptKept + "\n")
+		b.WriteString(textReceiptKept + "\n")
 	}
 	b.WriteString(textReceiptAutomated)
 	text := b.String()
@@ -238,6 +247,22 @@ func receiptText(e receiptEntry) string {
 	}
 	room := maxReceiptMessageRunes - utf8.RuneCountInString(text) + utf8.RuneCountInString(receiptMaskedSlot)
 	return strings.Replace(text, receiptMaskedSlot, fitMasked(mask.Text, room), 1)
+}
+
+func receiptWhere(e receiptEntry) string {
+	mask := e.trace.Mask
+	switch {
+	case e.embed.Sent && e.trace.Sent && mask != nil:
+		return fmt.Sprintf("Where your text went: your question to the embedding endpoint at %s; your question to the gateway's masking route; the masked text, with the documentation passages found for it, to the operator's gateway, and from there to the model behind it.", e.embed.Host)
+	case e.embed.Sent && e.trace.Sent:
+		return fmt.Sprintf("Where your text went: your question to the embedding endpoint at %s; your question, with the documentation passages found for it, to the operator's gateway, and from there to the model behind it.", e.embed.Host)
+	case e.embed.Sent:
+		return fmt.Sprintf("Where your text went: your question to the embedding endpoint at %s.", e.embed.Host)
+	case mask != nil:
+		return textReceiptMaskWhere
+	default:
+		return textReceiptWhere
+	}
 }
 
 // fitMasked is the masked text as the receipt shows it: no backtick, so it cannot end its code
@@ -374,11 +399,11 @@ func (h *Handler) recoverReceiptPanic(where string) {
 
 // receiptKeyFor holds the receipt of a reply and returns the key of its button, or "" when no text
 // left the bot or no receipts are held.
-func (h *Handler) receiptKeyFor(trace model.Trace, shown bool) string {
-	if h.receipts == nil || !trace.Sent {
+func (h *Handler) receiptKeyFor(trace model.Trace, emb embed.Trace, shown bool) string {
+	if h.receipts == nil || (!trace.Sent && !emb.Sent) {
 		return ""
 	}
-	key, err := h.receipts.put(trace, shown)
+	key, err := h.receipts.put(trace, emb, shown)
 	if err != nil {
 		h.logger.Warn("receipt not held", slog.String("error_class", "error"))
 		return ""

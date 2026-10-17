@@ -8,24 +8,33 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/embed"
 	"github.com/tekmora/diallak/internal/model"
 	"github.com/tekmora/diallak/internal/retrieval"
 )
 
 type stubRetriever struct {
-	hits []retrieval.Hit
-	err  error
+	hits  []retrieval.Hit
+	mode  retrieval.Mode
+	err   error
+	calls atomic.Int32
 }
 
-func (s *stubRetriever) Search(_ string, _ retrieval.Options) ([]retrieval.Hit, error) {
+func (s *stubRetriever) SearchMode(_ context.Context, _ string, _ retrieval.Options) ([]retrieval.Hit, retrieval.Mode, error) {
+	s.calls.Add(1)
+	mode := s.mode
 	if s.err != nil {
-		return nil, s.err
+		return s.hits, mode, s.err
 	}
-	return s.hits, nil
+	if mode == "" {
+		mode = retrieval.ModeKeyword
+	}
+	return s.hits, mode, nil
 }
 
 type fakeGenerator struct {
@@ -1191,4 +1200,156 @@ func TestAsk_Positive_TopPassagesAndMinScore(t *testing.T) {
 	t.Run("high min score 0.90 refuses question that answers at 0.20", func(t *testing.T) {
 		testHighMinScoreRefusal(t, index)
 	})
+}
+
+func TestRender_RetrievalModeLabels(t *testing.T) {
+	src := Source{N: 1, Title: "Doc", Path: "doc.md", Revision: "rev1", Excerpt: "Excerpt text."}
+
+	t.Run("keyword mode includes LabelKeywordOnly", func(t *testing.T) {
+		ans := Answer{
+			Kind:      KindAnswer,
+			Text:      "Answer citing [1].",
+			Sources:   []Source{src},
+			Retrieval: retrieval.ModeKeyword,
+		}
+		rendered := Render(ans, RenderOptions{})
+		if !strings.Contains(rendered, LabelKeywordOnly) {
+			t.Errorf("Render(KindAnswer, ModeKeyword) missing LabelKeywordOnly: %s", rendered)
+		}
+
+		exc := Answer{
+			Kind:      KindExcerpts,
+			Sources:   []Source{src},
+			Retrieval: retrieval.ModeKeyword,
+		}
+		renderedExc := Render(exc, RenderOptions{})
+		if !strings.Contains(renderedExc, LabelKeywordOnly) {
+			t.Errorf("Render(KindExcerpts, ModeKeyword) missing LabelKeywordOnly: %s", renderedExc)
+		}
+	})
+
+	t.Run("keyword fallback mode includes LabelEmbedUnavailable", func(t *testing.T) {
+		ans := Answer{
+			Kind:      KindAnswer,
+			Text:      "Answer citing [1].",
+			Sources:   []Source{src},
+			Retrieval: retrieval.ModeKeywordFallback,
+		}
+		rendered := Render(ans, RenderOptions{})
+		if !strings.Contains(rendered, LabelEmbedUnavailable) {
+			t.Errorf("Render(KindAnswer, ModeKeywordFallback) missing LabelEmbedUnavailable: %s", rendered)
+		}
+
+		exc := Answer{
+			Kind:      KindExcerpts,
+			Sources:   []Source{src},
+			Retrieval: retrieval.ModeKeywordFallback,
+		}
+		renderedExc := Render(exc, RenderOptions{})
+		if !strings.Contains(renderedExc, LabelEmbedUnavailable) {
+			t.Errorf("Render(KindExcerpts, ModeKeywordFallback) missing LabelEmbedUnavailable: %s", renderedExc)
+		}
+	})
+
+	t.Run("hybrid mode adds no extra retrieval label", func(t *testing.T) {
+		ans := Answer{
+			Kind:      KindAnswer,
+			Text:      "Answer citing [1].",
+			Sources:   []Source{src},
+			Retrieval: retrieval.ModeHybrid,
+		}
+		rendered := Render(ans, RenderOptions{})
+		if strings.Contains(rendered, LabelKeywordOnly) || strings.Contains(rendered, LabelEmbedUnavailable) {
+			t.Errorf("Render(KindAnswer, ModeHybrid) should not contain retrieval labels: %s", rendered)
+		}
+	})
+}
+
+func TestAsk_ModeKeywordFallback_CountsAndLogs(t *testing.T) {
+	hit := sampleHit("id1", "Title", "Heading", "Text", "rev1")
+	ret := &stubRetriever{
+		hits: []retrieval.Hit{hit},
+		mode: retrieval.ModeKeywordFallback,
+		err:  &retrieval.EmbedError{Err: &embed.StatusError{Code: 503}},
+	}
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	gen := &fakeGenerator{scripted: "Answer citing [1]."}
+
+	p, err := New(Config{
+		Retriever: ret,
+		Generator: gen,
+		Logger:    logger,
+		EmbedHost: "local-embed.svc",
+	})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	ans, err := p.Ask(context.Background(), "test question")
+	if err != nil {
+		t.Fatalf("Ask() error: %v", err)
+	}
+	if ans.Retrieval != retrieval.ModeKeywordFallback {
+		t.Errorf("ans.Retrieval = %v, want ModeKeywordFallback", ans.Retrieval)
+	}
+	if !ans.Embed.Sent || ans.Embed.Host != "local-embed.svc" {
+		t.Errorf("ans.Embed = %+v, want Sent: true, Host: local-embed.svc", ans.Embed)
+	}
+	stats := p.Stats()
+	if stats.EmbedFailures != 1 {
+		t.Errorf("stats.EmbedFailures = %d, want 1", stats.EmbedFailures)
+	}
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "embedding unavailable") {
+		t.Errorf("expected 'embedding unavailable' in log output, got: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, "error_class=status") {
+		t.Errorf("expected 'error_class=status' in log output, got: %s", logOutput)
+	}
+}
+
+// The forum answer must not reach the embedding endpoint (ADR-0009): Excerpts searches with the
+// Keyword retriever, Ask with Retriever.
+func TestExcerpts_KeywordRetrieverOnly(t *testing.T) {
+	hit := sampleHit("id1", "Title", "Heading", "Text", "rev1")
+	hybrid := &stubRetriever{hits: []retrieval.Hit{hit}, mode: retrieval.ModeHybrid}
+	keyword := &stubRetriever{hits: []retrieval.Hit{hit}}
+	p, err := New(Config{Retriever: hybrid, Keyword: keyword, EmbedHost: "local-embed.svc"})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	ans, err := p.Excerpts(context.Background(), "test question")
+	if err != nil {
+		t.Fatalf("Excerpts() error: %v", err)
+	}
+	if hybrid.calls.Load() != 0 || keyword.calls.Load() != 1 {
+		t.Errorf("calls hybrid=%d keyword=%d, want 0 and 1", hybrid.calls.Load(), keyword.calls.Load())
+	}
+	if ans.Embed.Sent {
+		t.Errorf("ans.Embed.Sent = true, want false for the keyword path")
+	}
+
+	if _, err := p.Ask(context.Background(), "test question"); err != nil {
+		t.Fatalf("Ask() error: %v", err)
+	}
+	if hybrid.calls.Load() != 1 {
+		t.Errorf("Ask used hybrid %d times, want 1", hybrid.calls.Load())
+	}
+}
+
+// Without Keyword, Excerpts falls back to Retriever, as before the field existed.
+func TestExcerpts_Boundary_KeywordDefaultsToRetriever(t *testing.T) {
+	ret := &stubRetriever{hits: []retrieval.Hit{sampleHit("id1", "Title", "Heading", "Text", "rev1")}}
+	p, err := New(Config{Retriever: ret})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	if _, err := p.Excerpts(context.Background(), "test question"); err != nil {
+		t.Fatalf("Excerpts() error: %v", err)
+	}
+	if ret.calls.Load() != 1 {
+		t.Errorf("calls = %d, want 1", ret.calls.Load())
+	}
 }
