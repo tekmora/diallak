@@ -10,3 +10,5 @@ bin/
 /.agents/mcp_config.json
 /.standards/cache/
 # END praetor private artifacts
+# make golangci-lint-install
+/.cache/golangci-lint/

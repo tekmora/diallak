@@ -55,27 +55,17 @@ jobs:
         if: github.event.pull_request.draft != true
         run: go vet ./...
       # The profile declares golangci-lint; .golangci.yml selects the linters
-      # and the gofmt formatter.
-      # The script lints planted defects first and fails unless each is found.
+      # and the gofmt formatter. The version and checksum live in
+      # .config/golangci-lint.mk; make verify-lints is the same target
+      # verify-all and the pre-push hook run. The script lints planted
+      # defects first and fails unless each is found.
       - name: Lint
         if: github.event.pull_request.draft != true
         shell: bash
-        env:
-          GOLANGCI_LINT_VERSION: 2.14.0
-          # yamllint disable-line rule:line-length
-          GOLANGCI_LINT_SHA256: ab90aeb7b066f92a33415b638a50fe5344bbb75a0d32ad30cc248d88f81032ab
         run: |
           set -euo pipefail
-          name="golangci-lint-${GOLANGCI_LINT_VERSION}-linux-amd64"
-          url="https://github.com/golangci/golangci-lint/releases/download/v${GOLANGCI_LINT_VERSION}/${name}.tar.gz"
-          curl --fail --silent --show-error --location --proto '=https' \
-            --max-time 60 --output "$RUNNER_TEMP/golangci-lint.tar.gz" "$url"
-          echo "${GOLANGCI_LINT_SHA256}  $RUNNER_TEMP/golangci-lint.tar.gz" | sha256sum --check --strict
-          tar -xzf "$RUNNER_TEMP/golangci-lint.tar.gz" -C "$RUNNER_TEMP" "${name}/golangci-lint"
-          golangci_lint="$RUNNER_TEMP/${name}/golangci-lint"
-          "$golangci_lint" version | grep --fixed-strings "version ${GOLANGCI_LINT_VERSION} "
-          python3 -I tools/ci/lint_scan.py --golangci-lint "$golangci_lint" --self-test
-          python3 -I tools/ci/lint_scan.py --golangci-lint "$golangci_lint"
+          make --silent golangci-lint-install GOLANGCI_LINT_DIR="$RUNNER_TEMP/golangci-lint" | tee "$RUNNER_TEMP/golangci-lint.out"
+          make verify-lints GOLANGCI_LINT="$(tail -n 1 "$RUNNER_TEMP/golangci-lint.out")"
       - name: Test
         if: github.event.pull_request.draft != true
         run: go test -race ./...
