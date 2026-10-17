@@ -1025,5 +1025,9 @@
         ]
       }
     ]
+  },
+  "news": {
+    "repositories": ["tekmora/diallak", "tekmora/epitrop"],
+    "feeds": []
   }
 }
