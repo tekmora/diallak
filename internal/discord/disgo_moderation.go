@@ -35,23 +35,11 @@ func (a *moderationAdapter) GuildID() uint64 {
 }
 
 func (a *moderationAdapter) MemberID() uint64 {
-	m := a.interaction.Member()
-	if m == nil {
-		return 0
-	}
-	return uint64(m.User.ID)
+	return interactionMemberID(a.interaction)
 }
 
 func (a *moderationAdapter) MemberRoleIDs() []uint64 {
-	m := a.interaction.Member()
-	if m == nil {
-		return nil
-	}
-	ids := make([]uint64, len(m.RoleIDs))
-	for i, id := range m.RoleIDs {
-		ids[i] = uint64(id)
-	}
-	return ids
+	return interactionMemberRoleIDs(a.interaction)
 }
 
 func (a *moderationAdapter) Reply(ctx context.Context, text string) error {

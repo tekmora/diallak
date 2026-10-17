@@ -25,16 +25,19 @@ func (a *areasAdapter) GuildID() uint64 {
 	return extractGuildID(a.interaction.GuildID())
 }
 
-func (a *areasAdapter) MemberID() uint64 {
-	m := a.interaction.Member()
+// interactionMemberID returns the id of the member who sent the interaction, or 0 outside a server.
+func interactionMemberID(in discord.Interaction) uint64 {
+	m := in.Member()
 	if m == nil {
 		return 0
 	}
 	return uint64(m.User.ID)
 }
 
-func (a *areasAdapter) MemberRoleIDs() []uint64 {
-	m := a.interaction.Member()
+// interactionMemberRoleIDs returns the role ids of the member who sent the interaction, or nil
+// outside a server.
+func interactionMemberRoleIDs(in discord.Interaction) []uint64 {
+	m := in.Member()
 	if m == nil {
 		return nil
 	}
@@ -43,6 +46,14 @@ func (a *areasAdapter) MemberRoleIDs() []uint64 {
 		ids[i] = uint64(id)
 	}
 	return ids
+}
+
+func (a *areasAdapter) MemberID() uint64 {
+	return interactionMemberID(a.interaction)
+}
+
+func (a *areasAdapter) MemberRoleIDs() []uint64 {
+	return interactionMemberRoleIDs(a.interaction)
 }
 
 func (a *areasAdapter) Pending() bool {
