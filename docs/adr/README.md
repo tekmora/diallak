@@ -27,4 +27,5 @@ record that supersedes it.
 | [0016](0016-honorary-supporter-and-third-subject-guide.md) | 2026-10-12 | An honorary supporter role and a third subject guide role | Accepted |
 | [0017](0017-administrator-role-made-by-hand.md) | 2026-10-17 | A role that grants Administrator is made by hand | Accepted |
 | [0018](0018-forum-guidelines-name-the-right-to-object.md) | 2026-10-17 | The forum guidelines name the right to object | Proposed |
+| [0019](0019-news-posts.md) | 2026-10-17 | News posts | Proposed |
 <!-- markdownlint-enable MD013 -->
