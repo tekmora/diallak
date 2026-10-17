@@ -226,6 +226,21 @@ compare shows afterwards whether they are gone again. The list can name more
 than a run uses, because a channel that is refused as not visible may already
 exist.
 
+The rights are tested step by step. A change counts on the rights the bot
+holds after the steps before it, not on those the server had when it was read.
+The read joins the rights of `@everyone` with those of the bot's roles, so a
+`set-role-permissions roles[everyone]` step takes away every right the bot
+held only through `@everyone`. A right that `@everyone` holds and the bot's
+own role does not counts as held through `@everyone`: the read does not say
+whether another role of the bot holds it too. A later change that needs such
+a right is refused as `lacks-right`, and the detail names the step, for
+example `CONNECT; step 25 takes CONNECT from @everyone`. Giving the right to
+the bot's role clears the refusal
+(`TestPlan_Negative_RightHeldOnlyThroughEveryoneIsGoneAfterItsStep` in
+[`rights_test.go`](../internal/serverplan/rights_test.go)). A right the step
+adds to `@everyone` does not count before it; the step needs that right
+itself.
+
 ## Why a change is refused
 
 A refused change carries the first reason that holds, in this order.
@@ -242,7 +257,7 @@ A refused change carries the first reason that holds, in this order.
 | `unknown-permission-bits` | The permission entry the change would replace has a bit set that the table does not name. The change sends the whole entry and would clear it |
 | `above-caller` | The role stands above the caller's role, or the new order would move or pass a role that does; Discord lets a bot edit and sort only roles below its own |
 | `too-few-positions` | The order step would need more positions below the caller's role than the server has; the detail names the roles to place by hand |
-| `lacks-right` | The caller does not hold a right the change needs |
+| `lacks-right` | The caller does not hold a right the change needs at its step; the detail names an earlier step that takes the right away |
 <!-- markdownlint-enable MD013 -->
 
 A bit without a name is handled in two ways, by where it sits.
