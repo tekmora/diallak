@@ -54,3 +54,20 @@ func TestModeratorGuide_Positive_ServerRulesSayHowToObject(t *testing.T) {
 		}
 	}
 }
+
+// The operator accepted the guide with ADR-0021. The guide is final: it no longer calls itself a
+// draft, and the record it names is accepted, in its own header and in the index.
+func TestModeratorGuide_Negative_FinalAndRecordAccepted(t *testing.T) {
+	guide := readDoc(t, "docs/moderator-guide.md")
+	if strings.Contains(guide, "Draft.") {
+		t.Error("the moderator guide still calls itself a draft")
+	}
+	record := readDoc(t, "docs/adr/0021-moderation-commands-and-trail.md")
+	if !strings.Contains(record, "- **Status**: Accepted\n") {
+		t.Error("ADR-0021 is not accepted")
+	}
+	index := readDoc(t, "docs/adr/README.md")
+	if !strings.Contains(index, "| The moderation commands and their trail | Accepted |") {
+		t.Error("the index of records does not list ADR-0021 as accepted")
+	}
+}

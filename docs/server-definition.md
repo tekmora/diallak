@@ -131,6 +131,7 @@ Each finding has a code, a path into the file and a message.
 | `area-condition` | A language room without the condition that someone who reads the language watches it |
 | `first-answer` | A support forum without exactly one opt-out tag that every member can set, or in which the bot cannot read and reply |
 | `staff-visibility` | A moderators' channel that a role other than operator, moderator or bot can see |
+| `trail` | More than one trail channel, the channel that holds the lines of the moderation commands; a trail channel that is not a moderators' channel; a trail channel whose history the bot cannot read, since the bot lists its own lines there to delete them |
 | `moderator-visibility` | A channel that a moderator cannot see |
 | `voice-closed` | A voice channel that members can join between events or use without push-to-talk |
 | `operator-only`, `moderation-only` | Administration rights outside the operator role; moderation rights outside the operator role; any right on the Moderator role itself. The bot's role passes for its four rights only |

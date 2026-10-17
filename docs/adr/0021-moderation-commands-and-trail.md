@@ -1,6 +1,6 @@
 # ADR-0021: The moderation commands and their trail
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-17
 - **Authors**: Maintainers
 - **Amends**: [ADR-0005](0005-moderation-and-escalation.md), "Moderator
@@ -78,10 +78,12 @@ retention, 90 days unless configuration sets another length. It looks once a
 day.
 
 - To find its lines, the bot needs `READ_MESSAGE_HISTORY` in the log channel:
-  without it, Discord returns no messages. The server definition gives the bot
-  only `VIEW_CHANNEL` and `SEND_MESSAGES` there today. The right is added to
-  the bot's entry on the log channel with the commands, as a change of the
-  definition that the operator applies like every other.
+  without it, Discord returns no messages. The bot holds it already: the role
+  every member holds has it on the server, and the log channel takes from that
+  role only `VIEW_CHANNEL`, which the bot's own entry allows. The server
+  definition marks the log channel as the trail (`trail`), and the validator
+  refuses a trail channel whose history the bot cannot read. No right is added
+  and nothing more is applied to the server.
 - The bot deletes its own messages only. Deleting a message the bot sent needs
   no further right.
 - Discord deletes messages older than 14 days only one at a time, so the bot
@@ -101,8 +103,9 @@ say something in the channel.
 - **Positive**: Lines leave the log channel after 90 days without anyone's
   hand.
 - **Negative**: Every member sees two commands that only moderators can use.
-- **Negative**: The bot gains a right in the log channel, and the operator
-  applies one more change to the server.
+- **Negative**: The bot reads the history of the log channel through a right
+  every member holds; taking that right from every member would stop the
+  sweep, and the validator refuses such a definition.
 - **Negative**: A member learns of a removed message only by missing it.
 
 ## Alternatives considered

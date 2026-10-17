@@ -36,6 +36,7 @@ func Validate(def *Definition) []Finding {
 	v.checkOperatorOnly()
 	v.checkModerationOnly()
 	v.checkBotRights()
+	v.checkTrail()
 	v.checkNothingAttaches()
 	v.checkRoleGrants()
 	v.checkRoleOrder()
