@@ -889,7 +889,8 @@ func TestRun_Negative_UnknownAliasStopsTheStart(t *testing.T) {
 		t.Errorf("error %q should contain 'status 404'", err.Error())
 	}
 	want := "model start probe: model endpoint returned status 404; check " +
-		config.EnvModelBaseURL + ", " + config.EnvModelAlias + ", " + config.EnvModelKeyFile + " and " + config.EnvModelPolicy
+		config.EnvModelBaseURL + ", " + config.EnvModelAlias + ", " + config.EnvModelKeyFile + ", " + config.EnvModelPolicy +
+		" and " + config.EnvModelGuardrail
 	if err.Error() != want {
 		t.Errorf("error = %q, want %q", err.Error(), want)
 	}

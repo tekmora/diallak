@@ -79,10 +79,20 @@ type Generator interface {
 	CompleteTraced(ctx context.Context, system, user string) (string, model.Trace, error)
 }
 
+// MaskingGenerator sends the question to the gateway's guardrail route first and builds the
+// prompt from the masked text with prompt (ADR-0013, step two). No model is called when no masked
+// text comes back.
+type MaskingGenerator interface {
+	CompleteMasked(ctx context.Context, system, question string, prompt func(masked string) string) (string, model.Trace, error)
+}
+
 // Config configures pipeline dependencies and limits.
 type Config struct {
-	Retriever          Retriever
-	Generator          Generator
+	Retriever Retriever
+	Generator Generator
+	// Masker, when not nil, takes the place of Generator for every question: the prompt is built
+	// from the masked text.
+	Masker             MaskingGenerator
 	Options            retrieval.Options
 	Logger             *slog.Logger
 	MaxQuestionRunes   int
@@ -152,6 +162,7 @@ var citationRegexp = regexp.MustCompile(`\[([0-9]+)\]`)
 type Pipeline struct {
 	retriever          Retriever
 	generator          Generator
+	masker             MaskingGenerator
 	options            retrieval.Options
 	logger             *slog.Logger
 	maxQuestionRunes   int
@@ -208,6 +219,7 @@ func New(cfg Config) (*Pipeline, error) {
 	return &Pipeline{
 		retriever:          cfg.Retriever,
 		generator:          cfg.Generator,
+		masker:             cfg.Masker,
 		options:            options,
 		logger:             logger,
 		maxQuestionRunes:   maxQuestion,
@@ -238,7 +250,7 @@ func (p *Pipeline) Ask(ctx context.Context, question string) (Answer, error) {
 		return p.refuseNoSource(), nil
 	}
 	sources := p.buildSources(hits)
-	if p.generator == nil {
+	if p.generator == nil && p.masker == nil {
 		return p.excerptsOnly(sources), nil
 	}
 	return p.generateAndAssemble(ctx, q, hits, sources)
@@ -296,8 +308,7 @@ func (p *Pipeline) excerptsOnly(sources []Source) Answer {
 }
 
 func (p *Pipeline) generateAndAssemble(ctx context.Context, q string, hits []retrieval.Hit, sources []Source) (Answer, error) {
-	userPrompt := buildUserPrompt(q, hits)
-	output, trace, err := p.generator.CompleteTraced(ctx, SystemPrompt, userPrompt)
+	output, trace, err := p.complete(ctx, q, hits)
 	if err != nil {
 		// A cancelled or expired caller context means nobody waits for the reply. That is the
 		// caller's doing, not a failing model, so it is no excerpt reply and no model failure.
@@ -334,6 +345,17 @@ func (p *Pipeline) generateAndAssemble(ctx context.Context, q string, hits []ret
 		Sources: validSources,
 		Trace:   trace,
 	}, nil
+}
+
+// complete asks the model, through the masking request when there is a Masker. Retrieval has run
+// on the question as written before; only the prompt is built from the masked text.
+func (p *Pipeline) complete(ctx context.Context, q string, hits []retrieval.Hit) (string, model.Trace, error) {
+	if p.masker != nil {
+		return p.masker.CompleteMasked(ctx, SystemPrompt, q, func(masked string) string {
+			return buildUserPrompt(masked, hits)
+		})
+	}
+	return p.generator.CompleteTraced(ctx, SystemPrompt, buildUserPrompt(q, hits))
 }
 
 func (p *Pipeline) buildSources(hits []retrieval.Hit) []Source {

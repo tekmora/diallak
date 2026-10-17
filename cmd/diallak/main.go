@@ -296,8 +296,9 @@ func probeModel(ctx context.Context, gate *model.Gate) error {
 	probeCtx, cancel := context.WithTimeout(ctx, startTimeout)
 	defer cancel()
 	if err := gate.Start(probeCtx); err != nil {
-		return fmt.Errorf("%w; check %s, %s, %s and %s", err,
-			config.EnvModelBaseURL, config.EnvModelAlias, config.EnvModelKeyFile, config.EnvModelPolicy)
+		return fmt.Errorf("%w; check %s, %s, %s, %s and %s", err,
+			config.EnvModelBaseURL, config.EnvModelAlias, config.EnvModelKeyFile, config.EnvModelPolicy,
+			config.EnvModelGuardrail)
 	}
 	return nil
 }

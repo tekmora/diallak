@@ -51,6 +51,13 @@ is missing or out of range stops the start with a message that names it.
   the gateway policy. In the live server they stay unset until the gates of
   [ADR-0013](adr/0013-guardrail-policy-and-receipt.md) are passed
   ([compliance](compliance/README.md), "Gates for model-written answers").
+- **The bot's own masking is off unless `DIALLAK_MODEL_GUARDRAIL` is set.** It
+  names a guardrail of the gateway, for example `presidio-pii`. The bot then
+  calls the gateway's route `/guardrails/apply_guardrail` at the root of the
+  base URL, without `/v1`, so the deployment must let that route through as
+  well as the chat route. At start it sends a fixed sentence with an invented
+  address there: an address that comes back unmasked, or a refusal, ends the
+  start with exit code 1.
 
 ## Start, stop and replace
 
