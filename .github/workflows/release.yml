@@ -1,6 +1,6 @@
 ---
-# Runs when a version tag vX.Y.Z is pushed, or by hand for an existing tag.
-# Merging this file releases nothing.
+# Runs when a version tag vX.Y.Z or a release candidate tag vX.Y.Z-rc.N is
+# pushed, or by hand for an existing tag. Merging this file releases nothing.
 #
 # The release is prepared before the tag exists: `praetorctl release` renders
 # the changelog fragments into CHANGELOG.md on a branch, that branch is merged,
@@ -8,16 +8,22 @@
 # has no section in CHANGELOG.md. The image is built, signed and attested by
 # release-image.yml; this workflow then publishes the release with its notes
 # and the SBOM. Every `uses:` is pinned to a commit.
+#
+# A release candidate is cut for a test only. Its release is a prerelease that
+# never becomes the latest release, its image carries only the tag X.Y.Z-rc.N,
+# and its notes come from the changelog fragments that are not yet rendered:
+# the changelog gains no section for it.
 name: release
 
 'on':
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+'
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to build again, vX.Y.Z
+        description: Existing release tag to build again, vX.Y.Z or vX.Y.Z-rc.N
         required: true
         type: string
 
@@ -47,8 +53,9 @@ jobs:
           if [ -z "$TAG" ] && [ "$REF_TYPE" = "tag" ]; then
             TAG="$REF_NAME"
           fi
-          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::tag must look like vX.Y.Z"
+          re='^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$'
+          if ! printf '%s' "$TAG" | grep -Eq "$re"; then
+            echo "::error::tag must look like vX.Y.Z or vX.Y.Z-rc.N"
             exit 1
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -57,13 +64,22 @@ jobs:
         with:
           ref: ${{ steps.tag.outputs.tag }}
           persist-credentials: false
-      # Nothing is built for a version the changelog does not describe.
-      - name: Require a changelog section for the version
+      # Nothing is built for a version the changelog does not describe, nor
+      # for a release candidate without a fragment.
+      - name: Require release notes for the version
         env:
           TAG: ${{ steps.tag.outputs.tag }}
-        run: >-
-          sh .github/scripts/release-notes.sh "${TAG#v}" CHANGELOG.md
-          > /dev/null
+        run: |
+          v=${TAG#v}
+          case "$TAG" in
+            *-rc.*)
+              sh .github/scripts/release-candidate-notes.sh "$v" changelog.d \
+                > /dev/null
+              ;;
+            *)
+              sh .github/scripts/release-notes.sh "$v" CHANGELOG.md > /dev/null
+              ;;
+          esac
 
   image:
     name: image
@@ -110,7 +126,18 @@ jobs:
           IMAGE: ghcr.io/${{ github.repository }}
           DIGEST: ${{ needs.image.outputs.digest }}
         run: |
-          sh .github/scripts/release-notes.sh "${TAG#v}" CHANGELOG.md > notes.md
+          v=${TAG#v}
+          flags=
+          case "$TAG" in
+            *-rc.*)
+              sh .github/scripts/release-candidate-notes.sh "$v" changelog.d \
+                > notes.md
+              flags='--prerelease --latest=false'
+              ;;
+            *)
+              sh .github/scripts/release-notes.sh "$v" CHANGELOG.md > notes.md
+              ;;
+          esac
           named=no
           if [ -f .github/scripts/release-image-note.sh ]; then
             sh .github/scripts/release-image-note.sh \
@@ -120,7 +147,9 @@ jobs:
             echo "::warning::$TAG has no image note script: no digest in notes"
           fi
           if ! gh release view "$TAG" > /dev/null 2>&1; then
-            gh release create "$TAG" --verify-tag --title "$TAG" \
+            # $flags holds whole options and is split on purpose.
+            # shellcheck disable=SC2086
+            gh release create "$TAG" --verify-tag --title "$TAG" $flags \
               --notes-file notes.md
           elif [ "$named" = yes ]; then
             gh release edit "$TAG" --notes-file notes.md

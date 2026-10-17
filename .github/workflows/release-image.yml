@@ -11,7 +11,7 @@ name: release image
   workflow_call:
     inputs:
       tag:
-        description: Release tag to build, vX.Y.Z
+        description: Release tag to build, vX.Y.Z or vX.Y.Z-rc.N
         required: true
         type: string
     outputs:
@@ -55,10 +55,11 @@ jobs:
         env:
           TAG: ${{ inputs.tag }}
         run: |
-          case "$TAG" in
-            v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "::error::tag must look like vX.Y.Z"; exit 1 ;;
-          esac
+          re='^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$'
+          if ! printf '%s' "$TAG" | grep -Eq "$re"; then
+            echo "::error::tag must look like vX.Y.Z or vX.Y.Z-rc.N"
+            exit 1
+          fi
           {
             echo "sbom_amd64=diallak-${TAG#v}-linux-amd64.spdx.json"
             echo "sbom_arm64=diallak-${TAG#v}-linux-arm64.spdx.json"
@@ -84,7 +85,9 @@ jobs:
           # Semver tags only. There is no floating `latest`, so every
           # deployment pins what it runs. The action adds `latest` to a
           # version tag unless the flavor forbids it: the first release got
-          # one that way.
+          # one that way. A release candidate tag X.Y.Z-rc.N gets only the
+          # tag of its full version: the action leaves out {{major}}.{{minor}}
+          # for a prerelease version.
           flavor: |
             latest=false
           tags: |
