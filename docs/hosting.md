@@ -25,7 +25,7 @@ checked. A value that was not measured says so.
 | Name | `ghcr.io/tekmora/diallak:X.Y.Z`, to be pinned by digest | [`release-image.yml`](../.github/workflows/release-image.yml); there is no `latest` tag |
 | Digest | On the release page of the version, from 0.1.2 on. 0.1.1: `sha256:65aacd457c9df4cd331c7ad356e9410ee241e188b36feb9d76b2b26eb2fa4e01` (the index of both platforms) | [`release.yml`](../.github/workflows/release.yml) writes it; `crane digest ghcr.io/tekmora/diallak:X.Y.Z` returns the same value |
 | Platform | `linux/amd64` and `linux/arm64`, one index | `platforms` in the same workflow; the Dockerfile compiles for the target platform without emulation |
-| Size | 22,053,900 bytes unpacked, `linux/amd64`, for the released image 0.1.1. The files in an image built from the tree of 2026-10-13 add up to 13,459,649 bytes (`linux/amd64`) and 12,656,833 bytes (`linux/arm64`) | The released image 0.1.1; the `image` jobs in [`ci.yml`](../.github/workflows/ci.yml) build the image on each platform for every pull request, and [`image_smoke.py`](../tools/ci/image_smoke.py) fails above 14,800,000 bytes |
+| Size | 22,053,900 bytes unpacked, `linux/amd64`, for the released image 0.1.1. The files in an image built from the tree of 2026-10-17 add up to 14,569,664 bytes (`linux/amd64`) and 13,639,872 bytes (`linux/arm64`) | The released image 0.1.1; the `image` jobs in [`ci.yml`](../.github/workflows/ci.yml) build the image on each platform for every pull request, and [`image_smoke.py`](../tools/ci/image_smoke.py) fails above 16,030,000 bytes |
 | User | `65532:65532`, not root | [`Dockerfile`](../Dockerfile); the `image` jobs fail on any other user |
 | Contents | The static binary on a distroless base without a shell | [`Dockerfile`](../Dockerfile) |
 | Signature, provenance, SBOM | Signed by the release workflow at its tag, with build provenance; one SBOM per platform on the release page | [README](../README.md), "Verifying a release": tried against 0.1.1 |
@@ -203,7 +203,7 @@ Nothing here is measured on a running bot: it has never run against Discord.
 <!-- markdownlint-disable MD013 -->
 | Fact | Value | How it was obtained |
 | :--- | :--- | :--- |
-| Binary | 11,092,128 bytes (`linux/amd64`), 10,289,312 bytes (`linux/arm64`) | Image builds of 2026-10-13, read by [`image_smoke.py`](../tools/ci/image_smoke.py), which fails above 12,200,000 bytes on every pull request |
+| Binary | 12,202,144 bytes (`linux/amd64`), 11,272,352 bytes (`linux/arm64`) | Image builds of 2026-10-17, read by [`image_smoke.py`](../tools/ci/image_smoke.py), which fails above 13,420,000 bytes on every pull request |
 | Memory of building the index and answering the evaluation questions | 16.7 MiB peak for the whole test process; the work itself holds about 0.33 MB and allocates about 2 MB, and a test fails above 700,000 bytes held or 4,000,000 bytes allocated | The evaluation test process over the fixture corpus (18 files, 44,616 bytes), 2026-10-10; the heap figures and limits from `TestEvalMemory_Positive_UnderTheLimits` in `internal/eval/eval_memory_test.go`, 2026-10-13 |
 <!-- markdownlint-enable MD013 -->
 

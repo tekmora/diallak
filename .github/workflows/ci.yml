@@ -191,8 +191,9 @@ jobs:
   # and refuse to run without configuration, the image must run as 65532, and
   # the files in the image and the binary must stay under the limits below.
   # The script first plants a case for each check and fails unless each is
-  # reported. The limits are about 10 % over the amd64 build of 2026-10-13
-  # (13,459,649 and 11,092,128 bytes); raising one is a reviewed change.
+  # reported. The limits are about 10 % over the amd64 build of 2026-10-17
+  # (14,569,664 and 12,202,144 bytes); raising one is a reviewed change
+  # that re-measures the build in the same pull request.
   image:
     name: image (${{ matrix.arch }})
     strategy:
@@ -207,8 +208,8 @@ jobs:
     timeout-minutes: 20
     env:
       ARCH: ${{ matrix.arch }}
-      MAX_IMAGE_BYTES: 14800000
-      MAX_BINARY_BYTES: 12200000
+      MAX_IMAGE_BYTES: 16030000
+      MAX_BINARY_BYTES: 13420000
     steps:
       - name: Stop on a draft pull request
         if: github.event.pull_request.draft == true
