@@ -1,0 +1,2 @@
+type: added
+title: 'The feed reader sends back the validators a feed server gave it, so an unchanged feed costs no transfer, and waits as long as a server asks it to'
