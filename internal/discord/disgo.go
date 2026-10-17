@@ -161,12 +161,7 @@ func registerCommandsWithOptions(ctx context.Context, token string, guildID uint
 		return err
 	}
 
-	commands := []discord.ApplicationCommandCreate{
-		buildCommandCreate(maxQuestionChars), buildAreasCommandCreate(),
-		buildRemoveMessageCommandCreate(), buildTimeoutCommandCreate(),
-	}
-
-	_, err = client.Rest.SetGuildCommands(appID, snowflake.ID(guildID), commands, rest.WithCtx(ctx))
+	_, err = client.Rest.SetGuildCommands(appID, snowflake.ID(guildID), guildCommands(maxQuestionChars), rest.WithCtx(ctx))
 	if err != nil {
 		return callError("set guild commands", err, token)
 	}
@@ -743,6 +738,15 @@ func (a *interactionAdapter) Reply(ctx context.Context, text, receiptKey string)
 		rest.WithCtx(ctx),
 	)
 	return err
+}
+
+// guildCommands is every command the bot registers in the server. The record of processing names
+// each of them (TestRecordOfProcessing_Negative_EveryCommandIsNamed).
+func guildCommands(maxQuestionChars int) []discord.ApplicationCommandCreate {
+	return []discord.ApplicationCommandCreate{
+		buildCommandCreate(maxQuestionChars), buildAreasCommandCreate(),
+		buildRemoveMessageCommandCreate(), buildTimeoutCommandCreate(),
+	}
 }
 
 func buildCommandCreate(maxChars int) discord.ApplicationCommandCreate {
