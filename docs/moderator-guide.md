@@ -10,7 +10,8 @@ operator, and what you never do. Members read the
 [server rules](compliance/server-rules.md); this guide binds you when you act
 on them.
 
-Moderation starts only when this guide and the organisation's code of conduct
+Moderation starts only when this guide and the organisation's
+[code of conduct](https://github.com/tekmora/.github/blob/main/CODE_OF_CONDUCT.md)
 exist ([ADR-0005](adr/0005-moderation-and-escalation.md),
 [ADR-0008](adr/0008-code-of-conduct-place.md)).
 

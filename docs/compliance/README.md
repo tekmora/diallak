@@ -13,14 +13,16 @@ legal advice. The operator reviews each one before it is used.
 | [Imprint](imprint.md) | Who provides the bot and the server | Draft; the identity block is filled |
 | [Privacy notice](privacy-notice.md) | What members are told about their data, point by point of GDPR Article 13 | Draft; content decided by the operator |
 | [Record of processing](record-of-processing.md) | The record of processing activities that GDPR Article 30 asks for | Draft, built from the data inventory |
-| [Server rules](server-rules.md) | The short add-on to the code of conduct that a member reads when joining | Draft wording accepted; final once the code of conduct exists |
+| [Server rules](server-rules.md) | The short add-on to the code of conduct that a member reads when joining | Draft wording accepted; final when the operator accepts it with the code of conduct |
 | [Support forum answer](support-forum-answer.md) | Where the entries for the first answer in the support forum went, and the gates before it is switched on | Built, off by default; [ADR-0009](../adr/0009-support-forum-first-answer.md) and [ADR-0020](../adr/0020-forum-answers-only-opted-in-posts.md) are its accepted records |
 <!-- markdownlint-enable MD013 -->
 
 The rules these documents implement are in
-[ADR-0002](../adr/0002-data-and-compliance.md). Still to come before moderation
-starts ([ADR-0005](../adr/0005-moderation-and-escalation.md)): the moderator
-guide, and the code of conduct, which is kept once per organisation
+[ADR-0002](../adr/0002-data-and-compliance.md). Moderation rests on two more
+texts ([ADR-0005](../adr/0005-moderation-and-escalation.md)): the
+[moderator guide](../moderator-guide.md), and the
+[code of conduct](https://github.com/tekmora/.github/blob/main/CODE_OF_CONDUCT.md),
+which is kept once per organisation
 ([ADR-0008](../adr/0008-code-of-conduct-place.md)). English is the source and
 the binding version of every text here; translations are linked and marked as
 translations.

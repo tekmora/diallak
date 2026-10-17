@@ -1,8 +1,11 @@
 # Server rules
 
 Draft. It is not published to members yet. The operator has accepted the eight
-rules as draft wording; they become final once the organisation's code of
-conduct exists.
+rules as draft wording. The organisation's
+[code of conduct](https://github.com/tekmora/.github/blob/main/CODE_OF_CONDUCT.md) now
+exists; its section "Our Pledge" is proposed wording that the operator has not
+accepted yet. The rules become final when the operator accepts them together
+with the code of conduct.
 
 The operator decided the shape: one code of conduct holds the rules of conduct
 for all spaces of the organisation, and the server rules are a short add-on for
@@ -13,9 +16,10 @@ linked when someone provides it and is marked as a translation.
 
 ## The rules
 
-1. **The code of conduct applies here.** It says how people treat each other in
-   every space of the organisation. The link follows once the code of conduct
-   exists.
+1. **The code of conduct applies here.** The
+   [code of conduct](https://github.com/tekmora/.github/blob/main/CODE_OF_CONDUCT.md) says
+   how people treat each other in every space of the organisation, and how to
+   report a breach of it.
 2. **Technical channels and support are in English.** A language gets a social
    room when enough members ask for it and a moderator or subject guide who
    reads the language watches the room. There is none at the start.
@@ -45,16 +49,22 @@ linked when someone provides it and is marked as a translation.
 
 ## What the code of conduct covers
 
-The code of conduct is written once per organisation and does not exist yet.
-Until it does, this list stands in for it in the draft, so that no rule of
-conduct is lost between the two texts:
+The code of conduct is written once per organisation. Until it existed, a list
+of rules of conduct stood in for it in this draft. The code of conduct now
+covers these points of that list:
 
 - Respect: no harassment, no hate speech, no threats.
 - Other people's privacy: no personal information about anyone without their
   consent.
-- No sexual, gory or shocking content.
-- No spam: no advertising, no unsolicited invitations, no repeated posts.
+- No sexual content.
 - No impersonation of another person, a moderator or a project.
+- No advertising.
+
+These points of the list are not in the code of conduct, so they stay with
+the server and hold here in addition to it:
+
+- No gory or shocking content.
+- No spam: no unsolicited invitations, no repeated posts.
 - No scams: no phishing, no malware, no solicitation of money.
 - Respect for licences: no pirated software and no help with getting it.
 - Nothing illegal.
@@ -81,6 +91,10 @@ Where the code of conduct lives is recorded in
 [ADR-0008](../adr/0008-code-of-conduct-place.md): once per organisation, not in
 this repository.
 
-## Open point
+## Open points
 
-The link to the code of conduct in rule 1, once the code of conduct exists.
+- The operator accepts or changes the section "Our Pledge" of the code of
+  conduct, which is proposed wording.
+- The points that stay with the server, listed above, are not yet in the
+  rules a member reads: the operator decides whether they become a rule of
+  their own here or move into the code of conduct.
