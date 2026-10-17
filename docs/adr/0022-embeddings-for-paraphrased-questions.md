@@ -4,7 +4,10 @@
 - **Date**: 2026-10-17
 - **Authors**: Maintainers
 - **Amends**: [ADR-0003](0003-answer-pipeline.md), "Retrieval decides whether
-  there is an answer"
+  there is an answer";
+  [ADR-0002](0002-data-and-compliance.md), "It is sent to one place only";
+  [ADR-0013](0013-guardrail-policy-and-receipt.md), "the bot's key reaches the
+  chat route only" and "The member can ask for a receipt"
 
 ## Context
 
@@ -47,8 +50,8 @@ the source documentation. The lexical index requires at least two distinct
 matching query terms (`MinMatchedTerms = 2`) and sufficient BM25 coverage
 (`DefaultMinScore = 0.20`)
 ([`internal/retrieval/retrieval.go`](../../internal/retrieval/retrieval.go)),
-so phrasing that relies on synonyms or colloquial descriptions fails to
-retrieve any source chunk.
+so phrasing that relies on synonyms or colloquial descriptions does not
+reach a listed source. The test logs the top hit of every miss.
 
 ## Decision
 
@@ -79,8 +82,8 @@ chat generation endpoint
 - Corpus chunk embedding vectors are computed once at startup and stored in
   memory next to the lexical index.
 - No vector database or external storage is used: the corpus covers a single
-  project's documentation (a few hundred chunks), fitting entirely in memory
-  within a few megabytes.
+  project's documentation, and one vector per chunk is held in memory. The
+  memory and start-up cost is measured when the retriever is built.
 
 ### Hybrid scoring and refusal
 
@@ -99,9 +102,9 @@ chat generation endpoint
   retrieval falls back to lexical matching for that question. In accordance
   with ADR-0003's rule against silent fallbacks, the failure is counted and
   logged with its error class only (never logging question text or remote error
-  bodies), and the reply does not hide the degradation: the reply indicates
-  that semantic retrieval was unavailable, and the reply receipt records the
-  event.
+  bodies), and the reply does not hide the degradation: it says that semantic
+  retrieval was unavailable, as an excerpt reply says that the model was
+  unavailable.
 
 ### Evaluation and threshold selection
 
@@ -117,15 +120,24 @@ chat generation endpoint
 
 ### Data and compliance
 
-- Under [ADR-0002](0002-data-and-compliance.md), member text from Discord is
-  sent only to operator-run endpoints that do not retain or train on the input.
-- Sending question text to `/v1/embeddings` is an additional processing step
-  within the same recipient class as the chat model (the operator's locally
-  run endpoint).
+- [ADR-0002](0002-data-and-compliance.md) sends text from Discord to one
+  place only, the model endpoint named in configuration, which must not keep
+  or train on it. This record adds a second place: the embedding endpoint
+  named in configuration, bound by the same rule. The question goes there
+  before any model call.
+- [ADR-0013](0013-guardrail-policy-and-receipt.md) lets the bot's gateway key
+  reach the chat route only. An embedding endpoint behind the same gateway
+  needs the key to reach the embeddings route too; that is a change to the
+  operator's gateway, made by the operator.
+- The receipt of ADR-0013 names where the text went. With embeddings it also
+  names the embedding endpoint. An excerpt reply has no receipt button today
+  because nothing was sent anywhere; once the question went to the embedding
+  endpoint, that reply carries the button as well.
 - Upon acceptance of this record,
   [`docs/compliance/data-inventory.md`](../compliance/data-inventory.md) must
   add a corresponding row under "What the bot passes on" for the embedding
-  endpoint.
+  endpoint, and the [privacy notice](../compliance/privacy-notice.md) must name
+  it.
 
 ## Consequences
 
@@ -153,11 +165,11 @@ chat generation endpoint
   labor-intensive, fragile, and cannot cover the open-ended vocabulary of a
   community. It could complement, but cannot replace, semantic retrieval.
 - **A vector database**: Not needed for a corpus of a few hundred documentation
-  chunks. In-memory linear cosine similarity executes in microseconds and
-  avoids operational complexity, additional storage, and failure modes.
-- **A hosted embedding service**: Senders of member questions to third-party
-  cloud providers violate the data privacy principles of
-  [ADR-0002](0002-data-and-compliance.md).
+  chunks. A linear scan over the in-memory vectors avoids another service,
+  its storage and its failure modes.
+- **A hosted embedding service**: Sending member questions to a third-party
+  provider breaks the rule of [ADR-0002](0002-data-and-compliance.md) that
+  the receiving endpoint must not keep or train on the text.
 - **Keep lexical only and accept the misses**: Rejected because 10 of 12
   measured paraphrase questions fail to retrieve any sources, leading to
   unnecessary refusals for valid member questions.
@@ -168,6 +180,8 @@ chat generation endpoint
   and local embeddings.
 - **Model selection**: Which local embedding model the alias routes to (for
   example, an open-weights embedding model such as `bge-small-en-v1.5`).
+- **Gateway route**: Whether the bot's key may reach the embeddings route of
+  the operator's gateway.
 - **Misses threshold**: Whether `MaxParaphraseMisses = 3` remains the permanent
   threshold for future corpus evaluations.
 
@@ -175,7 +189,7 @@ chat generation endpoint
 
 - [ADR-0002: Data and compliance](0002-data-and-compliance.md).
 - [ADR-0003: Answer pipeline](0003-answer-pipeline.md).
-- [ADR-0006: Role and duties under the EU AI Act](0006-ai-act-role.md).
+- [ADR-0013: Guardrail policy and receipt](0013-guardrail-policy-and-receipt.md).
 - [Data inventory](../compliance/data-inventory.md).
 - Issue 124: <https://github.com/tekmora/diallak/issues/124>.
 - SnatchArr evaluation test data:
