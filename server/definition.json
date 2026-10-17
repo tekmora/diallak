@@ -872,8 +872,8 @@
       "id": "moderation-queue",
       "what": "Carries out what a moderator does through it, deleting a message or timing a member out, and writes the trail of those actions.",
       "by": "bot",
-      "state": "decided",
-      "record": "docs/adr/0005-moderation-and-escalation.md"
+      "state": "built",
+      "record": "docs/adr/0021-moderation-commands-and-trail.md"
     },
     {
       "id": "area-choices",

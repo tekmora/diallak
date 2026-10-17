@@ -24,6 +24,10 @@ against the code.
   the bot reads your member id, the roles you hold and whether you have passed
   the server's screening, gives or takes the roles you chose, and keeps none of
   it. Other members can see the roles you hold.
+- When a moderator removes your message or times you out, the bot writes one
+  line into the server's log channel with your member id, the moderator and
+  the reason, and deletes it after 90 days. It holds no text of your message,
+  and the bot sends you no message about it.
 - Your question is held in memory until the reply is sent, and then it is gone.
 - The reply is visible only to you.
 - When your question left the bot, the reply has a button that shows you a
@@ -74,22 +78,26 @@ No data protection officer is appointed.
 | The id of the server the command came from | Refusing every server but the configured one | Legitimate interests, Article 6(1)(f) |
 | With `/areas`: your member id, the roles you hold, whether you have passed the server's screening, and the options you choose | Showing what you hold, giving and taking the roles you choose, refusing a member who has not passed screening | Legitimate interests, Article 6(1)(f) |
 | When you press the receipt's direct message button: your member id | Sending the receipt to you as a direct message, for that one request | Legitimate interests, Article 6(1)(f) |
-| Other fields Discord sends with a command or a button press, such as your name and locale, and your member id and roles with `/ask` | None: the bot reads none of them and keeps none | Not used |
+| When a moderator acts on you: your member id, and for a removed message its channel and message id | Carrying out the act and writing the trail line, so the operator can check what moderators did | Legitimate interests, Article 6(1)(f) |
+| When you are a moderator and use a moderation command: your member id, the roles you hold, and the reason you give | Refusing callers without the Moderator role and naming you and your reason in the trail line | Legitimate interests, Article 6(1)(f) |
+| Other fields Discord sends with a command or a button press, such as your name and locale, your member id and roles with `/ask`, and the text of a message a moderator removes | None: the bot reads none of them and keeps none | Not used |
 <!-- markdownlint-enable MD013 -->
 
 The question and the options you choose come from you. The other fields come
 from Discord, which attaches them to every command.
 
 The legitimate interest is to answer the question a member puts to the bot, in
-the server the bot is meant for, and to give a member the roles that member
-chose. The bot asks for no consent. This basis is the
+the server the bot is meant for, to give a member the roles that member
+chose, and to keep the server moderated with a record of every act. The bot
+asks for no consent. This basis is the
 operator's choice; [Legal research](legal-research.md), point 2, has the
 sources.
 
 The bot's logs hold no question, no answer and no member id. They record the
 outcome of a request, such as `answer` or `refusal`, and how long it took; for
 `/areas`, which role was given or taken and whether that worked; for a
-receipt, whether it was shown or sent
+receipt, whether it was shown or sent; for a moderation command, why it was
+refused or whether it worked
 ([data inventory](data-inventory.md), "What the bot logs").
 
 ## Who receives your data
@@ -101,7 +109,10 @@ receipt, whether it was shown or sent
   it was your own choice. Discord shows the role to the other members and keeps
   an entry in the server's audit log for 45 days, visible to roles that may
   view that log. When you press for it, Discord also receives your receipt as
-  a direct message to you.
+  a direct message to you. When a moderator acts, Discord receives the act
+  with the moderator's reason, which its audit log keeps for 45 days, and the
+  trail line in the log channel, which the moderators and the operator can
+  read.
 - **The model endpoint** receives your question and the documentation passages
   that were found, in model mode only. The operator runs that endpoint. It
   receives no member id and no name
@@ -158,6 +169,7 @@ provider, the country of its data centre and the agreement that binds it.
 | The endpoint's record of a request (model mode only) | 30 days. The record holds figures about the request only: which key and which model, how many tokens, and when. It holds no question and no answer |
 | The receipt of a reply, in the bot | In memory for 15 minutes, for at most 1000 replies at once, and lost on a restart. It holds the names of the guardrails and policies, the time, and whether the model's answer was shown; no text of yours and no member id |
 | Your member id, when you press for the receipt as a direct message | In memory until the direct message is sent |
+| The trail line of a moderator's act, in the server's log channel | 90 days, unless the operator configures 1 to 365 days; the bot deletes it once a day after that |
 | Log lines of the bot, which hold no personal data | 30 days |
 <!-- markdownlint-enable MD013 -->
 
@@ -210,14 +222,13 @@ question. The bot does not need them to answer.
 
 ## Changes to this notice
 
-Features that are planned will process more data: support tickets, the
-moderation trail, GitHub Discussions, supporter roles and a first answer in the
-support forum ([data inventory](data-inventory.md), "Not yet built"). This
-notice gains the matching entries before such a feature goes live. The entries
-for the support forum are drafted in
-[Support forum answer](support-forum-answer.md). Two periods are decided
-already: a support ticket is kept 30 days after it is closed, and the
-moderation trail 90 days.
+Features that are planned will process more data: support tickets, GitHub
+Discussions, supporter roles and a first answer in the support forum
+([data inventory](data-inventory.md), "Not yet built"). This notice gains the
+matching entries before such a feature goes live. The entries for the support
+forum are drafted in [Support forum answer](support-forum-answer.md). One
+period is decided already: a support ticket is kept 30 days after it is
+closed.
 
 ## Where this notice lives
 

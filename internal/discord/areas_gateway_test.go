@@ -27,6 +27,15 @@ import (
 type areasCall struct {
 	method, path, reason string
 	body                 areasBody
+	raw                  string
+}
+
+// componentsFake is a fake Discord for runComponentsOverGateway: it serves the requests, signals
+// every answer the test waits for and returns the requests it received.
+type componentsFake interface {
+	http.Handler
+	answered() <-chan struct{}
+	recorded() []areasCall
 }
 
 // areasBody is the body of an interaction callback or of the edit of a message.
@@ -83,7 +92,7 @@ func (f *areasFake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		f.t.Errorf("audit log reason %q does not decode: %v", r.Header.Get("X-Audit-Log-Reason"), err)
 	}
-	call := areasCall{method: r.Method, path: r.URL.Path, reason: reason}
+	call := areasCall{method: r.Method, path: r.URL.Path, reason: reason, raw: string(raw)}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &call.body); err != nil {
 			f.t.Errorf("%s %s: body does not decode: %v", r.Method, r.URL.Path, err)
@@ -178,6 +187,8 @@ func (f *areasFake) respondRead(w http.ResponseWriter, r *http.Request) error {
 	}
 }
 
+func (f *areasFake) answered() <-chan struct{} { return f.answers }
+
 func (f *areasFake) recorded() []areasCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -250,7 +261,7 @@ func runAreasOverGateway(t *testing.T, wantAnswers int, frames ...[]byte) []area
 // runComponentsOverGateway starts the bot as cfg sets it against fake, delivers the frames, waits for
 // wantAnswers callbacks and edits and stops the bot. It fills the token, the server and the logger,
 // and builds a handler without receipts when cfg.Handler is nil.
-func runComponentsOverGateway(t *testing.T, fake *areasFake, cfg BotConfig, wantAnswers int, frames ...[]byte) []areasCall {
+func runComponentsOverGateway(t *testing.T, fake componentsFake, cfg BotConfig, wantAnswers int, frames ...[]byte) []areasCall {
 	t.Helper()
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
@@ -292,7 +303,7 @@ func runComponentsOverGateway(t *testing.T, fake *areasFake, cfg BotConfig, want
 
 	for range wantAnswers {
 		select {
-		case <-fake.answers:
+		case <-fake.answered():
 		case err := <-done:
 			t.Fatalf("Run ended before the answers: %v", err)
 		case <-time.After(10 * time.Second):

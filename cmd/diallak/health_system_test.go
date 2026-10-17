@@ -249,11 +249,13 @@ func startFakeREST(t *testing.T, appID uint64, wsURL string) *httptest.Server {
 	t.Helper()
 	idStr := strconv.FormatUint(appID, 10)
 	// Each path the bot reads at start, with the body the fake answers. The areas command reads
-	// the server's roles once before the gateway opens.
+	// the server's roles once before the gateway opens; the moderation commands read the bot user,
+	// the roles and the channels.
 	bodies := map[string]string{
-		"/applications/@me": fmt.Sprintf(`{"id":"%s","name":"diallak"}`, idStr),
-		"/gateway":          fmt.Sprintf(`{"url":"%s","shards":1}`, wsURL),
-		"/gateway/bot":      fmt.Sprintf(`{"url":"%s","shards":1}`, wsURL),
+		"/applications/@me": fmt.Sprintf(`{"id":"%s","name":"diallak","bot":{"id":"%s","username":"diallak"}}`, idStr, idStr),
+		"/guilds/" + strconv.FormatUint(testGuildID, 10) + "/channels": `[]`,
+		"/gateway":     fmt.Sprintf(`{"url":"%s","shards":1}`, wsURL),
+		"/gateway/bot": fmt.Sprintf(`{"url":"%s","shards":1}`, wsURL),
 		"/guilds/" + strconv.FormatUint(testGuildID, 10) + "/roles": fmt.Sprintf(
 			`[{"id":"%d","name":"@everyone","position":0}]`, testGuildID),
 	}

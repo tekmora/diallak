@@ -1134,3 +1134,39 @@ func TestLoad_Boundary_ModelPolicyLengthAndPunctuation(t *testing.T) {
 		}
 	})
 }
+
+func TestLoad_Positive_TrailRetention(t *testing.T) {
+	cfg, err := Load(env(validBaseEnv(t)))
+	if err != nil || cfg.TrailRetention != 0 {
+		t.Fatalf("Load without %s = %v, %v; want 0, nil", EnvTrailRetention, cfg.TrailRetention, err)
+	}
+	base := validBaseEnv(t)
+	base[EnvTrailRetention] = "720h"
+	cfg, err = Load(env(base))
+	if err != nil || cfg.TrailRetention != 720*time.Hour {
+		t.Errorf("Load with 720h = %v, %v; want 720h, nil", cfg.TrailRetention, err)
+	}
+	if !strings.Contains(cfg.String(), "TrailRetention:720h0m0s") {
+		t.Errorf("String() misses the retention: %s", cfg.String())
+	}
+}
+
+func TestLoad_Negative_TrailRetentionRefused(t *testing.T) {
+	for _, raw := range []string{"not-a-duration", "-24h", "0s", "23h59m59s", "8760h0m1s", "90d"} {
+		base := validBaseEnv(t)
+		base[EnvTrailRetention] = raw
+		if _, err := Load(env(base)); err == nil || !strings.Contains(err.Error(), EnvTrailRetention) {
+			t.Errorf("Load with %q = %v, want an error naming %s", raw, err, EnvTrailRetention)
+		}
+	}
+}
+
+func TestLoad_Boundary_TrailRetentionBounds(t *testing.T) {
+	for _, raw := range []string{"24h", "8760h"} {
+		base := validBaseEnv(t)
+		base[EnvTrailRetention] = raw
+		if _, err := Load(env(base)); err != nil {
+			t.Errorf("Load with %q: %v, want accepted", raw, err)
+		}
+	}
+}
