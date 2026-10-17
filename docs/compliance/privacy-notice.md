@@ -18,8 +18,12 @@ against the code.
 ## In short
 
 - The bot stores nothing about you. It has no database and writes no file.
-- It reads two things from a command: the question you pass to `/ask` and the id
-  of the server the command came from.
+- It reads two things from `/ask`: the question you pass and the id of the
+  server the command came from.
+- With `/areas` you choose interest, language and notification roles. For that
+  the bot reads your member id, the roles you hold and whether you have passed
+  the server's screening, gives or takes the roles you chose, and keeps none of
+  it. Other members can see the roles you hold.
 - Your question is held in memory until the reply is sent, and then it is gone.
 - The reply is visible only to you.
 - Your question is never used to train or evaluate a model
@@ -64,26 +68,33 @@ No data protection officer is appointed.
 | :--- | :--- | :--- |
 | The question you pass to `/ask` | Finding documentation passages and writing the reply | Legitimate interests, Article 6(1)(f) |
 | The id of the server the command came from | Refusing every server but the configured one | Legitimate interests, Article 6(1)(f) |
-| Other fields Discord sends with a command, such as your member id, name, roles and locale | None: the bot reads none of them and keeps none | Not used |
+| With `/areas`: your member id, the roles you hold, whether you have passed the server's screening, and the options you choose | Showing what you hold, giving and taking the roles you choose, refusing a member who has not passed screening | Legitimate interests, Article 6(1)(f) |
+| Other fields Discord sends with a command, such as your name and locale, and your member id and roles with `/ask` | None: the bot reads none of them and keeps none | Not used |
 <!-- markdownlint-enable MD013 -->
 
-The question comes from you. The other fields come from Discord, which attaches
-them to every command.
+The question and the options you choose come from you. The other fields come
+from Discord, which attaches them to every command.
 
 The legitimate interest is to answer the question a member puts to the bot, in
-the server the bot is meant for. The bot asks for no consent. This basis is the
+the server the bot is meant for, and to give a member the roles that member
+chose. The bot asks for no consent. This basis is the
 operator's choice; [Legal research](legal-research.md), point 2, has the
 sources.
 
 The bot's logs hold no question, no answer and no member id. They record the
-outcome of a request, such as `answer` or `refusal`, and how long it took
+outcome of a request, such as `answer` or `refusal`, and how long it took; for
+`/areas`, which role was given or taken and whether that worked
 ([data inventory](data-inventory.md), "What the bot logs").
 
 ## Who receives your data
 
 *Article 13(1)(e).*
 
-- **Discord** receives the reply, because the bot answers through Discord.
+- **Discord** receives the reply, because the bot answers through Discord. With
+  `/areas` Discord also receives the role change, with a fixed reason that says
+  it was your own choice. Discord shows the role to the other members and keeps
+  an entry in the server's audit log for 45 days, visible to roles that may
+  view that log.
 - **The model endpoint** receives your question and the documentation passages
   that were found, in model mode only. The operator runs that endpoint. It
   receives no member id and no name
@@ -117,6 +128,7 @@ provider, the country of its data centre and the agreement that binds it.
 | Data | Kept |
 | :--- | :--- |
 | Your question, in the bot | In memory until the reply is sent |
+| Your member id, your roles and your choice with `/areas`, in the bot | In memory until the reply is sent. The role itself stays on you until you take it off with `/areas` |
 | Your question, at the model endpoint (model mode only) | Not written to storage and not used for training (ADR-0002). The three rows below name what the endpoint holds for a time anyway |
 | The answer, in the endpoint's cache (model mode only) | At most 60 minutes, in memory only. The cache finds an entry by a hash of the request, so it holds the answer but not your question. The bot sends no member id: another member who sends the identical question within that time gets the same answer |
 | A blocked question, in the endpoint's log (model mode only) | When a filter of the endpoint blocks a question, one log line holds the fragment that matched, never the whole question. The line is deleted after about 74 hours at most |
@@ -155,6 +167,8 @@ when you want none of them to read along.
 *Article 13(2)(e).*
 
 No. Using `/ask` is voluntary. Without a question the bot has nothing to answer.
+Using `/areas` is voluntary too, and every role it gives you can be taken off
+with it again.
 
 ## Automated decisions
 
@@ -212,6 +226,16 @@ gate for the launch:
 - whether the bot itself has to point a member to the right to object at first
   contact (Article 21(4) says "at the latest at the time of the first
   communication").
+
+## Legal points still open
+
+These points are named for legal review and not yet researched. They are not a
+gate for the launch:
+
+- whether legitimate interests covers reading a member's roles and giving and
+  taking the roles the member chose with `/areas`, given that other members can
+  see the roles, and that language roles can hint at where someone is from
+  ([ADR-0011](../adr/0011-area-roles-from-member-choice.md)).
 
 ## Sources
 

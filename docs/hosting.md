@@ -84,7 +84,8 @@ is missing or out of range stops the start with a message that names it.
 - **Commands are registered by a separate run.** `diallak -register-commands`
   with the same environment sets the server's command list and exits. Starting
   the bot never does. It is the operator's act at the cutover, and it is needed
-  again after a change of `DIALLAK_QUESTION_MAX_CHARS` ([README](../README.md),
+  again after a change of `DIALLAK_QUESTION_MAX_CHARS` and after an update that
+  adds a command, such as `/areas` ([README](../README.md),
   "Commands are registered by hand").
 
 ## Two shapes of deployment

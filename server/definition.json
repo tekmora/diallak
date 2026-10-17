@@ -878,7 +878,7 @@
       "id": "area-choices",
       "what": "Gives and takes the interest, language and notification roles from the member's own choice, made through the areas command.",
       "by": "bot",
-      "state": "decided",
+      "state": "built",
       "record": "docs/adr/0011-area-roles-from-member-choice.md"
     },
     {

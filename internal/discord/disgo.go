@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -83,9 +84,11 @@ func (o clientOptions) getApplyCallTimeout() time.Duration {
 
 // BotConfig configures the live Discord gateway client and runtime adapter.
 type BotConfig struct {
-	Token           string
-	GuildID         uint64
-	Handler         *Handler
+	Token   string
+	GuildID uint64
+	Handler *Handler
+	// Areas serves the areas command. Nil leaves the command unserved.
+	Areas           *AreasHandler
 	Logger          *slog.Logger
 	ShutdownTimeout time.Duration
 	// ReportReady reports whether the bot is ready to serve. It is called with true
@@ -94,7 +97,7 @@ type BotConfig struct {
 	ReportReady func(bool)
 }
 
-// RegisterCommands registers the single guild-scoped /ask command with Discord via REST.
+// RegisterCommands registers the guild-scoped /ask and /areas commands with Discord via REST.
 // maxQuestionChars is the longest question the command accepts, in runes; zero means
 // answer.MaxQuestionRunes.
 func RegisterCommands(ctx context.Context, token string, guildID uint64, maxQuestionChars int) error {
@@ -144,8 +147,7 @@ func registerCommandsWithOptions(ctx context.Context, token string, guildID uint
 		return err
 	}
 
-	cmd := buildCommandCreate(maxQuestionChars)
-	commands := []discord.ApplicationCommandCreate{cmd}
+	commands := []discord.ApplicationCommandCreate{buildCommandCreate(maxQuestionChars), buildAreasCommandCreate()}
 
 	_, err = client.Rest.SetGuildCommands(appID, snowflake.ID(guildID), commands, rest.WithCtx(ctx))
 	if err != nil {
@@ -189,11 +191,13 @@ func runWithOptions(ctx context.Context, cfg BotConfig, opts clientOptions) erro
 
 	// The worker pool bound is MaxConcurrent + 8 immediate busy replies, ensuring goroutines
 	// executing HandleAsk are strictly bounded under HISS-06 even during interaction surges.
-	workerSem := make(chan struct{}, cfg.Handler.maxConcurrent+maxBusyGoroutines)
-	var dispatching atomic.Bool
-	dispatching.Store(true)
+	d := &dispatcher{
+		cfg:       cfg,
+		workerSem: make(chan struct{}, cfg.Handler.maxConcurrent+maxBusyGoroutines),
+	}
+	d.dispatching.Store(true)
 
-	client, err := buildClient(ctx, cfg, workerSem, &dispatching, opts)
+	client, err := buildClient(ctx, cfg, d, opts)
 	if err != nil {
 		return fmt.Errorf("build discord client: %w", sanitizeToken(err, cfg.Token))
 	}
@@ -211,9 +215,9 @@ func runWithOptions(ctx context.Context, cfg BotConfig, opts clientOptions) erro
 	if cfg.ReportReady != nil {
 		cfg.ReportReady(false)
 	}
-	dispatching.Store(false)
+	d.dispatching.Store(false)
 
-	return shutdownClient(cfg, client, cfg.ShutdownTimeout)
+	return shutdownClient(cfg, client, &d.areasRunning, cfg.ShutdownTimeout)
 }
 
 func preGatewayStep(
@@ -236,6 +240,11 @@ func preGatewayStep(
 	opener := opts.openGateway
 	if opener == nil {
 		opener = openGatewayWithTimeout
+	}
+	if cfg.Areas != nil {
+		if err := readAreaRoles(ctx, client, cfg, opts); err != nil {
+			return 0, err
+		}
 	}
 	if err := opener(ctx, client, cfg.Token); err != nil {
 		return 0, err
@@ -462,8 +471,7 @@ func (h floorHandler) WithGroup(_ string) slog.Handler {
 func buildClient(
 	ctx context.Context,
 	cfg BotConfig,
-	workerSem chan struct{},
-	dispatching *atomic.Bool,
+	d *dispatcher,
 	opts clientOptions,
 ) (*bot.Client, error) {
 	botOpts := []bot.ConfigOpt{
@@ -476,7 +484,7 @@ func buildClient(
 			rest.WithDefaultAllowedMentions(defaultAllowedMentions()),
 		),
 		bot.WithEventListenerFunc(func(e *events.InteractionCreate) {
-			handleIncomingInteraction(ctx, cfg, e, workerSem, dispatching)
+			d.handle(ctx, e)
 		}),
 	}
 	if opts.restURL != "" {
@@ -485,48 +493,79 @@ func buildClient(
 	return disgo.New(cfg.Token, botOpts...)
 }
 
-func handleIncomingInteraction(
-	ctx context.Context,
-	cfg BotConfig,
-	e *events.InteractionCreate,
-	workerSem chan struct{},
-	dispatching *atomic.Bool,
-) {
-	if !dispatching.Load() {
-		cfg.Logger.Debug("ignoring interaction during shutdown")
+// dispatcher hands each interaction the bot serves to a worker. The worker pool bound is
+// MaxConcurrent + 8 immediate busy replies, so the goroutines executing handlers stay bounded under
+// HISS-06 even during interaction surges; the areas command shares that bound.
+type dispatcher struct {
+	cfg          BotConfig
+	workerSem    chan struct{}
+	dispatching  atomic.Bool
+	areasRunning sync.WaitGroup
+}
+
+func (d *dispatcher) handle(ctx context.Context, e *events.InteractionCreate) {
+	if !d.dispatching.Load() {
+		d.cfg.Logger.Debug("ignoring interaction during shutdown")
 		return
 	}
-
-	appCmd, ok := e.Interaction.(discord.ApplicationCommandInteraction)
-	if !ok {
-		cfg.Logger.Debug("ignoring non-application-command interaction", slog.Int("type", int(e.Type())))
-		return
+	switch i := e.Interaction.(type) {
+	case discord.ApplicationCommandInteraction:
+		d.handleCommand(ctx, e, i)
+	case discord.ComponentInteraction:
+		d.handleComponent(ctx, e, i)
+	default:
+		d.cfg.Logger.Debug("ignoring interaction of another type", slog.Int("type", int(e.Type())))
 	}
+}
 
+func (d *dispatcher) handleCommand(ctx context.Context, e *events.InteractionCreate, appCmd discord.ApplicationCommandInteraction) {
 	data, ok := slashCommandData(appCmd)
 	if !ok {
-		cfg.Logger.Debug("ignoring application command that is no slash command")
+		d.cfg.Logger.Debug("ignoring application command that is no slash command")
 		return
 	}
-	if data.CommandName() != CommandName {
-		cfg.Logger.Debug("ignoring unknown command", slog.String("command", data.CommandName()))
-		return
-	}
-
-	adapter := &interactionAdapter{
-		client:      e.Client(),
-		interaction: appCmd,
-		respond:     e.Respond,
-	}
-
-	select {
-	case workerSem <- struct{}{}:
-		go func() {
-			defer func() { <-workerSem }()
-			cfg.Handler.HandleAsk(ctx, adapter)
-		}()
+	switch {
+	case data.CommandName() == CommandName:
+		adapter := &interactionAdapter{client: e.Client(), interaction: appCmd, respond: e.Respond}
+		d.run(func() { d.cfg.Handler.HandleAsk(ctx, adapter) })
+	case data.CommandName() == AreasCommandName && d.cfg.Areas != nil:
+		adapter := &areasAdapter{client: e.Client(), interaction: appCmd, respond: e.Respond, command: true}
+		d.runAreas(func() { d.cfg.Areas.HandleCommand(ctx, adapter) })
 	default:
-		cfg.Logger.Warn("worker pool saturated, dropping interaction")
+		d.cfg.Logger.Debug("ignoring unknown command", slog.String("command", data.CommandName()))
+	}
+}
+
+func (d *dispatcher) handleComponent(ctx context.Context, e *events.InteractionCreate, comp discord.ComponentInteraction) {
+	customID, values, ok := areaChange(comp)
+	if !ok || d.cfg.Areas == nil {
+		d.cfg.Logger.Debug("ignoring component the bot does not serve")
+		return
+	}
+	adapter := &areasAdapter{client: e.Client(), interaction: comp, respond: e.Respond}
+	calls := restRoleCalls{rest: e.Client().Rest, guildID: snowflake.ID(d.cfg.GuildID)}
+	d.runAreas(func() { d.cfg.Areas.HandleChange(ctx, adapter, customID, values, calls) })
+}
+
+func (d *dispatcher) runAreas(work func()) {
+	d.areasRunning.Add(1)
+	if !d.run(func() { defer d.areasRunning.Done(); work() }) {
+		d.areasRunning.Done()
+	}
+}
+
+// run starts work on a worker and reports whether a worker was free.
+func (d *dispatcher) run(work func()) bool {
+	select {
+	case d.workerSem <- struct{}{}:
+		go func() {
+			defer func() { <-d.workerSem }()
+			work()
+		}()
+		return true
+	default:
+		d.cfg.Logger.Warn("worker pool saturated, dropping interaction")
+		return false
 	}
 }
 
@@ -540,17 +579,35 @@ func openGatewayWithTimeout(ctx context.Context, client *bot.Client, token strin
 	return nil
 }
 
-func shutdownClient(cfg BotConfig, client *bot.Client, timeout time.Duration) error {
+func shutdownClient(cfg BotConfig, client *bot.Client, areasRunning *sync.WaitGroup, timeout time.Duration) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	waitErr := cfg.Handler.Wait(shutdownCtx)
+	if waitErr == nil {
+		waitErr = waitGroup(shutdownCtx, areasRunning)
+	}
 	client.Close(shutdownCtx)
 
 	if waitErr != nil {
-		return fmt.Errorf("wait for in-flight asks: %w", waitErr)
+		return fmt.Errorf("wait for in-flight interactions: %w", waitErr)
 	}
 	return nil
+}
+
+// waitGroup waits for wg or for ctx to end. The one goroutine it starts ends with wg.
+func waitGroup(ctx context.Context, wg *sync.WaitGroup) error {
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 type interactionAdapter struct {
@@ -601,6 +658,13 @@ func buildCommandCreate(maxChars int) discord.ApplicationCommandCreate {
 				MaxLength:   &maxLen,
 			},
 		},
+	}
+}
+
+func buildAreasCommandCreate() discord.ApplicationCommandCreate {
+	return discord.SlashCommandCreate{
+		Name:        AreasCommandName,
+		Description: AreasCommandDescription,
 	}
 }
 

@@ -1,6 +1,7 @@
 // Command diallak is the community bot for the hub server.
 //
-// It serves guild command /ask answered by the documentation pipeline and can
+// It serves guild command /ask answered by the documentation pipeline and /areas, with which a
+// member takes and drops area roles, and can
 // register commands via -register-commands.
 package main
 
@@ -314,10 +315,23 @@ func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotC
 	if err != nil {
 		return discord.BotConfig{}, fmt.Errorf("create discord handler: %w", err)
 	}
+	def, err := server.Definition()
+	if err != nil {
+		return discord.BotConfig{}, fmt.Errorf("load definition: %w", err)
+	}
+	areas, err := discord.NewAreasHandler(discord.AreasConfig{
+		Definition: def,
+		GuildID:    cfg.GuildID,
+		Logger:     slog.Default(),
+	})
+	if err != nil {
+		return discord.BotConfig{}, fmt.Errorf("create areas handler: %w", err)
+	}
 	return discord.BotConfig{
 		Token:   cfg.Token,
 		GuildID: cfg.GuildID,
 		Handler: handler,
+		Areas:   areas,
 		Logger:  slog.Default(),
 	}, nil
 }

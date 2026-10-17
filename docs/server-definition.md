@@ -149,7 +149,7 @@ does the same for the fourth.
 <!-- markdownlint-disable MD013 -->
 | Right of the bot's role | Label in the role's settings | For |
 | :--- | :--- | :--- |
-| `MANAGE_ROLES` | Manage Roles | Giving and taking the Supporter roles and the Contributor role; opening and closing an area by the entry of its role on its channel |
+| `MANAGE_ROLES` | Manage Roles | Giving and taking the Supporter roles and the Contributor role; giving and taking the area roles a member chooses with `/areas` ([ADR-0011](adr/0011-area-roles-from-member-choice.md)); opening and closing an area by the entry of its role on its channel |
 | `MANAGE_MESSAGES` | Manage Messages | Deleting a message when a moderator acts through the bot |
 | `MODERATE_MEMBERS` | Time Out Members | Timing a member out when a moderator acts through the bot |
 | `MANAGE_GUILD` | Manage Server | Comparing and applying the platform's filter rules and the server's verification level as data of the definition. Decided, not built: until then no call of the tool needs the right ([#90](https://github.com/tekmora/diallak/issues/90)) |

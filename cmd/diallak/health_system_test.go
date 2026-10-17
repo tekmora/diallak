@@ -248,31 +248,30 @@ func startFakeGateway(t *testing.T, readyGate <-chan struct{}, appID uint64) (*h
 func startFakeREST(t *testing.T, appID uint64, wsURL string) *httptest.Server {
 	t.Helper()
 	idStr := strconv.FormatUint(appID, 10)
+	// Each path the bot reads at start, with the body the fake answers. The areas command reads
+	// the server's roles once before the gateway opens.
+	bodies := map[string]string{
+		"/applications/@me": fmt.Sprintf(`{"id":"%s","name":"diallak"}`, idStr),
+		"/gateway":          fmt.Sprintf(`{"url":"%s","shards":1}`, wsURL),
+		"/gateway/bot":      fmt.Sprintf(`{"url":"%s","shards":1}`, wsURL),
+		"/guilds/" + strconv.FormatUint(testGuildID, 10) + "/roles": fmt.Sprintf(
+			`[{"id":"%d","name":"@everyone","position":0}]`, testGuildID),
+	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/applications/@me":
-			if r.Method != http.MethodGet {
-				t.Errorf("unexpected method %s for /applications/@me", r.Method)
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			if _, err := fmt.Fprintf(w, `{"id":"%s","name":"diallak"}`, idStr); err != nil {
-				t.Errorf("write applications/@me: %v", err)
-			}
-		case "/gateway", "/gateway/bot":
-			if r.Method != http.MethodGet {
-				t.Errorf("unexpected method %s for %s", r.Method, r.URL.Path)
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			if _, err := fmt.Fprintf(w, `{"url":"%s","shards":1}`, wsURL); err != nil {
-				t.Errorf("write gateway: %v", err)
-			}
-		default:
+		body, ok := bodies[r.URL.Path]
+		if !ok {
 			t.Errorf("unexpected REST path: %s", r.URL.Path)
 			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodGet {
+			t.Errorf("unexpected method %s for %s", r.Method, r.URL.Path)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := fmt.Fprint(w, body); err != nil {
+			t.Errorf("write %s: %v", r.URL.Path, err)
 		}
 	})
 
