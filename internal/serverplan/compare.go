@@ -91,6 +91,7 @@ func Compare(def *serverdef.Definition, s *Snapshot) ([]Difference, error) {
 		diffs = append(diffs, *featDiff)
 	}
 	diffs = append(diffs, compareUnknownBits(s)...)
+	diffs = append(diffs, compareSettings(def, s)...)
 	return diffs, nil
 }
 

@@ -23,6 +23,10 @@ func TestActions_Positive_ContainsResolveNameAction(t *testing.T) {
 		ActionSetAccess,
 		ActionConvertChannel,
 		ActionResolveName,
+		ActionSetVerificationLevel,
+		ActionCreateFilterRule,
+		ActionSetFilterRule,
+		ActionConvertFilterRule,
 	}
 	if !slices.Equal(acts, want) {
 		t.Fatalf("Actions() = %v, want %v", acts, want)
@@ -31,14 +35,14 @@ func TestActions_Positive_ContainsResolveNameAction(t *testing.T) {
 
 func TestActions_Negative_LastActionIsNotDuplicateCreateRole(t *testing.T) {
 	acts := Actions()
-	if len(acts) != 10 {
-		t.Fatalf("Actions() length = %d, want 10", len(acts))
+	if len(acts) != 14 {
+		t.Fatalf("Actions() length = %d, want 14", len(acts))
 	}
-	if acts[9] == ActionCreateRole {
-		t.Fatal("Actions()[9] is ActionCreateRole, want ActionResolveName")
+	if acts[13] == ActionCreateRole {
+		t.Fatal("Actions()[13] is ActionCreateRole, want ActionConvertFilterRule")
 	}
-	if acts[9] != ActionResolveName {
-		t.Fatalf("Actions()[9] = %q, want %q", acts[9], ActionResolveName)
+	if acts[13] != ActionConvertFilterRule {
+		t.Fatalf("Actions()[13] = %q, want %q", acts[13], ActionConvertFilterRule)
 	}
 }
 
