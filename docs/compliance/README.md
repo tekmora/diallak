@@ -13,7 +13,7 @@ legal advice. The operator reviews each one before it is used.
 | [Imprint](imprint.md) | Who provides the bot and the server | Draft; the identity block is filled |
 | [Privacy notice](privacy-notice.md) | What members are told about their data, point by point of GDPR Article 13 | Draft; content decided by the operator |
 | [Record of processing](record-of-processing.md) | The record of processing activities that GDPR Article 30 asks for | Draft, built from the data inventory |
-| [Server rules](server-rules.md) | The short add-on to the code of conduct that a member reads when joining | Draft wording accepted; final when the operator accepts it with the code of conduct |
+| [Server rules](server-rules.md) | The short add-on to the code of conduct that a member reads when joining | Draft wording accepted; final when the operator accepts it |
 | [Support forum answer](support-forum-answer.md) | Where the entries for the first answer in the support forum went, and the gates before it is switched on | Built, off by default; [ADR-0009](../adr/0009-support-forum-first-answer.md) and [ADR-0020](../adr/0020-forum-answers-only-opted-in-posts.md) are its accepted records |
 <!-- markdownlint-enable MD013 -->
 
