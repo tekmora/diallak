@@ -47,8 +47,10 @@ func checkNewsRepositories(v *validator, repos []string) {
 		v.add(CodeNews, "news.repositories",
 			fmt.Sprintf("%d repositories, at most %d", len(repos), MaxNewsRepositories))
 	}
-	if _, ok := v.def.AnnouncementChannel(); !ok {
+	if ch, ok := v.def.AnnouncementChannel(); !ok {
 		v.add(CodeNews, "news.repositories", "own repositories need exactly one announcement channel")
+	} else {
+		checkAnnouncementBot(v, ch)
 	}
 	seen := make(map[string]struct{}, len(repos))
 	for _, r := range repos {
@@ -60,6 +62,23 @@ func checkNewsRepositories(v *validator, repos []string) {
 			v.add(CodeNews, p, fmt.Sprintf("repository %q is listed twice", r))
 		}
 		seen[r] = struct{}{}
+	}
+}
+
+// checkAnnouncementBot asks that the bot can post into announcement channel ch and crosspost
+// its own posts: Discord asks SEND_MESSAGES for both (discord-api-docs 2d337db, "Crosspost
+// Message").
+func checkAnnouncementBot(v *validator, ch string) {
+	botRole := findRoleByKind(v.def.Roles, "bot")
+	if botRole == nil {
+		return
+	}
+	eff := Effective(v.def, botRole.ID, ch)
+	for _, perm := range []string{"VIEW_CHANNEL", "SEND_MESSAGES"} {
+		if _, ok := eff[perm]; !ok {
+			v.add(CodeNews, "news.repositories",
+				fmt.Sprintf("bot lacks %s in announcement channel %s", perm, ch))
+		}
 	}
 }
 

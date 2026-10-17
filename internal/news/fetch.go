@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -110,7 +111,7 @@ func (r *Reader) Fetch(ctx context.Context, address string, prev Validators) (Re
 	if err := ValidFeedAddress(address); err != nil {
 		return Result{}, err
 	}
-	data, res, err := r.get(ctx, address, prev)
+	data, res, err := r.get(ctx, address, prev, feedHeaders)
 	if err != nil || res.NotModified {
 		return res, err
 	}
@@ -122,7 +123,11 @@ func (r *Reader) Fetch(ctx context.Context, address string, prev Validators) (Re
 	return res, nil
 }
 
-func (r *Reader) get(ctx context.Context, address string, prev Validators) (_ []byte, _ Result, err error) {
+// feedHeaders are the request headers of a feed read.
+var feedHeaders = http.Header{"Accept": {accept}}
+
+// get reads address with the request headers h and prev as validators.
+func (r *Reader) get(ctx context.Context, address string, prev Validators, h http.Header) (_ []byte, _ Result, err error) {
 	reqCtx, cancel := context.WithTimeout(ctx, ReadTimeout)
 	defer cancel()
 
@@ -130,7 +135,7 @@ func (r *Reader) get(ctx context.Context, address string, prev Validators) (_ []
 	if err != nil {
 		return nil, Result{}, fmt.Errorf("create request: %w", err)
 	}
-	setRequestHeaders(req.Header, prev)
+	setRequestHeaders(req.Header, prev, h)
 
 	resp, err := r.client.Do(req)
 	if err != nil {
@@ -159,9 +164,11 @@ func (r *Reader) get(ctx context.Context, address string, prev Validators) (_ []
 	return data, Result{Validators: keptValidators(Validators{}, resp.Header)}, nil
 }
 
-func setRequestHeaders(h http.Header, prev Validators) {
+func setRequestHeaders(h http.Header, prev Validators, extra http.Header) {
 	h.Set("User-Agent", userAgent)
-	h.Set("Accept", accept)
+	for k, v := range extra {
+		h[k] = slices.Clone(v)
+	}
 	if v := validator(prev.ETag); v != "" {
 		h.Set("If-None-Match", v)
 	}
