@@ -131,6 +131,9 @@ const (
 
 	// CodeRoleOrder flags a role order definition that is incomplete, duplicated, or misordered.
 	CodeRoleOrder = "role-order"
+
+	// CodeNews flags a news feed or repository the news function cannot read or place (ADR-0019).
+	CodeNews = "news"
 )
 
 // Finding represents one declarative rule infraction in a server definition.
@@ -157,6 +160,9 @@ type Definition struct {
 	// Settings holds the platform's filter rules and the verification level.
 	// Absent = nothing of it is compared or changed on the server.
 	Settings *Settings `json:"settings,omitempty"`
+	// News lists what the news function reads and the area each feed serves (ADR-0019).
+	// Absent = the definition names no news.
+	News *News `json:"news,omitempty"`
 }
 
 // Metric describes a trackable quantitative measurement on the server.

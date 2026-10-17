@@ -95,6 +95,7 @@ func TestServerDefinitionDoc_Negative_NamesEveryCodeAndCount(t *testing.T) {
 		{"choices", strconv.Itoa(len(def.Choices.Questions)) + " questions"},
 		{"automation", strconv.Itoa(len(def.Automation))},
 		{"settings", strconv.Itoa(len(def.Settings.FilterRules)) + " filter rules and the verification level"},
+		{"news", newsCount(def.News)},
 	}
 	for _, row := range counts {
 		pattern := "(?m)^\\| `" + row.part + "` \\| [^|]+ \\| " + regexp.QuoteMeta(row.count) + " \\|$"
@@ -102,4 +103,12 @@ func TestServerDefinitionDoc_Negative_NamesEveryCodeAndCount(t *testing.T) {
 			t.Errorf("the documentation page has no row for %s with the count %s", row.part, row.count)
 		}
 	}
+}
+
+// newsCount is the count the documentation page gives for the part news, "missing" without one.
+func newsCount(news *serverdef.News) string {
+	if news == nil {
+		return "missing"
+	}
+	return strconv.Itoa(len(news.Repositories)) + " repositories and " + strconv.Itoa(len(news.Feeds)) + " feeds"
 }

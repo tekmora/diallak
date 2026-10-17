@@ -1,0 +1,2 @@
+type: added
+title: 'The server definition says where news goes: own releases and advisories to the announcement channel, every other feed to the area it serves, and nothing for an area that is not open'

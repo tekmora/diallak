@@ -1025,5 +1025,9 @@
         ]
       }
     ]
+  },
+  "news": {
+    "repositories": [],
+    "feeds": []
   }
 }
