@@ -30,5 +30,5 @@ record that supersedes it.
 | [0019](0019-news-posts.md) | 2026-10-17 | News posts | Accepted |
 | [0020](0020-forum-answers-only-opted-in-posts.md) | 2026-10-17 | The forum answer reads only posts a member opted in | Accepted |
 | [0021](0021-moderation-commands-and-trail.md) | 2026-10-17 | The moderation commands and their trail | Accepted |
-| [0022](0022-embeddings-for-paraphrased-questions.md) | 2026-10-17 | Embeddings for paraphrased questions | Proposed |
+| [0022](0022-embeddings-for-paraphrased-questions.md) | 2026-10-17 | Embeddings for paraphrased questions | Accepted |
 <!-- markdownlint-enable MD013 -->
