@@ -16,6 +16,12 @@ type Endpoint interface {
 	Probe(ctx context.Context) error
 }
 
+// Masker specifies the bot's own masking request of ADR-0013, step two.
+type Masker interface {
+	Mask(ctx context.Context, text string) (string, error)
+	ProbeMask(ctx context.Context) error
+}
+
 // RetryInterval is the default duration to wait before a trial request when the endpoint is not ready.
 // Source: chosen, not measured.
 const RetryInterval = 30 * time.Second
@@ -35,7 +41,9 @@ var ErrPolicyMissing = errors.New("model policy missing")
 
 // GateConfig configures a model Gate.
 type GateConfig struct {
-	Endpoint      Endpoint
+	Endpoint Endpoint
+	// Masker is the bot's own masking request. Nil means none: the gate works as in step one.
+	Masker        Masker
 	Logger        *slog.Logger
 	RetryInterval time.Duration
 	Now           func() time.Time
@@ -44,6 +52,7 @@ type GateConfig struct {
 // Gate holds and transitions model availability state behind a concurrency-safe barrier.
 type Gate struct {
 	endpoint      Endpoint
+	masker        Masker
 	logger        *slog.Logger
 	retryInterval time.Duration
 	now           func() time.Time
@@ -77,15 +86,18 @@ func NewGate(cfg GateConfig) (*Gate, error) {
 	}
 	return &Gate{
 		endpoint:      cfg.Endpoint,
+		masker:        cfg.Masker,
 		logger:        logger,
 		retryInterval: interval,
 		now:           nowFn,
 	}, nil
 }
 
-// Start probes the endpoint and initializes model readiness state.
+// Start probes the endpoint and initializes model readiness state. With a Masker it first sends
+// the fixed text to the guardrail route: an unmasked address or a refusal stops the start, a
+// server error or a timeout leaves the model not ready without a chat probe.
 func (g *Gate) Start(ctx context.Context) error {
-	err := g.endpoint.Probe(ctx)
+	err := g.probe(ctx)
 	if err == nil {
 		g.mu.Lock()
 		wasReady := g.ready
@@ -109,6 +121,16 @@ func (g *Gate) Start(ctx context.Context) error {
 	return fmt.Errorf("model start probe: %w", err)
 }
 
+// probe sends the masking probe when there is a Masker, then the chat probe.
+func (g *Gate) probe(ctx context.Context) error {
+	if g.masker != nil {
+		if err := g.masker.ProbeMask(ctx); err != nil {
+			return fmt.Errorf("masking probe: %w", err)
+		}
+	}
+	return g.endpoint.Probe(ctx)
+}
+
 // Complete executes a model completion or gates it if the endpoint is not ready.
 func (g *Gate) Complete(ctx context.Context, system, user string) (string, error) {
 	res, _, err := g.CompleteTraced(ctx, system, user)
@@ -118,6 +140,36 @@ func (g *Gate) Complete(ctx context.Context, system, user string) (string, error
 // CompleteTraced is Complete, and it returns the trace of the request. A completion the gate
 // holds back returns the zero Trace: nothing was sent.
 func (g *Gate) CompleteTraced(ctx context.Context, system, user string) (string, Trace, error) {
+	return g.run(ctx, func(callCtx context.Context) (string, Trace, error) {
+		return g.endpoint.CompleteTraced(callCtx, system, user)
+	})
+}
+
+// CompleteMasked sends question to the guardrail route first and the completion built by prompt
+// from the masked text after it (ADR-0013, step two). Nothing falls back to an unmasked request:
+// when no masked text comes back, the model is not called. The trace holds the masked text and
+// its counts.
+func (g *Gate) CompleteMasked(ctx context.Context, system, question string, prompt func(masked string) string) (string, Trace, error) {
+	if g.masker == nil {
+		return "", Trace{}, errors.New("no masking configured")
+	}
+	return g.run(ctx, func(callCtx context.Context) (string, Trace, error) {
+		masked, err := g.masker.Mask(callCtx, question)
+		if err != nil {
+			return "", Trace{Sent: true, Mask: &MaskTrace{Failed: true}}, fmt.Errorf("mask question: %w", err)
+		}
+		mask := NewMaskTrace(question, masked)
+		res, trace, err := g.endpoint.CompleteTraced(callCtx, system, prompt(masked))
+		trace.Mask = &mask
+		return res, trace, err
+	})
+}
+
+// call is one request through the gate.
+type call func(ctx context.Context) (string, Trace, error)
+
+// run sends c when the gate is ready or a trial is due, and moves the state by its outcome.
+func (g *Gate) run(ctx context.Context, c call) (string, Trace, error) {
 	g.mu.Lock()
 	if g.policyLatched {
 		g.mu.Unlock()
@@ -125,13 +177,13 @@ func (g *Gate) CompleteTraced(ctx context.Context, system, user string) (string,
 	}
 	if g.ready {
 		g.mu.Unlock()
-		return g.completeReady(ctx, system, user)
+		return g.completeReady(ctx, c)
 	}
-	return g.completeNotReady(ctx, system, user)
+	return g.completeNotReady(ctx, c)
 }
 
-func (g *Gate) completeReady(ctx context.Context, system, user string) (string, Trace, error) {
-	res, trace, err := g.endpoint.CompleteTraced(ctx, system, user)
+func (g *Gate) completeReady(ctx context.Context, c call) (string, Trace, error) {
+	res, trace, err := c(ctx)
 	if err == nil {
 		return res, trace, nil
 	}
@@ -158,7 +210,7 @@ func (g *Gate) completeReady(ctx context.Context, system, user string) (string, 
 	return "", trace, err
 }
 
-func (g *Gate) completeNotReady(ctx context.Context, system, user string) (string, Trace, error) {
+func (g *Gate) completeNotReady(ctx context.Context, c call) (string, Trace, error) {
 	if g.policyLatched {
 		g.mu.Unlock()
 		return "", Trace{}, ErrPolicyMissing
@@ -171,7 +223,7 @@ func (g *Gate) completeNotReady(ctx context.Context, system, user string) (strin
 	g.trialInFlight = true
 	g.mu.Unlock()
 
-	res, trace, err := g.endpoint.CompleteTraced(ctx, system, user)
+	res, trace, err := g.trial(ctx, c)
 
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -196,6 +248,17 @@ func (g *Gate) completeNotReady(ctx context.Context, system, user string) (strin
 
 	g.nextTrial = g.now().Add(g.retryInterval)
 	return "", trace, err
+}
+
+// trial sends c. With a Masker it sends the fixed text to the guardrail route first, so a trial
+// never starts with a member's question; a probe that fails sends nothing of the member.
+func (g *Gate) trial(ctx context.Context, c call) (string, Trace, error) {
+	if g.masker != nil {
+		if err := g.masker.ProbeMask(ctx); err != nil {
+			return "", Trace{}, fmt.Errorf("masking probe: %w", err)
+		}
+	}
+	return c(ctx)
 }
 
 // State reports the current readiness state ("ready" or "not ready").

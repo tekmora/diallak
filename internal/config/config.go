@@ -34,6 +34,9 @@ const (
 	EnvModelAlias = "DIALLAK_MODEL_ALIAS"
 	// EnvModelPolicy names the variable holding the expected gateway policy.
 	EnvModelPolicy = "DIALLAK_MODEL_POLICY"
+	// EnvModelGuardrail names the optional variable holding the guardrail of the bot's own masking
+	// request (ADR-0013, step two). Unset, the bot sends no masking request.
+	EnvModelGuardrail = "DIALLAK_MODEL_GUARDRAIL"
 	// EnvModelKeyFile names the variable holding the path of the optional model API key file.
 	EnvModelKeyFile = "DIALLAK_MODEL_KEY_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
 	// EnvCorpusDir names the variable holding the absolute path of the documentation corpus directory.
@@ -103,6 +106,9 @@ type Config struct {
 	ModelAlias string
 	// ModelPolicy is the name of the gateway policy every chat reply must name.
 	ModelPolicy string
+	// ModelGuardrail names the guardrail of the bot's own masking request. It is empty when the
+	// variable is not set; the bot then sends no masking request.
+	ModelGuardrail string
 	// ModelKey is the optional API key for the model endpoint. It is never logged and is left out
 	// of JSON encodings.
 	ModelKey string `json:"-"`
@@ -164,8 +170,8 @@ func (c Config) HasForum() bool {
 
 // String returns a redacted representation of Config. Token and ModelKey are never printed.
 func (c Config) String() string {
-	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d}",
-		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, c.ModelPolicy, redactSecret(c.ModelKey), c.CorpusDir, c.SupportChannel,
+	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelGuardrail:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d}",
+		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, c.ModelPolicy, c.ModelGuardrail, redactSecret(c.ModelKey), c.CorpusDir, c.SupportChannel,
 		c.TopPassages, c.MinScore, c.QuestionMaxChars, c.ExcerptChars, c.ReplyMaxChars, c.MaxConcurrentAsks,
 		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate, c.HealthAddr, c.TrailRetention,
 		c.ForumChannelID, c.ForumOptInTagID)
@@ -184,6 +190,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("ModelBaseURL", c.ModelBaseURL),
 		slog.String("ModelAlias", c.ModelAlias),
 		slog.String("ModelPolicy", c.ModelPolicy),
+		slog.String("ModelGuardrail", c.ModelGuardrail),
 		slog.String("ModelKey", redactSecret(c.ModelKey)),
 		slog.String("CorpusDir", c.CorpusDir),
 		slog.String("SupportChannel", c.SupportChannel),
@@ -222,7 +229,7 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	baseURL, alias, policy, key, err := parseModelConfig(getenv)
+	m, err := parseModelConfig(getenv)
 	if err != nil {
 		return Config{}, err
 	}
@@ -234,7 +241,7 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	concurrent, askTimeout, modelTimeout, linkTmpl, err := parseOptionalTimeoutsAndTemplate(getenv, baseURL != "")
+	concurrent, askTimeout, modelTimeout, linkTmpl, err := parseOptionalTimeoutsAndTemplate(getenv, m.baseURL != "")
 	if err != nil {
 		return Config{}, err
 	}
@@ -249,10 +256,11 @@ func Load(getenv func(string) string) (Config, error) {
 	return Config{
 		Token:              token,
 		GuildID:            guild,
-		ModelBaseURL:       baseURL,
-		ModelAlias:         alias,
-		ModelPolicy:        policy,
-		ModelKey:           key,
+		ModelBaseURL:       m.baseURL,
+		ModelAlias:         m.alias,
+		ModelPolicy:        m.policy,
+		ModelGuardrail:     m.guardrail,
+		ModelKey:           m.key,
 		CorpusDir:          corpusDir,
 		SupportChannel:     supportChannel,
 		TopPassages:        passages,
@@ -354,43 +362,51 @@ func parseCorpusDir(raw string) (string, error) {
 	return raw, nil
 }
 
-func parseModelConfig(getenv func(string) string) (string, string, string, string, error) {
-	baseURL := getenv(EnvModelBaseURL)
-	alias := getenv(EnvModelAlias)
-	policy := getenv(EnvModelPolicy)
+// modelSettings are the model variables as parseModelConfig read them.
+type modelSettings struct {
+	baseURL, alias, policy, guardrail, key string
+}
+
+func parseModelConfig(getenv func(string) string) (modelSettings, error) {
+	m := modelSettings{
+		baseURL:   getenv(EnvModelBaseURL),
+		alias:     getenv(EnvModelAlias),
+		policy:    getenv(EnvModelPolicy),
+		guardrail: getenv(EnvModelGuardrail),
+	}
 	keyFile := getenv(EnvModelKeyFile)
 
-	hasBase := baseURL != ""
-	hasAlias := alias != ""
-	if hasBase != hasAlias {
-		return "", "", "", "", fmt.Errorf("%s and %s must both be set or both be unset", EnvModelBaseURL, EnvModelAlias)
+	hasBase := m.baseURL != ""
+	if hasBase != (m.alias != "") {
+		return modelSettings{}, fmt.Errorf("%s and %s must both be set or both be unset", EnvModelBaseURL, EnvModelAlias)
 	}
 	if !hasBase {
-		if keyFile != "" {
-			return "", "", "", "", fmt.Errorf("%s is set but no model is configured", EnvModelKeyFile)
+		for _, name := range []string{EnvModelKeyFile, EnvModelPolicy, EnvModelGuardrail} {
+			if getenv(name) != "" {
+				return modelSettings{}, fmt.Errorf("%s is set but no model is configured", name)
+			}
 		}
-		if policy != "" {
-			return "", "", "", "", fmt.Errorf("%s is set but no model is configured", EnvModelPolicy)
-		}
-		return "", "", "", "", nil
+		return modelSettings{}, nil
 	}
 
-	if policy == "" {
-		return "", "", "", "", fmt.Errorf("%s is not set", EnvModelPolicy)
+	if m.policy == "" {
+		return modelSettings{}, fmt.Errorf("%s is not set", EnvModelPolicy)
 	}
-	if !model.ValidPolicyName(policy) {
-		return "", "", "", "", fmt.Errorf("%s must match ^[A-Za-z0-9._:/-]{1,128}$", EnvModelPolicy)
+	if !model.ValidPolicyName(m.policy) {
+		return modelSettings{}, fmt.Errorf("%s must match ^[A-Za-z0-9._:/-]{1,128}$", EnvModelPolicy)
+	}
+	if m.guardrail != "" && !model.ValidPolicyName(m.guardrail) {
+		return modelSettings{}, fmt.Errorf("%s must match ^[A-Za-z0-9._:/-]{1,128}$", EnvModelGuardrail)
 	}
 
-	var key string
 	if keyFile != "" {
 		readKey, err := readSecretFile(keyFile, EnvModelKeyFile, "model key")
 		if err != nil {
-			return "", "", "", "", err
+			return modelSettings{}, err
 		}
-		key = readKey
+		m.key = readKey
 	}
-	return baseURL, alias, policy, key, nil
+	return m, nil
 }
 
 func parseGuildID(raw string) (uint64, error) {

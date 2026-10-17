@@ -11,7 +11,8 @@ The state below is the code on `main`. Each row names where it can be checked.
 The bot stores nothing about members. It handles a question, or a member's
 choice of area roles, in memory for the length of one request, and its logs
 carry no question, no answer and no member id. For 15 minutes it holds the
-receipt of a reply: names of guardrails and policies, never the member's text.
+receipt of a reply: names of guardrails and policies, and, only with the bot's
+own masking, the masked text of the question; never the question as written.
 When a moderator removes a message or times a member out, the bot writes one
 line of the moderation trail into the server's log channel, with the ids of
 the moderator and the affected member, and deletes the line after 90 days.
@@ -92,15 +93,27 @@ In memory it holds one receipt per reply for which text left the bot
 ([ADR-0013](../adr/0013-guardrail-policy-and-receipt.md)): the names of the
 guardrails and policies the gateway named in its reply headers, whether the
 reply named the deployment's policy, the time, and whether the model's answer
-was shown. It holds no text of the member and no member id; the key is random
-and carried in the button. A receipt is held for 15 minutes, at most 1000 at
-once with the oldest going first, and a restart empties the store.
+was shown. It holds no member id; the key is random and carried in the
+button. A receipt is held for 15 minutes, at most 1000 at once with the oldest
+going first, and a restart empties the store.
+
+With the bot's own masking (`DIALLAK_MODEL_GUARDRAIL` set,
+[ADR-0013](../adr/0013-guardrail-policy-and-receipt.md) step two) the receipt
+also holds the masked text of the question, as the gateway's masking route
+returned it and at most 8 KiB, and the kinds of data the masking replaced with
+their counts. It is held with the receipt for the same 15 minutes. The
+question as the member wrote it is never held: a passage the masking missed
+stands in the masked text as written, and the receipt says so. Without the
+bot's own masking the receipt holds no text of the member.
 
 Check: `Receipts` in
 [`internal/discord/receipt.go`](../../internal/discord/receipt.go);
 `TestReceipts_Boundary_ReceiptIsHeldForExactlyFifteenMinutes` and
 `TestReceipts_Boundary_OldestGoesFirstAtTheMaximum` in
-[`internal/discord`](../../internal/discord/receipt_test.go).
+[`internal/discord`](../../internal/discord/receipt_test.go);
+`TestAskReceipt_Positive_PlantedQuestionReachesTheModelMaskedAndTheReceiptShowsIt`
+in [`internal/discord`](../../internal/discord/receipt_mask_e2e_test.go);
+`MaxMaskedBytes` in [`internal/model`](../../internal/model/mask.go).
 
 The moderation trail is not stored by the bot: each line is a message in the
 server's log channel, which Discord holds
@@ -179,6 +192,8 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
 | Discord | The receipt as a direct message to the member who pressed for it | Only when the member presses the direct message button; never on the bot's own |
 | The model endpoint the operator configures | The question and the retrieved documentation passages | Model mode only |
 | The model endpoint the operator configures | One fixed word, to learn whether the endpoint answers | Model mode only, once at start |
+| The model endpoint's masking route | The question as the member wrote it, before anything goes to the model | Only with `DIALLAK_MODEL_GUARDRAIL` set, every request in model mode |
+| The model endpoint's masking route | One fixed sentence with an invented address, to learn whether the masking works | Only with `DIALLAK_MODEL_GUARDRAIL` set, at start and before each retry |
 <!-- markdownlint-enable MD013 -->
 
 - The model endpoint receives no member id and no name.
@@ -193,8 +208,16 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
 - In excerpt mode the question goes nowhere: the reply holds documentation text,
   not the question, and carries no receipt button.
 - The endpoint's guardrails can mask or change the text before the model. They
-  do not find everything, and the bot does not see their result, so no
-  document and no receipt says that personal data is masked.
+  do not find everything. Without the bot's own masking the bot does not see
+  their result, so no document and no receipt says that personal data is
+  masked.
+- With the bot's own masking, the model receives only the masked text. When
+  the masking route times out, refuses or returns no text, the model receives
+  nothing and the member gets excerpts
+  (`TestCompleteMasked_Negative_NoMaskedTextCallsNoModel` in
+  [`internal/model`](../../internal/model/gate_mask_test.go)). A start whose
+  invented address comes back unmasked stops
+  (`TestGateStart_Negative_UnmaskedProbeStopsTheStart`).
 
 Check: the request body is built in
 [`internal/model`](../../internal/model/model.go) from the prompt alone; the

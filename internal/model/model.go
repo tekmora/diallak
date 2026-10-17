@@ -39,7 +39,7 @@ const (
 )
 
 // Trace is what one completion request leaves for the member's receipt (ADR-0013). It holds no
-// text of the request or of the reply.
+// text of the request or of the reply, except the masked text of step two in Mask.
 type Trace struct {
 	// Sent reports that the request was handed to the HTTP client, so its text may have left the
 	// bot.
@@ -52,6 +52,8 @@ type Trace struct {
 	// PolicyMissing reports a reply with status 200 that did not name the configured policy, so
 	// its text was discarded.
 	PolicyMissing bool
+	// Mask is what the bot's own masking request left, or nil when the bot sent none.
+	Mask *MaskTrace
 }
 
 // PolicyError reports that the model response did not name the configured guardrail policy.
@@ -141,9 +143,11 @@ func ValidPolicyName(name string) bool {
 
 // Config holds configuration parameters for the model client.
 type Config struct {
-	BaseURL         string
-	Alias           string
-	Policy          string
+	BaseURL string
+	Alias   string
+	Policy  string
+	// Guardrail names the guardrail of the bot's own masking request. Empty means none.
+	Guardrail       string
 	APIKey          string
 	Timeout         time.Duration
 	MaxOutputTokens int
@@ -154,6 +158,7 @@ type Client struct {
 	baseURL    string
 	alias      string
 	policy     string
+	guardrail  string
 	apiKey     string
 	timeout    time.Duration
 	maxTokens  int
@@ -164,7 +169,7 @@ type Client struct {
 //
 // BaseURL must be a valid http or https URL without userinfo, query, or fragment.
 // Alias must match ^[A-Za-z0-9._:/-]{1,128}$.
-// Policy must match ^[A-Za-z0-9._:/-]{1,128}$.
+// Policy must match ^[A-Za-z0-9._:/-]{1,128}$, and so must Guardrail when it is not empty.
 // Timeout must be positive and at most MaxTimeout (0 uses DefaultTimeout).
 // MaxOutputTokens must be between 1 and 4096 (0 uses DefaultMaxOutputTokens).
 // If hc is nil, New creates its own http.Client. That client follows no redirect: a redirecting
@@ -181,6 +186,9 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	}
 	if !ValidPolicyName(cfg.Policy) {
 		return nil, errors.New("invalid model policy: 1 to 128 characters of letters, digits and \"._:/-\"")
+	}
+	if cfg.Guardrail != "" && !ValidPolicyName(cfg.Guardrail) {
+		return nil, errors.New("invalid model guardrail: 1 to 128 characters of letters, digits and \"._:/-\"")
 	}
 
 	timeout, err := validateTimeout(cfg.Timeout)
@@ -202,6 +210,7 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 		baseURL:    strings.TrimRight(cfg.BaseURL, "/"),
 		alias:      cfg.Alias,
 		policy:     cfg.Policy,
+		guardrail:  cfg.Guardrail,
 		apiKey:     cfg.APIKey,
 		timeout:    timeout,
 		maxTokens:  maxTokens,

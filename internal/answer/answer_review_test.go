@@ -13,14 +13,16 @@ import (
 	"github.com/tekmora/diallak/internal/retrieval"
 )
 
-// recordingRetriever keeps the options of the last search.
+// recordingRetriever keeps the options of the last search and every query.
 type recordingRetriever struct {
-	hits []retrieval.Hit
-	opt  retrieval.Options
+	hits    []retrieval.Hit
+	opt     retrieval.Options
+	queries []string
 }
 
-func (r *recordingRetriever) Search(_ string, opt retrieval.Options) ([]retrieval.Hit, error) {
+func (r *recordingRetriever) Search(q string, opt retrieval.Options) ([]retrieval.Hit, error) {
 	r.opt = opt
+	r.queries = append(r.queries, q)
 	return r.hits, nil
 }
 

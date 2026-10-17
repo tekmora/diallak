@@ -99,27 +99,33 @@ func loadCorpusFromRoot(ctx context.Context, root *os.Root) (corpus.Manifest, []
 
 func buildPipeline(cfg config.Config, index *retrieval.Index, logger *slog.Logger) (*answer.Pipeline, *model.Gate, error) {
 	var generator answer.Generator
+	var masker answer.MaskingGenerator
 	var gate *model.Gate
 	if cfg.HasModel() {
 		mCfg := model.Config{
-			BaseURL: cfg.ModelBaseURL,
-			Alias:   cfg.ModelAlias,
-			Policy:  cfg.ModelPolicy,
-			APIKey:  cfg.ModelKey,
-			Timeout: cfg.ModelTimeout,
+			BaseURL:   cfg.ModelBaseURL,
+			Alias:     cfg.ModelAlias,
+			Policy:    cfg.ModelPolicy,
+			Guardrail: cfg.ModelGuardrail,
+			APIKey:    cfg.ModelKey,
+			Timeout:   cfg.ModelTimeout,
 		}
 		mClient, err := model.New(mCfg, nil)
 		if err != nil {
 			return nil, nil, fmt.Errorf("create model client: %w", err)
 		}
-		gate, err = model.NewGate(model.GateConfig{
-			Endpoint: mClient,
-			Logger:   logger,
-		})
+		gateCfg := model.GateConfig{Endpoint: mClient, Logger: logger}
+		if mClient.Masking() {
+			gateCfg.Masker = mClient
+		}
+		gate, err = model.NewGate(gateCfg)
 		if err != nil {
 			return nil, nil, fmt.Errorf("create model gate: %w", err)
 		}
 		generator = gate
+		if mClient.Masking() {
+			masker = gate
+		}
 	}
 
 	opts := retrieval.DefaultOptions()
@@ -133,6 +139,7 @@ func buildPipeline(cfg config.Config, index *retrieval.Index, logger *slog.Logge
 	ansCfg := answer.Config{
 		Retriever:          index,
 		Generator:          generator,
+		Masker:             masker,
 		Options:            opts,
 		Logger:             logger,
 		MaxQuestionRunes:   cfg.QuestionMaxChars,

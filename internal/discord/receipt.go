@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/tekmora/diallak/internal/model"
 )
@@ -29,6 +30,12 @@ const (
 	DefaultMaxReceipts = 1000
 	// maxReceiptNames bounds the names of one list the receipt shows, so it fits one message.
 	maxReceiptNames = 10
+	// maxReceiptListRunes bounds the runes of one list the receipt shows; the first entry is shown
+	// whatever its length, so a list holds at most one 128-byte name past it.
+	// Source: chosen, so that the worst receipt fits maxReceiptMessageRunes.
+	maxReceiptListRunes = 160
+	// maxReceiptMessageRunes is the longest content of one Discord message.
+	maxReceiptMessageRunes = 2000
 	// receiptKeyBytes is the length of the random key carried in the button.
 	receiptKeyBytes = 16
 
@@ -58,11 +65,32 @@ const (
 	textReceiptWhere = "Where your text went: your question, with the documentation passages found for it, " +
 		"to the operator's gateway, and from there to the model behind it."
 	textReceiptKept = "How long it is kept: the bot holds no text of your question and keeps this receipt " +
-		"in memory for 15 minutes. The gateway writes your question to no storage and uses it for no " +
+		"in memory for 15 minutes. " + textReceiptKeptGateway
+	textReceiptKeptGateway = "The gateway writes your question to no storage and uses it for no " +
 		"training. It holds an answer in its cache for at most 60 minutes, one log line with the matching " +
 		"fragment of a blocked question for about 74 hours at most, and a record of the request without " +
 		"question or answer for 30 days. The privacy notice has the details."
 	textReceiptAutomated = "This receipt is automated."
+
+	// The texts of step two of ADR-0013, when the bot sent its own masking request.
+	textReceiptMaskFailed = "Your question was sent to the gateway's masking route, and no masked text came " +
+		"back, so nothing was sent to the model."
+	textReceiptMaskedIntro   = "The text sent on for the model, after masking:"
+	textReceiptMaskUnchanged = "The masking changed nothing in your text."
+	textReceiptMaskUnknown   = "The masking changed your text, and the kinds of what it replaced are not known."
+	textReceiptMaskCaveat    = "The masking does not find everything: a passage it missed stands in the text " +
+		"above as you wrote it."
+	textReceiptMaskWhere = "Where your text went: your question to the gateway's masking route; the masked " +
+		"text, with the documentation passages found for it, to the operator's gateway, and from there to " +
+		"the model behind it."
+	textReceiptMaskKept = "How long it is kept: the bot holds the masked text shown here, not your question as " +
+		"you wrote it, and keeps it with this receipt in memory for 15 minutes. " + textReceiptKeptGateway
+	// maxReceiptMaskedRunes bounds the masked text the receipt shows. Long lists shorten it further,
+	// so the receipt fits one message.
+	maxReceiptMaskedRunes = 500
+	textReceiptCut        = " [cut here]"
+	// receiptMaskedSlot stands for the masked text until the room left for it is known.
+	receiptMaskedSlot = "\x00"
 )
 
 // ErrDirectClosed reports that Discord refused a direct message because the member's direct
@@ -172,14 +200,23 @@ func (r *Receipts) dropLocked(now time.Time) {
 func receiptText(e receiptEntry) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "**Receipt for your question** (sent <t:%d:f>)\n", e.at.Unix())
-	if e.trace.Replied {
+	mask := e.trace.Mask
+	switch {
+	case mask != nil && mask.Failed:
+		b.WriteString(textReceiptMaskFailed + "\n")
+	case mask != nil:
+		writeMasked(&b, *mask)
+	}
+	switch {
+	case mask != nil && mask.Failed:
+	case e.trace.Replied:
 		fmt.Fprintf(&b, "Guardrails that ran: %s.\n", receiptNames(e.trace.Guardrails))
 		fmt.Fprintf(&b, "Policies that applied: %s.\n", receiptNames(e.trace.Policies))
 		if e.trace.PolicyMissing {
 			b.WriteString(textReceiptPolicyMissing + "\n")
 		}
 		b.WriteString(textReceiptCaveat + "\n")
-	} else {
+	default:
 		b.WriteString(textReceiptNoReply + "\n")
 	}
 	if e.shown {
@@ -187,10 +224,49 @@ func receiptText(e receiptEntry) string {
 	} else {
 		b.WriteString("No text of the model was shown to you.\n")
 	}
-	b.WriteString(textReceiptWhere + "\n")
-	b.WriteString(textReceiptKept + "\n")
+	if mask != nil {
+		b.WriteString(textReceiptMaskWhere + "\n" + textReceiptMaskKept + "\n")
+	} else {
+		b.WriteString(textReceiptWhere + "\n" + textReceiptKept + "\n")
+	}
 	b.WriteString(textReceiptAutomated)
-	return b.String()
+	text := b.String()
+	if mask == nil || mask.Failed {
+		return text
+	}
+	room := maxReceiptMessageRunes - utf8.RuneCountInString(text) + utf8.RuneCountInString(receiptMaskedSlot)
+	return strings.Replace(text, receiptMaskedSlot, fitMasked(mask.Text, room), 1)
+}
+
+// fitMasked is the masked text as the receipt shows it: no backtick, so it cannot end its code
+// block, and at most maxReceiptMaskedRunes or room runes, whichever is less.
+func fitMasked(text string, room int) string {
+	text = strings.ReplaceAll(strings.ReplaceAll(text, "`", "'"), receiptMaskedSlot, "")
+	limit := min(maxReceiptMaskedRunes, room)
+	if utf8.RuneCountInString(text) <= limit {
+		return text
+	}
+	keep := max(limit-utf8.RuneCountInString(textReceiptCut), 0)
+	return string([]rune(text)[:keep]) + textReceiptCut
+}
+
+// writeMasked writes the masked text as a code block, so it cannot format the message, and what
+// the masking replaced. It never says that the text holds no personal data.
+func writeMasked(b *strings.Builder, mask model.MaskTrace) {
+	b.WriteString(textReceiptMaskedIntro + "\n```\n" + receiptMaskedSlot + "\n```\n")
+	switch {
+	case len(mask.Kinds) > 0:
+		parts := make([]string, len(mask.Kinds))
+		for i, k := range mask.Kinds {
+			parts[i] = fmt.Sprintf("`%s` %d", k.Kind, k.Count)
+		}
+		fmt.Fprintf(b, "Replaced by the masking: %s.\n", receiptList(parts))
+	case mask.Changed:
+		b.WriteString(textReceiptMaskUnknown + "\n")
+	default:
+		b.WriteString(textReceiptMaskUnchanged + "\n")
+	}
+	b.WriteString(textReceiptMaskCaveat + "\n")
 }
 
 // receiptNames lists names as code, so a name cannot format the message, or says "none".
@@ -198,13 +274,27 @@ func receiptNames(names []string) string {
 	if len(names) == 0 {
 		return "none"
 	}
-	shown := names[:min(len(names), maxReceiptNames)]
-	quoted := make([]string, len(shown))
-	for i, n := range shown {
+	quoted := make([]string, len(names))
+	for i, n := range names {
 		quoted[i] = "`" + strings.ReplaceAll(n, "`", "'") + "`"
 	}
-	list := strings.Join(quoted, ", ")
-	if more := len(names) - len(shown); more > 0 {
+	return receiptList(quoted)
+}
+
+// receiptList joins at most maxReceiptNames entries within maxReceiptListRunes and says how many
+// more there are. The first entry is always shown.
+func receiptList(entries []string) string {
+	shown, runes := 0, 0
+	for _, e := range entries[:min(len(entries), maxReceiptNames)] {
+		n := utf8.RuneCountInString(e) + 2
+		if shown > 0 && runes+n > maxReceiptListRunes {
+			break
+		}
+		shown++
+		runes += n
+	}
+	list := strings.Join(entries[:shown], ", ")
+	if more := len(entries) - shown; more > 0 {
 		list += fmt.Sprintf(" and %d more", more)
 	}
 	return list

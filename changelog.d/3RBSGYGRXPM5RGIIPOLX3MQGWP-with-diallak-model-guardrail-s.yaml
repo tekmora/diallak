@@ -1,0 +1,2 @@
+type: added
+title: With DIALLAK_MODEL_GUARDRAIL set, the bot masks each question through the gateway before the model sees it, and the receipt shows the masked text and what it replaced (#69)

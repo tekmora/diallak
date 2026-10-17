@@ -110,6 +110,7 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 | `DIALLAK_MODEL_BASE_URL` | with the alias | Base URL of an OpenAI-compatible endpoint |
 | `DIALLAK_MODEL_ALIAS` | with the base URL | Name the endpoint routes on, never a model name |
 | `DIALLAK_MODEL_POLICY` | with the model endpoint | Name of the gateway policy every chat reply must name |
+| `DIALLAK_MODEL_GUARDRAIL` | no, with the model endpoint | Name of the gateway guardrail the bot masks each question with before the model sees it; off when unset |
 | `DIALLAK_MODEL_KEY_FILE` | no | Path of the file that holds the endpoint's credential |
 | `DIALLAK_SUPPORT_CHANNEL` | no | Wording for where a person helps, put into every reply; default "the support channel" |
 | `DIALLAK_HEALTH_ADDR` | no | Listen address "host:port" for health probes; off by default |

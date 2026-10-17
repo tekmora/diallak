@@ -34,6 +34,10 @@ against the code.
   receipt: which guardrails and policies ran, where your text went and how
   long it is kept. The bot holds that receipt in memory for 15 minutes. It
   sends it as a direct message only when you press for that.
+- When the operator has switched on the bot's own masking, the receipt also
+  shows the text sent on for the model after masking, and what kinds of data
+  the masking replaced. The bot holds that masked text with the receipt in
+  memory for 15 minutes, not your question as you wrote it.
 - Your question is never used to train or evaluate a model
   ([ADR-0002](../adr/0002-data-and-compliance.md)).
 - When the operator has switched the forum answer on, the bot reads the title
@@ -149,9 +153,17 @@ holds documentation text, not your question.
 
 The endpoint runs guardrails on your question before the model sees it. They
 can mask or change parts of the text, personal data among them, but they do
-not find everything, and the bot does not see what they changed. The receipt
-therefore names the guardrails that ran and never says that your data was
-masked.
+not find everything. Without the bot's own masking, the bot does not see what
+they changed: the receipt names the guardrails that ran and never says that
+your data was masked.
+
+When the operator sets `DIALLAK_MODEL_GUARDRAIL`, the bot first sends your
+question to the endpoint's masking route and sends on only the text that comes
+back ([ADR-0013](../adr/0013-guardrail-policy-and-receipt.md), step two). The
+receipt then shows you that masked text and says that the masking does not
+find everything: a passage it missed stands there as you wrote it. When no
+masked text comes back, the bot sends nothing to the model and answers with
+excerpts.
 
 ## Where the bot runs
 
@@ -190,7 +202,8 @@ provider, the country of its data centre and the agreement that binds it.
 | The answer, in the endpoint's cache (model mode only) | At most 60 minutes, in memory only. The cache finds an entry by a hash of the request, so it holds the answer but not your question. The bot sends no member id: another member who sends the identical question within that time gets the same answer |
 | A blocked question, in the endpoint's log (model mode only) | When a filter of the endpoint blocks a question, one log line holds the fragment that matched, never the whole question. The line is deleted after about 74 hours at most |
 | The endpoint's record of a request (model mode only) | 30 days. The record holds figures about the request only: which key and which model, how many tokens, and when. It holds no question and no answer |
-| The receipt of a reply, in the bot | In memory for 15 minutes, for at most 1000 replies at once, and lost on a restart. It holds the names of the guardrails and policies, the time, and whether the model's answer was shown; no text of yours and no member id |
+| The receipt of a reply, in the bot | In memory for 15 minutes, for at most 1000 replies at once, and lost on a restart. It holds the names of the guardrails and policies, the time, and whether the model's answer was shown, and no member id. Without the bot's own masking it holds no text of yours |
+| The masked text of your question, in the bot (only with the bot's own masking) | In memory with the receipt for 15 minutes, for at most 1000 replies at once, and lost on a restart. It is the text after masking, as the receipt shows it, with the kinds of data replaced and their counts; a passage the masking missed stands in it as you wrote it |
 | Your member id, when you press for the receipt as a direct message | In memory until the direct message is sent |
 | The trail line of a moderator's act, in the server's log channel | 90 days, unless the operator configures 1 to 365 days; the bot deletes it once a day after that |
 | Title and first message of your post in the support forum, in the bot | In memory until the reply is sent or the attempt ends |
