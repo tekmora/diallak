@@ -9,7 +9,8 @@ drafts.
 It is not legal advice. No lawyer was consulted: the project's direction is
 research instead of a lawyer until somebody funds the project. Every quotation
 below was compared word for word with a copy of its source fetched on
-2026-10-15. A statement no fetched source carries is marked **Unverified**.
+2026-10-15, and the sources added to point 5 on 2026-10-17. A statement no
+fetched source carries is marked **Unverified**.
 
 The research informs the drafts; it is not a gate for the launch. Three
 findings are tracked as issues for the support forum feature: the right to
@@ -23,7 +24,7 @@ post (#146) and the reply delivered through Discord (#147).
 | [2](#2-legitimate-interests-for-ask) | Legitimate interests for `/ask` | Fits; the interest is named | high |
 | [3](#3-no-data-protection-officer) | No data protection officer | None required | high |
 | [4](#4-complaint-without-a-named-authority) | Complaint, no authority named | Allowed | high |
-| [5](#5-where-the-bot-runs) | Where the bot runs | Move needs processor contract and notice change; Discord transfer open | medium |
+| [5](#5-where-the-bot-runs) | Where the bot runs | Move needs processor contract and notice change; Discord reply named as a possible transfer under the adequacy decision | medium |
 | [6](#6-right-to-object-at-first-contact) | Right to object at first contact | Own section suffices if linked before first use | medium |
 | [7](#7-reading-forum-text-not-addressed-to-the-bot) | Forum text not addressed to the bot | Can be carried, with the safeguards | medium |
 | [8](#8-informing-a-forum-member-in-time) | Informing a forum member in time | Art. 13 met; guidelines lack the right to object | medium |
@@ -165,12 +166,24 @@ notice names (Article 13(1)(e); WP260 counts processors as recipients). A data
 centre outside the EEA would add the statement of Article 13(1)(f). The
 notice already plans this block change.
 
-**Unverified:** whether delivering the reply through Discord is a transfer to a
-third country under Chapter V of the GDPR, and if so on which ground (for
-example an adequacy decision for the United States and Discord's certification
-under it). Neither was fetched. The
-[record of processing](record-of-processing.md), entry (e), leaves the same
-point open.
+**The reply through Discord (#147, sources fetched 2026-10-17).** Chapter V
+applies when three criteria are met: an exporter subject to the GDPR, which
+discloses or makes data available to another controller or processor, which is
+in a third country (EDPB Guidelines 05/2021). The operator is subject to the
+GDPR and hands the reply to Discord. For members in the EEA the controller on
+Discord's side is Discord Netherlands BV, which is not in a third country;
+Discord Inc. in the United States states that it complies with the EU-U.S.
+Data Privacy Framework. The General Court upheld the adequacy decision for that
+framework on 3 September 2025 (T-553/23, Latombe v Commission). No supervisory
+authority or EDPB text about a bot that replies through a platform's interface
+was found. The drafts therefore name the reply as a possible transfer and the
+adequacy decision as its ground, without claiming that it is one.
+
+**Unverified:** which Discord entity is the developer's counterpart under the
+Developer Terms of Service and which transfer clauses they contain (the page
+refused automated fetches on 2026-10-17), whether Discord Inc.'s entry on the
+Data Privacy Framework list is active today (the list needs a browser), and the
+state of an appeal against T-553/23.
 
 **Sources.**
 
@@ -186,10 +199,30 @@ point open.
   controllers and processors to whom data is transferred or disclosed are
   covered by the term “recipient” and information on such recipients should be
   provided in addition to information on third party recipients."
+- EDPB Guidelines 05/2021 on the interplay between the application of Article 3
+  and the provisions on international transfers as per Chapter V of the GDPR,
+  version 2.0, adopted 14 February 2023, section 2.2: "this second criterion
+  cannot be considered as fulfilled when there is no controller or processor
+  sending or making the data available (i.e. no “exporter”) to another
+  controller or processor, such as when data are disclosed directly by the
+  data subject to the recipient."
+  <https://www.edpb.europa.eu/system/files/documents/2023-02/edpb_guidelines_05-2021_interplay_between_the_application_of_art3-chapter_v_of_the_gdpr_v2_en_0.pdf>
+- Discord Privacy Policy, last updated 29 August 2025, section 1: "If you
+  reside in the European Economic Area (“EEA”), Discord Netherlands BV is the
+  “data controller” of your personal information collected through the
+  services"; section 9: "When transferring data outside the EEA, we use
+  standard contract clauses (Module 1 and Module 2)", and Discord's U.S.
+  entities "comply with the EU-U.S. and Swiss-U.S. Data Privacy Frameworks".
+  <https://discord.com/privacy>
+- General Court, judgment of 3 September 2025, T-553/23, Latombe v Commission,
+  on Commission Implementing Decision (EU) 2023/1795 (OJ 2023 L 231, p. 118);
+  date and parties from the InfoCuria case list, judgment text not fetched.
 
 **Effect on the drafts.** [Privacy notice](privacy-notice.md), "Where the bot
 runs" and "Who receives your data": the provider and its country after the
-move, as already planned. The Discord transfer point stays open.
+move, as already planned. The reply through Discord is named as a possible
+transfer, in the notice and in entry (e) of the
+[record of processing](record-of-processing.md).
 
 ## 6. Right to object at first contact
 
