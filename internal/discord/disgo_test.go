@@ -429,8 +429,8 @@ func assertAskCommandBody(t *testing.T, body []byte) {
 	if err := json.Unmarshal(body, &cmds); err != nil {
 		t.Fatalf("unmarshal command list body: %v", err)
 	}
-	if len(cmds) != 2 {
-		t.Fatalf("commands len = %d, want 2: the ask and the areas command", len(cmds))
+	if len(cmds) != 4 {
+		t.Fatalf("commands len = %d, want 4: the ask, areas, Remove message and timeout commands", len(cmds))
 	}
 	if cmds[0].Name != CommandName {
 		t.Errorf("command name = %q, want %q", cmds[0].Name, CommandName)
@@ -868,8 +868,14 @@ func TestRegisterCommands_Positive_RegistrationPayloadDescription(t *testing.T) 
 	if err := json.Unmarshal(body, &payload); err != nil {
 		t.Fatalf("unmarshal registered commands: %v", err)
 	}
-	if len(payload) != 2 {
-		t.Fatalf("registered %d commands, want 2", len(payload))
+	if len(payload) != 4 {
+		t.Fatalf("registered %d commands, want 4", len(payload))
+	}
+	if payload[2].Name != RemoveMessageCommandName || payload[2].Description != "" {
+		t.Errorf("third command = %+v, want the message command %q without a description", payload[2], RemoveMessageCommandName)
+	}
+	if payload[3].Name != TimeoutCommandName || payload[3].Description != TimeoutCommandDescription {
+		t.Errorf("fourth command = %+v, want %q with %q", payload[3], TimeoutCommandName, TimeoutCommandDescription)
 	}
 	if payload[1].Description != AreasCommandDescription {
 		t.Errorf("areas command description = %q, want %q", payload[1].Description, AreasCommandDescription)

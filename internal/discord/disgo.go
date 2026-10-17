@@ -51,6 +51,7 @@ type clientOptions struct {
 	now               func() time.Time
 	serverCallTimeout time.Duration
 	applyCallTimeout  time.Duration
+	trailSweepEvery   time.Duration
 }
 
 // lookupDeadline is the configured deadline of the application lookup, or the default.
@@ -75,6 +76,13 @@ func (o clientOptions) callTimeout() time.Duration {
 	return serverCallTimeout
 }
 
+func (o clientOptions) sweepInterval() time.Duration {
+	if o.trailSweepEvery > 0 {
+		return o.trailSweepEvery
+	}
+	return trailSweepInterval
+}
+
 func (o clientOptions) getApplyCallTimeout() time.Duration {
 	if o.applyCallTimeout > 0 {
 		return o.applyCallTimeout
@@ -88,7 +96,9 @@ type BotConfig struct {
 	GuildID uint64
 	Handler *Handler
 	// Areas serves the areas command. Nil leaves the command unserved.
-	Areas           *AreasHandler
+	Areas *AreasHandler
+	// Moderation serves the moderation commands and sweeps the trail. Nil leaves both off.
+	Moderation      *ModerationHandler
 	Logger          *slog.Logger
 	ShutdownTimeout time.Duration
 	// ReportReady reports whether the bot is ready to serve. It is called with true
@@ -97,7 +107,8 @@ type BotConfig struct {
 	ReportReady func(bool)
 }
 
-// RegisterCommands registers the guild-scoped /ask and /areas commands with Discord via REST.
+// RegisterCommands registers the guild-scoped /ask, /areas, /timeout and Remove message commands
+// with Discord via REST.
 // maxQuestionChars is the longest question the command accepts, in runes; zero means
 // answer.MaxQuestionRunes.
 func RegisterCommands(ctx context.Context, token string, guildID uint64, maxQuestionChars int) error {
@@ -147,7 +158,10 @@ func registerCommandsWithOptions(ctx context.Context, token string, guildID uint
 		return err
 	}
 
-	commands := []discord.ApplicationCommandCreate{buildCommandCreate(maxQuestionChars), buildAreasCommandCreate()}
+	commands := []discord.ApplicationCommandCreate{
+		buildCommandCreate(maxQuestionChars), buildAreasCommandCreate(),
+		buildRemoveMessageCommandCreate(), buildTimeoutCommandCreate(),
+	}
 
 	_, err = client.Rest.SetGuildCommands(appID, snowflake.ID(guildID), commands, rest.WithCtx(ctx))
 	if err != nil {
@@ -207,6 +221,13 @@ func runWithOptions(ctx context.Context, cfg BotConfig, opts clientOptions) erro
 		return err
 	}
 
+	if cfg.Moderation != nil {
+		d.componentsRunning.Add(1)
+		go func() {
+			defer d.componentsRunning.Done()
+			sweepTrail(ctx, client.Rest, cfg, opts)
+		}()
+	}
 	if cfg.ReportReady != nil {
 		cfg.ReportReady(true)
 	}
@@ -243,6 +264,11 @@ func preGatewayStep(
 	}
 	if cfg.Areas != nil {
 		if err := readAreaRoles(ctx, client, cfg, opts); err != nil {
+			return 0, err
+		}
+	}
+	if cfg.Moderation != nil {
+		if err := startModeration(ctx, client, cfg, opts); err != nil {
 			return 0, err
 		}
 	}
@@ -514,12 +540,18 @@ func (d *dispatcher) handle(ctx context.Context, e *events.InteractionCreate) {
 		d.handleCommand(ctx, e, i)
 	case discord.ComponentInteraction:
 		d.handleComponent(ctx, e, i)
+	case discord.ModalSubmitInteraction:
+		d.handleModal(ctx, e, i)
 	default:
 		d.cfg.Logger.Debug("ignoring interaction of another type", slog.Int("type", int(e.Type())))
 	}
 }
 
 func (d *dispatcher) handleCommand(ctx context.Context, e *events.InteractionCreate, appCmd discord.ApplicationCommandInteraction) {
+	if msgData, ok := appCmd.Data.(discord.MessageCommandInteractionData); ok {
+		d.handleMessageCommand(ctx, e, appCmd, msgData)
+		return
+	}
 	data, ok := slashCommandData(appCmd)
 	if !ok {
 		d.cfg.Logger.Debug("ignoring application command that is no slash command")
@@ -532,6 +564,11 @@ func (d *dispatcher) handleCommand(ctx context.Context, e *events.InteractionCre
 	case data.CommandName() == AreasCommandName && d.cfg.Areas != nil:
 		adapter := &areasAdapter{client: e.Client(), interaction: appCmd, respond: e.Respond, command: true}
 		d.runTracked(func() { d.cfg.Areas.HandleCommand(ctx, adapter) })
+	case data.CommandName() == TimeoutCommandName && d.cfg.Moderation != nil:
+		adapter := &moderationAdapter{client: e.Client(), interaction: appCmd, respond: e.Respond}
+		calls := restModerationCalls{rest: e.Client().Rest, guildID: snowflake.ID(d.cfg.GuildID)}
+		req := timeoutRequest(data)
+		d.runTracked(func() { d.cfg.Moderation.HandleTimeout(ctx, adapter, req, calls) })
 	default:
 		d.cfg.Logger.Debug("ignoring unknown command", slog.String("command", data.CommandName()))
 	}
@@ -555,6 +592,28 @@ func (d *dispatcher) handleComponent(ctx context.Context, e *events.InteractionC
 	adapter := &areasAdapter{client: e.Client(), interaction: comp, respond: e.Respond}
 	calls := restRoleCalls{rest: e.Client().Rest, guildID: snowflake.ID(d.cfg.GuildID)}
 	d.runTracked(func() { d.cfg.Areas.HandleChange(ctx, adapter, customID, values, calls) })
+}
+
+func (d *dispatcher) handleMessageCommand(ctx context.Context, e *events.InteractionCreate,
+	appCmd discord.ApplicationCommandInteraction, data discord.MessageCommandInteractionData) {
+	if data.CommandName() != RemoveMessageCommandName || d.cfg.Moderation == nil {
+		d.cfg.Logger.Debug("ignoring message command the bot does not serve")
+		return
+	}
+	adapter := &moderationAdapter{client: e.Client(), interaction: appCmd, respond: e.Respond}
+	target := removeMessageTarget(data)
+	d.runTracked(func() { d.cfg.Moderation.HandleRemoveCommand(ctx, adapter, target) })
+}
+
+func (d *dispatcher) handleModal(ctx context.Context, e *events.InteractionCreate, modal discord.ModalSubmitInteraction) {
+	customID, reason, ok := removeReasonForm(modal)
+	if !ok || d.cfg.Moderation == nil {
+		d.cfg.Logger.Debug("ignoring form the bot does not serve")
+		return
+	}
+	adapter := &moderationAdapter{client: e.Client(), interaction: modal, respond: e.Respond}
+	calls := restModerationCalls{rest: e.Client().Rest, guildID: snowflake.ID(d.cfg.GuildID)}
+	d.runTracked(func() { d.cfg.Moderation.HandleRemoveReason(ctx, adapter, customID, reason, calls) })
 }
 
 // runTracked runs work on a worker and lets the shutdown wait for it.

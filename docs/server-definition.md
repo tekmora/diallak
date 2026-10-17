@@ -254,15 +254,16 @@ against Discord. The names the tool reads and writes for each number are in
 The `automation` part names the party for each task and its state: built,
 decided, planned, or observed on the server.
 
-- **The bot, built:** the `/ask` command.
+- **The bot, built:** the `/ask` command; the `/areas` command, which gives
+  and takes the interest, language and notification roles from the member's
+  own choice ([ADR-0011](adr/0011-area-roles-from-member-choice.md)); and
+  what a moderator does through the bot, `Remove message` and `/timeout`,
+  together with the trail of it
+  ([ADR-0021](adr/0021-moderation-commands-and-trail.md)).
 - **The bot, decided and not built:** the first answer in the support forum,
-  the bridge from GitHub Discussions, what a moderator does through the bot
-  together with the trail of it, the `/areas` command, which gives and
-  takes the interest, language and notification roles from the member's own
-  choice
-  ([ADR-0011](adr/0011-area-roles-from-member-choice.md)), and the server's
-  settings as data: the platform's filter rules and the verification level,
-  compared and applied through plan and apply (ADR-0015).
+  the bridge from GitHub Discussions, and the server's settings as data: the
+  platform's filter rules and the verification level, compared and applied
+  through plan and apply (ADR-0015).
 - **The bot, planned:** opening and closing the areas, the news posts, the
   supporter roles and the Contributor role. Each needs its own decision record
   first; until then the operator opens and closes areas by hand.

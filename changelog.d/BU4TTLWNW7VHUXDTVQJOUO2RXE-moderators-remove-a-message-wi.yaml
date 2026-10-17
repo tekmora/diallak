@@ -1,0 +1,2 @@
+type: added
+title: 'Moderators remove a message with Remove message and time a member out with /timeout; the bot checks the Moderator role, requires a reason, writes one trail line per act into the log channel and deletes its own lines after 90 days (DIALLAK_TRAIL_RETENTION)'

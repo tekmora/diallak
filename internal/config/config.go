@@ -60,6 +60,8 @@ const (
 	EnvSourceLinkTemplate = "DIALLAK_SOURCE_LINK_TEMPLATE"
 	// EnvHealthAddr names the optional variable setting the health probe listen address.
 	EnvHealthAddr = "DIALLAK_HEALTH_ADDR"
+	// EnvTrailRetention names the optional variable setting how long a moderation trail line stays.
+	EnvTrailRetention = "DIALLAK_TRAIL_RETENTION"
 
 	// MaxTokenBytes bounds secret files (both bot token and model key).
 	MaxTokenBytes = 4096
@@ -76,6 +78,10 @@ const (
 	MaxAskTimeout = 10 * time.Minute
 	// DefaultAskTimeout is the default duration for DIALLAK_ASK_TIMEOUT.
 	DefaultAskTimeout = 60 * time.Second
+	// MinTrailRetention is the lower bound for DIALLAK_TRAIL_RETENTION: one day, the sweep interval.
+	MinTrailRetention = 24 * time.Hour
+	// MaxTrailRetention is the upper bound for DIALLAK_TRAIL_RETENTION: 365 days.
+	MaxTrailRetention = 365 * 24 * time.Hour
 )
 
 // Config is the validated configuration of one bot process.
@@ -129,6 +135,9 @@ type Config struct {
 	// HealthAddr is the optional TCP address ("host:port") for the health and readiness HTTP listener.
 	// It is empty when the variable is not set; no listener is then started.
 	HealthAddr string
+	// TrailRetention is how long a line of the moderation trail stays before the bot deletes it.
+	// It is 0 when the variable is not set; discord then uses its built-in default of 90 days.
+	TrailRetention time.Duration
 }
 
 // HasModel reports whether a model endpoint is configured.
@@ -138,10 +147,10 @@ func (c Config) HasModel() bool {
 
 // String returns a redacted representation of Config. Token and ModelKey are never printed.
 func (c Config) String() string {
-	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q}",
+	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v}",
 		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, c.ModelPolicy, redactSecret(c.ModelKey), c.CorpusDir, c.SupportChannel,
 		c.TopPassages, c.MinScore, c.QuestionMaxChars, c.ExcerptChars, c.ReplyMaxChars, c.MaxConcurrentAsks,
-		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate, c.HealthAddr)
+		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate, c.HealthAddr, c.TrailRetention)
 }
 
 // GoString returns a redacted representation of Config for Go syntax formatting.
@@ -170,6 +179,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Duration("ModelTimeout", c.ModelTimeout),
 		slog.String("SourceLinkTemplate", c.SourceLinkTemplate),
 		slog.String("HealthAddr", c.HealthAddr),
+		slog.Duration("TrailRetention", c.TrailRetention),
 	)
 }
 
@@ -216,6 +226,10 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	retention, err := parseOptionalDuration(getenv(EnvTrailRetention), EnvTrailRetention, MinTrailRetention, MaxTrailRetention)
+	if err != nil {
+		return Config{}, err
+	}
 	return Config{
 		Token:              token,
 		GuildID:            guild,
@@ -235,6 +249,7 @@ func Load(getenv func(string) string) (Config, error) {
 		ModelTimeout:       modelTimeout,
 		SourceLinkTemplate: linkTmpl,
 		HealthAddr:         healthAddr,
+		TrailRetention:     retention,
 	}, nil
 }
 

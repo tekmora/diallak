@@ -25,9 +25,10 @@ generated agent context against `AGENTS.md`.
 Community bot for the Lusoris Discord hub.
 
 > **Status: first slice built, not live.** The bot answers `/ask` from project
-> documentation with cited sources, and `/areas` lets a member choose interest,
-> language and notification roles. It has been tested against a fake Discord
-> only; the live test and the switch from the bot that runs today are still to
+> documentation with cited sources, `/areas` lets a member choose interest,
+> language and notification roles, and moderators remove a message or time a
+> member out through the bot, which keeps a trail of every act. It has been
+> tested against a fake Discord only; the live test and the switch from the bot that runs today are still to
 > come.
 
 ## What it will do
@@ -46,7 +47,10 @@ Community bot for the Lusoris Discord hub.
 
 Of this list only the answers from the docs are built. Besides the list, a
 member chooses interest, language and notification roles with `/areas`
-([ADR-0011](docs/adr/0011-area-roles-from-member-choice.md)). Issue drafts, wishes and
+([ADR-0011](docs/adr/0011-area-roles-from-member-choice.md)), and a moderator
+acts with `Remove message` and `/timeout`
+([ADR-0021](docs/adr/0021-moderation-commands-and-trail.md),
+[moderator guide](docs/moderator-guide.md)). Issue drafts, wishes and
 polls will not be built in this repository: they belong to a shared core the
 projects plan to use from every channel, and the bot will be its Discord
 adapter. That core has no record here yet.
@@ -104,6 +108,7 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 | `DIALLAK_MODEL_KEY_FILE` | no | Path of the file that holds the endpoint's credential |
 | `DIALLAK_SUPPORT_CHANNEL` | no | Wording for where a person helps, put into every reply; default "the support channel" |
 | `DIALLAK_HEALTH_ADDR` | no | Listen address "host:port" for health probes; off by default |
+| `DIALLAK_TRAIL_RETENTION` | no | How long a line of the moderation trail stays, as a Go duration from `24h` to `8760h`; default 90 days |
 <!-- markdownlint-enable MD013 -->
 
 Without the model variables the bot replies with cited excerpts and says
@@ -189,10 +194,12 @@ link that leaves the directory.
 diallak
 ```
 
-It loads the documentation and the server definition, reads the server's roles,
-connects to Discord and answers `/ask` and `/areas` until it receives a
-termination signal. A reply is visible only to the member who asked and can
-never mention anyone. A failed read of the roles stops the start.
+It loads the documentation and the server definition, reads the server's roles
+and channels and its own user, connects to Discord and answers `/ask`,
+`/areas`, `Remove message` and `/timeout` until it receives a termination
+signal. A reply is visible only to the member who asked and can never mention
+anyone. A failed read stops the start. Once a day it deletes its own lines of
+the moderation trail that are older than `DIALLAK_TRAIL_RETENTION`.
 
 ### Health checks
 
@@ -219,8 +226,8 @@ is not ready still answers with excerpts.
 diallak -register-commands
 ```
 
-This sets the server's command list for the application to `/ask` and `/areas`
-and exits. It
+This sets the server's command list for the application to `/ask`, `/areas`,
+`Remove message` and `/timeout` and exits. It
 needs the same environment as a normal start. Starting the bot never registers
 or changes a command.
 

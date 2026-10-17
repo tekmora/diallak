@@ -344,12 +344,22 @@ func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotC
 	if err != nil {
 		return discord.BotConfig{}, fmt.Errorf("create areas handler: %w", err)
 	}
+	moderation, err := discord.NewModerationHandler(discord.ModerationConfig{
+		Definition: def,
+		GuildID:    cfg.GuildID,
+		Logger:     slog.Default(),
+		Retention:  cfg.TrailRetention,
+	})
+	if err != nil {
+		return discord.BotConfig{}, fmt.Errorf("create moderation handler: %w", err)
+	}
 	return discord.BotConfig{
-		Token:   cfg.Token,
-		GuildID: cfg.GuildID,
-		Handler: handler,
-		Areas:   areas,
-		Logger:  slog.Default(),
+		Token:      cfg.Token,
+		GuildID:    cfg.GuildID,
+		Handler:    handler,
+		Areas:      areas,
+		Moderation: moderation,
+		Logger:     slog.Default(),
 	}, nil
 }
 
