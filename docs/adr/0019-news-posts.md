@@ -1,6 +1,6 @@
 # ADR-0019: News posts
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-17
 - **Authors**: Maintainers
 
