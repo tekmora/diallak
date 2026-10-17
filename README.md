@@ -65,7 +65,7 @@ adapter. That core has no record here yet.
 | Language and library | Go with disgo |
 | Server | One hub server; the guild is configuration, not code |
 | Auto-answers, first version | Local-model answers with citations and an AI label |
-| Gate for model answers | The bot refuses a model reply that does not name the deployment's guardrail policy, and a member can ask for a receipt of the guardrails that ran ([ADR-0013](docs/adr/0013-guardrail-policy-and-receipt.md)); the policy check is built, the receipt is not |
+| Gate for model answers | The bot refuses a model reply that does not name the deployment's guardrail policy, and a member can ask for a receipt of the guardrails that ran ([ADR-0013](docs/adr/0013-guardrail-policy-and-receipt.md)); both are built; model mode stays off in the live server until the operator switches it on |
 | Discord application | The existing bot application and its token are reused |
 | Community questions | GitHub Discussions for searchable answers, the hub for live chat; the bot links them |
 | Moderation | The bot filters spam and obvious abuse; people decide unclear cases |
@@ -111,8 +111,8 @@ that no model wrote them. In the live server that is the only mode for now: no
 deployment sets the variables until the gates of
 [ADR-0013](docs/adr/0013-guardrail-policy-and-receipt.md) are passed: every
 reply of the model has to name the deployment's guardrail policy, and the
-member can ask for a receipt of the guardrails that ran. The first is built;
-the receipt is not yet.
+member can ask for a receipt of the guardrails that ran. Both are built; the
+operator decides when the live server switches model mode on.
 
 With the model variables set the bot sends the endpoint one small request at start
 ([ADR-0012](docs/adr/0012-model-state.md)):

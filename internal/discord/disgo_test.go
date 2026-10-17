@@ -120,7 +120,7 @@ func TestBuildDeferPayload_Positive_EphemeralAndAllowedMentions(t *testing.T) {
 
 func TestBuildReplyPayload_Positive_ContentAndAllowedMentions(t *testing.T) {
 	text := "Here is the rendered answer text."
-	payload := buildReplyPayload(text)
+	payload := buildReplyPayload(text, "")
 
 	if payload.Content == nil || *payload.Content != text {
 		t.Errorf("reply content = %v, want %q", payload.Content, text)
@@ -170,7 +170,7 @@ func TestBuildPayloads_Negative_ControlAllowedMentionsAndEphemeralFlag(t *testin
 	if err := verifyDeferPayload(buildDeferPayload()); err != nil {
 		t.Fatalf("legitimate defer payload failed verification: %v", err)
 	}
-	if err := verifyReplyPayload(buildReplyPayload("ok")); err != nil {
+	if err := verifyReplyPayload(buildReplyPayload("ok", "")); err != nil {
 		t.Fatalf("legitimate reply payload failed verification: %v", err)
 	}
 
@@ -191,7 +191,7 @@ func TestBuildPayloads_Negative_ControlAllowedMentionsAndEphemeralFlag(t *testin
 	}
 
 	// Negative control 3: Reply payload with role mention fails
-	leakyReplyMentions := buildReplyPayload("ok")
+	leakyReplyMentions := buildReplyPayload("ok", "")
 	leakyReplyMentions.AllowedMentions = &discord.AllowedMentions{
 		Roles: []snowflake.ID{123},
 	}

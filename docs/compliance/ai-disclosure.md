@@ -24,6 +24,7 @@ The reading behind it is in [ADR-0006](../adr/0006-ai-act-role.md).
 | First line of an excerpt reply | "Automated excerpts from the documentation. No AI model wrote this reply." | In the code |
 | Second line when the model failed | "The AI model is unavailable right now, so these are excerpts only." | In the code |
 | Last line of every reply | "Automated reply. A person can help in the support channel." | In the code |
+| Last line of a receipt | "This receipt is automated." | In the code |
 | The bot's profile text | "Automated assistant of this community. It answers from project documentation and can be wrong." | Proposed, set by the operator |
 <!-- markdownlint-enable MD013 -->
 
@@ -52,6 +53,8 @@ The approved texts are fixed by constants and formatting functions:
 - The answer markers are constants `LabelAnswer`, `LabelExcerpts` and
   `LabelModelUnavailable` in
   [`internal/answer`](../../internal/answer/answer.go).
+- The receipt's last line is constant `textReceiptAutomated` in
+  [`internal/discord`](../../internal/discord/receipt.go).
 - The reply footer and refusal text are produced by `Footer`, `Refusal` and
   `AppendFooter` in [`internal/answer`](../../internal/answer/answer.go), using
   `DefaultPlace` when no support channel is configured.
@@ -77,6 +80,9 @@ Every text is pinned by tests to prevent accidental edits:
   `TestHandler_Positive_FooterIsLastLineForAdapterTexts` in
   [`internal/discord`](../../internal/discord/discord_test.go) verify that the
   footer is the last line of every reply.
+- `TestReceiptText_Positive_RepliedReceiptNamesGuardrailsPoliciesAndRetention`
+  in [`internal/discord`](../../internal/discord/receipt_test.go) verifies that
+  a receipt carries the automated notice.
 - `TestHandleAsk_Positive_AnswerRepliesNameTheConfiguredPlace` in
   [`internal/discord`](../../internal/discord/review_test.go) verifies that a
   configured place reaches answers, excerpts and refusals.

@@ -168,7 +168,7 @@ func (c *ctxInteraction) Question() string { return c.question }
 
 func (c *ctxInteraction) Defer(ctx context.Context) error { return ctx.Err() }
 
-func (c *ctxInteraction) Reply(ctx context.Context, text string) error {
+func (c *ctxInteraction) Reply(ctx context.Context, text, _ string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

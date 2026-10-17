@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"unicode/utf8"
 
+	"github.com/tekmora/diallak/internal/model"
 	"github.com/tekmora/diallak/internal/retrieval"
 )
 
@@ -62,6 +63,9 @@ type Answer struct {
 	Reason  Reason
 	Text    string
 	Sources []Source
+	// Trace says whether the question left the bot for the model and what the reply named. It is
+	// the zero Trace when no model was asked.
+	Trace model.Trace
 }
 
 // Retriever executes lexical search queries against a documentation index.
@@ -69,9 +73,10 @@ type Retriever interface {
 	Search(query string, opt retrieval.Options) ([]retrieval.Hit, error)
 }
 
-// Generator produces completions from an OpenAI-compatible model endpoint.
+// Generator produces completions from an OpenAI-compatible model endpoint. It returns the trace of
+// its request also when the completion failed.
 type Generator interface {
-	Complete(ctx context.Context, system, user string) (string, error)
+	CompleteTraced(ctx context.Context, system, user string) (string, model.Trace, error)
 }
 
 // Config configures pipeline dependencies and limits.
@@ -261,7 +266,7 @@ func (p *Pipeline) Ask(ctx context.Context, question string) (Answer, error) {
 
 func (p *Pipeline) generateAndAssemble(ctx context.Context, q string, hits []retrieval.Hit, sources []Source) (Answer, error) {
 	userPrompt := buildUserPrompt(q, hits)
-	output, err := p.generator.Complete(ctx, SystemPrompt, userPrompt)
+	output, trace, err := p.generator.CompleteTraced(ctx, SystemPrompt, userPrompt)
 	if err != nil {
 		// A cancelled or expired caller context means nobody waits for the reply. That is the
 		// caller's doing, not a failing model, so it is no excerpt reply and no model failure.
@@ -271,21 +276,21 @@ func (p *Pipeline) generateAndAssemble(ctx context.Context, q string, hits []ret
 		p.handleModelFailure(err)
 		p.asked.Add(1)
 		p.excerpts.Add(1)
-		return Answer{Kind: KindExcerpts, Reason: ReasonModelUnavailable, Sources: sources}, nil
+		return Answer{Kind: KindExcerpts, Reason: ReasonModelUnavailable, Sources: sources, Trace: trace}, nil
 	}
 
 	trimmedOutput := strings.TrimSpace(output)
 	if trimmedOutput == NoAnswerSentinel {
 		p.asked.Add(1)
 		p.refused.Add(1)
-		return Answer{Kind: KindRefusal, Reason: ReasonNotInSources}, nil
+		return Answer{Kind: KindRefusal, Reason: ReasonNotInSources, Trace: trace}, nil
 	}
 
 	validSources, ok := filterCitedSources(trimmedOutput, sources)
 	if !ok {
 		p.asked.Add(1)
 		p.refused.Add(1)
-		return Answer{Kind: KindRefusal, Reason: ReasonUncited}, nil
+		return Answer{Kind: KindRefusal, Reason: ReasonUncited, Trace: trace}, nil
 	}
 
 	ansText := cutRunes(trimmedOutput, p.maxAnswerRunes)
@@ -296,6 +301,7 @@ func (p *Pipeline) generateAndAssemble(ctx context.Context, q string, hits []ret
 		Reason:  ReasonNone,
 		Text:    ansText,
 		Sources: validSources,
+		Trace:   trace,
 	}, nil
 }
 

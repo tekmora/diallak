@@ -34,7 +34,25 @@ const (
 	ProbeTimeout = 10 * time.Second
 	// PolicyHeader names the HTTP header liteLLM uses to return applied guardrail policies.
 	PolicyHeader = "x-litellm-applied-policies"
+	// GuardrailHeader names the HTTP header liteLLM uses to return the guardrails that ran.
+	GuardrailHeader = "x-litellm-applied-guardrails"
 )
+
+// Trace is what one completion request leaves for the member's receipt (ADR-0013). It holds no
+// text of the request or of the reply.
+type Trace struct {
+	// Sent reports that the request was handed to the HTTP client, so its text may have left the
+	// bot.
+	Sent bool
+	// Replied reports that the endpoint answered with a status, so its headers were read.
+	Replied bool
+	// Guardrails and Policies are the names the reply headers carried, sorted.
+	Guardrails []string
+	Policies   []string
+	// PolicyMissing reports a reply with status 200 that did not name the configured policy, so
+	// its text was discarded.
+	PolicyMissing bool
+}
 
 // PolicyError reports that the model response did not name the configured guardrail policy.
 type PolicyError struct {
@@ -262,10 +280,11 @@ type chatResponse struct {
 }
 
 // sendRequest builds the request, sets headers, sends, checks status and reads the limited body.
-func (c *Client) sendRequest(ctx context.Context, timeout time.Duration, reqBody chatRequest) (_ []byte, err error) {
+// The trace it returns says how far the request got, also when err is not nil.
+func (c *Client) sendRequest(ctx context.Context, timeout time.Duration, reqBody chatRequest) (_ []byte, trace Trace, err error) {
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+		return nil, trace, fmt.Errorf("marshal request: %w", err)
 	}
 
 	reqCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -274,16 +293,17 @@ func (c *Client) sendRequest(ctx context.Context, timeout time.Duration, reqBody
 	endpoint := c.baseURL + "/chat/completions"
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, trace, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if c.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
 
+	trace.Sent = true
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", &TransportError{Err: err})
+		return nil, trace, fmt.Errorf("do request: %w", &TransportError{Err: err})
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -291,32 +311,37 @@ func (c *Client) sendRequest(ctx context.Context, timeout time.Duration, reqBody
 		}
 	}()
 
-	if resp.StatusCode != http.StatusOK {
-		if _, copyErr := io.Copy(io.Discard, io.LimitReader(resp.Body, int64(MaxResponseBytes+1))); copyErr != nil {
-			return nil, errors.Join(&StatusError{Code: resp.StatusCode}, fmt.Errorf("drain response body: %w", copyErr))
-		}
-		return nil, &StatusError{Code: resp.StatusCode}
-	}
+	trace.Replied = true
+	trace.Guardrails, _ = readHeaderNames(resp.Header.Values(GuardrailHeader), "")
+	var named bool
+	trace.Policies, named = readHeaderNames(resp.Header.Values(PolicyHeader), c.policy)
 
-	applied, named := readAppliedPolicies(resp.Header, c.policy)
+	if resp.StatusCode != http.StatusOK {
+		return nil, trace, drainWith(resp.Body, &StatusError{Code: resp.StatusCode})
+	}
 	if !named {
-		slices.Sort(applied)
-		policyErr := &PolicyError{Applied: applied}
-		if _, copyErr := io.Copy(io.Discard, io.LimitReader(resp.Body, int64(MaxResponseBytes+1))); copyErr != nil {
-			return nil, errors.Join(policyErr, fmt.Errorf("drain response body: %w", copyErr))
-		}
-		return nil, policyErr
+		trace.PolicyMissing = true
+		return nil, trace, drainWith(resp.Body, &PolicyError{Applied: trace.Policies})
 	}
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, int64(MaxResponseBytes+1)))
 	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", &TransportError{Err: err})
+		return nil, trace, fmt.Errorf("read response body: %w", &TransportError{Err: err})
 	}
 	if len(data) > MaxResponseBytes {
-		return nil, fmt.Errorf("response body exceeds max %d bytes", MaxResponseBytes)
+		return nil, trace, fmt.Errorf("response body exceeds max %d bytes", MaxResponseBytes)
 	}
 
-	return data, nil
+	return data, trace, nil
+}
+
+// drainWith discards the rest of body, so the connection can be reused, and returns cause, joined
+// with the error of the drain if there was one.
+func drainWith(body io.Reader, cause error) error {
+	if _, copyErr := io.Copy(io.Discard, io.LimitReader(body, int64(MaxResponseBytes+1))); copyErr != nil {
+		return errors.Join(cause, fmt.Errorf("drain response body: %w", copyErr))
+	}
+	return cause
 }
 
 const (
@@ -324,16 +349,14 @@ const (
 	maxPolicyNameBytes = 128
 )
 
-// readAppliedPolicies reads the names in the policy header and reports whether
-// want is one of them. It reads at most maxAppliedPolicies entries over all
-// header lines, empty ones included, so a long header costs no more than that.
-// want is compared with the whole name; only the returned names are cut to
-// maxPolicyNameBytes.
-func readAppliedPolicies(header http.Header, want string) ([]string, bool) {
+// readHeaderNames reads the comma-separated names in the lines of a header, sorted, and reports
+// whether want is one of them. It reads at most maxAppliedPolicies entries over all header lines,
+// empty ones included, so a long header costs no more than that. want is compared with the whole
+// name; only the returned names are cut to maxPolicyNameBytes.
+func readHeaderNames(values []string, want string) ([]string, bool) {
 	var applied []string
 	named := false
 	read := 0
-	values := header.Values(PolicyHeader)
 	for i := 0; i < len(values) && read < maxAppliedPolicies; i++ {
 		parts := strings.SplitN(values[i], ",", maxAppliedPolicies-read+1)
 		for j := 0; j < len(parts) && read < maxAppliedPolicies; j++ {
@@ -351,11 +374,19 @@ func readAppliedPolicies(header http.Header, want string) ([]string, bool) {
 			applied = append(applied, name)
 		}
 	}
+	slices.Sort(applied)
 	return applied, named
 }
 
 // Complete sends a prompt to the chat completion endpoint and returns the generated content.
 func (c *Client) Complete(ctx context.Context, system, user string) (string, error) {
+	content, _, err := c.CompleteTraced(ctx, system, user)
+	return content, err
+}
+
+// CompleteTraced is Complete, and it returns the trace of the request for the member's receipt,
+// also when the completion failed.
+func (c *Client) CompleteTraced(ctx context.Context, system, user string) (string, Trace, error) {
 	reqBody := chatRequest{
 		Model: c.alias,
 		Messages: []chatMessage{
@@ -366,11 +397,12 @@ func (c *Client) Complete(ctx context.Context, system, user string) (string, err
 		Temperature: 0,
 		Stream:      false,
 	}
-	data, err := c.sendRequest(ctx, c.timeout, reqBody)
+	data, trace, err := c.sendRequest(ctx, c.timeout, reqBody)
 	if err != nil {
-		return "", err
+		return "", trace, err
 	}
-	return parseChatResponse(data)
+	content, err := parseChatResponse(data)
+	return content, trace, err
 }
 
 func parseChatResponse(data []byte) (string, error) {
@@ -399,6 +431,6 @@ func (c *Client) Probe(ctx context.Context) error {
 		Temperature: 0,
 		Stream:      false,
 	}
-	_, err := c.sendRequest(ctx, min(ProbeTimeout, c.timeout), reqBody)
+	_, _, err := c.sendRequest(ctx, min(ProbeTimeout, c.timeout), reqBody)
 	return err
 }

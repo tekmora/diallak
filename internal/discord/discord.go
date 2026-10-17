@@ -95,7 +95,9 @@ type Interaction interface {
 	GuildID() uint64
 	Question() string
 	Defer(ctx context.Context) error
-	Reply(ctx context.Context, text string) error
+	// Reply sends the answer. A non-empty receiptKey adds the button that shows the receipt held
+	// under that key.
+	Reply(ctx context.Context, text, receiptKey string) error
 }
 
 // HandlerConfig configures the interaction handler dependencies and limits.
@@ -112,6 +114,9 @@ type HandlerConfig struct {
 	// RenderOptions holds the support place and the reply length limit. They apply to every
 	// reply the handler sends. The zero value means the defaults of the answer package.
 	RenderOptions answer.RenderOptions
+	// Receipts holds the receipts of replies for which text left the bot (ADR-0013). Nil means
+	// replies carry no receipt button.
+	Receipts *Receipts
 }
 
 // Handler coordinates slash command interactions, concurrency limits, and replies.
@@ -124,6 +129,7 @@ type Handler struct {
 	logger           *slog.Logger
 	questionMaxChars int
 	renderOptions    answer.RenderOptions
+	receipts         *Receipts
 
 	mu          sync.Mutex
 	inFlight    int
@@ -170,6 +176,7 @@ func NewHandler(cfg HandlerConfig) (*Handler, error) {
 		logger:           logger,
 		questionMaxChars: questionMaxChars,
 		renderOptions:    cfg.RenderOptions,
+		receipts:         cfg.Receipts,
 	}, nil
 }
 
@@ -314,7 +321,7 @@ func (h *Handler) handleDirectReply(ctx context.Context, in Interaction, text st
 }
 
 func (h *Handler) sendFixedReply(ctx context.Context, in Interaction, text string) {
-	h.sendReply(ctx, in, answer.AppendFooter(text, h.renderOptions.Place))
+	h.sendReply(ctx, in, answer.AppendFooter(text, h.renderOptions.Place), "")
 }
 
 func (h *Handler) performDefer(ctx context.Context, in Interaction) bool {
@@ -349,14 +356,15 @@ func (h *Handler) executeAskAndReply(ctx context.Context, in Interaction, q stri
 		slog.String("reason", string(ans.Reason)),
 		slog.Duration("duration", time.Since(start)),
 	)
-	h.sendReply(ctx, in, answer.Render(ans, h.renderOptions))
+	key := h.receiptKeyFor(ans.Trace, ans.Kind == answer.KindAnswer)
+	h.sendReply(ctx, in, answer.Render(ans, h.renderOptions), key)
 }
 
-func (h *Handler) sendReply(ctx context.Context, in Interaction, text string) {
+func (h *Handler) sendReply(ctx context.Context, in Interaction, text, receiptKey string) {
 	replyCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), h.replyTimeout)
 	defer cancel()
 
-	if err := in.Reply(replyCtx, text); err != nil {
+	if err := in.Reply(replyCtx, text, receiptKey); err != nil {
 		h.logger.Warn("reply failed", slog.String("error_class", classifyError(err)))
 	}
 }
