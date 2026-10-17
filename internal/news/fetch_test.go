@@ -49,12 +49,12 @@ func TestFetch_Positive_ReadsFeedAndSendsHeaders(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	items, err := testReader(srv).Fetch(testContext(t), srv.URL+"/releases.atom")
+	res, err := testReader(srv).Fetch(testContext(t), srv.URL+"/releases.atom", Validators{})
 	if err != nil {
 		t.Fatalf("Fetch() error = %v", err)
 	}
-	if len(items) != 10 {
-		t.Fatalf("Fetch() = %d items, want 10", len(items))
+	if len(res.Items) != 10 || res.NotModified {
+		t.Fatalf("Fetch() = %d items, not modified %v; want 10, false", len(res.Items), res.NotModified)
 	}
 	if got := <-headers; got != [2]string{userAgent, accept} {
 		t.Fatalf("headers = %q, want %q, %q", got, userAgent, accept)
@@ -65,10 +65,10 @@ func TestFetch_Negative_StatusOtherThanOK(t *testing.T) {
 	srv := httptest.NewTLSServer(http.NotFoundHandler())
 	t.Cleanup(srv.Close)
 
-	_, err := testReader(srv).Fetch(testContext(t), srv.URL)
+	_, err := testReader(srv).Fetch(testContext(t), srv.URL, Validators{})
 	var se *StatusError
-	if !errors.As(err, &se) || se.Code != http.StatusNotFound {
-		t.Fatalf("Fetch() error = %v, want StatusError 404", err)
+	if !errors.As(err, &se) || se.Code != http.StatusNotFound || se.RetryAfter != 0 {
+		t.Fatalf("Fetch() error = %v, want StatusError 404 without a wait", err)
 	}
 }
 
@@ -78,7 +78,7 @@ func TestFetch_Negative_AddressRefusedBeforeAnyRequest(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	for _, address := range []string{srv.URL, "https://user:pw@example.org/feed", "/relative", "https://", "javascript:alert(1)"} {
-		if _, err := NewReader(srv.Client()).Fetch(testContext(t), address); err == nil {
+		if _, err := NewReader(srv.Client()).Fetch(testContext(t), address, Validators{}); err == nil {
 			t.Fatalf("Fetch(%q) error = nil, want refusal", address)
 		}
 	}
@@ -95,7 +95,7 @@ func TestFetch_Negative_RedirectToHTTPRefused(t *testing.T) {
 	srv := httptest.NewTLSServer(http.RedirectHandler(plain.URL, http.StatusFound))
 	t.Cleanup(srv.Close)
 
-	if _, err := testReader(srv).Fetch(testContext(t), srv.URL); err == nil || !strings.Contains(err.Error(), "https") {
+	if _, err := testReader(srv).Fetch(testContext(t), srv.URL, Validators{}); err == nil || !strings.Contains(err.Error(), "https") {
 		t.Fatalf("Fetch() error = %v, want a refused redirect", err)
 	}
 }
@@ -109,7 +109,7 @@ func TestFetch_Negative_RedirectLoopEnds(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	if _, err := testReader(srv).Fetch(testContext(t), srv.URL); err == nil {
+	if _, err := testReader(srv).Fetch(testContext(t), srv.URL, Validators{}); err == nil {
 		t.Fatal("Fetch() error = nil, want redirect limit")
 	}
 	if n := hits.Load(); n != MaxRedirects+1 {
@@ -132,7 +132,7 @@ func TestFetch_Negative_HangingServerEndsAtDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	_, err := testReader(srv).Fetch(ctx, srv.URL)
+	_, err := testReader(srv).Fetch(ctx, srv.URL, Validators{})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Fetch() error = %v, want context.DeadlineExceeded", err)
 	}
@@ -144,7 +144,7 @@ func TestFetch_Negative_HangingServerEndsAtDeadline(t *testing.T) {
 func TestFetch_Negative_OversizedBody(t *testing.T) {
 	srv := serveBytes(t, bytes.Repeat([]byte(" "), MaxFeedBytes+1))
 
-	if _, err := testReader(srv).Fetch(testContext(t), srv.URL); !errors.Is(err, ErrTooLarge) {
+	if _, err := testReader(srv).Fetch(testContext(t), srv.URL, Validators{}); !errors.Is(err, ErrTooLarge) {
 		t.Fatalf("Fetch() error = %v, want ErrTooLarge", err)
 	}
 }
@@ -154,12 +154,12 @@ func TestFetch_Boundary_BodyOfExactlyMaxFeedBytes(t *testing.T) {
 	body := append(feed, bytes.Repeat([]byte(" "), MaxFeedBytes-len(feed))...)
 	srv := serveBytes(t, body)
 
-	items, err := testReader(srv).Fetch(testContext(t), srv.URL)
+	res, err := testReader(srv).Fetch(testContext(t), srv.URL, Validators{})
 	if err != nil {
 		t.Fatalf("Fetch(%d bytes) error = %v", len(body), err)
 	}
-	if len(items) != 1 {
-		t.Fatalf("Fetch() = %d items, want 1", len(items))
+	if len(res.Items) != 1 {
+		t.Fatalf("Fetch() = %d items, want 1", len(res.Items))
 	}
 }
 
