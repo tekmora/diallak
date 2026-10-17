@@ -901,8 +901,8 @@
       "id": "news",
       "what": "Posts own releases and security advisories as they happen, and everything else as one digest per channel per day.",
       "by": "bot",
-      "state": "planned",
-      "needs_record": true
+      "state": "built",
+      "record": "docs/adr/0019-news-posts.md"
     },
     {
       "id": "supporter-roles",
