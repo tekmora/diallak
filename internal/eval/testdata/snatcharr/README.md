@@ -46,7 +46,13 @@ RECORD: hits 2/12, due true, date 2026-10-17
 Hybrid retrieval (ADR-0022) measured with `TestSnatchArrEval_EmbedSweep` on
 2026-10-17, model `hf.co/unsloth/embeddinggemma-2-GGUF:Q8_0` on a local Ollama
 endpoint. The sweep runs only when `DIALLAK_EVAL_EMBED_BASE_URL` and
-`DIALLAK_EVAL_EMBED_ALIAS` are set.
+`DIALLAK_EVAL_EMBED_ALIAS` are set. `DIALLAK_EVAL_EMBED_KEY_FILE` names the
+endpoint's key file, and `DIALLAK_EVAL_EMBED_REFUSED_ALIASES` lists models,
+comma separated, that the endpoint must refuse: each must make the start-time
+embedding step fail, or the sweep fails.
+[`tools/embed_route_probe.py`](../../../../tools/embed_route_probe.py) runs the
+sweep against a live route with the key on standard input and at least one
+refused model.
 
 | Similarity | Answerable hit | Off-topic refused | Undocumented refused | Paraphrase hit | Bars hold |
 | ---: | ---: | ---: | ---: | ---: | :--- |
