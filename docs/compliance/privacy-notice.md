@@ -125,10 +125,20 @@ masked.
 
 <!-- hosting statement: this block is replaced as a whole when the bot moves -->
 The bot and the model endpoint run on machines the operator owns, in Germany.
-No hosting provider is involved, and the bot sends your data to no place
-outside the European Economic Area. The reply itself reaches you through
-Discord, like every message on the server; Discord's own policy covers that.
+No hosting provider is involved. The bot and the endpoint themselves send
+your data to no place outside the European Economic Area.
 <!-- hosting statement: end -->
+
+**The reply and Discord.** The bot hands its reply to Discord, which delivers
+it to you like every message on the server. For members in the European
+Economic Area, Discord Netherlands BV is the controller of what Discord holds.
+Discord also processes data in the United States. Discord Inc. states that it
+takes part in the EU-U.S. Data Privacy Framework, for which the European
+Commission decided that it protects data adequately (Article 45 GDPR,
+Implementing Decision (EU) 2023/1795). No source found settles whether handing
+the reply to Discord is a transfer to a third country by the operator; this
+notice names it either way. The [legal research](legal-research.md), point 5,
+has the details.
 
 A move to a rented server is planned. Before it happens this block names the
 provider, the country of its data centre and the agreement that binds it.
