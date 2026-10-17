@@ -240,7 +240,7 @@ func parseResponse(resp *http.Response, now time.Time, out any) error {
 		return ErrTooLarge
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return &StatusError{Code: resp.StatusCode, RetryAfter: slowDown(resp.StatusCode, resp.Header, now)}
+		return &StatusError{Code: resp.StatusCode, RetryAfter: SlowDown(resp.StatusCode, resp.Header, now)}
 	}
 	if out != nil && len(data) > 0 {
 		if err := json.Unmarshal(data, out); err != nil {
@@ -311,7 +311,11 @@ func (a *App) now() time.Time {
 	return a.Now()
 }
 
-func slowDown(code int, h http.Header, now time.Time) time.Duration {
+// SlowDown returns how long to wait after an answer with status code and headers h, or zero when
+// the answer does not ask to slow down. It follows GitHub's rule for 403 and 429 (github/docs
+// dae83f7d28f3, "Exceeding the rate limit") and RFC 9110, section 10.2.3, for 503. The news
+// reader uses it for feed servers too.
+func SlowDown(code int, h http.Header, now time.Time) time.Duration {
 	if code != http.StatusTooManyRequests && code != http.StatusServiceUnavailable && code != http.StatusForbidden {
 		return 0
 	}
@@ -330,6 +334,7 @@ func slowDown(code int, h http.Header, now time.Time) time.Duration {
 	return MinBackoff
 }
 
+// retryAfter reads a Retry-After value: delay-seconds or an HTTP date (RFC 9110, section 10.2.3).
 func retryAfter(v string, now time.Time) (time.Duration, bool) {
 	if v == "" {
 		return 0, false

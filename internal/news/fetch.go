@@ -8,8 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strconv"
 	"time"
+
+	"github.com/tekmora/diallak/internal/ghapp"
 )
 
 const (
@@ -17,11 +18,10 @@ const (
 	ReadTimeout = 10 * time.Second
 	// MaxRedirects bounds the redirects one read follows. Source: chosen, not measured.
 	MaxRedirects = 3
-	// MinBackoff is the shortest wait after a server asked to slow down: GitHub asks for "at least
-	// one minute" when it names no time (github/docs dae83f7d28f3, "Exceeding the rate limit").
-	MinBackoff = time.Minute
-	// MaxBackoff caps the wait a server can ask for. Source: chosen, not measured.
-	MaxBackoff = 24 * time.Hour
+	// MinBackoff and MaxBackoff bound the wait after a feed's server asked to slow down; they are
+	// the GitHub client's bounds, since both follow the same rule (ghapp.SlowDown).
+	MinBackoff = ghapp.MinBackoff
+	MaxBackoff = ghapp.MaxBackoff
 	// maxValidatorBytes bounds a stored ETag or Last-Modified value; a longer one is not kept.
 	maxValidatorBytes = 1024
 	// userAgent names the bot to the feed's server.
@@ -155,7 +155,7 @@ func (r *Reader) get(ctx context.Context, address string, prev Validators, h htt
 	case http.StatusNotModified:
 		return nil, Result{NotModified: true, Validators: keptValidators(prev, resp.Header)}, nil
 	default:
-		return nil, Result{}, &StatusError{Code: resp.StatusCode, RetryAfter: slowDown(resp.StatusCode, resp.Header, r.now())}
+		return nil, Result{}, &StatusError{Code: resp.StatusCode, RetryAfter: ghapp.SlowDown(resp.StatusCode, resp.Header, r.now())}
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxFeedBytes+1))
 	if err != nil {
@@ -205,44 +205,4 @@ func validator(v string) string {
 		}
 	}
 	return v
-}
-
-// slowDown returns how long to wait after an answer with status code and headers h, or zero when
-// the answer does not ask to slow down. It follows GitHub's rule for 403 and 429 (github/docs
-// dae83f7d28f3, "Exceeding the rate limit") and RFC 9110, section 10.2.3, for 503.
-func slowDown(code int, h http.Header, now time.Time) time.Duration {
-	if code != http.StatusTooManyRequests && code != http.StatusServiceUnavailable && code != http.StatusForbidden {
-		return 0
-	}
-	if d, ok := retryAfter(h.Get("Retry-After"), now); ok {
-		return clampBackoff(d)
-	}
-	if h.Get("X-Ratelimit-Remaining") == "0" {
-		if reset, err := strconv.ParseInt(h.Get("X-Ratelimit-Reset"), 10, 64); err == nil {
-			return clampBackoff(time.Unix(reset, 0).Sub(now))
-		}
-		return MinBackoff
-	}
-	if code == http.StatusForbidden {
-		return 0
-	}
-	return MinBackoff
-}
-
-// retryAfter reads a Retry-After value: delay-seconds or an HTTP date (RFC 9110, section 10.2.3).
-func retryAfter(v string, now time.Time) (time.Duration, bool) {
-	if v == "" {
-		return 0, false
-	}
-	if secs, err := strconv.ParseUint(v, 10, 32); err == nil {
-		return time.Duration(secs) * time.Second, true
-	}
-	if t, err := http.ParseTime(v); err == nil {
-		return t.Sub(now), true
-	}
-	return 0, false
-}
-
-func clampBackoff(d time.Duration) time.Duration {
-	return min(max(d, MinBackoff), MaxBackoff)
 }
