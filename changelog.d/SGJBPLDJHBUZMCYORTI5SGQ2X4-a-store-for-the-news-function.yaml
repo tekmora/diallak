@@ -1,0 +1,2 @@
+type: added
+title: 'A store for the news function remembers which feed items were seen, for 30 days and across restarts, so no item is posted twice'
