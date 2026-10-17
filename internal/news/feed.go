@@ -1,5 +1,6 @@
 // Package news reads the feeds of the news function (ADR-0019) and turns their items into post
-// candidates. It posts nothing: the path to Discord waits for the record to be accepted.
+// candidates. Items that are not urgent wait in the store for their channel's daily digest, which
+// goes out through a Poster.
 package news
 
 import (
