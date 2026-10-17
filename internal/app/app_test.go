@@ -542,7 +542,9 @@ func TestBuild_Positive_WithEmbedHybridRetrieval(t *testing.T) {
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+		if err := json.NewEncoder(w).Encode(map[string]any{"data": data}); err != nil {
+			http.Error(w, "encode error", http.StatusInternalServerError)
+		}
 	}))
 	defer embedServer.Close()
 
@@ -592,7 +594,9 @@ func TestBuild_Negative_EmbedStartFailure(t *testing.T) {
 	_, cleanup, err := Build(context.Background(), cfg, nil)
 	if err == nil {
 		if cleanup != nil {
-			_ = cleanup()
+			if closeErr := cleanup(); closeErr != nil {
+				t.Errorf("cleanup = %v, want nil", closeErr)
+			}
 		}
 		t.Fatalf("Build expected error when embedder fails at startup, got nil")
 	}

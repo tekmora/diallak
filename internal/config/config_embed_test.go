@@ -9,6 +9,16 @@ import (
 )
 
 // TestLoad_Negative_HostedEmbedBaseURL tests that hosted embedding URLs are refused while on-premises URLs pass.
+// loadEmbedURL loads the valid base environment with rawURL as the embedding base URL.
+func loadEmbedURL(t *testing.T, rawURL string) (Config, error) {
+	t.Helper()
+	base := validBaseEnv(t)
+	base[EnvEmbedBaseURL] = rawURL
+	base[EnvEmbedAlias] = "bge-m3"
+	return Load(env(base))
+}
+
+// Planted case (ADR-0022): a hosted embedding base URL stops the start.
 func TestLoad_Negative_HostedEmbedBaseURL(t *testing.T) {
 	plantedHosted := []struct {
 		name string
@@ -22,23 +32,18 @@ func TestLoad_Negative_HostedEmbedBaseURL(t *testing.T) {
 
 	for _, tc := range plantedHosted {
 		t.Run("planted_"+tc.name, func(t *testing.T) {
-			base := validBaseEnv(t)
-			base[EnvEmbedBaseURL] = tc.url
-			base[EnvEmbedAlias] = "bge-m3"
-
-			_, err := Load(env(base))
+			_, err := loadEmbedURL(t, tc.url)
 			if err == nil {
 				t.Fatalf("Load with hosted base URL %q succeeded, want error", tc.url)
 			}
-			if !strings.Contains(err.Error(), EnvEmbedBaseURL) {
-				t.Errorf("error %q does not name %s", err.Error(), EnvEmbedBaseURL)
-			}
-			if !strings.Contains(err.Error(), "ADR-0022") {
-				t.Errorf("error %q does not mention ADR-0022", err.Error())
+			if !strings.Contains(err.Error(), EnvEmbedBaseURL) || !strings.Contains(err.Error(), "ADR-0022") {
+				t.Errorf("error %q does not name %s and ADR-0022", err.Error(), EnvEmbedBaseURL)
 			}
 		})
 	}
+}
 
+func TestLoad_Positive_OnPremisesEmbedBaseURL(t *testing.T) {
 	positives := []struct {
 		name string
 		url  string
@@ -52,23 +57,18 @@ func TestLoad_Negative_HostedEmbedBaseURL(t *testing.T) {
 
 	for _, tc := range positives {
 		t.Run("positive_"+tc.name, func(t *testing.T) {
-			base := validBaseEnv(t)
-			base[EnvEmbedBaseURL] = tc.url
-			base[EnvEmbedAlias] = "bge-m3"
-
-			cfg, err := Load(env(base))
+			cfg, err := loadEmbedURL(t, tc.url)
 			if err != nil {
 				t.Fatalf("Load with on-premises URL %q failed: %v", tc.url, err)
 			}
-			if !cfg.HasEmbed() {
-				t.Errorf("HasEmbed = false, want true")
-			}
-			if cfg.EmbedBaseURL != tc.url {
-				t.Errorf("EmbedBaseURL = %q, want %q", cfg.EmbedBaseURL, tc.url)
+			if !cfg.HasEmbed() || cfg.EmbedBaseURL != tc.url {
+				t.Errorf("HasEmbed = %v, EmbedBaseURL = %q, want true and %q", cfg.HasEmbed(), cfg.EmbedBaseURL, tc.url)
 			}
 		})
 	}
+}
 
+func TestLoad_Boundary_EmbedBaseURL(t *testing.T) {
 	boundaries := []struct {
 		name    string
 		url     string
@@ -81,18 +81,12 @@ func TestLoad_Negative_HostedEmbedBaseURL(t *testing.T) {
 
 	for _, tc := range boundaries {
 		t.Run("boundary_"+tc.name, func(t *testing.T) {
-			base := validBaseEnv(t)
-			base[EnvEmbedBaseURL] = tc.url
-			base[EnvEmbedAlias] = "bge-m3"
-
-			_, err := Load(env(base))
-			if (err != nil) != tc.wantErr {
+			if _, err := loadEmbedURL(t, tc.url); (err != nil) != tc.wantErr {
 				t.Fatalf("Load with URL %q err = %v, wantErr %v", tc.url, err, tc.wantErr)
 			}
 		})
 	}
 }
-
 func TestLoad_Positive_EmbedConfig(t *testing.T) {
 	keyPath := writeSecret(t, "embed-key", "secret-embed-token\n")
 	base := validBaseEnv(t)

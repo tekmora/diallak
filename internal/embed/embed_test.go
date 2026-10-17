@@ -63,34 +63,39 @@ func TestOnPremises(t *testing.T) {
 	}
 }
 
+// checkEmbedRequest reports whether r is the embedding request the positive test sends.
+func checkEmbedRequest(t *testing.T, r *http.Request) bool {
+	t.Helper()
+	if r.URL.Path != "/embeddings" {
+		t.Errorf("unexpected path: %s", r.URL.Path)
+		return false
+	}
+	if auth := r.Header.Get("Authorization"); auth != "Bearer secret-key" {
+		t.Errorf("auth header = %q, want Bearer secret-key", auth)
+	}
+	var req embedRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		t.Errorf("decode request: %v", err)
+		return false
+	}
+	if len(req.Input) != 2 {
+		t.Errorf("got %d input texts, want 2", len(req.Input))
+	}
+	return true
+}
+
 func TestEmbed_Positive_SuccessfulEmbedAndReorder(t *testing.T) {
+	// Return in reverse index order to verify sorting
+	reply := serveJSON(items(
+		embedItem{Index: 1, Embedding: []float32{0.3, 0.4}},
+		embedItem{Index: 0, Embedding: []float32{0.1, 0.2}},
+	))
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/embeddings" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-			http.NotFound(w, r)
-			return
-		}
-		if auth := r.Header.Get("Authorization"); auth != "Bearer secret-key" {
-			t.Errorf("auth header = %q, want Bearer secret-key", auth)
-		}
-		var req embedRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Errorf("decode request: %v", err)
+		if !checkEmbedRequest(t, r) {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		if len(req.Input) != 2 {
-			t.Errorf("got %d input texts, want 2", len(req.Input))
-		}
-		// Return in reverse index order to verify sorting
-		resp := embedResponse{
-			Data: []embedItem{
-				{Index: 1, Embedding: []float32{0.3, 0.4}},
-				{Index: 0, Embedding: []float32{0.1, 0.2}},
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(resp)
+		reply(w, r)
 	}))
 	defer ts.Close()
 
@@ -179,73 +184,48 @@ func TestEmbed_Negative_RedirectRefused(t *testing.T) {
 	}
 }
 
+// serveJSON answers every request with resp encoded as JSON.
+func serveJSON(resp embedResponse) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, "encode error", http.StatusInternalServerError)
+		}
+	}
+}
+
+func items(pairs ...embedItem) embedResponse {
+	return embedResponse{Data: pairs}
+}
+
 func TestEmbed_Negative_MalformedResponses(t *testing.T) {
 	cases := []struct {
 		name    string
 		handler http.HandlerFunc
 		wantErr string
 	}{
-		{
-			name: "wrong count",
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				resp := embedResponse{Data: []embedItem{{Index: 0, Embedding: []float32{0.1}}}}
-				_ = json.NewEncoder(w).Encode(resp)
-			},
-			wantErr: "expected 2 embeddings, got 1",
-		},
-		{
-			name: "mixed dimensions",
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				resp := embedResponse{Data: []embedItem{
-					{Index: 0, Embedding: []float32{0.1, 0.2}},
-					{Index: 1, Embedding: []float32{0.1}},
-				}}
-				_ = json.NewEncoder(w).Encode(resp)
-			},
-			wantErr: "mixed vector dimensions",
-		},
-		{
-			name: "zero dimension",
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				resp := embedResponse{Data: []embedItem{
-					{Index: 0, Embedding: []float32{}},
-					{Index: 1, Embedding: []float32{}},
-				}}
-				_ = json.NewEncoder(w).Encode(resp)
-			},
-			wantErr: "vector dimension is zero",
-		},
-		{
-			name: "duplicate index",
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				resp := embedResponse{Data: []embedItem{
-					{Index: 0, Embedding: []float32{0.1}},
-					{Index: 0, Embedding: []float32{0.2}},
-				}}
-				_ = json.NewEncoder(w).Encode(resp)
-			},
-			wantErr: "duplicate embedding index",
-		},
-		{
-			name: "out of bounds index",
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				resp := embedResponse{Data: []embedItem{
-					{Index: 0, Embedding: []float32{0.1}},
-					{Index: 5, Embedding: []float32{0.2}},
-				}}
-				_ = json.NewEncoder(w).Encode(resp)
-			},
-			wantErr: "outside 0..1",
-		},
-		{
-			name: "oversized body",
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				// Write more than MaxResponseBytes
-				w.Write(make([]byte, MaxResponseBytes+10))
-			},
-			wantErr: "exceeds max",
-		},
+		{"wrong count", serveJSON(items(embedItem{Index: 0, Embedding: []float32{0.1}})), "expected 2 embeddings, got 1"},
+		{"mixed dimensions", serveJSON(items(
+			embedItem{Index: 0, Embedding: []float32{0.1, 0.2}},
+			embedItem{Index: 1, Embedding: []float32{0.1}},
+		)), "mixed vector dimensions"},
+		{"zero dimension", serveJSON(items(
+			embedItem{Index: 0, Embedding: []float32{}},
+			embedItem{Index: 1, Embedding: []float32{}},
+		)), "vector dimension is zero"},
+		{"duplicate index", serveJSON(items(
+			embedItem{Index: 0, Embedding: []float32{0.1}},
+			embedItem{Index: 0, Embedding: []float32{0.2}},
+		)), "duplicate embedding index"},
+		{"out of bounds index", serveJSON(items(
+			embedItem{Index: 0, Embedding: []float32{0.1}},
+			embedItem{Index: 5, Embedding: []float32{0.2}},
+		)), "outside 0..1"},
+		{"oversized body", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if _, err := w.Write(make([]byte, MaxResponseBytes+10)); err != nil {
+				return
+			}
+		}, "exceeds max"},
 	}
 
 	for _, tc := range cases {
@@ -253,14 +233,10 @@ func TestEmbed_Negative_MalformedResponses(t *testing.T) {
 			ts := httptest.NewServer(tc.handler)
 			defer ts.Close()
 
-			client, err := New(Config{
-				BaseURL: ts.URL,
-				Alias:   "test-alias",
-			}, ts.Client())
+			client, err := New(Config{BaseURL: ts.URL, Alias: "test-alias"}, ts.Client())
 			if err != nil {
 				t.Fatalf("New: %v", err)
 			}
-
 			_, err = client.Embed(context.Background(), []string{"one", "two"})
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("Embed error = %v, want substring %q", err, tc.wantErr)

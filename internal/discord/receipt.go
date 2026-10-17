@@ -200,6 +200,21 @@ func (r *Receipts) dropLocked(now time.Time) {
 	r.order = r.order[n:]
 }
 
+// writeReceiptModel writes what the model endpoint did with the question.
+func writeReceiptModel(b *strings.Builder, e receiptEntry) {
+	switch {
+	case e.trace.Replied:
+		fmt.Fprintf(b, "Guardrails that ran: %s.\n", receiptNames(e.trace.Guardrails))
+		fmt.Fprintf(b, "Policies that applied: %s.\n", receiptNames(e.trace.Policies))
+		if e.trace.PolicyMissing {
+			b.WriteString(textReceiptPolicyMissing + "\n")
+		}
+		b.WriteString(textReceiptCaveat + "\n")
+	case e.trace.Sent:
+		b.WriteString(textReceiptNoReply + "\n")
+	}
+}
+
 // receiptText is the receipt the member sees, built from what the bot holds only.
 func receiptText(e receiptEntry) string {
 	var b strings.Builder
@@ -211,17 +226,8 @@ func receiptText(e receiptEntry) string {
 	case mask != nil:
 		writeMasked(&b, *mask)
 	}
-	switch {
-	case mask != nil && mask.Failed:
-	case e.trace.Replied:
-		fmt.Fprintf(&b, "Guardrails that ran: %s.\n", receiptNames(e.trace.Guardrails))
-		fmt.Fprintf(&b, "Policies that applied: %s.\n", receiptNames(e.trace.Policies))
-		if e.trace.PolicyMissing {
-			b.WriteString(textReceiptPolicyMissing + "\n")
-		}
-		b.WriteString(textReceiptCaveat + "\n")
-	case e.trace.Sent:
-		b.WriteString(textReceiptNoReply + "\n")
+	if mask == nil || !mask.Failed {
+		writeReceiptModel(&b, e)
 	}
 	if e.shown {
 		b.WriteString("The model's answer was shown to you.\n")
