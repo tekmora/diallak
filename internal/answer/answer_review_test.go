@@ -16,14 +16,19 @@ import (
 // recordingRetriever keeps the options of the last search and every query.
 type recordingRetriever struct {
 	hits    []retrieval.Hit
+	mode    retrieval.Mode
 	opt     retrieval.Options
 	queries []string
 }
 
-func (r *recordingRetriever) Search(q string, opt retrieval.Options) ([]retrieval.Hit, error) {
+func (r *recordingRetriever) SearchMode(_ context.Context, q string, opt retrieval.Options) ([]retrieval.Hit, retrieval.Mode, error) {
 	r.opt = opt
 	r.queries = append(r.queries, q)
-	return r.hits, nil
+	mode := r.mode
+	if mode == "" {
+		mode = retrieval.ModeKeyword
+	}
+	return r.hits, mode, nil
 }
 
 func manyHits(n int) []retrieval.Hit {

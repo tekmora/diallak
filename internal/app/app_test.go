@@ -14,6 +14,7 @@ import (
 	"github.com/tekmora/diallak/internal/answer"
 	"github.com/tekmora/diallak/internal/config"
 	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/retrieval"
 )
 
 func setupTestCorpus(t *testing.T) string {
@@ -511,5 +512,91 @@ func TestBuild_Positive_PipelineWithGateNotReadyAnswersExcerpts(t *testing.T) {
 	}
 	if reqCount != 1 {
 		t.Errorf("server request count = %d, want 1 (probe only)", reqCount)
+	}
+}
+
+func TestBuild_Positive_WithEmbedHybridRetrieval(t *testing.T) {
+	corpusDir := setupTestCorpus(t)
+
+	embedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/embeddings" {
+			http.NotFound(w, r)
+			return
+		}
+		var req struct {
+			Input []string `json:"input"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		type item struct {
+			Embedding []float32 `json:"embedding"`
+			Index     int       `json:"index"`
+		}
+		data := make([]item, len(req.Input))
+		for i := range req.Input {
+			data[i] = item{
+				Embedding: []float32{0.5, 0.5, 0.5, 0.5},
+				Index:     i,
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+	}))
+	defer embedServer.Close()
+
+	cfg := config.Config{
+		CorpusDir:          corpusDir,
+		EmbedBaseURL:       embedServer.URL + "/v1",
+		EmbedAlias:         "router/embed",
+		EmbedMinSimilarity: 0.25,
+	}
+
+	assembly, cleanup, err := Build(context.Background(), cfg, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer func() {
+		if closeErr := cleanup(); closeErr != nil {
+			t.Errorf("cleanup: %v", closeErr)
+		}
+	}()
+
+	ans, err := assembly.Pipeline.Ask(context.Background(), "where are tokens stored in secret files?")
+	if err != nil {
+		t.Fatalf("Ask: %v", err)
+	}
+	if ans.Retrieval != retrieval.ModeHybrid {
+		t.Errorf("ans.Retrieval = %v, want ModeHybrid", ans.Retrieval)
+	}
+	if !ans.Embed.Sent {
+		t.Errorf("ans.Embed.Sent = false, want true")
+	}
+}
+
+func TestBuild_Negative_EmbedStartFailure(t *testing.T) {
+	corpusDir := setupTestCorpus(t)
+
+	embedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "server error", http.StatusInternalServerError)
+	}))
+	defer embedServer.Close()
+
+	cfg := config.Config{
+		CorpusDir:    corpusDir,
+		EmbedBaseURL: embedServer.URL + "/v1",
+		EmbedAlias:   "router/embed",
+	}
+
+	_, cleanup, err := Build(context.Background(), cfg, nil)
+	if err == nil {
+		if cleanup != nil {
+			_ = cleanup()
+		}
+		t.Fatalf("Build expected error when embedder fails at startup, got nil")
+	}
+	if !strings.Contains(err.Error(), "initialize hybrid retrieval") {
+		t.Errorf("err = %v, want 'initialize hybrid retrieval'", err)
 	}
 }

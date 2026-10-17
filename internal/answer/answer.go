@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"unicode/utf8"
 
+	"github.com/tekmora/diallak/internal/embed"
 	"github.com/tekmora/diallak/internal/model"
 	"github.com/tekmora/diallak/internal/retrieval"
 )
@@ -59,18 +60,20 @@ type Source struct {
 
 // Answer represents the assembled pipeline reply.
 type Answer struct {
-	Kind    Kind
-	Reason  Reason
-	Text    string
-	Sources []Source
+	Kind      Kind
+	Reason    Reason
+	Text      string
+	Sources   []Source
+	Retrieval retrieval.Mode
+	Embed     embed.Trace
 	// Trace says whether the question left the bot for the model and what the reply named. It is
 	// the zero Trace when no model was asked.
 	Trace model.Trace
 }
 
-// Retriever executes lexical search queries against a documentation index.
+// Retriever executes search queries against a documentation index.
 type Retriever interface {
-	Search(query string, opt retrieval.Options) ([]retrieval.Hit, error)
+	SearchMode(ctx context.Context, query string, opt retrieval.Options) ([]retrieval.Hit, retrieval.Mode, error)
 }
 
 // Generator produces completions from an OpenAI-compatible model endpoint. It returns the trace of
@@ -93,6 +96,7 @@ type Config struct {
 	// Masker, when not nil, takes the place of Generator for every question: the prompt is built
 	// from the masked text.
 	Masker             MaskingGenerator
+	EmbedHost          string
 	Options            retrieval.Options
 	Logger             *slog.Logger
 	MaxQuestionRunes   int
@@ -108,6 +112,7 @@ type Stats struct {
 	Excerpts      uint64
 	Refused       uint64
 	ModelFailures uint64
+	EmbedFailures uint64
 }
 
 const (
@@ -145,6 +150,10 @@ const (
 	LabelExcerpts = "Automated excerpts from the documentation. No AI model wrote this reply."
 	// LabelModelUnavailable is the secondary note when model generation fails.
 	LabelModelUnavailable = "The AI model is unavailable right now, so these are excerpts only."
+	// LabelKeywordOnly is the disclosure label when retrieval ran without an embedding endpoint.
+	LabelKeywordOnly = "Search was by keyword only."
+	// LabelEmbedUnavailable is the secondary note when embedding retrieval failed and fell back to lexical.
+	LabelEmbedUnavailable = "Semantic search is unavailable right now, so search was by keyword only."
 	// FooterForum ends every reply in the support forum (ADR-0009, "The label").
 	FooterForum = "Automated first reply. A person can help here in this post."
 	// DefaultPlace is the wording for where a person helps when the configuration names no place.
@@ -163,6 +172,7 @@ type Pipeline struct {
 	retriever          Retriever
 	generator          Generator
 	masker             MaskingGenerator
+	embedHost          string
 	options            retrieval.Options
 	logger             *slog.Logger
 	maxQuestionRunes   int
@@ -175,6 +185,7 @@ type Pipeline struct {
 	excerpts      atomic.Uint64
 	refused       atomic.Uint64
 	modelFailures atomic.Uint64
+	embedFailures atomic.Uint64
 }
 
 // New constructs and validates a new Pipeline instance.
@@ -220,6 +231,7 @@ func New(cfg Config) (*Pipeline, error) {
 		retriever:          cfg.Retriever,
 		generator:          cfg.Generator,
 		masker:             cfg.Masker,
+		embedHost:          cfg.EmbedHost,
 		options:            options,
 		logger:             logger,
 		maxQuestionRunes:   maxQuestion,
@@ -237,62 +249,97 @@ func (p *Pipeline) Stats() Stats {
 		Excerpts:      p.excerpts.Load(),
 		Refused:       p.refused.Load(),
 		ModelFailures: p.modelFailures.Load(),
+		EmbedFailures: p.embedFailures.Load(),
 	}
 }
 
 // Ask processes a user inquiry through retrieval, generation, citation verification, and assembly.
 func (p *Pipeline) Ask(ctx context.Context, question string) (Answer, error) {
-	q, hits, err := p.retrieve(question)
+	q, hits, mode, err := p.retrieve(ctx, question)
 	if err != nil {
 		return Answer{}, err
 	}
+	embedTrace := embed.Trace{
+		Sent: mode == retrieval.ModeHybrid || mode == retrieval.ModeKeywordFallback,
+		Host: p.embedHost,
+	}
 	if len(hits) == 0 {
-		return p.refuseNoSource(), nil
+		ans := p.refuseNoSource()
+		ans.Retrieval = mode
+		ans.Embed = embedTrace
+		return ans, nil
 	}
 	sources := p.buildSources(hits)
 	if p.generator == nil && p.masker == nil {
-		return p.excerptsOnly(sources), nil
+		ans := p.excerptsOnly(sources)
+		ans.Retrieval = mode
+		ans.Embed = embedTrace
+		return ans, nil
 	}
-	return p.generateAndAssemble(ctx, q, hits, sources)
+	ans, err := p.generateAndAssemble(ctx, q, hits, sources)
+	if err != nil {
+		return Answer{}, err
+	}
+	ans.Retrieval = mode
+	ans.Embed = embedTrace
+	return ans, nil
 }
 
 // Excerpts answers with documentation excerpts only and never calls the generator, whatever the
 // model settings are: the forum answer of ADR-0009 sends no text to the model endpoint.
-func (p *Pipeline) Excerpts(_ context.Context, question string) (Answer, error) {
-	_, hits, err := p.retrieve(question)
+func (p *Pipeline) Excerpts(ctx context.Context, question string) (Answer, error) {
+	_, hits, mode, err := p.retrieve(ctx, question)
 	if err != nil {
 		return Answer{}, err
 	}
-	if len(hits) == 0 {
-		return p.refuseNoSource(), nil
+	embedTrace := embed.Trace{
+		Sent: mode == retrieval.ModeHybrid || mode == retrieval.ModeKeywordFallback,
+		Host: p.embedHost,
 	}
-	return p.excerptsOnly(p.buildSources(hits)), nil
+	if len(hits) == 0 {
+		ans := p.refuseNoSource()
+		ans.Retrieval = mode
+		ans.Embed = embedTrace
+		return ans, nil
+	}
+	ans := p.excerptsOnly(p.buildSources(hits))
+	ans.Retrieval = mode
+	ans.Embed = embedTrace
+	return ans, nil
 }
 
-// retrieve checks the question and searches the passages for it. It returns the trimmed question
-// and at most retrieval.MaxLimit hits; no hit means no passage passed the threshold.
-func (p *Pipeline) retrieve(question string) (string, []retrieval.Hit, error) {
+// retrieve checks the question and searches the passages for it. It returns the trimmed question,
+// hits and retrieval mode; no hit means no passage passed the threshold.
+func (p *Pipeline) retrieve(ctx context.Context, question string) (string, []retrieval.Hit, retrieval.Mode, error) {
 	if !utf8.ValidString(question) {
-		return "", nil, errors.New("question is not valid UTF-8")
+		return "", nil, retrieval.ModeKeyword, errors.New("question is not valid UTF-8")
 	}
 	q := strings.TrimSpace(question)
 	if q == "" {
-		return "", nil, errors.New("question is empty")
+		return "", nil, retrieval.ModeKeyword, errors.New("question is empty")
 	}
 	if utf8.RuneCountInString(q) > p.maxQuestionRunes {
-		return "", nil, fmt.Errorf("question exceeds maximum %d runes", p.maxQuestionRunes)
+		return "", nil, retrieval.ModeKeyword, fmt.Errorf("question exceeds maximum %d runes", p.maxQuestionRunes)
 	}
 
-	hits, err := p.retriever.Search(q, p.options)
+	hits, mode, err := p.retriever.SearchMode(ctx, q, p.options)
 	if err != nil {
-		return "", nil, fmt.Errorf("retrieve: %w", err)
+		return "", nil, mode, fmt.Errorf("retrieve: %w", err)
+	}
+	if mode == retrieval.ModeKeywordFallback {
+		p.embedFailures.Add(1)
+		errClass := "error"
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			errClass = "timeout"
+		}
+		p.logger.Warn("embedding unavailable", slog.String("error_class", errClass))
 	}
 	// The prompt offers at most retrieval.MaxLimit sources. Sources and prompt are built from the
 	// same slice, so an id is valid exactly when it was offered.
 	if len(hits) > retrieval.MaxLimit {
 		hits = hits[:retrieval.MaxLimit]
 	}
-	return q, hits, nil
+	return q, hits, mode, nil
 }
 
 func (p *Pipeline) refuseNoSource() Answer {
@@ -526,6 +573,31 @@ func Render(a Answer, opts RenderOptions) string {
 	return AppendFooter(body, place)
 }
 
+func answerHeader(mode retrieval.Mode) string {
+	switch mode {
+	case retrieval.ModeKeyword:
+		return LabelAnswer + "\n" + LabelKeywordOnly
+	case retrieval.ModeKeywordFallback:
+		return LabelAnswer + "\n" + LabelEmbedUnavailable
+	default:
+		return LabelAnswer
+	}
+}
+
+func excerptsHeader(reason Reason, mode retrieval.Mode) string {
+	header := LabelExcerpts
+	if reason == ReasonModelUnavailable {
+		header += "\n" + LabelModelUnavailable
+	}
+	switch mode {
+	case retrieval.ModeKeyword:
+		header += "\n" + LabelKeywordOnly
+	case retrieval.ModeKeywordFallback:
+		header += "\n" + LabelEmbedUnavailable
+	}
+	return header
+}
+
 func renderAnswer(a Answer, place string, maxRunes int) string {
 	footerRunes := 2 + utf8.RuneCountInString(Footer(place))
 	bodyMax := maxRunes - footerRunes
@@ -534,7 +606,8 @@ func renderAnswer(a Answer, place string, maxRunes int) string {
 	for i, s := range a.Sources {
 		lines[i] = formatSourceLine(s)
 	}
-	fixed := utf8.RuneCountInString(LabelAnswer) + 2
+	header := answerHeader(a.Retrieval)
+	fixed := utf8.RuneCountInString(header) + 2
 	block := sourcesBlock(lines)
 	for len(lines) > 1 && fixed+utf8.RuneCountInString(block)+minAnswerRunes > bodyMax {
 		lines = lines[:len(lines)-1]
@@ -551,7 +624,7 @@ func renderAnswer(a Answer, place string, maxRunes int) string {
 		block = sourcesBlock(lines)
 		budget = bodyMax - fixed - utf8.RuneCountInString(block)
 	}
-	body := LabelAnswer + "\n\n" + cutToRunes(a.Text, budget) + block
+	body := header + "\n\n" + cutToRunes(a.Text, budget) + block
 	return hardCutTo(body, bodyMax)
 }
 
@@ -594,10 +667,7 @@ func renderExcerpts(a Answer, footer string, maxRunes int) string {
 	footerRunes := 2 + utf8.RuneCountInString(footer)
 	bodyMax := maxRunes - footerRunes
 
-	header := LabelExcerpts
-	if a.Reason == ReasonModelUnavailable {
-		header += "\n" + LabelModelUnavailable
-	}
+	header := excerptsHeader(a.Reason, a.Retrieval)
 	if len(a.Sources) == 0 {
 		return hardCutTo(header, bodyMax)
 	}

@@ -116,6 +116,9 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 | `DIALLAK_MODEL_POLICY` | with the model endpoint | Name of the gateway policy every chat reply must name |
 | `DIALLAK_MODEL_GUARDRAIL` | no, with the model endpoint | Name of the gateway guardrail the bot masks each question with before the model sees it; off when unset |
 | `DIALLAK_MODEL_KEY_FILE` | no | Path of the file that holds the endpoint's credential |
+| `DIALLAK_EMBED_BASE_URL` | with the alias | Base URL of an OpenAI-compatible on-premises embedding endpoint |
+| `DIALLAK_EMBED_ALIAS` | with the base URL | Name the embedding endpoint routes on, never a model name |
+| `DIALLAK_EMBED_KEY_FILE` | no | Path of the file that holds the embedding endpoint's credential |
 | `DIALLAK_SUPPORT_CHANNEL` | no | Wording for where a person helps, put into every reply; default "the support channel" |
 | `DIALLAK_HEALTH_ADDR` | no | Listen address "host:port" for health probes; off by default |
 | `DIALLAK_FORUM_CHANNEL_ID` | with the tag | Id of the support forum whose new opted-in posts get a first reply; the forum answer is off without it |
@@ -172,6 +175,8 @@ with a message that names the variable
 | `DIALLAK_MAX_CONCURRENT_ASKS` | How many questions are answered at the same time; one more gets the busy reply | `4` | `1` to `64` |
 | `DIALLAK_ASK_TIMEOUT` | Time one question may take in total | `60s` | `1s` to `10m` |
 | `DIALLAK_MODEL_TIMEOUT` | Time one request to the model endpoint may take | `45s` | `1s` to `5m`, and below the ask timeout |
+| `DIALLAK_EMBED_TIMEOUT` | Time one request to the embedding endpoint may take | `10s` | `1s` to `60s` |
+| `DIALLAK_EMBED_MIN_SIMILARITY` | Minimum cosine similarity for a passage to match semantically | `0.50` | above `0`, at most `1` |
 | `DIALLAK_SOURCE_LINK_TEMPLATE` | Shape of the link to a source | `https://github.com/{repository}/blob/{revision}/{path}` | an `https://` address that holds each of the three placeholders once, after the host, at most 200 characters |
 <!-- markdownlint-enable MD013 -->
 

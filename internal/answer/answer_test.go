@@ -18,14 +18,19 @@ import (
 
 type stubRetriever struct {
 	hits []retrieval.Hit
+	mode retrieval.Mode
 	err  error
 }
 
-func (s *stubRetriever) Search(_ string, _ retrieval.Options) ([]retrieval.Hit, error) {
+func (s *stubRetriever) SearchMode(_ context.Context, _ string, _ retrieval.Options) ([]retrieval.Hit, retrieval.Mode, error) {
 	if s.err != nil {
-		return nil, s.err
+		return nil, "", s.err
 	}
-	return s.hits, nil
+	mode := s.mode
+	if mode == "" {
+		mode = retrieval.ModeKeyword
+	}
+	return s.hits, mode, nil
 }
 
 type fakeGenerator struct {
@@ -1191,4 +1196,110 @@ func TestAsk_Positive_TopPassagesAndMinScore(t *testing.T) {
 	t.Run("high min score 0.90 refuses question that answers at 0.20", func(t *testing.T) {
 		testHighMinScoreRefusal(t, index)
 	})
+}
+
+func TestRender_RetrievalModeLabels(t *testing.T) {
+	src := Source{N: 1, Title: "Doc", Path: "doc.md", Revision: "rev1", Excerpt: "Excerpt text."}
+
+	t.Run("keyword mode includes LabelKeywordOnly", func(t *testing.T) {
+		ans := Answer{
+			Kind:      KindAnswer,
+			Text:      "Answer citing [1].",
+			Sources:   []Source{src},
+			Retrieval: retrieval.ModeKeyword,
+		}
+		rendered := Render(ans, RenderOptions{})
+		if !strings.Contains(rendered, LabelKeywordOnly) {
+			t.Errorf("Render(KindAnswer, ModeKeyword) missing LabelKeywordOnly: %s", rendered)
+		}
+
+		exc := Answer{
+			Kind:      KindExcerpts,
+			Sources:   []Source{src},
+			Retrieval: retrieval.ModeKeyword,
+		}
+		renderedExc := Render(exc, RenderOptions{})
+		if !strings.Contains(renderedExc, LabelKeywordOnly) {
+			t.Errorf("Render(KindExcerpts, ModeKeyword) missing LabelKeywordOnly: %s", renderedExc)
+		}
+	})
+
+	t.Run("keyword fallback mode includes LabelEmbedUnavailable", func(t *testing.T) {
+		ans := Answer{
+			Kind:      KindAnswer,
+			Text:      "Answer citing [1].",
+			Sources:   []Source{src},
+			Retrieval: retrieval.ModeKeywordFallback,
+		}
+		rendered := Render(ans, RenderOptions{})
+		if !strings.Contains(rendered, LabelEmbedUnavailable) {
+			t.Errorf("Render(KindAnswer, ModeKeywordFallback) missing LabelEmbedUnavailable: %s", rendered)
+		}
+
+		exc := Answer{
+			Kind:      KindExcerpts,
+			Sources:   []Source{src},
+			Retrieval: retrieval.ModeKeywordFallback,
+		}
+		renderedExc := Render(exc, RenderOptions{})
+		if !strings.Contains(renderedExc, LabelEmbedUnavailable) {
+			t.Errorf("Render(KindExcerpts, ModeKeywordFallback) missing LabelEmbedUnavailable: %s", renderedExc)
+		}
+	})
+
+	t.Run("hybrid mode adds no extra retrieval label", func(t *testing.T) {
+		ans := Answer{
+			Kind:      KindAnswer,
+			Text:      "Answer citing [1].",
+			Sources:   []Source{src},
+			Retrieval: retrieval.ModeHybrid,
+		}
+		rendered := Render(ans, RenderOptions{})
+		if strings.Contains(rendered, LabelKeywordOnly) || strings.Contains(rendered, LabelEmbedUnavailable) {
+			t.Errorf("Render(KindAnswer, ModeHybrid) should not contain retrieval labels: %s", rendered)
+		}
+	})
+}
+
+func TestAsk_ModeKeywordFallback_CountsAndLogs(t *testing.T) {
+	hit := sampleHit("id1", "Title", "Heading", "Text", "rev1")
+	ret := &stubRetriever{
+		hits: []retrieval.Hit{hit},
+		mode: retrieval.ModeKeywordFallback,
+	}
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	gen := &fakeGenerator{scripted: "Answer citing [1]."}
+
+	p, err := New(Config{
+		Retriever: ret,
+		Generator: gen,
+		Logger:    logger,
+		EmbedHost: "local-embed.svc",
+	})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	ans, err := p.Ask(context.Background(), "test question")
+	if err != nil {
+		t.Fatalf("Ask() error: %v", err)
+	}
+	if ans.Retrieval != retrieval.ModeKeywordFallback {
+		t.Errorf("ans.Retrieval = %v, want ModeKeywordFallback", ans.Retrieval)
+	}
+	if !ans.Embed.Sent || ans.Embed.Host != "local-embed.svc" {
+		t.Errorf("ans.Embed = %+v, want Sent: true, Host: local-embed.svc", ans.Embed)
+	}
+	stats := p.Stats()
+	if stats.EmbedFailures != 1 {
+		t.Errorf("stats.EmbedFailures = %d, want 1", stats.EmbedFailures)
+	}
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "embedding unavailable") {
+		t.Errorf("expected 'embedding unavailable' in log output, got: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, "error_class=error") {
+		t.Errorf("expected 'error_class=error' in log output, got: %s", logOutput)
+	}
 }

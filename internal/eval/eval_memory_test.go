@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"testing"
@@ -39,7 +40,7 @@ func measureEval(t *testing.T, keep func() any) evalMemory {
 	t.Helper()
 	before := heapAfterGC()
 	set, _, ix := loadSnatchArrFixture(t)
-	if _, err := Run(set, ix, retrieval.DefaultOptions()); err != nil {
+	if _, err := Run(context.Background(), set, ix, retrieval.DefaultOptions()); err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
 	var held any

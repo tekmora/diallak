@@ -135,6 +135,12 @@ var (
 	policyRegexp = regexp.MustCompile(`^[A-Za-z0-9._:/-]{1,128}$`)
 )
 
+// ValidAlias reports whether name may be configured as the alias a model or
+// embedding endpoint routes on: 1 to 128 characters of letters, digits and "._:/-".
+func ValidAlias(name string) bool {
+	return aliasRegexp.MatchString(name)
+}
+
 // ValidPolicyName reports whether name may be configured as the policy a
 // reply must name: 1 to 128 characters of letters, digits and "._:/-".
 func ValidPolicyName(name string) bool {
@@ -178,10 +184,10 @@ type Client struct {
 // and timeout itself.
 // Error text never contains cfg.APIKey.
 func New(cfg Config, hc *http.Client) (*Client, error) {
-	if err := validateBaseURL(cfg.BaseURL); err != nil {
+	if err := ValidateBaseURL(cfg.BaseURL); err != nil {
 		return nil, err
 	}
-	if !aliasRegexp.MatchString(cfg.Alias) {
+	if !ValidAlias(cfg.Alias) {
 		return nil, fmt.Errorf("invalid model alias %q", cfg.Alias)
 	}
 	if !ValidPolicyName(cfg.Policy) {
@@ -203,7 +209,7 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 
 	client := hc
 	if client == nil {
-		client = &http.Client{CheckRedirect: refuseRedirect, Timeout: timeout}
+		client = &http.Client{CheckRedirect: RefuseRedirect, Timeout: timeout}
 	}
 
 	return &Client{
@@ -218,13 +224,14 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	}, nil
 }
 
-// refuseRedirect keeps the prompt and the credential at the configured endpoint: the response
+// RefuseRedirect keeps the prompt and the credential at the configured endpoint: the response
 // that redirects is returned as it is, and Complete reports its status as an error.
-func refuseRedirect(*http.Request, []*http.Request) error {
+func RefuseRedirect(*http.Request, []*http.Request) error {
 	return http.ErrUseLastResponse
 }
 
-func validateBaseURL(rawURL string) error {
+// ValidateBaseURL checks that rawURL is a valid http or https URL without userinfo, query, or fragment.
+func ValidateBaseURL(rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return fmt.Errorf("parse base URL: %w", err)

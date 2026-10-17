@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/tekmora/diallak/internal/answer"
+	"github.com/tekmora/diallak/internal/embed"
 	"github.com/tekmora/diallak/internal/model"
 )
 
@@ -50,7 +51,7 @@ var repliedTrace = model.Trace{
 
 func TestReceipts_Positive_HeldReceiptIsReturnedUnderItsKey(t *testing.T) {
 	r, _ := newTestReceipts(t, 0)
-	key, err := r.put(repliedTrace, true)
+	key, err := r.put(repliedTrace, embed.Trace{}, true)
 	if err != nil {
 		t.Fatalf("put: %v", err)
 	}
@@ -65,7 +66,7 @@ func TestReceipts_Positive_HeldReceiptIsReturnedUnderItsKey(t *testing.T) {
 
 func TestReceipts_Negative_UnknownKeyAndNilStoreHoldNothing(t *testing.T) {
 	r, _ := newTestReceipts(t, 0)
-	if _, err := r.put(repliedTrace, true); err != nil {
+	if _, err := r.put(repliedTrace, embed.Trace{}, true); err != nil {
 		t.Fatalf("put: %v", err)
 	}
 	if _, ok := r.get("0123456789abcdef0123456789abcdef"); ok {
@@ -82,7 +83,7 @@ func TestReceipts_Negative_FailingRandomSourceHoldsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewReceipts: %v", err)
 	}
-	if key, err := r.put(repliedTrace, true); err == nil || key != "" {
+	if key, err := r.put(repliedTrace, embed.Trace{}, true); err == nil || key != "" {
 		t.Errorf("put = %q, %v; want an error and no key", key, err)
 	}
 	if _, err := NewReceipts(ReceiptsConfig{Max: -1}); err == nil {
@@ -92,7 +93,7 @@ func TestReceipts_Negative_FailingRandomSourceHoldsNothing(t *testing.T) {
 
 func TestReceipts_Boundary_ReceiptIsHeldForExactlyFifteenMinutes(t *testing.T) {
 	r, clock := newTestReceipts(t, 0)
-	key, err := r.put(repliedTrace, true)
+	key, err := r.put(repliedTrace, embed.Trace{}, true)
 	if err != nil {
 		t.Fatalf("put: %v", err)
 	}
@@ -110,7 +111,7 @@ func TestReceipts_Boundary_OldestGoesFirstAtTheMaximum(t *testing.T) {
 	r, clock := newTestReceipts(t, 2)
 	keys := make([]string, 3)
 	for i := range keys {
-		key, err := r.put(repliedTrace, true)
+		key, err := r.put(repliedTrace, embed.Trace{}, true)
 		if err != nil {
 			t.Fatalf("put %d: %v", i, err)
 		}
@@ -232,7 +233,7 @@ func newReceiptHandler(t *testing.T, receipts *Receipts, asker Asker) *Handler {
 
 func TestHandleReceipt_Positive_HeldReceiptIsShownWithTheDirectButton(t *testing.T) {
 	r, _ := newTestReceipts(t, 0)
-	key, err := r.put(repliedTrace, true)
+	key, err := r.put(repliedTrace, embed.Trace{}, true)
 	if err != nil {
 		t.Fatalf("put: %v", err)
 	}
@@ -245,7 +246,7 @@ func TestHandleReceipt_Positive_HeldReceiptIsShownWithTheDirectButton(t *testing
 
 func TestHandleReceipt_Negative_ExpiredReceiptSaysItIsNoLongerHeld(t *testing.T) {
 	r, clock := newTestReceipts(t, 0)
-	key, err := r.put(repliedTrace, true)
+	key, err := r.put(repliedTrace, embed.Trace{}, true)
 	if err != nil {
 		t.Fatalf("put: %v", err)
 	}
@@ -270,7 +271,7 @@ func TestHandleReceiptDirect_Positive_SentClosedAndFailedEachSayWhatHappened(t *
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r, _ := newTestReceipts(t, 0)
-			key, err := r.put(repliedTrace, false)
+			key, err := r.put(repliedTrace, embed.Trace{}, false)
 			if err != nil {
 				t.Fatalf("put: %v", err)
 			}
@@ -300,11 +301,11 @@ func TestHandleReceiptDirect_Negative_GoneReceiptOpensNoDirectMessage(t *testing
 	}
 }
 
-// askReceiptKey runs one ask whose answer carries trace and returns the receipt key of the reply.
-func askReceiptKey(t *testing.T, receipts *Receipts, kind answer.Kind, trace model.Trace) string {
+// askReceiptKeyWithEmbed runs one ask whose answer carries trace and embed trace, returning the receipt key.
+func askReceiptKeyWithEmbed(t *testing.T, receipts *Receipts, kind answer.Kind, trace model.Trace, emb embed.Trace) string {
 	t.Helper()
 	asker := &fakeAsker{askFunc: func(context.Context, string) (answer.Answer, error) {
-		return answer.Answer{Kind: kind, Text: "text", Trace: trace}, nil
+		return answer.Answer{Kind: kind, Text: "text", Trace: trace, Embed: emb}, nil
 	}}
 	in := &fakeInteraction{guildID: 123, question: "How do I install it?"}
 	newReceiptHandler(t, receipts, asker).HandleAsk(context.Background(), in)
@@ -312,6 +313,11 @@ func askReceiptKey(t *testing.T, receipts *Receipts, kind answer.Kind, trace mod
 		t.Fatalf("%d replies, want one", len(in.receiptKeys))
 	}
 	return in.receiptKeys[0]
+}
+
+// askReceiptKey runs one ask whose answer carries trace and returns the receipt key of the reply.
+func askReceiptKey(t *testing.T, receipts *Receipts, kind answer.Kind, trace model.Trace) string {
+	return askReceiptKeyWithEmbed(t, receipts, kind, trace, embed.Trace{})
 }
 
 func TestHandleAsk_Positive_ReplyAfterTextLeftTheBotCarriesTheButton(t *testing.T) {
@@ -335,5 +341,41 @@ func TestHandleAsk_Negative_ExcerptModeAndNoStoreCarryNoButton(t *testing.T) {
 	}
 	if key := askReceiptKey(t, nil, answer.KindAnswer, repliedTrace); key != "" {
 		t.Errorf("reply without a receipt store carries key %q", key)
+	}
+}
+
+func TestHandleAsk_Positive_ExcerptReplyWithEmbedSent(t *testing.T) {
+	r, _ := newTestReceipts(t, 0)
+	const embedHost = "local-embed.internal:8000"
+
+	// 1. Excerpt reply with embed sent -> carries button
+	keyWithEmbed := askReceiptKeyWithEmbed(t, r, answer.KindExcerpts, model.Trace{}, embed.Trace{
+		Sent: true,
+		Host: embedHost,
+	})
+	if keyWithEmbed == "" {
+		t.Fatalf("excerpt reply with embed sent carries no receipt button")
+	}
+
+	// 2. Receipt text names the host
+	e, ok := r.get(keyWithEmbed)
+	if !ok {
+		t.Fatalf("receipt not held for key %q", keyWithEmbed)
+	}
+	text := receiptText(e)
+	if !strings.Contains(text, embedHost) {
+		t.Errorf("receipt text does not name embed host %q; got:\n%s", embedHost, text)
+	}
+	if !strings.Contains(text, "Where your text went: your question to the embedding endpoint at "+embedHost) {
+		t.Errorf("receipt text does not contain expected where-text; got:\n%s", text)
+	}
+
+	// 3. Excerpt reply without embed sent -> carries no button
+	keyWithoutEmbed := askReceiptKeyWithEmbed(t, r, answer.KindExcerpts, model.Trace{}, embed.Trace{
+		Sent: false,
+		Host: embedHost,
+	})
+	if keyWithoutEmbed != "" {
+		t.Errorf("excerpt reply without embed sent carries key %q, want none", keyWithoutEmbed)
 	}
 }

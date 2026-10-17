@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -14,8 +15,8 @@ type stubRetriever struct {
 	err  error
 }
 
-func (s *stubRetriever) Search(_ string, _ retrieval.Options) ([]retrieval.Hit, error) {
-	return s.hits, s.err
+func (s *stubRetriever) SearchMode(_ context.Context, _ string, _ retrieval.Options) ([]retrieval.Hit, retrieval.Mode, error) {
+	return s.hits, retrieval.ModeKeyword, s.err
 }
 
 func sampleSetJSON() string {
@@ -129,7 +130,7 @@ func TestRun_Positive_EvaluatesKinds(t *testing.T) {
 			{Chunk: corpus.Chunk{Path: "docs/deploy.md"}, Score: 0.8},
 		},
 	}
-	rep, err := Run(set, stub, retrieval.DefaultOptions())
+	rep, err := Run(context.Background(), set, stub, retrieval.DefaultOptions())
 	if err != nil {
 		t.Fatalf("Run err = %v", err)
 	}
@@ -149,7 +150,7 @@ func TestCheck_Negative_ControlsProveGateFails(t *testing.T) {
 
 	// Negative control (a): No hits fails answerable bar
 	noHitsRetriever := &stubRetriever{hits: nil}
-	repNoHits, err := Run(set, noHitsRetriever, retrieval.DefaultOptions())
+	repNoHits, err := Run(context.Background(), set, noHitsRetriever, retrieval.DefaultOptions())
 	if err != nil {
 		t.Fatalf("Run noHits err = %v", err)
 	}
@@ -160,7 +161,7 @@ func TestCheck_Negative_ControlsProveGateFails(t *testing.T) {
 
 	// Negative control (b): Stub returning hits fails off-topic refusal bar
 	allHitsRetriever := &stubRetriever{hits: []retrieval.Hit{{Chunk: corpus.Chunk{Path: "docs/other.md"}, Score: 0.9}}}
-	repAllHits, err := Run(set, allHitsRetriever, retrieval.DefaultOptions())
+	repAllHits, err := Run(context.Background(), set, allHitsRetriever, retrieval.DefaultOptions())
 	if err != nil {
 		t.Fatalf("Run allHits err = %v", err)
 	}

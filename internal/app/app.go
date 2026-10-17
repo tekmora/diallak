@@ -8,14 +8,20 @@ import (
 	"log/slog"
 	"os"
 	"sync/atomic"
+	"time"
 	"unicode/utf8"
 
 	"github.com/tekmora/diallak/internal/answer"
 	"github.com/tekmora/diallak/internal/config"
 	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/embed"
 	"github.com/tekmora/diallak/internal/model"
 	"github.com/tekmora/diallak/internal/retrieval"
 )
+
+// HybridStartTimeout bounds the startup indexing phase for computing chunk embeddings.
+// Source: chosen, not measured; gives generous headroom for embedding a few hundred chunks at start.
+const HybridStartTimeout = 2 * time.Minute
 
 // Assembly holds the initialized components and metadata of the application.
 type Assembly struct {
@@ -62,7 +68,7 @@ func Build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Assemb
 		return nil, nil, closeOnError(cleanup, fmt.Errorf("build retrieval index: %w", err))
 	}
 
-	pipeline, gate, err := buildPipeline(cfg, index, logger)
+	pipeline, gate, err := buildPipeline(ctx, cfg, index, chunks, logger)
 	if err != nil {
 		return nil, nil, closeOnError(cleanup, err)
 	}
@@ -97,35 +103,90 @@ func loadCorpusFromRoot(ctx context.Context, root *os.Root) (corpus.Manifest, []
 	return manifest, chunks, nil
 }
 
-func buildPipeline(cfg config.Config, index *retrieval.Index, logger *slog.Logger) (*answer.Pipeline, *model.Gate, error) {
-	var generator answer.Generator
+func buildModelGate(cfg config.Config, logger *slog.Logger) (answer.Generator, answer.MaskingGenerator, *model.Gate, error) {
+	if !cfg.HasModel() {
+		return nil, nil, nil, nil
+	}
+	mCfg := model.Config{
+		BaseURL:   cfg.ModelBaseURL,
+		Alias:     cfg.ModelAlias,
+		Policy:    cfg.ModelPolicy,
+		Guardrail: cfg.ModelGuardrail,
+		APIKey:    cfg.ModelKey,
+		Timeout:   cfg.ModelTimeout,
+	}
+	mClient, err := model.New(mCfg, nil)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("create model client: %w", err)
+	}
+	gateCfg := model.GateConfig{Endpoint: mClient, Logger: logger}
+	if mClient.Masking() {
+		gateCfg.Masker = mClient
+	}
+	gate, err := model.NewGate(gateCfg)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("create model gate: %w", err)
+	}
+	var generator answer.Generator = gate
 	var masker answer.MaskingGenerator
-	var gate *model.Gate
-	if cfg.HasModel() {
-		mCfg := model.Config{
-			BaseURL:   cfg.ModelBaseURL,
-			Alias:     cfg.ModelAlias,
-			Policy:    cfg.ModelPolicy,
-			Guardrail: cfg.ModelGuardrail,
-			APIKey:    cfg.ModelKey,
-			Timeout:   cfg.ModelTimeout,
-		}
-		mClient, err := model.New(mCfg, nil)
-		if err != nil {
-			return nil, nil, fmt.Errorf("create model client: %w", err)
-		}
-		gateCfg := model.GateConfig{Endpoint: mClient, Logger: logger}
-		if mClient.Masking() {
-			gateCfg.Masker = mClient
-		}
-		gate, err = model.NewGate(gateCfg)
-		if err != nil {
-			return nil, nil, fmt.Errorf("create model gate: %w", err)
-		}
-		generator = gate
-		if mClient.Masking() {
-			masker = gate
-		}
+	if mClient.Masking() {
+		masker = gate
+	}
+	return generator, masker, gate, nil
+}
+
+func buildRetriever(ctx context.Context, cfg config.Config, index *retrieval.Index, chunks []corpus.Chunk, logger *slog.Logger) (answer.Retriever, string, error) {
+	if !cfg.HasEmbed() {
+		logger.Info("retrieval mode", slog.String("mode", string(retrieval.ModeKeyword)))
+		return index, "", nil
+	}
+
+	eCfg := embed.Config{
+		BaseURL: cfg.EmbedBaseURL,
+		Alias:   cfg.EmbedAlias,
+		APIKey:  cfg.EmbedKey,
+		Timeout: cfg.EmbedTimeout,
+	}
+	embClient, err := embed.New(eCfg, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("create embed client: %w", err)
+	}
+
+	minSim := retrieval.DefaultMinSimilarity
+	if cfg.EmbedMinSimilarity > 0 {
+		minSim = cfg.EmbedMinSimilarity
+	}
+
+	startCtx, cancel := context.WithTimeout(ctx, HybridStartTimeout)
+	defer cancel()
+	start := time.Now()
+	hybrid, err := retrieval.NewHybrid(startCtx, index, chunks, embClient, minSim)
+	if err != nil {
+		return nil, "", fmt.Errorf("initialize hybrid retrieval: %w", err)
+	}
+	duration := time.Since(start)
+	dim := hybrid.VectorDim()
+	vecBytes := len(chunks) * dim * 4
+
+	logger.Info("retrieval mode",
+		slog.String("mode", string(retrieval.ModeHybrid)),
+		slog.Int("chunk_count", len(chunks)),
+		slog.Int("vector_dimension", dim),
+		slog.Duration("duration", duration),
+		slog.Int("approximate_vector_bytes", vecBytes),
+	)
+	return hybrid, embClient.Host(), nil
+}
+
+func buildPipeline(ctx context.Context, cfg config.Config, index *retrieval.Index, chunks []corpus.Chunk, logger *slog.Logger) (*answer.Pipeline, *model.Gate, error) {
+	generator, masker, gate, err := buildModelGate(cfg, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	searcher, embedHost, err := buildRetriever(ctx, cfg, index, chunks, logger)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	opts := retrieval.DefaultOptions()
@@ -137,7 +198,8 @@ func buildPipeline(cfg config.Config, index *retrieval.Index, logger *slog.Logge
 	}
 
 	ansCfg := answer.Config{
-		Retriever:          index,
+		Retriever:          searcher,
+		EmbedHost:          embedHost,
 		Generator:          generator,
 		Masker:             masker,
 		Options:            opts,

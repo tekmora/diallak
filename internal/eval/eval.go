@@ -3,6 +3,7 @@ package eval
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -220,7 +221,7 @@ func Validate(set Set, chunks []corpus.Chunk) error {
 
 // Retriever executes search queries against an index.
 type Retriever interface {
-	Search(query string, opt retrieval.Options) ([]retrieval.Hit, error)
+	SearchMode(ctx context.Context, query string, opt retrieval.Options) ([]retrieval.Hit, retrieval.Mode, error)
 }
 
 // Outcome records retrieval results and pass/fail evaluation for one case.
@@ -249,10 +250,10 @@ func EmbeddingsRecordDue(rep Report) bool {
 }
 
 // Run executes all cases in set against retriever r using opt.
-func Run(set Set, r Retriever, opt retrieval.Options) (Report, error) {
+func Run(ctx context.Context, set Set, r Retriever, opt retrieval.Options) (Report, error) {
 	var rep Report
 	for _, c := range set.Cases {
-		hits, err := r.Search(c.Question, opt)
+		hits, _, err := r.SearchMode(ctx, c.Question, opt)
 		if err != nil {
 			return Report{}, fmt.Errorf("search for case %q: %w", c.ID, err)
 		}

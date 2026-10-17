@@ -2,6 +2,7 @@
 package retrieval
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -12,6 +13,29 @@ import (
 
 	"github.com/tekmora/diallak/internal/corpus"
 )
+
+const (
+	// DefaultMinSimilarity is the default minimum cosine similarity threshold for semantic retrieval hits.
+	// Source: placeholder until the sweep is recorded (issue 189)
+	DefaultMinSimilarity = 0.5
+)
+
+// Mode represents the retrieval strategy used to answer an inquiry.
+type Mode string
+
+const (
+	// ModeHybrid indicates combined lexical BM25 and on-premises embedding retrieval.
+	ModeHybrid Mode = "hybrid"
+	// ModeKeyword indicates retrieval performed solely by the lexical index.
+	ModeKeyword Mode = "keyword"
+	// ModeKeywordFallback indicates retrieval fell back to keyword search after embedding failure.
+	ModeKeywordFallback Mode = "keyword_fallback"
+)
+
+// Embedder generates embedding vectors for given texts.
+type Embedder interface {
+	Embed(ctx context.Context, texts []string) ([][]float32, error)
+}
 
 const (
 	// MaxLimit is the maximum number of hits that can be requested.
@@ -44,12 +68,13 @@ const (
 	DefaultMinScore = 0.20
 )
 
-// Hit pairs a retrieved documentation chunk with its coverage score in [0, 1].
+// Hit pairs a retrieved documentation chunk with its coverage score in [0, 1] and semantic similarity in [-1, 1].
 // Results are ranked by raw BM25 score descending, while Score reflects query term coverage.
 type Hit struct {
-	Chunk corpus.Chunk
-	Score float64
-	rank  float64
+	Chunk      corpus.Chunk
+	Score      float64
+	Similarity float64
+	rank       float64
 }
 
 // Options configures retrieval query execution parameters.
@@ -170,6 +195,12 @@ func (ix *Index) Search(query string, opt Options) ([]Hit, error) {
 		hits = hits[:opt.Limit]
 	}
 	return hits, nil
+}
+
+// SearchMode retrieves chunks matching query using lexical BM25 search and returns ModeKeyword.
+func (ix *Index) SearchMode(_ context.Context, q string, opt Options) ([]Hit, Mode, error) {
+	hits, err := ix.Search(q, opt)
+	return hits, ModeKeyword, err
 }
 
 func validateSearchOptions(query string, opt Options) error {

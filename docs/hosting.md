@@ -62,6 +62,17 @@ is missing or out of range stops the start with a message that names it.
   well as the chat route. At start it sends a fixed sentence with an invented
   address there: an address that comes back unmasked, or a refusal, ends the
   start with exit code 1.
+- **Embedding mode is off unless the embedding variables are set.**
+  `DIALLAK_EMBED_BASE_URL` and `DIALLAK_EMBED_ALIAS` configure the endpoint
+  and the routing alias ([ADR-0022](adr/0022-embeddings-for-paraphrased-questions.md)).
+  The start verifies that the base URL points to an on-premises destination
+  (loopback or RFC 1918 / fc00::/7 private IP literal, `localhost`, a single-label
+  host name, or a host ending in `.svc`, `.cluster.local`, `.internal`,
+  `.home.arpa`, or `.lan`) and refuses any other host. When embeddings are not
+  configured or when the embedding call fails, retrieval is keyword only and
+  the reply carries a notice saying so. At start the bot computes embedding
+  vectors for all documentation chunks in memory; if the endpoint fails at start,
+  the start stops with an exit code of 1.
 - **The news function is off unless `DIALLAK_NEWS_STATE_FILE` is set**
   ([ADR-0019](adr/0019-news-posts.md), issue #180). It names an absolute path
   on the writable volume. A damaged state file stops the start, because an
@@ -185,6 +196,7 @@ platform's probes; a deployment does not publish the port.
 | Out | `discord.com`, port 443 | Always: the REST API | `rest/rest_endpoints.go` of the pinned library |
 | Out | The gateway host names Discord returns, port 443 | Always: the gateway connection | The address is not in the code: the library asks the platform for it and the gateway later sends a resume address (`bot/config.go`, `gateway/gateway_config.go`) |
 | Out | The host of `DIALLAK_MODEL_BASE_URL` | Model mode only | [`internal/model`](../internal/model/model.go); the client follows no redirect |
+| Out | The host of `DIALLAK_EMBED_BASE_URL` | Hybrid retrieval mode only | [`internal/embed`](../internal/embed/embed.go); the client follows no redirect |
 | Out | DNS | Always | |
 | Out | `github.com`, port 443 | News on: the releases feed of each own repository, every 10 minutes | [`internal/news`](../internal/news/advisory.go), `ReleasesAddress`; redirects only to https, at most a fixed number |
 | Out | `api.github.com`, port 443 | News on: the published advisories of each own repository, every 15 minutes | `AdvisoriesAddress` in the same file; the token goes to this host only |

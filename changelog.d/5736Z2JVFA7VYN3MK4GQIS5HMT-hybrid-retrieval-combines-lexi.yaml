@@ -1,0 +1,3 @@
+type: added
+title: Hybrid retrieval combines lexical index search with cosine similarity of on-premises embeddings
+issue: '#189'

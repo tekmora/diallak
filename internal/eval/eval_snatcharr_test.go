@@ -2,10 +2,12 @@ package eval
 
 import (
 	"context"
+	"math"
 	"os"
 	"testing"
 
 	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/embed"
 	"github.com/tekmora/diallak/internal/retrieval"
 )
 
@@ -36,7 +38,7 @@ func loadSnatchArrFixture(t *testing.T) (Set, []corpus.Chunk, *retrieval.Index) 
 
 func TestSnatchArrEval(t *testing.T) {
 	set, _, ix := loadSnatchArrFixture(t)
-	rep, err := Run(set, ix, retrieval.DefaultOptions())
+	rep, err := Run(context.Background(), set, ix, retrieval.DefaultOptions())
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
@@ -69,7 +71,7 @@ const (
 
 func TestSnatchArrEval_Paraphrase(t *testing.T) {
 	set, _, ix := loadSnatchArrFixture(t)
-	rep, err := Run(set, ix, retrieval.DefaultOptions())
+	rep, err := Run(context.Background(), set, ix, retrieval.DefaultOptions())
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
@@ -105,7 +107,7 @@ func TestSnatchArrEval_Sweep(t *testing.T) {
 	for i := 0; i <= 18; i++ {
 		score := float64(i) * 0.05
 		opt := retrieval.Options{Limit: 3, MinScore: score}
-		rep, err := Run(set, ix, opt)
+		rep, err := Run(context.Background(), set, ix, opt)
 		if err != nil {
 			t.Fatalf("Run score %.2f error: %v", score, err)
 		}
@@ -119,7 +121,7 @@ func TestSnatchArrEval_NegativeControls(t *testing.T) {
 
 	// Negative control (a): Stub returning no hits fails answerable bar
 	noHitsRetriever := &stubRetriever{hits: nil}
-	repNoHits, err := Run(set, noHitsRetriever, retrieval.DefaultOptions())
+	repNoHits, err := Run(context.Background(), set, noHitsRetriever, retrieval.DefaultOptions())
 	if err != nil {
 		t.Fatalf("Run noHits error: %v", err)
 	}
@@ -129,7 +131,7 @@ func TestSnatchArrEval_NegativeControls(t *testing.T) {
 
 	// Negative control (b): Real index with MinScore 0.0 fails off_topic bar if dropped below 5,
 	// otherwise test with an all-hits stub.
-	repZeroScore, err := Run(set, ix, retrieval.Options{Limit: 3, MinScore: 0.0})
+	repZeroScore, err := Run(context.Background(), set, ix, retrieval.Options{Limit: 3, MinScore: 0.0})
 	if err != nil {
 		t.Fatalf("Run zero score error: %v", err)
 	}
@@ -139,12 +141,108 @@ func TestSnatchArrEval_NegativeControls(t *testing.T) {
 		}
 	} else {
 		allHitsStub := &stubRetriever{hits: []retrieval.Hit{{Chunk: corpus.Chunk{Path: "docs/dummy.md"}, Score: 1.0}}}
-		repAllHits, rErr := Run(set, allHitsStub, retrieval.DefaultOptions())
+		repAllHits, rErr := Run(context.Background(), set, allHitsStub, retrieval.DefaultOptions())
 		if rErr != nil {
 			t.Fatalf("Run allHits error: %v", rErr)
 		}
 		if checkErr := Check(repAllHits, bars); checkErr == nil {
 			t.Error("Check with allHits stub passed, want error on off_topic bar")
 		}
+	}
+}
+
+type hashEmbedder struct{}
+
+func (hashEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
+	vecs := make([][]float32, len(texts))
+	for i, text := range texts {
+		vec := make([]float32, 256)
+		tokens := retrieval.Tokenize(text)
+		for _, tok := range tokens {
+			h := fnv32(tok) % 256
+			vec[h] += 1.0
+		}
+		var sumSq float64
+		for _, v := range vec {
+			sumSq += float64(v * v)
+		}
+		if sumSq > 0 {
+			norm := float32(math.Sqrt(sumSq))
+			for j := range vec {
+				vec[j] /= norm
+			}
+		}
+		vecs[i] = vec
+	}
+	return vecs, nil
+}
+
+func fnv32(s string) uint32 {
+	var h uint32 = 2166136261
+	for i := 0; i < len(s); i++ {
+		h ^= uint32(s[i])
+		h *= 16777619
+	}
+	return h
+}
+
+func TestSnatchArrEval_Hybrid(t *testing.T) {
+	set, chunks, ix := loadSnatchArrFixture(t)
+	hybrid, err := retrieval.NewHybrid(context.Background(), ix, chunks, hashEmbedder{}, retrieval.DefaultMinSimilarity)
+	if err != nil {
+		t.Fatalf("NewHybrid error: %v", err)
+	}
+
+	rep, err := Run(context.Background(), set, hybrid, retrieval.DefaultOptions())
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	t.Logf("answerable: %d/%d hits", rep.AnswerableHit, rep.Answerable)
+	t.Logf("off_topic: %d/%d refused", rep.OffTopicRefused, rep.OffTopic)
+	t.Logf("undocumented: %d/%d refused", rep.UndocumentedRefused, rep.Undocumented)
+	t.Logf("paraphrase: %d/%d hits", rep.ParaphraseHit, rep.Paraphrase)
+
+	bars := Bars{MinAnswerableHit: 28, MinOffTopicRefused: 5}
+	if checkErr := Check(rep, bars); checkErr != nil {
+		t.Fatalf("Check failed: %v", checkErr)
+	}
+}
+
+func TestSnatchArrEval_EmbedSweep(t *testing.T) {
+	baseURL := os.Getenv("DIALLAK_EVAL_EMBED_BASE_URL")
+	alias := os.Getenv("DIALLAK_EVAL_EMBED_ALIAS")
+	if baseURL == "" || alias == "" {
+		t.Skip("skipping embed sweep: DIALLAK_EVAL_EMBED_BASE_URL and DIALLAK_EVAL_EMBED_ALIAS must be set")
+	}
+
+	embClient, err := embed.New(embed.Config{
+		BaseURL: baseURL,
+		Alias:   alias,
+	}, nil)
+	if err != nil {
+		t.Fatalf("embed.New: %v", err)
+	}
+
+	set, chunks, ix := loadSnatchArrFixture(t)
+	bars := Bars{MinAnswerableHit: 28, MinOffTopicRefused: 5}
+
+	t.Log("similarity | answerable_hit | off_topic_refused | paraphrase_hit | bars_hold")
+	t.Log("-----------|----------------|-------------------|----------------|----------")
+
+	const sweepSteps = 11 // 0.30 .. 0.80 step 0.05
+	for i := 0; i < sweepSteps; i++ {
+		sim := 0.30 + float64(i)*0.05
+		hybrid, hErr := retrieval.NewHybrid(context.Background(), ix, chunks, embClient, sim)
+		if hErr != nil {
+			t.Fatalf("NewHybrid similarity %.2f: %v", sim, hErr)
+		}
+		rep, rErr := Run(context.Background(), set, hybrid, retrieval.DefaultOptions())
+		if rErr != nil {
+			t.Fatalf("Run similarity %.2f: %v", sim, rErr)
+		}
+		barsHold := Check(rep, bars) == nil
+		t.Logf("%10.2f | %14d | %17d | %14d | %9t",
+			sim, rep.AnswerableHit, rep.OffTopicRefused, rep.ParaphraseHit, barsHold)
 	}
 }

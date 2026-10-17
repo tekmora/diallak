@@ -76,11 +76,11 @@ func e2eWriteJSON(w http.ResponseWriter, v any) {
 
 type oneHitRetriever struct{}
 
-func (oneHitRetriever) Search(string, retrieval.Options) ([]retrieval.Hit, error) {
+func (oneHitRetriever) SearchMode(context.Context, string, retrieval.Options) ([]retrieval.Hit, retrieval.Mode, error) {
 	return []retrieval.Hit{{Chunk: corpus.Chunk{
 		ID: "c1", Repository: "tekmora/test-repo", Revision: "abc123", Path: "docs/import.md",
 		Title: "Import", Heading: "Stops", Text: "The import stops when the disk is full.",
-	}, Score: 0.9}}, nil
+	}, Score: 0.9}}, retrieval.ModeKeyword, nil
 }
 
 // newMaskingAsker wires the model client, the gate and the answer pipeline as the app does.
