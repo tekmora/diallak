@@ -50,6 +50,14 @@ type Store interface {
 	Feed(id string) FeedState
 	// Record keeps the result of a read of feed id and returns the items of res that may be posted.
 	Record(id string, res Result, now time.Time) []Item
+	// Hold keeps items for the next digest of channel, in the order given, each with the time now.
+	Hold(channel string, items []Item, now time.Time)
+	// Held returns the items channel holds for its digest, in the order they were held.
+	Held(channel string) []HeldItem
+	// HeldChannels returns the channels that hold items, in order.
+	HeldChannels() []string
+	// ClearHeld forgets the items channel holds.
+	ClearHeld(channel string)
 	// SetNextRead sets the earliest time of the next read of feed id.
 	SetNextRead(id string, at time.Time)
 	// KeepFeeds forgets the state of every feed not in ids; item keys stay until they expire.
@@ -60,10 +68,20 @@ type Store interface {
 	Save(ctx context.Context) error
 }
 
+// HeldItem is an item waiting for its channel's digest: its title and address only (ADR-0019,
+// "What is kept").
+type HeldItem struct {
+	Title string `json:"title"`
+	Link  string `json:"link"`
+	// Held is when the item was held; it waits at most MaxHeldAge.
+	Held time.Time `json:"held"`
+}
+
 type stateFile struct {
-	Version int                  `json:"version"`
-	Feeds   map[string]FeedState `json:"feeds"`
-	Seen    map[string]time.Time `json:"seen"`
+	Version int                   `json:"version"`
+	Feeds   map[string]FeedState  `json:"feeds"`
+	Seen    map[string]time.Time  `json:"seen"`
+	Held    map[string][]HeldItem `json:"held,omitempty"`
 }
 
 // FileStore is a Store kept in one JSON file.
@@ -78,7 +96,12 @@ var _ Store = (*FileStore)(nil)
 // OpenFileStore reads the state at path. A missing file is an empty state; a file that cannot be
 // read whole is an error, never an empty state, so a damaged file cannot make the bot post again.
 func OpenFileStore(path string) (*FileStore, error) {
-	s := &FileStore{path: path, state: stateFile{Version: stateVersion, Feeds: map[string]FeedState{}, Seen: map[string]time.Time{}}}
+	s := &FileStore{path: path, state: stateFile{
+		Version: stateVersion,
+		Feeds:   map[string]FeedState{},
+		Seen:    map[string]time.Time{},
+		Held:    map[string][]HeldItem{},
+	}}
 	data, err := readStateFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return s, nil
@@ -97,6 +120,7 @@ func OpenFileStore(path string) (*FileStore, error) {
 	}
 	maps.Copy(s.state.Feeds, read.Feeds)
 	maps.Copy(s.state.Seen, read.Seen)
+	maps.Copy(s.state.Held, read.Held)
 	return s, nil
 }
 
@@ -161,6 +185,44 @@ func (s *FileStore) Record(id string, res Result, now time.Time) []Item {
 	}
 	s.evictOldest()
 	return fresh
+}
+
+// Hold implements Store. Past MaxHeldPerChannel the oldest items of the channel go first.
+func (s *FileStore) Hold(channel string, items []Item, now time.Time) {
+	if len(items) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	held := s.state.Held[channel]
+	for i := 0; i < len(items) && i < MaxItems; i++ {
+		held = append(held, HeldItem{Title: items[i].Title, Link: items[i].Link, Held: now})
+	}
+	if over := len(held) - MaxHeldPerChannel; over > 0 {
+		held = slices.Clone(held[over:])
+	}
+	s.state.Held[channel] = held
+}
+
+// Held implements Store.
+func (s *FileStore) Held(channel string) []HeldItem {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.state.Held[channel])
+}
+
+// HeldChannels implements Store.
+func (s *FileStore) HeldChannels() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Sorted(maps.Keys(s.state.Held))
+}
+
+// ClearHeld implements Store.
+func (s *FileStore) ClearHeld(channel string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.state.Held, channel)
 }
 
 // SetNextRead implements Store.
