@@ -101,26 +101,50 @@ func trailLineJSON(id uint64, sent time.Time) string {
 		id, modTrailID, sent.Format(time.RFC3339), modBotUserID)
 }
 
+// respondAct answers the delete of the target message and the member update.
+func (f *moderationFake) respondAct(w http.ResponseWriter, r *http.Request) error {
+	switch {
+	case f.refuse:
+		w.WriteHeader(http.StatusForbidden)
+		_, err := fmt.Fprint(w, `{"code":50013,"message":"Missing Permissions"}`)
+		return err
+	case r.Method == http.MethodDelete:
+		w.WriteHeader(http.StatusNoContent)
+		return nil
+	default:
+		_, err := fmt.Fprintf(w, `{"user":{"id":"%d","username":"member"},"roles":[],"joined_at":"2026-01-01T00:00:00Z"}`, modMemberID)
+		return err
+	}
+}
+
+// respondTrail answers the trail line posted after an act and the delete of a swept line.
+func (f *moderationFake) respondTrail(w http.ResponseWriter, r *http.Request) error {
+	switch {
+	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, fmt.Sprintf("/channels/%d/messages/", modTrailID)):
+		w.WriteHeader(http.StatusNoContent)
+		if f.sweepSignals {
+			f.answers <- struct{}{}
+		}
+		return nil
+	case r.Method == http.MethodPost && r.URL.Path == fmt.Sprintf("/channels/%d/messages", modTrailID):
+		return writeFakeMessage(w)
+	default:
+		f.t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+		return nil
+	}
+}
+
 func (f *moderationFake) respondWrite(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	isAct := (r.Method == http.MethodDelete && path == fmt.Sprintf("/channels/%d/messages/%d", modChannelID, modGatewayMessageID)) ||
 		(r.Method == http.MethodPatch && path == fmt.Sprintf("/guilds/%d/members/%d", areasGuildID, modMemberID))
 	var err error
 	switch {
-	case isAct && f.refuse:
-		w.WriteHeader(http.StatusForbidden)
-		_, err = fmt.Fprint(w, `{"code":50013,"message":"Missing Permissions"}`)
-	case isAct && r.Method == http.MethodDelete:
-		w.WriteHeader(http.StatusNoContent)
 	case isAct:
-		_, err = fmt.Fprintf(w, `{"user":{"id":"%d","username":"member"},"roles":[],"joined_at":"2026-01-01T00:00:00Z"}`, modMemberID)
-	case r.Method == http.MethodDelete && strings.HasPrefix(path, fmt.Sprintf("/channels/%d/messages/", modTrailID)):
-		w.WriteHeader(http.StatusNoContent)
-		if f.sweepSignals {
-			f.answers <- struct{}{}
-		}
-	case r.Method == http.MethodPost && path == fmt.Sprintf("/channels/%d/messages", modTrailID):
-		err = writeFakeMessage(w)
+		err = f.respondAct(w, r)
+	case strings.HasPrefix(path, fmt.Sprintf("/channels/%d/messages", modTrailID)):
+		err = f.respondTrail(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(path, "/interactions/"):
 		w.WriteHeader(http.StatusNoContent)
 		f.answers <- struct{}{}
@@ -207,7 +231,12 @@ func TestModerationGateway_Positive_RemoveMessageAsksForAReasonThenActs(t *testi
 		!strings.Contains(form[0].raw, gatewayRemoveCustomID()) || !strings.Contains(form[0].raw, `"max_length":512`) {
 		t.Fatalf("first answer = %+v, want the reason form of the message", form)
 	}
-	got := callsTo(calls, 900000000000000002)
+	checkRemoveRequests(t, callsTo(calls, 900000000000000002))
+}
+
+// checkRemoveRequests checks the requests of a submitted reason form: defer, delete, line, edit.
+func checkRemoveRequests(t *testing.T, got []areasCall) {
+	t.Helper()
 	if len(got) != 4 {
 		t.Fatalf("requests = %+v, want defer, delete, line, edit", got)
 	}

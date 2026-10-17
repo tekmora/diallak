@@ -161,17 +161,8 @@ type ModerationHandler struct {
 // NewModerationHandler checks cfg and returns a handler that refuses every act until SetServer
 // found the Moderator role and the trail channel.
 func NewModerationHandler(cfg ModerationConfig) (*ModerationHandler, error) {
-	if cfg.Definition == nil {
-		return nil, errors.New("definition is required")
-	}
-	if cfg.GuildID == 0 {
-		return nil, errors.New("guild ID must not be zero")
-	}
-	if cfg.CallTimeout < 0 || cfg.CallTimeout > maxModerationCallTimeout {
-		return nil, fmt.Errorf("call timeout %v out of range [0, %v]", cfg.CallTimeout, maxModerationCallTimeout)
-	}
-	if cfg.Retention != 0 && (cfg.Retention < MinTrailRetention || cfg.Retention > MaxTrailRetention) {
-		return nil, fmt.Errorf("trail retention %v out of range [%v, %v]", cfg.Retention, MinTrailRetention, MaxTrailRetention)
+	if err := checkModerationConfig(cfg); err != nil {
+		return nil, err
 	}
 	roleName, trailName, err := moderationNames(cfg.Definition)
 	if err != nil {
@@ -194,6 +185,22 @@ func NewModerationHandler(cfg ModerationConfig) (*ModerationHandler, error) {
 		h.now = time.Now
 	}
 	return h, nil
+}
+
+func checkModerationConfig(cfg ModerationConfig) error {
+	if cfg.Definition == nil {
+		return errors.New("definition is required")
+	}
+	if cfg.GuildID == 0 {
+		return errors.New("guild ID must not be zero")
+	}
+	if cfg.CallTimeout < 0 || cfg.CallTimeout > maxModerationCallTimeout {
+		return fmt.Errorf("call timeout %v out of range [0, %v]", cfg.CallTimeout, maxModerationCallTimeout)
+	}
+	if cfg.Retention != 0 && (cfg.Retention < MinTrailRetention || cfg.Retention > MaxTrailRetention) {
+		return fmt.Errorf("trail retention %v out of range [%v, %v]", cfg.Retention, MinTrailRetention, MaxTrailRetention)
+	}
+	return nil
 }
 
 func moderationNames(def *serverdef.Definition) (string, string, error) {

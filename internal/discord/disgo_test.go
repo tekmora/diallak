@@ -860,7 +860,12 @@ func TestRegisterCommands_Positive_RegistrationPayloadDescription(t *testing.T) 
 	if len(body) == 0 {
 		t.Fatalf("no registration PUT request recorded")
 	}
+	checkRegisteredCommands(t, body)
+}
 
+// checkRegisteredCommands checks the names and descriptions of the four registered commands.
+func checkRegisteredCommands(t *testing.T, body []byte) {
+	t.Helper()
 	var payload []struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`

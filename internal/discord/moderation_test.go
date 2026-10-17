@@ -68,7 +68,11 @@ func modTextChannel(id uint64, name string) discord.GuildChannel {
 	if err := json.Unmarshal([]byte(raw), &u); err != nil {
 		panic(err)
 	}
-	return u.Channel.(discord.GuildChannel)
+	ch, ok := u.Channel.(discord.GuildChannel)
+	if !ok {
+		panic(fmt.Sprintf("channel %d decodes as %T, want a guild channel", id, u.Channel))
+	}
+	return ch
 }
 
 func newModHandler(t *testing.T) *ModerationHandler {
