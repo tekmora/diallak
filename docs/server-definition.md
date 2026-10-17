@@ -300,9 +300,12 @@ decided, planned, or observed on the server.
 - **The bot, built and off until its app is set:** the bridge from GitHub
   Discussions, which posts each new Q&A or Ideas discussion into
   `news.discussions_channel`, the lounge
-  ([ADR-0004](adr/0004-community-questions.md), issue #99).
-- **The bot, planned:** opening and closing the areas, the news posts, the
-  supporter roles and the Contributor role. Each needs its own decision record
+  ([ADR-0004](adr/0004-community-questions.md), issue #99), and the news
+  posts: own releases and advisories as they happen, every other feed as one
+  digest per channel per day; off until `DIALLAK_NEWS_STATE_FILE` is set
+  ([ADR-0019](adr/0019-news-posts.md)).
+- **The bot, planned:** opening and closing the areas, the supporter roles
+  and the Contributor role. Each needs its own decision record
   first; until then the operator opens and closes areas by hand.
 - **The platform:** the spam filter, which writes each flagged case into the
   moderators' queue channel by itself.
