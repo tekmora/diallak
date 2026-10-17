@@ -858,7 +858,7 @@
       "id": "support-first-answer",
       "what": "Reads the first message of a new post in the support forum and replies first with excerpts, only when the member set the opt-in tag at its creation (ADR-0020).",
       "by": "bot",
-      "state": "decided",
+      "state": "built",
       "record": "docs/adr/0009-support-forum-first-answer.md"
     },
     {
@@ -947,7 +947,7 @@
       "id": "server-settings",
       "what": "Compares the platform's filter rules and the server's verification level with the definition and applies a difference through plan and apply.",
       "by": "bot",
-      "state": "decided",
+      "state": "built",
       "record": "docs/adr/0015-moderator-without-rights-and-server-settings-as-data.md"
     },
     {

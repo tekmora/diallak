@@ -41,12 +41,12 @@ and applying one plan. None of it was run against Discord
   roles, deleting messages, timing members out and managing the server. The
   order of roles keeps the first of them away from the staff roles
   ([ADR-0010](adr/0010-bot-rights-and-apply-path.md)). The fourth is held for
-  a function that is not built yet
+  applying the server's settings
   ([ADR-0015](adr/0015-moderator-without-rights-and-server-settings-as-data.md)).
 - **The Moderator role holds no right.** A moderator deletes a message or
   times a member out through a command of the bot, and every such act lands
-  in the moderators' log channel. Those commands are not built yet; until
-  they are, only the operator can do either (ADR-0015).
+  in the moderators' log channel (ADR-0015,
+  [ADR-0021](adr/0021-moderation-commands-and-trail.md)).
 - **The platform's filter rules and the verification level are data.**
   The file proposes three filter rules and a verification level for the
   operator to read before anything is applied
@@ -259,11 +259,16 @@ decided, planned, or observed on the server.
   own choice ([ADR-0011](adr/0011-area-roles-from-member-choice.md)); and
   what a moderator does through the bot, `Remove message` and `/timeout`,
   together with the trail of it
-  ([ADR-0021](adr/0021-moderation-commands-and-trail.md)).
-- **The bot, decided and not built:** the first answer in the support forum,
-  the bridge from GitHub Discussions, and the server's settings as data: the
-  platform's filter rules and the verification level, compared and applied
-  through plan and apply (ADR-0015).
+  ([ADR-0021](adr/0021-moderation-commands-and-trail.md)); the first answer
+  in the support forum, off until its two settings are set
+  ([support-forum-answer.md](compliance/support-forum-answer.md)); and the
+  server's settings as data: the platform's filter rules and the
+  verification level, compared and applied through plan and apply
+  ([ADR-0015](adr/0015-moderator-without-rights-and-server-settings-as-data.md)).
+  `TestDefinition_Negative_BotAutomationStateMatchesCode` in
+  [definition_test.go](../server/definition_test.go) names the code file of
+  each and fails when a state and the code disagree.
+- **The bot, decided and not built:** the bridge from GitHub Discussions.
 - **The bot, planned:** opening and closing the areas, the news posts, the
   supporter roles and the Contributor role. Each needs its own decision record
   first; until then the operator opens and closes areas by hand.
@@ -327,7 +332,7 @@ decided, planned, or observed on the server.
   ([ADR-0011](adr/0011-area-roles-from-member-choice.md)). The two
   notification roles are a third question of the same command (ADR-0014). The
   file holds the three questions under `choices`, and the ten roles carry
-  `"assigned_by": "choice"`. The command is not built yet.
+  `"assigned_by": "choice"`.
 - **Discord's onboarding** and the two measurements are described as its
   documentation gives them
   ([`discord/discord-api-docs`](https://github.com/discord/discord-api-docs/tree/37148620d2324292b76047541d5f8331f81ea77a)

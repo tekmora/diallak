@@ -212,6 +212,48 @@ func TestDefinition_Boundary_NoSendPolls(t *testing.T) {
 	})
 }
 
+// builtCode names, for each bot automation that is built, the source file that carries it, counted
+// from the repository root. A bot automation is built exactly when it has a row here and that file
+// exists; a row added with the code while the state stays decided fails, and so does the reverse.
+var builtCode = map[string]string{
+	"ask-command":          "internal/discord/discord.go",
+	"support-first-answer": "internal/discord/forum.go",
+	"moderation-queue":     "internal/discord/moderation.go",
+	"area-choices":         "internal/discord/areas.go",
+	"server-settings":      "internal/discord/server_apply_settings.go",
+}
+
+func TestDefinition_Negative_BotAutomationStateMatchesCode(t *testing.T) {
+	def, err := Definition()
+	if err != nil {
+		t.Fatalf("Definition() error = %v", err)
+	}
+	seen := map[string]bool{}
+	for _, a := range def.Automation {
+		if a.By != "bot" {
+			continue
+		}
+		path, hasCode := builtCode[a.ID]
+		seen[a.ID] = true
+		if hasCode != (a.State == "built") {
+			t.Errorf("automation %s: state %q, code file in builtCode %q; built exactly when a file is named",
+				a.ID, a.State, path)
+		}
+		if !hasCode {
+			continue
+		}
+		// The path counts from the repository root; this package is one folder below it.
+		if _, statErr := os.Stat(filepath.Join("..", path)); statErr != nil {
+			t.Errorf("automation %s: code file %s: %v", a.ID, path, statErr)
+		}
+	}
+	for id := range builtCode {
+		if !seen[id] {
+			t.Errorf("builtCode names %s, which is no bot automation of the definition", id)
+		}
+	}
+}
+
 func TestDefinition_Positive_ServerSettingsAutomation(t *testing.T) {
 	def, err := Definition()
 	if err != nil {
@@ -229,9 +271,6 @@ func TestDefinition_Positive_ServerSettingsAutomation(t *testing.T) {
 	}
 	if entry.By != "bot" {
 		t.Errorf("server-settings.By = %q, want %q", entry.By, "bot")
-	}
-	if entry.State != "decided" {
-		t.Errorf("server-settings.State = %q, want %q", entry.State, "decided")
 	}
 	// The record's path counts from the repository root; this package is one folder below it.
 	if _, err := os.Stat(filepath.Join("..", entry.Record)); err != nil {
