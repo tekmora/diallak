@@ -870,6 +870,13 @@
       "record": "docs/adr/0004-community-questions.md"
     },
     {
+      "id": "bug-report-link",
+      "what": "Answers the bug command with a link that opens a new issue of the project's repository, filled in with the member's title and steps, for the member to submit under their own account.",
+      "by": "bot",
+      "state": "built",
+      "record": "docs/adr/0001-architecture-and-boundaries.md"
+    },
+    {
       "id": "moderation-queue",
       "what": "Carries out what a moderator does through it, deleting a message or timing a member out, and writes the trail of those actions.",
       "by": "bot",
@@ -1031,5 +1038,8 @@
     "repositories": ["tekmora/diallak", "tekmora/epitrop"],
     "feeds": [],
     "discussions_channel": "lounge"
+  },
+  "bug_reports": {
+    "repository": "tekmora/diallak"
   }
 }

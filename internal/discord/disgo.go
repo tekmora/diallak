@@ -97,6 +97,8 @@ type BotConfig struct {
 	Handler *Handler
 	// Areas serves the areas command. Nil leaves the command unserved.
 	Areas *AreasHandler
+	// Bug serves the bug command. Nil leaves the command unserved.
+	Bug *BugHandler
 	// Moderation serves the moderation commands and sweeps the trail. Nil leaves both off.
 	Moderation *ModerationHandler
 	// Forum answers opted-in posts of the support forum. Nil leaves the gateway session without
@@ -603,6 +605,9 @@ func (d *dispatcher) handleCommand(ctx context.Context, e *events.InteractionCre
 		calls := restModerationCalls{rest: e.Client().Rest, guildID: snowflake.ID(d.cfg.GuildID)}
 		req := timeoutRequest(data)
 		d.runTracked(func() { d.cfg.Moderation.HandleTimeout(ctx, adapter, req, calls) })
+	case data.CommandName() == BugCommandName && d.cfg.Bug != nil:
+		adapter := &bugAdapter{interaction: appCmd, data: data, respond: e.Respond}
+		d.runTracked(func() { d.cfg.Bug.HandleCommand(ctx, adapter) })
 	default:
 		d.cfg.Logger.Debug("ignoring unknown command", slog.String("command", data.CommandName()))
 	}
@@ -755,6 +760,7 @@ func guildCommands(maxQuestionChars int) []discord.ApplicationCommandCreate {
 	return []discord.ApplicationCommandCreate{
 		buildCommandCreate(maxQuestionChars), buildAreasCommandCreate(),
 		buildRemoveMessageCommandCreate(), buildTimeoutCommandCreate(),
+		buildBugCommandCreate(),
 	}
 }
 

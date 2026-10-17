@@ -85,7 +85,7 @@ after the definition and a file over one mebibyte are refused
 | `channels` | Every channel with type, purpose, owner and the permissions it changes per role | 16 |
 | `areas` | The rooms that open at a threshold, each with an opening and a closing rule | 8 |
 | `choices` | The questions the bot's areas command offers and the role each option gives | 3 questions |
-| `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 16 |
+| `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 17 |
 | `settings` | The platform's filter rules and the server's verification level; absent, nothing of it is compared or changed | 3 filter rules and the verification level |
 | `news` | Own repositories, whose releases and advisories go to the announcement channel, the other feeds, each with the area it serves, and the text channel of the Discussions bridge; read by the bot, not applied to the server | 2 repositories and 0 feeds |
 <!-- markdownlint-enable MD013 -->
@@ -143,6 +143,7 @@ Each finding has a code, a path into the file and a message.
 | `choice-limit` | A question with more than 25 options, or an option title longer than 100 characters |
 | `filter-rule` | More rules of one trigger than a server may hold; a field the rule's trigger or the action's type does not read; a keyword rule without keywords or patterns, a preset rule without presets; a list or an entry over the platform's limit; a mention limit outside 1 to 50; a rule without an action or with one action twice; an alert without a channel or into a channel that is not a staff channel; a timeout on a trigger other than keyword or mention spam, or outside one second to four weeks; a block message over 150 characters; more than 20 exempt roles or 50 exempt channels, or one listed twice; two rules with one name |
 | `news` | A feed address that is not an absolute `https` address; a feed without an area or for an area the file does not hold; more than 20 feeds; more than 10 own repositories, one not written `owner/name` or listed twice; own repositories without exactly one announcement channel, or with one where the bot cannot see or send; a `discussions_channel` that is no channel of the file or not of type `text` |
+| `bug-reports` | A bug reports repository that is not written `owner/name` |
 | `automation-record` | Something the bot or the platform does without a decision record, a planned bot feature not marked as needing one, or the state `observed` on anything but the platform or together with a record |
 | `id`, `text`, `enum`, `ref`, `version`, `singleton`, `permission-name`, `access-shape` | Malformed ids, empty texts, unknown values, references to nothing or to a managed role from a channel entry or an area, a wrong version, a missing or doubled base role, unknown or doubled permissions |
 <!-- markdownlint-enable MD013 -->
@@ -280,7 +281,9 @@ stays empty until the operator names the sources for AI and video news.
 The `automation` part names the party for each task and its state: built,
 decided, planned, or observed on the server.
 
-- **The bot, built:** the `/ask` command; the `/areas` command, which gives
+- **The bot, built:** the `/ask` command; the `/bug` command, which answers
+  with a prefilled new-issue link of the repository in `bug_reports` for the
+  member to submit ([ADR-0001](adr/0001-architecture-and-boundaries.md)); the `/areas` command, which gives
   and takes the interest, language and notification roles from the member's
   own choice ([ADR-0011](adr/0011-area-roles-from-member-choice.md)); and
   what a moderator does through the bot, `Remove message` and `/timeout`,

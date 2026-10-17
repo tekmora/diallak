@@ -50,7 +50,11 @@ member chooses interest, language and notification roles with `/areas`
 ([ADR-0011](docs/adr/0011-area-roles-from-member-choice.md)), and a moderator
 acts with `Remove message` and `/timeout`
 ([ADR-0021](docs/adr/0021-moderation-commands-and-trail.md),
-[moderator guide](docs/moderator-guide.md)). In the support forum the bot can
+[moderator guide](docs/moderator-guide.md)). A member reports a bug with `/bug`:
+the bot answers with a link that opens a filled-in new issue of the repository
+the server definition names, and the member submits it under their own GitHub
+account; the bot calls no GitHub interface for it
+([ADR-0001](docs/adr/0001-architecture-and-boundaries.md)). In the support forum the bot can
 reply first to a new post that carries the tag "Automated answer", with
 excerpts from the documentation only
 ([ADR-0009](docs/adr/0009-support-forum-first-answer.md),
@@ -208,7 +212,7 @@ diallak
 
 It loads the documentation and the server definition, reads the server's roles
 and channels and its own user, connects to Discord and answers `/ask`,
-`/areas`, `Remove message` and `/timeout` until it receives a termination
+`/areas`, `/bug`, `Remove message` and `/timeout` until it receives a termination
 signal. With the two forum variables set it also replies to each new post in
 that forum that carries the opt-in tag, with excerpts and never with the model.
 The forum answer needs the right to read message content, switched on in
@@ -242,7 +246,7 @@ diallak -register-commands
 ```
 
 This sets the server's command list for the application to `/ask`, `/areas`,
-`Remove message` and `/timeout` and exits. It
+`/bug`, `Remove message` and `/timeout` and exits. It
 needs the same environment as a normal start. Starting the bot never registers
 or changes a command.
 

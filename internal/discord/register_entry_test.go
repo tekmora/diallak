@@ -88,8 +88,8 @@ func questionMaxLength(t *testing.T, calls []recordedRequest) int {
 		if err := json.Unmarshal(c.body, &cmds); err != nil {
 			t.Fatalf("command list body: %v", err)
 		}
-		if len(cmds) != 4 || len(cmds[0].Options) != 1 || cmds[0].Options[0].Name != OptionQuestion {
-			t.Fatalf("command list %s, want the ask command with the option %q, then areas, Remove message and timeout",
+		if len(cmds) != 5 || len(cmds[0].Options) != 1 || cmds[0].Options[0].Name != OptionQuestion {
+			t.Fatalf("command list %s, want the ask command with the option %q, then areas, Remove message, timeout and bug",
 				c.body, OptionQuestion)
 		}
 		return cmds[0].Options[0].MaxLength

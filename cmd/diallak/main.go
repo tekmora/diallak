@@ -24,6 +24,7 @@ import (
 	"github.com/tekmora/diallak/internal/discord"
 	"github.com/tekmora/diallak/internal/health"
 	"github.com/tekmora/diallak/internal/model"
+	"github.com/tekmora/diallak/internal/serverdef"
 	"github.com/tekmora/diallak/internal/serverplan"
 	"github.com/tekmora/diallak/server"
 )
@@ -336,6 +337,33 @@ func newForum(cfg config.Config, assembly *app.Assembly) (*discord.ForumHandler,
 	return forum, nil
 }
 
+func newAreas(def *serverdef.Definition, guildID uint64) (*discord.AreasHandler, error) {
+	areas, err := discord.NewAreasHandler(discord.AreasConfig{
+		Definition: def,
+		GuildID:    guildID,
+		Logger:     slog.Default(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create areas handler: %w", err)
+	}
+	return areas, nil
+}
+
+func newBug(def *serverdef.Definition, guildID uint64) (*discord.BugHandler, error) {
+	if def.BugReports == nil {
+		return nil, nil
+	}
+	bug, err := discord.NewBugHandler(discord.BugConfig{
+		Repository: def.BugReports.Repository,
+		GuildID:    guildID,
+		Logger:     slog.Default(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create bug handler: %w", err)
+	}
+	return bug, nil
+}
+
 func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotConfig, error) {
 	receipts, err := newReceipts(assembly)
 	if err != nil {
@@ -358,13 +386,13 @@ func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotC
 	if err != nil {
 		return discord.BotConfig{}, fmt.Errorf("load definition: %w", err)
 	}
-	areas, err := discord.NewAreasHandler(discord.AreasConfig{
-		Definition: def,
-		GuildID:    cfg.GuildID,
-		Logger:     slog.Default(),
-	})
+	areas, err := newAreas(def, cfg.GuildID)
 	if err != nil {
-		return discord.BotConfig{}, fmt.Errorf("create areas handler: %w", err)
+		return discord.BotConfig{}, err
+	}
+	bug, err := newBug(def, cfg.GuildID)
+	if err != nil {
+		return discord.BotConfig{}, err
 	}
 	moderation, err := discord.NewModerationHandler(discord.ModerationConfig{
 		Definition: def,
@@ -388,6 +416,7 @@ func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotC
 		GuildID:    cfg.GuildID,
 		Handler:    handler,
 		Areas:      areas,
+		Bug:        bug,
 		Moderation: moderation,
 		Forum:      forum,
 		News:       newsCfg,

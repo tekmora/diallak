@@ -25,6 +25,10 @@ against the code.
   the bot reads your member id, the roles you hold and whether you have passed
   the server's screening, gives or takes the roles you chose, and keeps none of
   it. Other members can see the roles you hold.
+- With `/bug` you give a title and the steps of a bug. The bot reads them only
+  to build a link that opens a filled-in new issue on GitHub, shows the link to
+  you alone and keeps nothing. Nothing reaches GitHub unless you open the link
+  and submit the issue there yourself, under your own account and GitHub's terms.
 - When a moderator removes your message or times you out, the bot writes one
   line into the server's log channel with your member id, the moderator and
   the reason, and deletes it after 90 days. It holds no text of your message,
@@ -95,6 +99,7 @@ No data protection officer is appointed.
 | The question you pass to `/ask` | Finding documentation passages and writing the reply | Legitimate interests, Article 6(1)(f) |
 | The id of the server the command came from | Refusing every server but the configured one | Legitimate interests, Article 6(1)(f) |
 | With `/areas`: your member id, the roles you hold, whether you have passed the server's screening, and the options you choose | Showing what you hold, giving and taking the roles you choose, refusing a member who has not passed screening | Legitimate interests, Article 6(1)(f) |
+| With `/bug`: the title and the steps you pass | Building the new-issue link in the reply | Legitimate interests, Article 6(1)(f) |
 | When you press the receipt's direct message button: your member id | Sending the receipt to you as a direct message, for that one request | Legitimate interests, Article 6(1)(f) |
 | When a moderator acts on you: your member id, and for a removed message its channel and message id | Carrying out the act and writing the trail line, so the operator can check what moderators did | Legitimate interests, Article 6(1)(f) |
 | When you are a moderator and use a moderation command: your member id, the roles you hold, and the reason you give | Refusing callers without the Moderator role and naming you and your reason in the trail line | Legitimate interests, Article 6(1)(f) |
@@ -198,6 +203,7 @@ provider, the country of its data centre and the agreement that binds it.
 | Data | Kept |
 | :--- | :--- |
 | Your question, in the bot | In memory until the reply is sent |
+| The title and the steps you pass to `/bug`, in the bot | In memory until the reply is sent |
 | Your member id, your roles and your choice with `/areas`, in the bot | In memory until the reply is sent. The role itself stays on you until you take it off with `/areas` |
 | Your question, at the model endpoint (model mode only) | Not written to storage and not used for training (ADR-0002). The three rows below name what the endpoint holds for a time anyway |
 | The answer, in the endpoint's cache (model mode only) | At most 60 minutes, in memory only. The cache finds an entry by a hash of the request, so it holds the answer but not your question. The bot sends no member id: another member who sends the identical question within that time gets the same answer |
@@ -246,7 +252,8 @@ when you want none of them to read along.
 
 No. Using `/ask` is voluntary. Without a question the bot has nothing to answer.
 Using `/areas` is voluntary too, and every role it gives you can be taken off
-with it again.
+with it again. Using `/bug` is voluntary, and an issue is filed only when you
+submit it on GitHub yourself.
 
 ## Automated decisions
 

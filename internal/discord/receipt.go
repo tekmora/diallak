@@ -34,8 +34,10 @@ const (
 	// whatever its length, so a list holds at most one 128-byte name past it.
 	// Source: chosen, so that the worst receipt fits maxReceiptMessageRunes.
 	maxReceiptListRunes = 160
+	// maxMessageRunes is the longest content of one Discord message.
+	maxMessageRunes = 2000
 	// maxReceiptMessageRunes is the longest content of one Discord message.
-	maxReceiptMessageRunes = 2000
+	maxReceiptMessageRunes = maxMessageRunes
 	// receiptKeyBytes is the length of the random key carried in the button.
 	receiptKeyBytes = 16
 

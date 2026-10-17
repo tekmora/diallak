@@ -27,6 +27,7 @@ memory until its reply is sent.
 | :--- | :--- | :--- | :--- |
 | The question a member passes to `/ask` | Discord, with the command | Finding passages and, in model mode, writing the answer | In memory until the reply is sent |
 | The id of the server the command came from | Discord, with the command | Refusing any server but the configured one | Not kept |
+| The title and the steps a member passes to `/bug` | Discord, with the command | Building the new-issue link in the reply, which only that member sees | In memory until the reply is sent |
 | For `/areas` and its menus: the member's id, the roles the member holds and whether the member has still to pass the server's screening | Discord, with the command or the menu change | Selecting the roles the member holds, working out which roles to give or take, addressing the two role calls, refusing a member in screening | In memory until the reply is sent |
 | For a menu change of `/areas`: the options the member chose | Discord, with the menu change | Checking them against the options of the definition and giving or taking the roles | In memory until the reply is sent |
 | The server's roles: id and name of each | Discord, read at start and again for each menu change | Finding the role of each option by name | In memory until the next read |
@@ -53,7 +54,9 @@ Discord issues for replying to that one command
 `interactionAdapter`). For `/areas` the adapter reads the server id, the
 member's id, roles and screening flag, and the chosen options
 ([`internal/discord/disgo_areas.go`](../../internal/discord/disgo_areas.go),
-`areasAdapter`). For a receipt button it reads the key in the button, and the
+`areasAdapter`). For `/bug` it reads the server id, the title and the steps
+([`internal/discord/disgo_bugreport.go`](../../internal/discord/disgo_bugreport.go),
+`bugAdapter`). For a receipt button it reads the key in the button, and the
 member's id only to open the direct message
 ([`internal/discord/disgo_receipt.go`](../../internal/discord/disgo_receipt.go),
 `receiptAdapter`). For the moderation commands it reads the server id, the
@@ -159,6 +162,7 @@ Check: `line` and `Sweep` in
 | A change of the model's state, with the class of the failure and the status code when there is one | `model not ready`, `status`, `503` | No |
 | Duration | `1.2s` | No |
 | For `/areas`: the role of the definition, whether it was given or taken, the outcome, the error class of a failed call, the reason of a refusal | `interest-games`, `given`, `ok`, `not-an-option` | No |
+| For `/bug`: the outcome, and the error class of a failed reply; never the title, the steps or the link | `link`, `empty`, `too_long`, `wrong_guild` | No |
 | For a receipt: the outcome, and the error class of a failed call | `shown`, `gone`, `sent`, `closed`, `failure` | No |
 | For a post in the support forum: the outcome, the reason, the error class of a failed call; at debug level, why a thread was skipped | `excerpts`, `no_source`, `application_author`, `busy`, `not_opted_in` | No |
 | For a moderation command: the reason of a refusal, the error class of a failed act or trail line; for the daily sweep, the number of lines deleted | `not-moderator`, `timeout`, `deleted` | No |
