@@ -1,7 +1,8 @@
 # Support forum answer: entries for launch
 
 Draft, and not in force. The feature it describes is not built;
-[ADR-0009](../adr/0009-support-forum-first-answer.md) is its accepted record.
+[ADR-0009](../adr/0009-support-forum-first-answer.md) is its accepted record,
+as amended by [ADR-0020](../adr/0020-forum-answers-only-opted-in-posts.md).
 The other documents in this directory describe the code on `main` and say
 nothing of the forum yet.
 
@@ -15,7 +16,8 @@ has the findings on these entries.
 - In the support forum the bot reads the title and the first message of a new
   post, once, and may reply first with excerpts from the documentation.
 - It reads no other message, in the forum or anywhere else.
-- A post that carries the opt-out tag is neither read nor answered.
+- Only a post that carries the opt-in tag "Automated answer" from its
+  creation is read and answered ([ADR-0020](../adr/0020-forum-answers-only-opted-in-posts.md)).
 - It keeps the text in memory until the reply is sent, stores nothing and logs
   no text and no id.
 - The text is sent to nobody. No model writes the reply.
@@ -28,7 +30,7 @@ has the findings on these entries.
   post, once, to find documentation that answers it. It reads no other message.
 - Its reply there is public, like the post, and holds documentation text, not
   your text.
-- To keep the bot away from a post, add the tag "No automated reply" when you
+- The bot reads a post only when you add the tag "Automated answer" when you
   create it.
 
 ### "What is processed, for what purpose and on what basis", new rows
@@ -38,7 +40,7 @@ has the findings on these entries.
 | :--- | :--- | :--- |
 | Title and first message of a new post in the support forum | Finding documentation passages for a first reply in that post | Legitimate interests, Article 6(1)(f) |
 | Whether a post was written by an application | Leaving such a post without a reply | Legitimate interests, Article 6(1)(f) |
-| Whether a post carries the tag "No automated reply" | Leaving such a post unread | Legitimate interests, Article 6(1)(f) |
+| Whether a post carries the tag "Automated answer" | Reading only a post that carries it | Legitimate interests, Article 6(1)(f) |
 | Other fields Discord sends with a post or with events about channels, roles and threads, such as the id of the member who created a thread | None: the bot compares the channel and the kind of thread and reads nothing else | Not used |
 <!-- markdownlint-enable MD013 -->
 
@@ -48,10 +50,11 @@ the forum's guidelines say that it reads the first message before you post.
 
 ### "Your right to object", one more paragraph
 
-In the support forum you can keep the bot away from a single post: add the tag
-"No automated reply" when you create the post. The bot then does not read the
-post and does not reply. A tag you add later does not take a reply back,
-because the bot reads a post once, when it is created.
+In the support forum the bot reads a post only when you add the tag
+"Automated answer" when you create the post. Without the tag it does not read
+the post and does not reply. Adding the tag later does not make the bot read
+the post, and removing it later does not take a reply back, because the bot
+reads a post once, when it is created.
 
 ### "Who receives your data", changed points
 
@@ -85,7 +88,7 @@ message.
 | Title of a new post in the support forum | Discord, with the thread event | Finding passages | In memory until the reply is sent or the attempt ends |
 | Text of the first message of that post, up to a fixed length | Discord, on the bot's request for that one message | Finding passages | In memory until the reply is sent or the attempt ends |
 | Whether the author of that message is an application | Discord, with the message | Leaving such a post without a reply | Not kept |
-| Whether a new post carries the opt-out tag | Discord, with the thread event | Leaving a tagged post unread: its first message is not requested | Not kept |
+| Whether a new post carries the opt-in tag | Discord, with the thread event | Reading only a tagged post: the first message of any other post is not requested | Not kept |
 | Events about channels, roles and threads of the server, with the title of each new thread and the id of its creator | Discord, with the standard intent that carries thread events | Nothing, except telling a new post in the configured forum from everything else by the id of the parent channel and the kind of thread | Not kept |
 | Other fields of the first message: author id and name, attachments, embeds, polls, components | Discord, with the message | Nothing: the bot reads none of them | Not kept |
 <!-- markdownlint-enable MD013 -->
@@ -140,8 +143,8 @@ New rows for "Where the notice appears". The texts are accepted with ADR-0009.
 <!-- markdownlint-disable MD013 -->
 | Place | Text | State |
 | :--- | :--- | :--- |
-| Guidelines of the support forum, shown before a member posts | "The automated assistant reads the first message of a new post and may reply first with excerpts from the documentation. It reads nothing else here. To keep it away from a post, add the tag 'No automated reply' when you create it. More is in the privacy notice." | Accepted with ADR-0009, set by the operator |
-| Guidelines of the support forum, a paragraph of its own after the text above | "You can object at any time to the assistant reading your posts here: write to the e-mail address in the privacy notice, or open a private thread in the ticket channel. The privacy notice explains this under 'Your right to object'." | Proposed with [ADR-0018](../adr/0018-forum-guidelines-name-the-right-to-object.md), set by the operator |
+| Guidelines of the support forum, shown before a member posts | "The automated assistant reads a new post only when you add the tag 'Automated answer' when you create it. It then reads the first message and may reply first with excerpts from the documentation. It reads nothing else here. Do not ask for it on a post that holds health data or other sensitive data, or data about other people. More is in the privacy notice." | Accepted with [ADR-0020](../adr/0020-forum-answers-only-opted-in-posts.md), set by the operator |
+| Guidelines of the support forum, a paragraph of its own after the text above | "You can object at any time to the assistant reading your posts here: write to the e-mail address in the privacy notice, or open a private thread in the ticket channel. The privacy notice explains this under 'Your right to object'." | Accepted with [ADR-0018](../adr/0018-forum-guidelines-name-the-right-to-object.md), set by the operator |
 | First line of a reply in the support forum | "Automated excerpts from the documentation. No AI model wrote this reply." | In the code, used by `/ask` today |
 | Last line of a reply in the support forum | "Automated first reply. A person can help here in this post." | Accepted with ADR-0009, not in the code |
 <!-- markdownlint-enable MD013 -->
@@ -151,19 +154,22 @@ New rows for "Where the notice appears". The texts are accepted with ADR-0009.
 Rule 5 gains one sentence after "check the sources it cites":
 
 > In the support forum it reads the first message of a new post and may reply
-> first, unless the post carries the tag "No automated reply".
+> first, when the post carries the tag "Automated answer".
 
 ## Before launch
 
 - The findings of [Legal research](legal-research.md), points 7 to 9, are
   settled:
-  - the guidelines text names the right to object (#145; the sentence is
-    proposed in ADR-0018 and settled when that record is accepted);
-  - posts with data of the kinds Article 9(1) lists have an answer (#146).
+  - the guidelines text names the right to object (#145; accepted with
+    ADR-0018);
+  - posts with data of the kinds Article 9(1) lists have an answer (#146;
+    ADR-0020 has the bot read only posts a member opted in, and whether the
+    tag meets Article 9(2)(a) is still to be checked).
 - The entries above are in their documents, and the privacy notice is
   published ([compliance](README.md), "Gates for the public launch").
-- The implementation passes the cases of ADR-0009.
-- The operator has created the opt-out tag, has set the guidelines text of the
-  forum and has switched the right to message content on in Discord's
-  developer portal.
+- The implementation passes the cases of ADR-0009, cases 17 to 19 for the
+  opt-in tag of ADR-0020.
+- The operator has created the opt-in tag "Automated answer", has set the
+  guidelines text of the forum and has switched the right to message content
+  on in Discord's developer portal.
 - The live test has shown the two points ADR-0009 lists as not tried.

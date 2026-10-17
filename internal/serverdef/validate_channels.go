@@ -106,18 +106,18 @@ func (v *validator) checkFirstAnswer() {
 }
 
 func (v *validator) checkFirstAnswerTagsAndBot(path string, ch Channel) {
-	optOutCount := 0
+	optInCount := 0
 	for _, tag := range ch.Tags {
-		if tag.OptOut {
-			optOutCount++
+		if tag.OptIn {
+			optInCount++
 			if tag.Moderated {
 				v.add(CodeFirstAnswer, fmt.Sprintf("%s.tags[%s]", path, tag.Name),
-					"opt_out tag must have moderated false")
+					"opt_in tag must have moderated false")
 			}
 		}
 	}
-	if optOutCount != 1 {
-		v.add(CodeFirstAnswer, path+".tags", "first_answer forum must have exactly one opt_out tag")
+	if optInCount != 1 {
+		v.add(CodeFirstAnswer, path+".tags", "first_answer forum must have exactly one opt_in tag")
 	}
 	botRole := findRoleByKind(v.def.Roles, "bot")
 	if botRole != nil {

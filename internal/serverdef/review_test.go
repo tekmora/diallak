@@ -161,15 +161,15 @@ func TestValidate_Negative_FirstAnswerConditions(t *testing.T) {
 		{"the forum is a text channel", func(t *testing.T, def *Definition) {
 			channelOf(t, def, "support").Type = "text"
 		}, CodeFirstAnswer, "channels[support].type", "forum"},
-		{"only moderators can set the opt-out tag", func(t *testing.T, def *Definition) {
+		{"only moderators can set the opt-in tag", func(t *testing.T, def *Definition) {
 			channelOf(t, def, "support").Tags[0].Moderated = true
-		}, CodeFirstAnswer, "channels[support].tags[No automated reply]", "moderated"},
-		{"two opt-out tags", func(t *testing.T, def *Definition) {
-			channelOf(t, def, "support").Tags[1].OptOut = true
-		}, CodeFirstAnswer, "channels[support].tags", "exactly one"},
-		{"no opt-out tag", func(t *testing.T, def *Definition) {
-			channelOf(t, def, "support").Tags[0].OptOut = false
-		}, CodeFirstAnswer, "channels[support].tags", "exactly one"},
+		}, CodeFirstAnswer, "channels[support].tags[Automated answer]", "moderated"},
+		{"two opt-in tags", func(t *testing.T, def *Definition) {
+			channelOf(t, def, "support").Tags[1].OptIn = true
+		}, CodeFirstAnswer, "channels[support].tags", "exactly one opt_in"},
+		{"no opt-in tag", func(t *testing.T, def *Definition) {
+			channelOf(t, def, "support").Tags[0].OptIn = false
+		}, CodeFirstAnswer, "channels[support].tags", "exactly one opt_in"},
 		{"the bot cannot see the forum", denyBot("VIEW_CHANNEL"), CodeFirstAnswer, bot, "VIEW_CHANNEL"},
 		{"the bot cannot read the first message", denyBot("READ_MESSAGE_HISTORY"),
 			CodeFirstAnswer, bot, "READ_MESSAGE_HISTORY"},

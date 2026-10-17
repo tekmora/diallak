@@ -46,8 +46,8 @@ creation. A post without the tag is neither read nor answered; the bot does
 not request its first message and does not use its title.
 
 - One setting names the tag. The operator creates the tag in the forum and
-  leaves it free for every member to set; the proposed name is "Automated
-  first answer". The tag id never enters the tree.
+  leaves it free for every member to set; its name is "Automated answer".
+  The tag id never enters the tree.
 - With the forum configured and no tag configured, the start stops, as it did
   for the opt-out tag.
 - The tag counts when the post is created, because the bot reads once, at
@@ -61,7 +61,7 @@ not request its first message and does not use its title.
 The guidelines text of the forum becomes:
 
 > The automated assistant reads a new post only when you add the tag
-> 'Automated first answer' when you create it. It then reads the first
+> 'Automated answer' when you create it. It then reads the first
 > message and may reply first with excerpts from the documentation. It reads
 > nothing else here. Do not ask for it on a post that holds health data or
 > other sensitive data, or data about other people. More is in the privacy

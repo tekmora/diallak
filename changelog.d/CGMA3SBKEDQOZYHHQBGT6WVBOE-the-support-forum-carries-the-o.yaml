@@ -1,0 +1,2 @@
+type: changed
+title: 'The support forum carries the opt-in tag "Automated answer" in place of the opt-out tag, and the server definition check asks for exactly one opt-in tag (ADR-0020, #39)'
