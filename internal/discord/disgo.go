@@ -98,7 +98,10 @@ type BotConfig struct {
 	// Areas serves the areas command. Nil leaves the command unserved.
 	Areas *AreasHandler
 	// Moderation serves the moderation commands and sweeps the trail. Nil leaves both off.
-	Moderation      *ModerationHandler
+	Moderation *ModerationHandler
+	// Forum answers opted-in posts of the support forum. Nil leaves the gateway session without
+	// any intent and handles no thread event (ADR-0009 case 1).
+	Forum           *ForumHandler
 	Logger          *slog.Logger
 	ShutdownTimeout time.Duration
 	// ReportReady reports whether the bot is ready to serve. It is called with true
@@ -179,17 +182,31 @@ func lookupApplicationID(
 	token string,
 	deadline time.Duration,
 ) (snowflake.ID, error) {
+	app, err := lookupApplication(ctx, restClient, token, deadline)
+	if err != nil {
+		return 0, err
+	}
+	return app.ID, nil
+}
+
+// lookupApplication reads the application of the token: its id and its flags.
+func lookupApplication(
+	ctx context.Context,
+	restClient rest.Rest,
+	token string,
+	deadline time.Duration,
+) (*discord.Application, error) {
 	lookupCtx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 
 	app, err := restClient.GetCurrentApplication(rest.WithCtx(lookupCtx))
 	if err != nil {
-		return 0, callError("lookup current application", err, token)
+		return nil, callError("lookup current application", err, token)
 	}
 	if app == nil || app.ID == 0 {
-		return 0, fmt.Errorf("lookup current application: %w", errEmptyApplicationID)
+		return nil, fmt.Errorf("lookup current application: %w", errEmptyApplicationID)
 	}
-	return app.ID, nil
+	return app, nil
 }
 
 // Run starts the Discord gateway connection and dispatches interactions to the handler.
@@ -247,9 +264,13 @@ func preGatewayStep(
 	client *bot.Client,
 	opts clientOptions,
 ) (snowflake.ID, error) {
-	appID, err := lookupApplicationID(ctx, client.Rest, cfg.Token, opts.lookupDeadline())
+	app, err := lookupApplication(ctx, client.Rest, cfg.Token, opts.lookupDeadline())
 	if err != nil {
 		return 0, err
+	}
+	appID := app.ID
+	if cfg.Forum != nil && !hasMessageContentRight(app.Flags) {
+		return 0, errNoMessageContentRight
 	}
 
 	matchesTokenID := appID == client.ApplicationID
@@ -299,9 +320,13 @@ func normalizeBotConfig(cfg BotConfig) (BotConfig, error) {
 	return cfg, nil
 }
 
-// gatewayIntents is the intent set of the gateway session: none. Application command interactions
-// arrive without any intent, and the bot requests no privileged one (ADR-0001).
-func gatewayIntents() gateway.Intents {
+// gatewayIntents is the intent set of the gateway session. Application command interactions
+// arrive without any intent, and the bot requests no privileged one (ADR-0001). Only the forum
+// answer adds the one standard intent that carries thread events (ADR-0009).
+func gatewayIntents(forum bool) gateway.Intents {
+	if forum {
+		return gateway.IntentGuilds
+	}
 	return gateway.IntentsNone
 }
 
@@ -503,7 +528,7 @@ func buildClient(
 	botOpts := []bot.ConfigOpt{
 		bot.WithLogger(libraryLogger(cfg.Logger)),
 		bot.WithGatewayConfigOpts(
-			gateway.WithIntents(gatewayIntents()),
+			gateway.WithIntents(gatewayIntents(cfg.Forum != nil)),
 			gateway.WithAutoReconnect(true),
 		),
 		bot.WithRestConfigOpts(
@@ -512,6 +537,11 @@ func buildClient(
 		bot.WithEventListenerFunc(func(e *events.InteractionCreate) {
 			d.handle(ctx, e)
 		}),
+	}
+	if cfg.Forum != nil {
+		botOpts = append(botOpts, bot.WithEventListenerFunc(func(e *events.ThreadCreate) {
+			d.handleThreadCreate(ctx, e)
+		}))
 	}
 	if opts.restURL != "" {
 		botOpts = append(botOpts, bot.WithRestClientConfigOpts(rest.WithURL(opts.restURL)))
@@ -654,6 +684,9 @@ func shutdownClient(cfg BotConfig, client *bot.Client, componentsRunning *sync.W
 	defer cancel()
 
 	waitErr := cfg.Handler.Wait(shutdownCtx)
+	if waitErr == nil && cfg.Forum != nil {
+		waitErr = cfg.Forum.Wait(shutdownCtx)
+	}
 	if waitErr == nil {
 		waitErr = waitGroup(shutdownCtx, componentsRunning)
 	}

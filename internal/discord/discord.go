@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -131,9 +130,7 @@ type Handler struct {
 	renderOptions    answer.RenderOptions
 	receipts         *Receipts
 
-	mu          sync.Mutex
-	inFlight    int
-	zeroWaiters []chan struct{}
+	slots slots
 }
 
 // NewHandler constructs and validates a new Handler instance.
@@ -177,6 +174,7 @@ func NewHandler(cfg HandlerConfig) (*Handler, error) {
 		questionMaxChars: questionMaxChars,
 		renderOptions:    cfg.RenderOptions,
 		receipts:         cfg.Receipts,
+		slots:            slots{max: maxConcurrent},
 	}, nil
 }
 
@@ -211,64 +209,10 @@ func validateReplyTimeout(d time.Duration) (time.Duration, error) {
 }
 
 // InFlight returns the number of asks currently holding a processing slot.
-func (h *Handler) InFlight() int {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.inFlight
-}
+func (h *Handler) InFlight() int { return h.slots.inFlightCount() }
 
 // Wait blocks until all in-flight asks complete or ctx is cancelled.
-func (h *Handler) Wait(ctx context.Context) error {
-	h.mu.Lock()
-	if h.inFlight == 0 {
-		h.mu.Unlock()
-		return nil
-	}
-	ch := make(chan struct{})
-	h.zeroWaiters = append(h.zeroWaiters, ch)
-	h.mu.Unlock()
-
-	select {
-	case <-ch:
-		return nil
-	case <-ctx.Done():
-		h.mu.Lock()
-		h.removeZeroWaiter(ch)
-		h.mu.Unlock()
-		return ctx.Err()
-	}
-}
-
-func (h *Handler) removeZeroWaiter(ch chan struct{}) {
-	for i, w := range h.zeroWaiters {
-		if w == ch {
-			h.zeroWaiters = append(h.zeroWaiters[:i], h.zeroWaiters[i+1:]...)
-			break
-		}
-	}
-}
-
-func (h *Handler) acquireSlot() bool {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.inFlight >= h.maxConcurrent {
-		return false
-	}
-	h.inFlight++
-	return true
-}
-
-func (h *Handler) releaseSlot() {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.inFlight--
-	if h.inFlight == 0 {
-		for _, ch := range h.zeroWaiters {
-			close(ch)
-		}
-		h.zeroWaiters = nil
-	}
-}
+func (h *Handler) Wait(ctx context.Context) error { return h.slots.wait(ctx) }
 
 // HandleAsk processes an /ask command interaction safely without panicking.
 func (h *Handler) HandleAsk(ctx context.Context, in Interaction) {
@@ -284,11 +228,11 @@ func (h *Handler) HandleAsk(ctx context.Context, in Interaction) {
 		return
 	}
 
-	if !h.acquireSlot() {
+	if !h.slots.acquire() {
 		h.handleDirectReply(ctx, in, TextBusy)
 		return
 	}
-	defer h.releaseSlot()
+	defer h.slots.release()
 
 	if !h.performDefer(ctx, in) {
 		return
