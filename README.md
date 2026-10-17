@@ -50,7 +50,12 @@ member chooses interest, language and notification roles with `/areas`
 ([ADR-0011](docs/adr/0011-area-roles-from-member-choice.md)), and a moderator
 acts with `Remove message` and `/timeout`
 ([ADR-0021](docs/adr/0021-moderation-commands-and-trail.md),
-[moderator guide](docs/moderator-guide.md)). Issue drafts, wishes and
+[moderator guide](docs/moderator-guide.md)). In the support forum the bot can
+reply first to a new post that carries the tag "Automated answer", with
+excerpts from the documentation only
+([ADR-0009](docs/adr/0009-support-forum-first-answer.md),
+[ADR-0020](docs/adr/0020-forum-answers-only-opted-in-posts.md)); it is off
+until a deployment sets the two forum variables. Issue drafts, wishes and
 polls will not be built in this repository: they belong to a shared core the
 projects plan to use from every channel, and the bot will be its Discord
 adapter. That core has no record here yet.
@@ -108,6 +113,8 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 | `DIALLAK_MODEL_KEY_FILE` | no | Path of the file that holds the endpoint's credential |
 | `DIALLAK_SUPPORT_CHANNEL` | no | Wording for where a person helps, put into every reply; default "the support channel" |
 | `DIALLAK_HEALTH_ADDR` | no | Listen address "host:port" for health probes; off by default |
+| `DIALLAK_FORUM_CHANNEL_ID` | with the tag | Id of the support forum whose new opted-in posts get a first reply; the forum answer is off without it |
+| `DIALLAK_FORUM_OPT_IN_TAG_ID` | with the forum | Id of the forum's tag "Automated answer"; only a post that carries it from its creation is read |
 | `DIALLAK_TRAIL_RETENTION` | no | How long a line of the moderation trail stays, as a Go duration from `24h` to `8760h`; default 90 days |
 <!-- markdownlint-enable MD013 -->
 
@@ -197,7 +204,10 @@ diallak
 It loads the documentation and the server definition, reads the server's roles
 and channels and its own user, connects to Discord and answers `/ask`,
 `/areas`, `Remove message` and `/timeout` until it receives a termination
-signal. A reply is visible only to the member who asked and can never mention
+signal. With the two forum variables set it also replies to each new post in
+that forum that carries the opt-in tag, with excerpts and never with the model.
+The forum answer needs the right to read message content, switched on in
+Discord's developer portal; without it the start stops. A reply is visible only to the member who asked and can never mention
 anyone. A failed read stops the start. Once a day it deletes its own lines of
 the moderation trail that are older than `DIALLAK_TRAIL_RETENTION`.
 

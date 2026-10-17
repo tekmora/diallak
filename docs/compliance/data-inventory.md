@@ -15,6 +15,9 @@ receipt of a reply: names of guardrails and policies, never the member's text.
 When a moderator removes a message or times a member out, the bot writes one
 line of the moderation trail into the server's log channel, with the ids of
 the moderator and the affected member, and deletes the line after 90 days.
+When the support forum is configured, the bot reads the title and the first
+message of a new post that carries the opt-in tag, once, and holds them in
+memory until its reply is sent.
 
 ## What the bot receives
 
@@ -34,6 +37,12 @@ the moderator and the affected member, and deletes the line after 90 days.
 | For the form of `Remove message`: the reason | Discord, with the form | The audit log reason and the trail line | In memory until the reply is sent; the reason stays in the trail line |
 | The server's roles and channels, and the bot's own user id | Discord, read at start and once a day | Finding the Moderator role and the log channel by name; telling the bot's own trail lines apart | In memory until the next read |
 | The lines in the log channel: id, author id and time of each | Discord, read once a day | Finding the bot's own lines older than the retention | Not kept beyond the sweep |
+| Title of a new post in the support forum | Discord, with the thread event | Finding passages | In memory until the reply is sent or the attempt ends |
+| Text of the first message of that post, up to the question limit | Discord, on the bot's request for that one message | Finding passages | In memory until the reply is sent or the attempt ends |
+| Whether the author of that message is an application | Discord, with the message | Leaving such a post without a reply | Not kept |
+| Whether a new post carries the opt-in tag | Discord, with the thread event | Reading only a tagged post: the first message of any other post is not requested | Not kept |
+| Events about channels, roles and threads of the server, with the title of each new thread and the id of its creator | Discord, with the standard intent that carries thread events, only when the support forum is configured | Nothing, except telling a new opted-in post in the configured forum from everything else by the id of the parent channel, the kind of thread, the mark of a new thread and its tags | Not kept |
+| Other fields of the first message of a post: author id and name, attachments, embeds, polls, components | Discord, with the message | Nothing: the bot reads none of them | Not kept |
 | Other fields Discord sends with a command or a button press, such as the member's name and locale, the member's id and roles with `/ask`, and the text of the message a `Remove message` names | Discord, with the command | Nothing: the bot reads none of them | Not kept |
 <!-- markdownlint-enable MD013 -->
 
@@ -53,7 +62,24 @@ the options and the reason
 `moderationAdapter`, `removeMessageTarget`, `timeoutRequest`). The daily sweep
 reads only the id, the author and the time of a line (`ListLines` in the same
 file). The gateway session requests no intent, so no message,
-member or presence event reaches the bot (`gatewayIntents` in the same file).
+member or presence event reaches the bot (`gatewayIntents` in
+[`internal/discord/disgo.go`](../../internal/discord/disgo.go)). Only when
+`DIALLAK_FORUM_CHANNEL_ID` and `DIALLAK_FORUM_OPT_IN_TAG_ID` are set does it
+request the one standard intent that carries thread events, still no message
+intent and no privileged intent
+([ADR-0009](../adr/0009-support-forum-first-answer.md),
+[ADR-0020](../adr/0020-forum-answers-only-opted-in-posts.md)). For the support
+forum the bot compares the parent channel, the kind of thread, the mark of a
+new thread and the tags of each created thread, and only for a new opted-in
+post requests the first message through the HTTP API, one request for one
+message ([`internal/discord/forum.go`](../../internal/discord/forum.go),
+`skipReason`; [`internal/discord/disgo_forum.go`](../../internal/discord/disgo_forum.go),
+`forumPostOf`, `restForumCalls`). The Discord library's caches keep their
+default, which stores nothing, so no thread title is kept
+(`TestRunForum_Positive_OptedInPostIsAnsweredOverREST`). The start stops when the application lacks the right to
+message content (`TestRunForum_Negative_StartStopsWithoutTheRight`), and
+`TestRunForum_Negative_OnlyNewOptedInPostsAreRead` shows that an old post, a
+post without the tag, a message event and an edit are not read.
 When it is switched on, the health listener answers the deployment's probes.
 It reads no request body, writes no log line per request and holds no member
 data ([`internal/health`](../../internal/health/health.go)).
@@ -105,6 +131,7 @@ Check: `line` and `Sweep` in
 | Duration | `1.2s` | No |
 | For `/areas`: the role of the definition, whether it was given or taken, the outcome, the error class of a failed call, the reason of a refusal | `interest-games`, `given`, `ok`, `not-an-option` | No |
 | For a receipt: the outcome, and the error class of a failed call | `shown`, `gone`, `sent`, `closed`, `failure` | No |
+| For a post in the support forum: the outcome, the reason, the error class of a failed call; at debug level, why a thread was skipped | `excerpts`, `no_source`, `application_author`, `busy`, `not_opted_in` | No |
 | For a moderation command: the reason of a refusal, the error class of a failed act or trail line; for the daily sweep, the number of lines deleted | `not-moderator`, `timeout`, `deleted` | No |
 | At start: number of sources and passages, each source with its revision, whether a model is configured, the model alias | `lusoris/SnatchArr@9e70c2e03d22` | No |
 | Name of a command or numeric type of an interaction the bot does not serve, at debug level only | `other` | No |
@@ -113,7 +140,8 @@ Check: `line` and `Sweep` in
 <!-- markdownlint-enable MD013 -->
 
 The logs never hold a question, an answer, a member id, the bot token or the
-text of an error from the model endpoint. The Discord library's own debug
+text of an error from the model endpoint. For the support forum they hold no
+title, no text, no post id and no member id. The Discord library's own debug
 output, which would include message bodies, is cut off. Its warnings and errors
 pass a fixed list of fields; a reply body, a request address, an error text and
 the value of a program fault are held back, also in a fault of the reply call
@@ -129,6 +157,8 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
 `TestNewRestClient_Negative_LibraryRecordsOfOneShotCommandsAreFiltered` and
 `TestAreasChange_Positive_GivesAndTakesOnlyTheDifference` in
 [`internal/discord`](../../internal/discord), and
+`TestForum_Negative_LogHoldsNoContent` in
+[`internal/discord`](../../internal/discord/forum_test.go), and
 `TestAsk_Negative_ModelErrorTextIsNeverLogged` in
 [`internal/answer`](../../internal/answer), and
 `TestGate_Negative_ErrorTextNeverReachesTheLog` in
@@ -145,6 +175,7 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
 | Discord | The deletion of a message or the timeout of a member, with the moderator's reason for the audit log | Each act of a moderator |
 | Discord | The trail line, into the log channel, mentioning no one | Each act that Discord carried out |
 | Discord | The deletion of a trail line of the bot's own past the retention | Once a day |
+| Discord | A public reply in a post of the support forum, with excerpts from the documentation, mentioning no one | A new opted-in post for which a passage is found; at most one reply per post |
 | Discord | The receipt as a direct message to the member who pressed for it | Only when the member presses the direct message button; never on the bot's own |
 | The model endpoint the operator configures | The question and the retrieved documentation passages | Model mode only |
 | The model endpoint the operator configures | One fixed word, to learn whether the endpoint answers | Model mode only, once at start |
@@ -155,6 +186,10 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
   it. What it holds for a time anyway, a cached answer and a log line about a
   blocked question, is listed in the [privacy notice](privacy-notice.md),
   "How long data is kept".
+- The model endpoint receives nothing from the support forum, whatever the
+  model settings are: posts are answered with excerpts only
+  (`TestExcerpts_Positive_NeverCallsTheGenerator` in
+  [`internal/answer`](../../internal/answer/forum_test.go)).
 - In excerpt mode the question goes nowhere: the reply holds documentation text,
   not the question, and carries no receipt button.
 - The endpoint's guardrails can mask or change the text before the model. They
@@ -181,6 +216,9 @@ For the moderation commands, Discord holds the trail lines in the log channel
 until the bot deletes them, and an audit log entry for each act with the
 moderator's reason. A timeout shows on the member while it lasts.
 
+For the support forum, Discord holds the post and the bot's public reply under
+its own terms. The bot keeps no copy of the reply and no reference to it.
+
 ## Not yet built
 
 These will add entries here when they are built:
@@ -189,7 +227,3 @@ These will add entries here when they are built:
   after a ticket is closed, as a default that configuration can change.
 - Reading GitHub Discussions ([ADR-0004](../adr/0004-community-questions.md)).
 - Supporter roles.
-- A first answer in the support forum, for which the bot reads the title and
-  the first message of a new post
-  ([ADR-0009](../adr/0009-support-forum-first-answer.md)). The
-  entries are drafted in [Support forum answer](support-forum-answer.md).

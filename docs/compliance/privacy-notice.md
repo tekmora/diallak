@@ -36,6 +36,13 @@ against the code.
   sends it as a direct message only when you press for that.
 - Your question is never used to train or evaluate a model
   ([ADR-0002](../adr/0002-data-and-compliance.md)).
+- When the operator has switched the forum answer on, the bot reads the title
+  and the first message of a new post in the support forum, once, to find
+  documentation that answers it. It reads no other message.
+- It reads a post only when you add the tag "Automated answer" when you create
+  it ([ADR-0020](../adr/0020-forum-answers-only-opted-in-posts.md)).
+- Its reply there is public, like the post, and holds documentation text, not
+  your text. No model writes it.
 
 ## Your right to object
 
@@ -49,6 +56,12 @@ interests.
 To object, write to the e-mail address under "Who is responsible". That is the
 binding path. A private thread in the ticket channel of the server, addressed
 to the operator, is accepted too.
+
+In the support forum the bot reads a post only when you add the tag
+"Automated answer" when you create the post. Without the tag it does not read
+the post and does not reply. Adding the tag later does not make the bot read
+the post, and removing it later does not take a reply back, because the bot
+reads a post once, when it is created.
 
 ## Who is responsible
 
@@ -80,15 +93,22 @@ No data protection officer is appointed.
 | When you press the receipt's direct message button: your member id | Sending the receipt to you as a direct message, for that one request | Legitimate interests, Article 6(1)(f) |
 | When a moderator acts on you: your member id, and for a removed message its channel and message id | Carrying out the act and writing the trail line, so the operator can check what moderators did | Legitimate interests, Article 6(1)(f) |
 | When you are a moderator and use a moderation command: your member id, the roles you hold, and the reason you give | Refusing callers without the Moderator role and naming you and your reason in the trail line | Legitimate interests, Article 6(1)(f) |
+| Title and first message of a new post in the support forum | Finding documentation passages for a first reply in that post | Legitimate interests, Article 6(1)(f) |
+| Whether a post was written by an application | Leaving such a post without a reply | Legitimate interests, Article 6(1)(f) |
+| Whether a post carries the tag "Automated answer" | Reading only a post that carries it | Legitimate interests, Article 6(1)(f) |
+| Other fields Discord sends with a post or with events about channels, roles and threads, such as the id of the member who created a thread | None: the bot compares the channel and the kind of thread and reads nothing else | Not used |
 | Other fields Discord sends with a command or a button press, such as your name and locale, your member id and roles with `/ask`, and the text of a message a moderator removes | None: the bot reads none of them and keeps none | Not used |
 <!-- markdownlint-enable MD013 -->
 
-The question and the options you choose come from you. The other fields come
-from Discord, which attaches them to every command.
+The question, the options you choose and your post come from you. The other
+fields come from Discord, which attaches them to every command and event.
 
 The legitimate interest is to answer the question a member puts to the bot, in
 the server the bot is meant for, to give a member the roles that member
-chose, and to keep the server moderated with a record of every act. The bot
+chose, to keep the server moderated with a record of every act, and to give a
+question in the support forum a first answer from the documentation at once.
+You did not call the bot in the forum, so the forum's guidelines say that it
+reads the first message before you post. The bot
 asks for no consent. This basis is the
 operator's choice; [Legal research](legal-research.md), point 2, has the
 sources.
@@ -97,7 +117,8 @@ The bot's logs hold no question, no answer and no member id. They record the
 outcome of a request, such as `answer` or `refusal`, and how long it took; for
 `/areas`, which role was given or taken and whether that worked; for a
 receipt, whether it was shown or sent; for a moderation command, why it was
-refused or whether it worked
+refused or whether it worked; for a forum post, whether it was answered or
+why not, with no title, text, post id or member id
 ([data inventory](data-inventory.md), "What the bot logs").
 
 ## Who receives your data
@@ -112,11 +133,13 @@ refused or whether it worked
   a direct message to you. When a moderator acts, Discord receives the act
   with the moderator's reason, which its audit log keeps for 45 days, and the
   trail line in the log channel, which the moderators and the operator can
-  read.
+  read. In the support forum Discord receives the reply, which is public in
+  your post.
 - **The model endpoint** receives your question and the documentation passages
   that were found, in model mode only. The operator runs that endpoint. It
   receives no member id and no name
-  ([`internal/model`](../../internal/model/model.go)).
+  ([`internal/model`](../../internal/model/model.go)). It receives nothing
+  from the support forum: posts are answered with excerpts only.
 - Nobody else. The bot sells nothing and shares nothing for advertising.
 
 Model mode is switched off in the live server until the gates of
@@ -170,8 +193,12 @@ provider, the country of its data centre and the agreement that binds it.
 | The receipt of a reply, in the bot | In memory for 15 minutes, for at most 1000 replies at once, and lost on a restart. It holds the names of the guardrails and policies, the time, and whether the model's answer was shown; no text of yours and no member id |
 | Your member id, when you press for the receipt as a direct message | In memory until the direct message is sent |
 | The trail line of a moderator's act, in the server's log channel | 90 days, unless the operator configures 1 to 365 days; the bot deletes it once a day after that |
+| Title and first message of your post in the support forum, in the bot | In memory until the reply is sent or the attempt ends |
 | Log lines of the bot, which hold no personal data | 30 days |
 <!-- markdownlint-enable MD013 -->
+
+A reply in the support forum stays in your post under Discord's terms. The bot
+keeps no copy of it and no reference to it. A moderator can remove it.
 
 The three periods of the endpoint, and what each place holds, were measured
 on the operator's endpoint on 2026-10-11.
@@ -218,15 +245,16 @@ automated text about project documentation, and each one says so
 ## What you should not send
 
 Do not put secrets, or personal data of yourself or of other people, into a
-question. The bot does not need them to answer.
+question. The bot does not need them to answer. The same holds for a post in
+the support forum that carries the tag "Automated answer": the bot reads its
+first message.
 
 ## Changes to this notice
 
 Features that are planned will process more data: support tickets, GitHub
-Discussions, supporter roles and a first answer in the support forum
+Discussions and supporter roles
 ([data inventory](data-inventory.md), "Not yet built"). This notice gains the
-matching entries before such a feature goes live. The entries for the support
-forum are drafted in [Support forum answer](support-forum-answer.md). One
+matching entries before such a feature goes live. One
 period is decided already: a support ticket is kept 30 days after it is
 closed.
 
