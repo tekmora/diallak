@@ -62,6 +62,41 @@ func TestSnatchArrEval(t *testing.T) {
 	}
 }
 
+const (
+	recordedParaphraseHit = 2
+	recordedEmbeddingsDue = true
+)
+
+func TestSnatchArrEval_Paraphrase(t *testing.T) {
+	set, _, ix := loadSnatchArrFixture(t)
+	rep, err := Run(set, ix, retrieval.DefaultOptions())
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	t.Logf("paraphrase: %d/%d hits", rep.ParaphraseHit, rep.Paraphrase)
+
+	for _, out := range rep.Outcomes {
+		if out.Case.Kind == KindParaphrase && !out.Pass {
+			if len(out.Hits) > 0 {
+				top := out.Hits[0]
+				t.Logf("missing case %s: top hit %s (score %.4f)", out.Case.ID, top.Chunk.Path, top.Score)
+			} else {
+				t.Logf("missing case %s: no hits", out.Case.ID)
+			}
+		}
+	}
+
+	misses := rep.Paraphrase - rep.ParaphraseHit
+	due := EmbeddingsRecordDue(rep)
+	t.Logf("misses: %d (max: %d), embeddings record due: %t", misses, MaxParaphraseMisses, due)
+
+	if rep.ParaphraseHit != recordedParaphraseHit || due != recordedEmbeddingsDue {
+		t.Fatalf("run changed: got hits %d due %t, want hits %d due %t; update README record and test constants",
+			rep.ParaphraseHit, due, recordedParaphraseHit, recordedEmbeddingsDue)
+	}
+}
+
 func TestSnatchArrEval_Sweep(t *testing.T) {
 	set, _, ix := loadSnatchArrFixture(t)
 	t.Log("minscore | answerable_hit | off_topic_refused | undocumented_refused")

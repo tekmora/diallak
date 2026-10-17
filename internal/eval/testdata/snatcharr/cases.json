@@ -49,6 +49,18 @@
     {"id": "undoc-price", "kind": "undocumented", "question": "How much does a licence cost?"},
     {"id": "undoc-mobile", "kind": "undocumented", "question": "Is there a mobile app for iOS or Android?"},
     {"id": "undoc-plex", "kind": "undocumented", "question": "How do I set up Plex notifications?"},
-    {"id": "undoc-unraid", "kind": "undocumented", "question": "Is there a template for Unraid?"}
+    {"id": "undoc-unraid", "kind": "undocumented", "question": "Is there a template for Unraid?"},
+    {"id": "para-retry-delay", "kind": "paraphrase", "question": "When a release cannot be found, what duration elapses prior to checking anew?", "sources": ["docs/concepts.md", "docs/configuration.md"]},
+    {"id": "para-client-halt", "kind": "paraphrase", "question": "Will lookups pause automatically if my torrent daemon stops responding?", "sources": ["docs/concepts.md", "docs/download-clients.md"]},
+    {"id": "para-hourly-rate", "kind": "paraphrase", "question": "What is the standard limit on outbound tracker lookups every sixty minutes?", "sources": ["docs/concepts.md", "docs/configuration.md"]},
+    {"id": "para-backend-storage", "kind": "paraphrase", "question": "Is an external SQL engine mandatory to persist application data?", "sources": ["docs/deployment.md", "docs/configuration.md", "README.md"]},
+    {"id": "para-consecutive-errors", "kind": "paraphrase", "question": "What delay progression applies when multiple remote operations fail successively?", "sources": ["docs/concepts.md"]},
+    {"id": "para-log-cleanup", "kind": "paraphrase", "question": "Are past activity records purged automatically after three months?", "sources": ["docs/configuration.md"]},
+    {"id": "para-node-failure", "kind": "paraphrase", "question": "If an execution node dies mid-job, is the unfinished job reassigned after ninety seconds?", "sources": ["docs/concepts.md", "docs/configuration.md", "docs/adr/0002-lease-pull-work-distribution.md"]},
+    {"id": "para-media-request-priority", "kind": "paraphrase", "question": "Do requests submitted by users jump ahead of standard collection scans?", "sources": ["docs/seerr.md"]},
+    {"id": "para-delete-stuck", "kind": "paraphrase", "question": "Will this tool purge transfers that become unresponsive during acquisition?", "sources": ["docs/cleanuparr.md", "docs/download-clients.md", "README.md", "docs/adr/0004-no-swaparr-cleanuparr-deferred.md", "docs/adr/0007-read-only-cleanuparr-link.md", "docs/adr/0006-download-client-backpressure.md"]},
+    {"id": "para-database-ssl-validation", "kind": "paraphrase", "question": "How can I mandate complete TLS certificate verification against our internal PKI?", "sources": ["docs/deployment.md"]},
+    {"id": "para-immediate-trigger", "kind": "paraphrase", "question": "Is there a way to kick off an immediate collection scan on demand without waiting for the timer?", "sources": ["docs/concepts.md", "docs/api.md"]},
+    {"id": "para-legal-terms", "kind": "paraphrase", "question": "What open source software copyright terms govern this project and its guides?", "sources": ["README.md", "docs/index.md"]}
   ]
 }
