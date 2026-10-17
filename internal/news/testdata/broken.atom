@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/" xml:lang="en-US">
+  <id>tag:github.com,2008:https://github.com/tekmora/diallak/releases</id>
+  <link type="text/html" rel="alternate" href="https://github.com/tekmora/diallak/releases"/>
+  <link type="application/atom+xml" rel="self" href="https://github.com/tekmora/diallak/releases.atom"/>
+  <title>Release notes from diallak</title>
+  <updated>2026-10-12T15:17:44Z</updated>
+  <entry>
+    <id>tag:github.com,2008:Repository/1413111065/v0.4.2</id>
+    <updated>2026-10-12T15:20:19Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/tekmora/diallak/releases/tag/v0.4.2"/>
+    <title>v0.4.2</title>
+    <content type="html">&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;A server plan that creates roles no longer stops in the apply at the order 

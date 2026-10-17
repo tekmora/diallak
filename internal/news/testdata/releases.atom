@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/" xml:lang="en-US">
+  <id>tag:github.com,2008:https://github.com/tekmora/diallak/releases</id>
+  <link type="text/html" rel="alternate" href="https://github.com/tekmora/diallak/releases"/>
+  <link type="application/atom+xml" rel="self" href="https://github.com/tekmora/diallak/releases.atom"/>
+  <title>Release notes from diallak</title>
+  <updated>2026-10-12T15:17:44Z</updated>
+  <entry>
+    <id>tag:github.com,2008:Repository/1413111065/v0.4.2</id>
+    <updated>2026-10-12T15:20:19Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/tekmora/diallak/releases/tag/v0.4.2"/>
+    <title>v0.4.2</title>
+    <content type="html">&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;A server plan that creates roles no longer stops in the apply at the order step: the plan holds the step only when the order differs, and refuses it with too-few-positions when the server has no room (&lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5814328640&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/tekmora/diallak/issues/108&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/tekmora/diallak/issues/108/hovercard&quot; href=&quot;https://github.com/tekmora/diallak/issues/108&quot;&gt;#108&lt;/a&gt;)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Image&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak:0.4.2&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak@sha256:6b4d7c444cdc98f969bdace6af9f45a6dd3395300394bdce7abd2391936264c7&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Verify the image before you use it: README, &quot;Verifying a release&quot;.&lt;/p&gt;</content>
+    <author>
+      <name>github-actions[bot]</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/in/15368?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1413111065/v0.4.1</id>
+    <updated>2026-10-12T12:03:06Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/tekmora/diallak/releases/tag/v0.4.1"/>
+    <title>v0.4.1</title>
+    <content type="html">&lt;h3&gt;Added&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Server definition: Honorary supporter and software engineering guide roles&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Image&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak:0.4.1&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak@sha256:8e254c58839875a76469ff938347de4d3cc3f3da6ee1c72197f3df3373d0a980&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Verify the image before you use it: README, &quot;Verifying a release&quot;.&lt;/p&gt;</content>
+    <author>
+      <name>github-actions[bot]</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/in/15368?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1413111065/v0.4.0</id>
+    <updated>2026-10-12T11:41:05Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/tekmora/diallak/releases/tag/v0.4.0"/>
+    <title>v0.4.0</title>
+    <content type="html">&lt;h3&gt;Added&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Server definition: managed, notification and six more recognition roles&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Changed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;The pages on applying and on the definition give each right the label it carries in the settings of the chat platform beside its programming name; the right to time members out is the switch Time Out Members&lt;/li&gt;
+&lt;li&gt;Server definition: Moderator role without rights; bot may manage the server&lt;/li&gt;
+&lt;li&gt;The first set-up page names the step that comes first: the operator makes the Operator role by hand, and the bot&#39;s role holds no ADMINISTRATOR&lt;/li&gt;
+&lt;li&gt;The privacy notice names what the model endpoint holds and for how long: a cached answer for 60 minutes, a log line about a blocked question for about 74 hours, and a record without question or answer for 30 days&lt;/li&gt;
+&lt;li&gt;The first set-up starts from an invitation address that carries the seven rights&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Image&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak:0.4.0&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak@sha256:44d8aead1742fd74897fd44b656e3a3e0a1b4e24fe73f76d42efc96307261f6e&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Verify the image before you use it: README, &quot;Verifying a release&quot;.&lt;/p&gt;</content>
+    <author>
+      <name>github-actions[bot]</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/in/15368?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1413111065/v0.3.1</id>
+    <updated>2026-10-11T20:23:59Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/tekmora/diallak/releases/tag/v0.3.1"/>
+    <title>v0.3.1</title>
+    <content type="html">&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;A permission bit the table does not name on a role no longer stops the server plan: the change clears it and the plan line names it&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Image&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak:0.3.1&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak@sha256:b53f55202bd3502b8948ad96426a723c86b154781a2b87e03e5eaf1a0cc253f5&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Verify the image before you use it: README, &quot;Verifying a release&quot;.&lt;/p&gt;</content>
+    <author>
+      <name>github-actions[bot]</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/in/15368?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1413111065/v0.3.0</id>
+    <updated>2026-10-11T19:17:57Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/tekmora/diallak/releases/tag/v0.3.0"/>
+    <title>v0.3.0</title>
+    <content type="html">&lt;h3&gt;Changed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;README: supporter perks, the gate for model answers and where drafts, wishes and polls will live&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;BREAKING&lt;/strong&gt;: Model mode needs the name of the gateway policy and refuses a reply without it&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;A fault in a call to Discord no longer writes reply text or the reply address to the log&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Image&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak:0.3.0&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak@sha256:3b4e3a33ea9e755d5bc53e80e798d7f0e9189d33ebe02c944f2b8433609a5bd7&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Verify the image before you use it: README, &quot;Verifying a release&quot;.&lt;/p&gt;</content>
+    <author>
+      <name>github-actions[bot]</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/in/15368?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1413111065/v0.2.1</id>
+    <updated>2026-10-11T18:32:00Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/tekmora/diallak/releases/tag/v0.2.1"/>
+    <title>v0.2.1</title>
+    <content type="html">&lt;h3&gt;Changed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Say how the provenance of the SBOM files was tried against 0.2.0&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Server read no longer stops on a permission bit Discord&#39;s reference does not list; compare reports it and a plan refuses to write over it&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Image&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak:0.2.1&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak@sha256:2fb84d13312d344f0e451c66cca0a5f7d60ac769a24ad1521df6a81567beacdd&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Verify the image before you use it: README, &quot;Verifying a release&quot;.&lt;/p&gt;</content>
+    <author>
+      <name>github-actions[bot]</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/in/15368?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1413111065/v0.2.0</id>
+    <updated>2026-10-11T15:35:23Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/tekmora/diallak/releases/tag/v0.2.0"/>
+    <title>v0.2.0</title>
+    <content type="html">&lt;h3&gt;Security&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Release: the SBOM files on the release page get build provenance, so a downloaded file can be checked with gh attestation verify&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Added&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Start probe of the model endpoint and a model state on the health listener&lt;/li&gt;
+&lt;li&gt;Read a server into a snapshot; plan and compare commands that change nothing&lt;/li&gt;
+&lt;li&gt;Propose the record for the first answer in the support forum (&lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5796498601&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/tekmora/diallak/issues/39&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/tekmora/diallak/issues/39/hovercard&quot; href=&quot;https://github.com/tekmora/diallak/issues/39&quot;&gt;#39&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;Add the server definition as data with a validator&lt;/li&gt;
+&lt;li&gt;Apply command: make planned server changes gated by the plan digest&lt;/li&gt;
+&lt;li&gt;Server definition: observed platform state, with Membership Screening as the first entry&lt;/li&gt;
+&lt;li&gt;Decision record 0011: the bot gives area roles from the member&#39;s own choice&lt;/li&gt;
+&lt;li&gt;Apply path, offline half: compare and plan against a server snapshot&lt;/li&gt;
+&lt;li&gt;Dependency updates: Renovate proposes them as pull requests, three days after a release, with actions pinned to a commit&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Changed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Split the check of the source link template into smaller functions&lt;/li&gt;
+&lt;li&gt;Accept the record for the support forum answer and add an opt-out tag (&lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5796498601&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/tekmora/diallak/issues/39&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/tekmora/diallak/issues/39/hovercard&quot; href=&quot;https://github.com/tekmora/diallak/issues/39&quot;&gt;#39&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;Decision record 0013: a guardrail policy on every model call and a receipt for the member replace the gates for model mode&lt;/li&gt;
+&lt;li&gt;Say that a language room opens at a threshold and needs a reader&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;BREAKING&lt;/strong&gt;: Server definition: the key onboarding becomes choices, done by the bot&lt;/li&gt;
+&lt;li&gt;Apply the decided opening measure, contributor ladder and supporter roles&lt;/li&gt;
+&lt;li&gt;Server definition: the bot holds three rights, bounded by role order&lt;/li&gt;
+&lt;li&gt;Move the private path for requests and appeals to a ticket channel (&lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5796472113&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/tekmora/diallak/issues/37&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/tekmora/diallak/issues/37/hovercard&quot; href=&quot;https://github.com/tekmora/diallak/issues/37&quot;&gt;#37&lt;/a&gt;)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Removed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Editor and agent client files outside the set in use&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;BREAKING&lt;/strong&gt;: Refuse a placeholder before the path of the source link template (&lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5796694796&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/tekmora/diallak/issues/45&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/tekmora/diallak/issues/45/hovercard&quot; href=&quot;https://github.com/tekmora/diallak/issues/45&quot;&gt;#45&lt;/a&gt;)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Image&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak:0.2.0&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak@sha256:fdf33d1446a548c0bf5cef04be5cd9fd4c27c796aa37d27319269f18902b2b2f&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Verify the image before you use it: README, &quot;Verifying a release&quot;.&lt;/p&gt;</content>
+    <author>
+      <name>github-actions[bot]</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/in/15368?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1413111065/v0.1.2</id>
+    <updated>2026-10-11T00:33:45Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/tekmora/diallak/releases/tag/v0.1.2"/>
+    <title>v0.1.2</title>
+    <content type="html">&lt;h3&gt;Added&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Name the image digest on the release page&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Changed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Describe how to verify a release and name the first image&lt;/li&gt;
+&lt;li&gt;Update BuildKit in the release workflow to v0.34.0&lt;/li&gt;
+&lt;li&gt;Say what each release verification command needs&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Image&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak:0.1.2&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ghcr.io/tekmora/diallak@sha256:4ef6fa66afb63e85baa4d010d7cea7bd302dbd7431b6778d1aef7d17f48a5700&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Verify the image before you use it: README, &quot;Verifying a release&quot;.&lt;/p&gt;</content>
+    <author>
+      <name>github-actions[bot]</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/in/15368?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1413111065/v0.1.1</id>
+    <updated>2026-10-10T21:03:31Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/tekmora/diallak/releases/tag/v0.1.1"/>
+    <title>v0.1.1</title>
+    <content type="html">&lt;h3&gt;Added&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Add the record of processing and a separate notice of the right to object&lt;/li&gt;
+&lt;li&gt;Draft the imprint with one identity block shared with the privacy notice&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Stop the release from pushing a latest image tag&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>github-actions[bot]</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/in/15368?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1413111065/v0.1.0</id>
+    <updated>2026-10-10T20:01:00Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/tekmora/diallak/releases/tag/v0.1.0"/>
+    <title>Diallak v0.1.0</title>
+    <content type="html">&lt;p&gt;First release. Notes: section 0.1.0 of CHANGELOG.md.&lt;/p&gt;</content>
+    <author>
+      <name>lusoris</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/6750258?s=60&amp;v=4"/>
+  </entry>
+</feed>
