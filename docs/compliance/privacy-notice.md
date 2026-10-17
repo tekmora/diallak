@@ -271,8 +271,13 @@ and processes no data about members: its posts mention a role, never a
 member, and the file it keeps holds feed items and read times only
 ([data inventory](data-inventory.md), "What the bot stores").
 
+The Discussions bridge, when the operator switches it on, posts the title,
+category and link of each new public Q&A or Ideas discussion of the project's
+repositories into one channel. It names no author and mentions no one, and
+nothing written on the server goes to GitHub.
+
 Features that are planned will process more data: support tickets, GitHub
-Discussions and supporter roles
+Discussions as a source of answers, and supporter roles
 ([data inventory](data-inventory.md), "Not yet built"). This notice gains the
 matching entries before such a feature goes live. One
 period is decided already: a support ticket is kept 30 days after it is

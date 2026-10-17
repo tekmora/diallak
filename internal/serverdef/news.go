@@ -15,6 +15,8 @@ type News struct {
 	Repositories []string `json:"repositories"`
 	// Feeds are the other feeds, each with the area it serves.
 	Feeds []NewsFeed `json:"feeds"`
+	// DiscussionsChannel is the id of the text channel where new discussions are posted.
+	DiscussionsChannel string `json:"discussions_channel,omitempty"`
 }
 
 // NewsFeed is one feed and the area whose channel gets its digest.
@@ -72,6 +74,8 @@ type NewsNames struct {
 	Role string
 	// Channels maps the id of each feed's channel to the channel's name.
 	Channels map[string]string
+	// Discussions is the name of the channel where discussion posts go, or empty when unset.
+	Discussions string
 }
 
 // NewsNames returns the names of the news places. ok is false unless the definition has exactly one
@@ -88,6 +92,11 @@ func (d *Definition) NewsNames() (names NewsNames, ok bool) {
 	names = NewsNames{Announcement: findChannel(d.Channels, id).Name, Role: role.Name, Channels: map[string]string{}}
 	if d.News == nil {
 		return names, true
+	}
+	if d.News.DiscussionsChannel != "" {
+		if ch := findChannel(d.Channels, d.News.DiscussionsChannel); ch != nil {
+			names.Discussions = ch.Name
+		}
 	}
 	for _, f := range d.News.Feeds {
 		if ch, ok := d.FeedChannel(f.ID); ok {

@@ -118,6 +118,8 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 | `DIALLAK_FORUM_OPT_IN_TAG_ID` | with the forum | Id of the forum's tag "Automated answer"; only a post that carries it from its creation is read |
 | `DIALLAK_NEWS_STATE_FILE` | no | Absolute path of the file in which the news function keeps what it has posted; the news function is off without it |
 | `DIALLAK_NEWS_GITHUB_TOKEN_FILE` | no, with the state file | Path of the file that holds a read-only GitHub token, sent only to `api.github.com` for the advisory reads; without it those reads go unauthenticated |
+| `DIALLAK_DISCUSSIONS_APP_CLIENT_ID` | with the key file and the state file | Client ID of the GitHub App that reads Discussions; the bridge is off without it |
+| `DIALLAK_DISCUSSIONS_APP_KEY_FILE` | with the client ID and the state file | Path of the file that holds the app's private key; sent nowhere, it signs the app's short-lived tokens |
 | `DIALLAK_TRAIL_RETENTION` | no | How long a line of the moderation trail stays, as a Go duration from `24h` to `8760h`; default 90 days |
 <!-- markdownlint-enable MD013 -->
 

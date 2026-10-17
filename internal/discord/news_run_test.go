@@ -95,6 +95,50 @@ func TestNewsConfig_Boundary_FeedChannelHeldTwice(t *testing.T) {
 	}
 }
 
+func TestNewsConfig_Positive_DiscussionsPlace(t *testing.T) {
+	channels := fmt.Sprintf(`[{"id":"%d","guild_id":"%d","type":5,"name":"announcements"},`+
+		`{"id":"%d","guild_id":"%d","type":0,"name":"ai-news-tools"},`+
+		`{"id":"504","guild_id":"%d","type":0,"name":"discussions"}]`,
+		newsAnnouncementID, modGuildID, newsFeedChannelID, modGuildID, modGuildID)
+	nc := newsServer(t, newsRoles, channels)
+	nc.Names.Discussions = "discussions"
+	got, err := nc.Runner.ReadPlaces(context.Background())
+	if err != nil {
+		t.Fatalf("ReadPlaces() error = %v", err)
+	}
+	if got.Discussions != "504" {
+		t.Errorf("Discussions = %q, want 504", got.Discussions)
+	}
+}
+
+func TestNewsConfig_Boundary_DiscussionsMissingOrHeldTwice(t *testing.T) {
+	twice := fmt.Sprintf(`[{"id":"%d","guild_id":"%d","type":5,"name":"announcements"},`+
+		`{"id":"%d","guild_id":"%d","type":0,"name":"ai-news-tools"},`+
+		`{"id":"504","guild_id":"%d","type":0,"name":"discussions"},`+
+		`{"id":"505","guild_id":"%d","type":0,"name":"discussions"}]`,
+		newsAnnouncementID, modGuildID, newsFeedChannelID, modGuildID, modGuildID, modGuildID)
+	cases := []struct {
+		name     string
+		channels string
+	}{
+		{"missing", newsChannels},
+		{"held twice", twice},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			nc := newsServer(t, newsRoles, tc.channels)
+			nc.Names.Discussions = "discussions"
+			got, err := nc.Runner.ReadPlaces(context.Background())
+			if err != nil {
+				t.Fatalf("ReadPlaces() error = %v, want nil", err)
+			}
+			if got.Discussions != "" {
+				t.Errorf("Discussions = %q, want empty", got.Discussions)
+			}
+		})
+	}
+}
+
 // The news runner starts with the bot and ends with it.
 func TestStartNews_Positive_EndsWithContext(t *testing.T) {
 	client, _, _ := recordingRest(t, map[string]string{})

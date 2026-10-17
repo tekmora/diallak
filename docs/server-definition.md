@@ -87,7 +87,7 @@ after the definition and a file over one mebibyte are refused
 | `choices` | The questions the bot's areas command offers and the role each option gives | 3 questions |
 | `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 16 |
 | `settings` | The platform's filter rules and the server's verification level; absent, nothing of it is compared or changed | 3 filter rules and the verification level |
-| `news` | Own repositories, whose releases and advisories go to the announcement channel, and the other feeds, each with the area it serves; read by the bot, not applied to the server | 2 repositories and 0 feeds |
+| `news` | Own repositories, whose releases and advisories go to the announcement channel, the other feeds, each with the area it serves, and the text channel of the Discussions bridge; read by the bot, not applied to the server | 2 repositories and 0 feeds |
 <!-- markdownlint-enable MD013 -->
 
 A role or a rule carries `"basis": "decided"` or `"basis": "proposal"`. Decided
@@ -142,7 +142,7 @@ Each finding has a code, a path into the file and a message.
 | `role-grant` | A role assigned by the wrong party, such as a member's choice handing out the moderator role, or a managed role not assigned by the platform or an integration; an interest, language or notification role that is not the option of exactly one question; an option that gives a role of another kind; a notification role that does not state `mentionable: true`; `mentionable` on a managed role; `shown_apart` or `mentionable` on the bot's role or on the role every member holds |
 | `choice-limit` | A question with more than 25 options, or an option title longer than 100 characters |
 | `filter-rule` | More rules of one trigger than a server may hold; a field the rule's trigger or the action's type does not read; a keyword rule without keywords or patterns, a preset rule without presets; a list or an entry over the platform's limit; a mention limit outside 1 to 50; a rule without an action or with one action twice; an alert without a channel or into a channel that is not a staff channel; a timeout on a trigger other than keyword or mention spam, or outside one second to four weeks; a block message over 150 characters; more than 20 exempt roles or 50 exempt channels, or one listed twice; two rules with one name |
-| `news` | A feed address that is not an absolute `https` address; a feed without an area or for an area the file does not hold; more than 20 feeds; more than 10 own repositories, one not written `owner/name` or listed twice; own repositories without exactly one announcement channel, or with one where the bot cannot see or send |
+| `news` | A feed address that is not an absolute `https` address; a feed without an area or for an area the file does not hold; more than 20 feeds; more than 10 own repositories, one not written `owner/name` or listed twice; own repositories without exactly one announcement channel, or with one where the bot cannot see or send; a `discussions_channel` that is no channel of the file or not of type `text` |
 | `automation-record` | Something the bot or the platform does without a decision record, a planned bot feature not marked as needing one, or the state `observed` on anything but the platform or together with a record |
 | `id`, `text`, `enum`, `ref`, `version`, `singleton`, `permission-name`, `access-shape` | Malformed ids, empty texts, unknown values, references to nothing or to a managed role from a channel entry or an area, a wrong version, a missing or doubled base role, unknown or doubled permissions |
 <!-- markdownlint-enable MD013 -->
@@ -294,7 +294,10 @@ decided, planned, or observed on the server.
   `TestDefinition_Negative_BotAutomationStateMatchesCode` in
   [definition_test.go](../server/definition_test.go) names the code file of
   each and fails when a state and the code disagree.
-- **The bot, decided and not built:** the bridge from GitHub Discussions.
+- **The bot, built and off until its app is set:** the bridge from GitHub
+  Discussions, which posts each new Q&A or Ideas discussion into
+  `news.discussions_channel`, the lounge
+  ([ADR-0004](adr/0004-community-questions.md), issue #99).
 - **The bot, planned:** opening and closing the areas, the news posts, the
   supporter roles and the Contributor role. Each needs its own decision record
   first; until then the operator opens and closes areas by hand.

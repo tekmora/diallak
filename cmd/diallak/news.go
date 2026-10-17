@@ -7,6 +7,7 @@ import (
 
 	"github.com/tekmora/diallak/internal/config"
 	"github.com/tekmora/diallak/internal/discord"
+	"github.com/tekmora/diallak/internal/ghapp"
 	"github.com/tekmora/diallak/internal/news"
 	"github.com/tekmora/diallak/internal/serverdef"
 )
@@ -37,8 +38,49 @@ func newNews(cfg config.Config, def *serverdef.Definition) (*discord.NewsConfig,
 			ID: f.ID, Address: f.URL, Kind: news.SourceFeed, Interval: news.FeedInterval, Channel: ch,
 		})
 	}
+	discSrc, discReader, err := buildDiscussions(cfg, def)
+	if err != nil {
+		return nil, err
+	}
+	if discReader != nil {
+		sources = append(sources, discSrc)
+	}
 	return &discord.NewsConfig{
-		Runner: &news.Runner{Store: store, Reader: reader, Sources: sources, Logger: slog.Default()},
-		Names:  names,
+		Runner: &news.Runner{
+			Store:       store,
+			Reader:      reader,
+			Discussions: discReader,
+			Sources:     sources,
+			Logger:      slog.Default(),
+		},
+		Names: names,
 	}, nil
+}
+
+// buildDiscussions wires the GitHub Discussions reader and source when configured (issue #99).
+func buildDiscussions(cfg config.Config, def *serverdef.Definition) (news.Source, news.DiscussionReader, error) {
+	if !cfg.HasDiscussions() {
+		return news.Source{}, nil, nil
+	}
+	if def.News.DiscussionsChannel == "" {
+		return news.Source{}, nil, errors.New("news: discussions configured without serverdef discussions_channel")
+	}
+	key, err := ghapp.ParseKey([]byte(cfg.DiscussionsAppKey))
+	if err != nil {
+		return news.Source{}, nil, fmt.Errorf("news: parse discussions app key: %w", err)
+	}
+	app := &ghapp.App{
+		ClientID: cfg.DiscussionsAppClientID,
+		Key:      key,
+	}
+	reader := &news.GitHubDiscussions{
+		App:    app,
+		Logger: slog.Default(),
+	}
+	src := news.Source{
+		ID:       "discussions",
+		Kind:     news.SourceDiscussions,
+		Interval: news.DiscussionInterval,
+	}
+	return src, reader, nil
 }

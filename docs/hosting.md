@@ -74,6 +74,20 @@ is missing or out of range stops the start with a message that names it.
   only to `api.github.com`, for the advisory reads, and never logs it. Without
   it those reads are unauthenticated and may be refused; the bot then waits for
   the reset the reply names.
+- **The Discussions bridge is off unless its GitHub App is set**
+  ([ADR-0004](adr/0004-community-questions.md), issue #99).
+  `DIALLAK_DISCUSSIONS_APP_CLIENT_ID` and `DIALLAK_DISCUSSIONS_APP_KEY_FILE`
+  are set together and need the news state file; one without the other stops
+  the start. The operator creates the app with the repository permission
+  Discussions read-only and no other, installs it on the selected public
+  repositories whose discussions the hub should see, and mounts its private
+  key as a file of at most 16384 bytes. The bot never sends or logs the key: it
+  signs a token of nine minutes with it, exchanges that for an installation
+  token of one hour limited to discussions and metadata, and sends both only
+  to `api.github.com`. Every 15 minutes it posts each new Q&A or Ideas
+  discussion into the channel `news.discussions_channel` of the server
+  definition, the lounge today, with no mention and no crosspost. The first
+  read after the state file is new posts nothing.
 
 ## Start, stop and replace
 
@@ -174,6 +188,7 @@ platform's probes; a deployment does not publish the port.
 | Out | DNS | Always | |
 | Out | `github.com`, port 443 | News on: the releases feed of each own repository, every 10 minutes | [`internal/news`](../internal/news/advisory.go), `ReleasesAddress`; redirects only to https, at most a fixed number |
 | Out | `api.github.com`, port 443 | News on: the published advisories of each own repository, every 15 minutes | `AdvisoriesAddress` in the same file; the token goes to this host only |
+| Out | `api.github.com`, port 443 | Bridge on: `GET /app/installations` once per run, `POST /app/installations/{id}/access_tokens` about once an hour, `GET /installation/repositories` and one `POST /graphql` per repository every 15 minutes | [`internal/ghapp`](../internal/ghapp/ghapp.go) refuses redirects and every other host |
 | Out | The hosts of the definition's feeds, port 443 | News on and feeds listed: each feed once an hour | `news.feeds` in [`server/definition.json`](../server/definition.json); none listed today |
 | In | The health listener | Only when `DIALLAK_HEALTH_ADDR` is set | See "Health checks" |
 <!-- markdownlint-enable MD013 -->

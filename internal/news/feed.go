@@ -45,6 +45,8 @@ type Item struct {
 	Link string
 	// Published is the item's date, zero when the feed gives none the reader understands.
 	Published time.Time
+	// Category is the discussion category name, plain text, at most MaxTitleRunes runes.
+	Category string
 }
 
 type xmlFeed struct {
