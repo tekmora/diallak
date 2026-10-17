@@ -25,6 +25,19 @@ const (
 	KindOffTopic Kind = "off_topic"
 	// KindUndocumented indicates the question is about the project but not in the docs.
 	KindUndocumented Kind = "undocumented"
+	// KindParaphrase indicates the documentation answers it, but the question uses other words than the files that answer it; measured against a threshold, not a pass bar.
+	KindParaphrase Kind = "paraphrase"
+)
+
+const (
+	// MaxParaphraseOverlap is the maximum allowed share of distinct query tokens that may occur in source chunks.
+	// A paraphrase case shares at most half of its distinct terms with its sources.
+	// Source: chosen, not measured.
+	MaxParaphraseOverlap = 0.5
+
+	// MaxParaphraseMisses is the maximum number of missed paraphrase cases tolerated before a decision record on embeddings is due.
+	// Source: chosen, not measured.
+	MaxParaphraseMisses = 3
 )
 
 // Case represents a single evaluation query with expected behavior.
@@ -97,6 +110,15 @@ func validateSet(set Set) error {
 	return nil
 }
 
+func isSupportedKind(k Kind) bool {
+	switch k {
+	case KindAnswerable, KindParaphrase, KindOffTopic, KindUndocumented:
+		return true
+	default:
+		return false
+	}
+}
+
 func validateCase(c Case, seenIDs map[string]struct{}) error {
 	if c.ID == "" {
 		return errors.New("empty case ID in set")
@@ -106,22 +128,75 @@ func validateCase(c Case, seenIDs map[string]struct{}) error {
 	}
 	seenIDs[c.ID] = struct{}{}
 
-	if c.Kind != KindAnswerable && c.Kind != KindOffTopic && c.Kind != KindUndocumented {
+	if !isSupportedKind(c.Kind) {
 		return fmt.Errorf("case %q has unknown kind %q", c.ID, c.Kind)
 	}
 	if strings.TrimSpace(c.Question) == "" {
 		return fmt.Errorf("case %q has empty question", c.ID)
 	}
-	if c.Kind == KindAnswerable && len(c.Sources) == 0 {
-		return fmt.Errorf("case %q: answerable without sources", c.ID)
+	needsSources := c.Kind == KindAnswerable || c.Kind == KindParaphrase
+	if needsSources && len(c.Sources) == 0 {
+		return fmt.Errorf("case %q: %s without sources", c.ID, c.Kind)
 	}
-	if c.Kind != KindAnswerable && len(c.Sources) > 0 {
+	if !needsSources && len(c.Sources) > 0 {
 		return fmt.Errorf("case %q: non-answerable with sources", c.ID)
 	}
 	return nil
 }
 
-// Validate verifies that every source path listed in set exists in chunks.
+func addChunkTokens(set map[string]struct{}, texts ...string) {
+	for _, text := range texts {
+		for _, tok := range retrieval.Tokenize(text) {
+			set[tok] = struct{}{}
+		}
+	}
+}
+
+func collectSourceTokens(chunks []corpus.Chunk, srcSet map[string]struct{}) map[string]struct{} {
+	sourceTokens := make(map[string]struct{})
+	for _, c := range chunks {
+		if _, ok := srcSet[c.Path]; !ok {
+			continue
+		}
+		addChunkTokens(sourceTokens, c.Text, c.Heading, c.Title)
+	}
+	return sourceTokens
+}
+
+// Overlap returns the share of distinct retrieval.Tokenize tokens of question
+// that occur in the tokens of any chunk whose Path is in sources:
+//
+//	overlap = |tokens(question) ∩ tokens(sources)| / |tokens(question)|
+//
+// Tokens in sources are drawn from Text, Heading, and Title of matching chunks.
+// If question produces zero tokens, Overlap returns 0.
+func Overlap(question string, chunks []corpus.Chunk, sources []string) float64 {
+	qTokens := retrieval.Tokenize(question)
+	if len(qTokens) == 0 {
+		return 0
+	}
+	qDistinct := make(map[string]struct{}, len(qTokens))
+	for _, tok := range qTokens {
+		qDistinct[tok] = struct{}{}
+	}
+
+	srcSet := make(map[string]struct{}, len(sources))
+	for _, s := range sources {
+		srcSet[s] = struct{}{}
+	}
+
+	sourceTokens := collectSourceTokens(chunks, srcSet)
+	shared := 0
+	for tok := range qDistinct {
+		if _, ok := sourceTokens[tok]; ok {
+			shared++
+		}
+	}
+	return float64(shared) / float64(len(qDistinct))
+}
+
+// Validate verifies that every source path listed in set exists in chunks,
+// and that no paraphrase case exceeds MaxParaphraseOverlap.
 func Validate(set Set, chunks []corpus.Chunk) error {
 	paths := make(map[string]struct{}, len(chunks))
 	for _, c := range chunks {
@@ -131,6 +206,12 @@ func Validate(set Set, chunks []corpus.Chunk) error {
 		for _, s := range c.Sources {
 			if _, ok := paths[s]; !ok {
 				return fmt.Errorf("case %q references source %q not in chunks", c.ID, s)
+			}
+		}
+		if c.Kind == KindParaphrase {
+			overlap := Overlap(c.Question, chunks, c.Sources)
+			if overlap > MaxParaphraseOverlap {
+				return fmt.Errorf("case %q: overlap %.4f exceeds maximum %.4f", c.ID, overlap, MaxParaphraseOverlap)
 			}
 		}
 	}
@@ -158,6 +239,13 @@ type Report struct {
 	OffTopicRefused     int
 	Undocumented        int
 	UndocumentedRefused int
+	Paraphrase          int
+	ParaphraseHit       int
+}
+
+// EmbeddingsRecordDue reports whether the number of missed paraphrase cases exceeds MaxParaphraseMisses.
+func EmbeddingsRecordDue(rep Report) bool {
+	return rep.Paraphrase-rep.ParaphraseHit > MaxParaphraseMisses
 }
 
 // Run executes all cases in set against retriever r using opt.
@@ -185,6 +273,15 @@ func evaluateCase(c Case, hits []retrieval.Hit, rep *Report) bool {
 		for _, h := range hits {
 			if slices.Contains(c.Sources, h.Chunk.Path) {
 				rep.AnswerableHit++
+				return true
+			}
+		}
+		return false
+	case KindParaphrase:
+		rep.Paraphrase++
+		for _, h := range hits {
+			if slices.Contains(c.Sources, h.Chunk.Path) {
+				rep.ParaphraseHit++
 				return true
 			}
 		}

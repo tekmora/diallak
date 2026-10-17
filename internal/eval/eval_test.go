@@ -58,6 +58,7 @@ func TestLoadSet_Negative_ErrorsOnMalformedInputs(t *testing.T) {
 		{"unknown kind", `{"version": 1, "cases": [{"id": "c1", "kind": "random", "question": "q"}]}`, "unknown kind \"random\""},
 		{"empty question", `{"version": 1, "cases": [{"id": "c1", "kind": "off_topic", "question": "   "}]}`, "empty question"},
 		{"answerable without sources", `{"version": 1, "cases": [{"id": "c1", "kind": "answerable", "question": "q", "sources": []}]}`, "answerable without sources"},
+		{"paraphrase without sources", `{"version": 1, "cases": [{"id": "c1", "kind": "paraphrase", "question": "q", "sources": []}]}`, "paraphrase without sources"},
 		{"off topic with sources", `{"version": 1, "cases": [{"id": "c1", "kind": "off_topic", "question": "q", "sources": ["a.md"]}]}`, "non-answerable with sources"},
 		{"trailing data", sampleSetJSON() + "\n extra", "trailing data"},
 	}
@@ -96,6 +97,22 @@ func TestValidate_Negative_MissingSourceErrors(t *testing.T) {
 	chunks := []corpus.Chunk{{Path: "docs/a.md"}}
 	if err := Validate(set, chunks); err == nil || !strings.Contains(err.Error(), "docs/missing.md") {
 		t.Errorf("Validate missing source err = %v, want containing docs/missing.md", err)
+	}
+}
+
+func TestValidate_Negative_ParaphraseHighOverlap(t *testing.T) {
+	set := Set{
+		Cases: []Case{
+			{ID: "para-dup", Kind: KindParaphrase, Question: "How to deploy?", Sources: []string{"docs/deploy.md"}},
+		},
+	}
+	chunks := []corpus.Chunk{{Path: "docs/deploy.md", Text: "How to deploy application on server"}}
+	err := Validate(set, chunks)
+	if err == nil {
+		t.Fatal("Validate want error for high overlap paraphrase, got nil")
+	}
+	if !strings.Contains(err.Error(), "para-dup") {
+		t.Errorf("Validate error %q does not name case para-dup", err.Error())
 	}
 }
 

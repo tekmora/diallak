@@ -21,13 +21,30 @@ This directory is test data for the answer pipeline
 | Kind | Meaning | Expected |
 | :--- | :--- | :--- |
 | `answerable` | The documentation answers it | A listed source is retrieved |
+| `paraphrase` | Documented fact in other words | A listed source is retrieved; measured against the threshold |
 | `off_topic` | Nothing to do with the project | Refusal |
 | `undocumented` | About the project, but not in the docs | Measured only |
 
 `sources` lists every file that answers the question; retrieving any one of
 them counts.
 
+## Paraphrase cases and the embeddings threshold
+
+The `paraphrase` kind tests retrieval against questions that ask for documented
+facts using everyday words and synonyms rather than the documentation's own
+vocabulary (no file names, headings, or option names).
+
+Two constants govern paraphrase cases:
+
+- `MaxParaphraseOverlap = 0.5`: a paraphrase case shares at most half of its
+  distinct terms with its sources.
+- `MaxParaphraseMisses = 3`: a decision record on embeddings is due when more
+  than this many paraphrase cases miss.
+
+RECORD: hits 2/12, due true, date 2026-10-17
+
 Do not edit a question to make a test pass. A failing case is a finding about
 retrieval. To refresh the corpus, replace `corpus/` from a newer commit, update
 the revision here and in `cases.json`, and review every case against the new
 text.
+
