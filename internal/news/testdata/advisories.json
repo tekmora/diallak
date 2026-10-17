@@ -1,0 +1,30 @@
+[
+  {
+    "ghsa_id": "GHSA-aaaa-bbbb-cccc",
+    "cve_id": null,
+    "html_url": "https://github.com/tekmora/diallak/security/advisories/GHSA-aaaa-bbbb-cccc",
+    "summary": "Token <b>leak</b> in the log",
+    "description": "Long text the bot never copies.",
+    "severity": "high",
+    "state": "published",
+    "published_at": "2026-10-16T09:00:00Z",
+    "updated_at": "2026-10-16T09:05:00Z",
+    "withdrawn_at": null
+  },
+  {
+    "ghsa_id": "GHSA-dddd-eeee-ffff",
+    "html_url": "https://github.com/tekmora/diallak/security/advisories/GHSA-dddd-eeee-ffff",
+    "summary": "Withdrawn advisory",
+    "state": "published",
+    "published_at": "2026-10-15T09:00:00Z",
+    "withdrawn_at": "2026-10-15T10:00:00Z"
+  },
+  {
+    "ghsa_id": "GHSA-gggg-hhhh-iiii",
+    "html_url": "http://github.com/tekmora/diallak/security/advisories/GHSA-gggg-hhhh-iiii",
+    "summary": "Address without https",
+    "state": "published",
+    "published_at": "2026-10-14T09:00:00Z",
+    "withdrawn_at": null
+  }
+]

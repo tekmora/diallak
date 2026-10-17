@@ -31,6 +31,20 @@ func newsRepositories(n int) []string {
 	return repos
 }
 
+// setBotAccess replaces the bot's entry in channel id's access with one that allows allow and
+// denies deny.
+func setBotAccess(t *testing.T, def *Definition, id string, allow, deny []string) {
+	t.Helper()
+	ch := channelOf(t, def, id)
+	access := []Access{{Role: "bot", Allow: allow, Deny: deny}}
+	for _, a := range ch.Access {
+		if a.Role != "bot" {
+			access = append(access, a)
+		}
+	}
+	ch.Access = access
+}
+
 func newsFindings(findings []Finding) []Finding {
 	var out []Finding
 	for _, f := range findings {
@@ -137,6 +151,14 @@ func TestValidate_Negative_NewsFeeds(t *testing.T) {
 			def.News.Repositories = []string{"tekmora/diallak"}
 			channelOf(t, def, "home-lab").Type = "announcement"
 		}, CodeNews, "news.repositories", "announcement"},
+		// The bot posts and crossposts its own announcements: Discord asks SEND_MESSAGES for both
+		// (discord-api-docs 2d337db, "Crosspost Message").
+		{"bot cannot see the announcement channel", func(t *testing.T, def *Definition) {
+			setBotAccess(t, def, "announcements", []string{"SEND_MESSAGES"}, []string{"VIEW_CHANNEL"})
+		}, CodeNews, "news.repositories", "VIEW_CHANNEL"},
+		{"bot cannot post into the announcement channel", func(t *testing.T, def *Definition) {
+			setBotAccess(t, def, "announcements", []string{"VIEW_CHANNEL"}, []string{})
+		}, CodeNews, "news.repositories", "SEND_MESSAGES"},
 	})
 }
 

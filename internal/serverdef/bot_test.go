@@ -74,9 +74,10 @@ func TestBotRights_Negative_EntryBeyondTheChannelKind(t *testing.T) {
 			acc := accessOf(channelOf(t, def, "home-lab"), "bot")
 			acc.Allow = append(acc.Allow, "SEND_MESSAGES")
 		}, CodeBotRights, "channels[home-lab].access[bot]", "beyond"},
-		{"new bot entry on announcements allowing SEND_MESSAGES", func(_ *testing.T, def *Definition) {
+		// ADR-0019, point 4: the bot crossposts only its own posts, so MANAGE_MESSAGES is not given.
+		{"MANAGE_MESSAGES added to announcements", func(_ *testing.T, def *Definition) {
 			acc := accessOf(channelOf(t, def, "announcements"), "bot")
-			acc.Allow = []string{"SEND_MESSAGES"}
+			acc.Allow = append(acc.Allow, "MANAGE_MESSAGES")
 		}, CodeBotRights, "channels[announcements].access[bot]", "beyond"},
 		{"new bot entry on lounge allowing VIEW_CHANNEL", func(_ *testing.T, def *Definition) {
 			acc := accessOf(channelOf(t, def, "lounge"), "bot")

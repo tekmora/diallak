@@ -33,20 +33,7 @@ func (v *validator) checkBotChannelCeilings(botRole *Role) {
 		if acc == nil {
 			continue
 		}
-		allowed := make(map[string]struct{}, 4)
-		if ch.FirstAnswer {
-			allowed["VIEW_CHANNEL"] = struct{}{}
-			allowed["READ_MESSAGE_HISTORY"] = struct{}{}
-			allowed["SEND_MESSAGES_IN_THREADS"] = struct{}{}
-		}
-		if ch.Staff {
-			allowed["VIEW_CHANNEL"] = struct{}{}
-			allowed["SEND_MESSAGES"] = struct{}{}
-		}
-		if ch.Area != "" {
-			allowed["VIEW_CHANNEL"] = struct{}{}
-		}
-
+		allowed := botChannelCeiling(ch)
 		p := fmt.Sprintf("channels[%s].access[%s]", ch.ID, botRole.ID)
 		for _, perm := range acc.Allow {
 			if _, ok := allowed[perm]; !ok {
@@ -54,6 +41,30 @@ func (v *validator) checkBotChannelCeilings(botRole *Role) {
 			}
 		}
 	}
+}
+
+// botChannelCeiling returns what an entry of the bot's role may allow in ch: what the functions
+// of ch's kind need.
+func botChannelCeiling(ch Channel) map[string]struct{} {
+	allowed := make(map[string]struct{}, 4)
+	if ch.FirstAnswer {
+		allowed["VIEW_CHANNEL"] = struct{}{}
+		allowed["READ_MESSAGE_HISTORY"] = struct{}{}
+		allowed["SEND_MESSAGES_IN_THREADS"] = struct{}{}
+	}
+	if ch.Staff {
+		allowed["VIEW_CHANNEL"] = struct{}{}
+		allowed["SEND_MESSAGES"] = struct{}{}
+	}
+	if ch.Area != "" {
+		allowed["VIEW_CHANNEL"] = struct{}{}
+	}
+	if ch.Type == "announcement" {
+		// The bot posts own releases and advisories there and crossposts them (ADR-0019).
+		allowed["VIEW_CHANNEL"] = struct{}{}
+		allowed["SEND_MESSAGES"] = struct{}{}
+	}
+	return allowed
 }
 
 func (v *validator) checkBotStaffChannels(botRole *Role) {

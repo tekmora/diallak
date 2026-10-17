@@ -50,6 +50,8 @@ type Store interface {
 	Feed(id string) FeedState
 	// Record keeps the result of a read of feed id and returns the items of res that may be posted.
 	Record(id string, res Result, now time.Time) []Item
+	// Forget drops the key of item itemID of feed id, so the next read returns the item again.
+	Forget(id, itemID string)
 	// Hold keeps items for the next digest of channel, in the order given, each with the time now.
 	Hold(channel string, items []Item, now time.Time)
 	// Held returns the items channel holds for its digest, in the order they were held.
@@ -185,6 +187,13 @@ func (s *FileStore) Record(id string, res Result, now time.Time) []Item {
 	}
 	s.evictOldest()
 	return fresh
+}
+
+// Forget implements Store.
+func (s *FileStore) Forget(id, itemID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.state.Seen, ItemKey(id, itemID))
 }
 
 // Hold implements Store. Past MaxHeldPerChannel the oldest items of the channel go first.

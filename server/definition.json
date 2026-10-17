@@ -369,7 +369,8 @@
           "role": "everyone",
           "allow": [],
           "deny": ["SEND_MESSAGES", "SEND_MESSAGES_IN_THREADS", "CREATE_PUBLIC_THREADS"]
-        }
+        },
+        {"role": "bot", "allow": ["VIEW_CHANNEL", "SEND_MESSAGES"], "deny": []}
       ]
     },
     {
