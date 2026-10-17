@@ -61,6 +61,23 @@ func (e *TransportError) Unwrap() error {
 	return e.Err
 }
 
+// Classify returns the class of an embedding error for logs: "timeout", "status", "transport"
+// or "error". It never returns error text, which may name the endpoint.
+func Classify(err error) string {
+	var statusErr *StatusError
+	var transportErr *TransportError
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	case errors.As(err, &statusErr):
+		return "status"
+	case errors.As(err, &transportErr):
+		return "transport"
+	default:
+		return "error"
+	}
+}
+
 // Config holds configuration parameters for the embedding client.
 type Config struct {
 	BaseURL string
@@ -97,6 +114,9 @@ func OnPremises(rawURL string) error {
 		return errors.New("base URL host is empty")
 	}
 	host = strings.TrimSuffix(host, ".")
+	if host == "" {
+		return errors.New("embedding base URL host is empty: a hosted embedding service is never used (ADR-0022)")
+	}
 	hostLower := strings.ToLower(host)
 
 	if ip := net.ParseIP(hostLower); ip != nil {

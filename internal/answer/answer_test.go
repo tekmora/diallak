@@ -8,25 +8,29 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/embed"
 	"github.com/tekmora/diallak/internal/model"
 	"github.com/tekmora/diallak/internal/retrieval"
 )
 
 type stubRetriever struct {
-	hits []retrieval.Hit
-	mode retrieval.Mode
-	err  error
+	hits  []retrieval.Hit
+	mode  retrieval.Mode
+	err   error
+	calls atomic.Int32
 }
 
 func (s *stubRetriever) SearchMode(_ context.Context, _ string, _ retrieval.Options) ([]retrieval.Hit, retrieval.Mode, error) {
-	if s.err != nil {
-		return nil, "", s.err
-	}
+	s.calls.Add(1)
 	mode := s.mode
+	if s.err != nil {
+		return s.hits, mode, s.err
+	}
 	if mode == "" {
 		mode = retrieval.ModeKeyword
 	}
@@ -1266,6 +1270,7 @@ func TestAsk_ModeKeywordFallback_CountsAndLogs(t *testing.T) {
 	ret := &stubRetriever{
 		hits: []retrieval.Hit{hit},
 		mode: retrieval.ModeKeywordFallback,
+		err:  &retrieval.EmbedError{Err: &embed.StatusError{Code: 503}},
 	}
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
@@ -1299,7 +1304,52 @@ func TestAsk_ModeKeywordFallback_CountsAndLogs(t *testing.T) {
 	if !strings.Contains(logOutput, "embedding unavailable") {
 		t.Errorf("expected 'embedding unavailable' in log output, got: %s", logOutput)
 	}
-	if !strings.Contains(logOutput, "error_class=error") {
-		t.Errorf("expected 'error_class=error' in log output, got: %s", logOutput)
+	if !strings.Contains(logOutput, "error_class=status") {
+		t.Errorf("expected 'error_class=status' in log output, got: %s", logOutput)
+	}
+}
+
+// The forum answer must not reach the embedding endpoint (ADR-0009): Excerpts searches with the
+// Keyword retriever, Ask with Retriever.
+func TestExcerpts_KeywordRetrieverOnly(t *testing.T) {
+	hit := sampleHit("id1", "Title", "Heading", "Text", "rev1")
+	hybrid := &stubRetriever{hits: []retrieval.Hit{hit}, mode: retrieval.ModeHybrid}
+	keyword := &stubRetriever{hits: []retrieval.Hit{hit}}
+	p, err := New(Config{Retriever: hybrid, Keyword: keyword, EmbedHost: "local-embed.svc"})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	ans, err := p.Excerpts(context.Background(), "test question")
+	if err != nil {
+		t.Fatalf("Excerpts() error: %v", err)
+	}
+	if hybrid.calls.Load() != 0 || keyword.calls.Load() != 1 {
+		t.Errorf("calls hybrid=%d keyword=%d, want 0 and 1", hybrid.calls.Load(), keyword.calls.Load())
+	}
+	if ans.Embed.Sent {
+		t.Errorf("ans.Embed.Sent = true, want false for the keyword path")
+	}
+
+	if _, err := p.Ask(context.Background(), "test question"); err != nil {
+		t.Fatalf("Ask() error: %v", err)
+	}
+	if hybrid.calls.Load() != 1 {
+		t.Errorf("Ask used hybrid %d times, want 1", hybrid.calls.Load())
+	}
+}
+
+// Without Keyword, Excerpts falls back to Retriever, as before the field existed.
+func TestExcerpts_Boundary_KeywordDefaultsToRetriever(t *testing.T) {
+	ret := &stubRetriever{hits: []retrieval.Hit{sampleHit("id1", "Title", "Heading", "Text", "rev1")}}
+	p, err := New(Config{Retriever: ret})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	if _, err := p.Excerpts(context.Background(), "test question"); err != nil {
+		t.Fatalf("Excerpts() error: %v", err)
+	}
+	if ret.calls.Load() != 1 {
+		t.Errorf("calls = %d, want 1", ret.calls.Load())
 	}
 }

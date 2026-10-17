@@ -154,7 +154,8 @@ why not, with no title, text, post id or member id
   only. The operator runs that endpoint on-premises. It receives no member id
   and no name ([`internal/embed`](../../internal/embed/embed.go)), at most once
   per question, and must not keep or train on what it receives
-  ([ADR-0022](../adr/0022-embeddings-for-paraphrased-questions.md)).
+  ([ADR-0022](../adr/0022-embeddings-for-paraphrased-questions.md)). It
+  receives nothing from the support forum: posts are searched by keyword only.
 - Nobody else. The bot sells nothing and shares nothing for advertising.
 
 Model mode is switched off in the live server until the gates of

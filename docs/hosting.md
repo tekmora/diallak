@@ -70,7 +70,8 @@ is missing or out of range stops the start with a message that names it.
   host name, or a host ending in `.svc`, `.cluster.local`, `.internal`,
   `.home.arpa`, or `.lan`) and refuses any other host. When embeddings are not
   configured or when the embedding call fails, retrieval is keyword only and
-  the reply carries a notice saying so. At start the bot computes embedding
+  the reply carries a notice saying so. Support forum posts are always searched
+  by keyword only and never reach the embedding endpoint. At start the bot computes embedding
   vectors for all documentation chunks in memory; if the endpoint fails at start,
   the start stops with an exit code of 1.
 - **The news function is off unless `DIALLAK_NEWS_STATE_FILE` is set**

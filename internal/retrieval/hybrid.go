@@ -110,8 +110,23 @@ func (h *Hybrid) ChunkCount() int {
 	return len(h.chunks)
 }
 
+// EmbedError reports that the query embedding failed and retrieval fell back to the lexical
+// hits returned beside it. It is not fatal: the caller answers from those hits, counts the
+// failure and logs its class only.
+type EmbedError struct {
+	Err error
+}
+
+func (e *EmbedError) Error() string {
+	return "embed query: " + e.Err.Error()
+}
+
+func (e *EmbedError) Unwrap() error {
+	return e.Err
+}
+
 // SearchMode executes hybrid retrieval: lexical search merged with cosine similarity over embeddings.
-// On embedder failure, it falls back to lexical search with ModeKeywordFallback and a nil error.
+// On embedder failure, it returns the lexical hits with ModeKeywordFallback and an *EmbedError.
 func (h *Hybrid) SearchMode(ctx context.Context, q string, opt Options) ([]Hit, Mode, error) {
 	lexHits, err := h.ix.Search(q, opt)
 	if err != nil {
@@ -119,8 +134,11 @@ func (h *Hybrid) SearchMode(ctx context.Context, q string, opt Options) ([]Hit, 
 	}
 
 	qVecs, err := h.emb.Embed(ctx, []string{q})
-	if err != nil || len(qVecs) != 1 {
-		return lexHits, ModeKeywordFallback, nil
+	if err != nil {
+		return lexHits, ModeKeywordFallback, &EmbedError{Err: err}
+	}
+	if len(qVecs) != 1 {
+		return lexHits, ModeKeywordFallback, &EmbedError{Err: fmt.Errorf("expected 1 query vector, got %d", len(qVecs))}
 	}
 
 	return h.mergeHits(lexHits, qVecs[0], opt), ModeHybrid, nil

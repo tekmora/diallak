@@ -200,8 +200,9 @@ func TestHybrid_SearchMode(t *testing.T) {
 		t.Fatalf("NewHybrid: %v", err)
 	}
 	fbHits, fbMode, fbErr := hFailing.SearchMode(context.Background(), "install software", DefaultOptions())
-	if fbErr != nil {
-		t.Errorf("expected nil error on embed failure fallback, got %v", fbErr)
+	var embErr *EmbedError
+	if !errors.As(fbErr, &embErr) {
+		t.Errorf("expected *EmbedError on embed failure fallback, got %v", fbErr)
 	}
 	if fbMode != ModeKeywordFallback {
 		t.Errorf("mode = %v, want ModeKeywordFallback", fbMode)

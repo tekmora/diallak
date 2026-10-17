@@ -92,6 +92,10 @@ type MaskingGenerator interface {
 // Config configures pipeline dependencies and limits.
 type Config struct {
 	Retriever Retriever
+	// Keyword, when not nil, takes the place of Retriever in Excerpts: the forum answer sends the
+	// post to no endpoint (ADR-0009), the embedding endpoint included, so the deployment passes
+	// the lexical index here.
+	Keyword   Retriever
 	Generator Generator
 	// Masker, when not nil, takes the place of Generator for every question: the prompt is built
 	// from the masked text.
@@ -173,6 +177,7 @@ type Pipeline struct {
 	generator          Generator
 	masker             MaskingGenerator
 	embedHost          string
+	keyword            Retriever
 	options            retrieval.Options
 	logger             *slog.Logger
 	maxQuestionRunes   int
@@ -227,8 +232,14 @@ func New(cfg Config) (*Pipeline, error) {
 		options = retrieval.DefaultOptions()
 	}
 
+	keyword := cfg.Keyword
+	if keyword == nil {
+		keyword = cfg.Retriever
+	}
+
 	return &Pipeline{
 		retriever:          cfg.Retriever,
+		keyword:            keyword,
 		generator:          cfg.Generator,
 		masker:             cfg.Masker,
 		embedHost:          cfg.EmbedHost,
@@ -255,7 +266,7 @@ func (p *Pipeline) Stats() Stats {
 
 // Ask processes a user inquiry through retrieval, generation, citation verification, and assembly.
 func (p *Pipeline) Ask(ctx context.Context, question string) (Answer, error) {
-	q, hits, mode, err := p.retrieve(ctx, question)
+	q, hits, mode, err := p.retrieve(ctx, p.retriever, question)
 	if err != nil {
 		return Answer{}, err
 	}
@@ -286,9 +297,10 @@ func (p *Pipeline) Ask(ctx context.Context, question string) (Answer, error) {
 }
 
 // Excerpts answers with documentation excerpts only and never calls the generator, whatever the
-// model settings are: the forum answer of ADR-0009 sends no text to the model endpoint.
+// model settings are: the forum answer of ADR-0009 sends no text to the model endpoint. It
+// searches with the Keyword retriever, so with Keyword set the post reaches no endpoint at all.
 func (p *Pipeline) Excerpts(ctx context.Context, question string) (Answer, error) {
-	_, hits, mode, err := p.retrieve(ctx, question)
+	_, hits, mode, err := p.retrieve(ctx, p.keyword, question)
 	if err != nil {
 		return Answer{}, err
 	}
@@ -310,7 +322,7 @@ func (p *Pipeline) Excerpts(ctx context.Context, question string) (Answer, error
 
 // retrieve checks the question and searches the passages for it. It returns the trimmed question,
 // hits and retrieval mode; no hit means no passage passed the threshold.
-func (p *Pipeline) retrieve(ctx context.Context, question string) (string, []retrieval.Hit, retrieval.Mode, error) {
+func (p *Pipeline) retrieve(ctx context.Context, r Retriever, question string) (string, []retrieval.Hit, retrieval.Mode, error) {
 	if !utf8.ValidString(question) {
 		return "", nil, retrieval.ModeKeyword, errors.New("question is not valid UTF-8")
 	}
@@ -322,17 +334,15 @@ func (p *Pipeline) retrieve(ctx context.Context, question string) (string, []ret
 		return "", nil, retrieval.ModeKeyword, fmt.Errorf("question exceeds maximum %d runes", p.maxQuestionRunes)
 	}
 
-	hits, mode, err := p.retriever.SearchMode(ctx, q, p.options)
+	hits, mode, err := r.SearchMode(ctx, q, p.options)
+	var embedErr *retrieval.EmbedError
+	if errors.As(err, &embedErr) {
+		p.embedFailures.Add(1)
+		p.logger.Warn("embedding unavailable", slog.String("error_class", embed.Classify(embedErr.Err)))
+		err = nil
+	}
 	if err != nil {
 		return "", nil, mode, fmt.Errorf("retrieve: %w", err)
-	}
-	if mode == retrieval.ModeKeywordFallback {
-		p.embedFailures.Add(1)
-		errClass := "error"
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			errClass = "timeout"
-		}
-		p.logger.Warn("embedding unavailable", slog.String("error_class", errClass))
 	}
 	// The prompt offers at most retrieval.MaxLimit sources. Sources and prompt are built from the
 	// same slice, so an id is valid exactly when it was offered.

@@ -227,8 +227,8 @@ func TestSnatchArrEval_EmbedSweep(t *testing.T) {
 	set, chunks, ix := loadSnatchArrFixture(t)
 	bars := Bars{MinAnswerableHit: 28, MinOffTopicRefused: 5}
 
-	t.Log("similarity | answerable_hit | off_topic_refused | paraphrase_hit | bars_hold")
-	t.Log("-----------|----------------|-------------------|----------------|----------")
+	t.Log("similarity | answerable_hit | off_topic_refused | undocumented_refused | paraphrase_hit | bars_hold")
+	t.Log("-----------|----------------|-------------------|----------------------|----------------|----------")
 
 	const sweepSteps = 11 // 0.30 .. 0.80 step 0.05
 	for i := 0; i < sweepSteps; i++ {
@@ -242,7 +242,7 @@ func TestSnatchArrEval_EmbedSweep(t *testing.T) {
 			t.Fatalf("Run similarity %.2f: %v", sim, rErr)
 		}
 		barsHold := Check(rep, bars) == nil
-		t.Logf("%10.2f | %14d | %17d | %14d | %9t",
-			sim, rep.AnswerableHit, rep.OffTopicRefused, rep.ParaphraseHit, barsHold)
+		t.Logf("%10.2f | %14d | %17d | %20d | %14d | %9t",
+			sim, rep.AnswerableHit, rep.OffTopicRefused, rep.UndocumentedRefused, rep.ParaphraseHit, barsHold)
 	}
 }

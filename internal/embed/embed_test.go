@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -46,6 +47,7 @@ func TestOnPremises(t *testing.T) {
 		{"suffix trick localhost.example.com", "http://localhost.example.com/v1", true},
 		{"suffix trick evil.svc.example.com", "http://evil.svc.example.com/v1", true},
 		{"invalid url", ":::invalid:::", true},
+		{"host only a dot", "http://./v1", true},
 	}
 
 	for _, tc := range cases {
@@ -300,5 +302,36 @@ func TestEmbed_Boundary_BatchAndTimeout(t *testing.T) {
 	oversized := make([]string, MaxBatch+1)
 	if _, err := client.Embed(context.Background(), oversized); err == nil {
 		t.Error("Embed with 65 texts returned nil error")
+	}
+}
+
+func TestClassify(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"timeout", fmt.Errorf("do request: %w", &TransportError{Err: context.DeadlineExceeded}), "timeout"},
+		{"status", &StatusError{Code: 503}, "status"},
+		{"transport", fmt.Errorf("do request: %w", &TransportError{Err: errors.New("refused")}), "transport"},
+		{"other", errors.New("expected 1 embeddings, got 0"), "error"},
+		{"nil", nil, "error"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Classify(tt.err); got != tt.want {
+				t.Errorf("Classify() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNew_Negative_HostedBaseURLRefused(t *testing.T) {
+	_, err := New(Config{BaseURL: "https://api.openai.com/v1", Alias: "embed"}, nil)
+	if err == nil || !strings.Contains(err.Error(), "ADR-0022") {
+		t.Fatalf("New() error = %v, want on-premises refusal naming ADR-0022", err)
+	}
+	if _, err := New(Config{BaseURL: "http://127.0.0.1:11434/v1", Alias: "embed"}, nil); err != nil {
+		t.Fatalf("New() loopback error = %v, want nil", err)
 	}
 }

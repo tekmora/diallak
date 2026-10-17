@@ -16,8 +16,12 @@ import (
 
 const (
 	// DefaultMinSimilarity is the default minimum cosine similarity threshold for semantic retrieval hits.
-	// Source: placeholder until the sweep is recorded (issue 189)
-	DefaultMinSimilarity = 0.5
+	// Source: measured 2026-10-17 with TestSnatchArrEval_EmbedSweep, model
+	// hf.co/unsloth/embeddinggemma-2-GGUF:Q8_0 on local Ollama: 0.75 keeps the bars and the
+	// keyword-only undocumented refusals (5/6) and raises paraphrase hits from 2/12 to 9/12; 0.70
+	// refuses only 2/6 undocumented questions. Another model needs its own sweep and
+	// DIALLAK_EMBED_MIN_SIMILARITY.
+	DefaultMinSimilarity = 0.75
 )
 
 // Mode represents the retrieval strategy used to answer an inquiry.

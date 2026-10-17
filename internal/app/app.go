@@ -199,6 +199,7 @@ func buildPipeline(ctx context.Context, cfg config.Config, index *retrieval.Inde
 
 	ansCfg := answer.Config{
 		Retriever:          searcher,
+		Keyword:            index,
 		EmbedHost:          embedHost,
 		Generator:          generator,
 		Masker:             masker,

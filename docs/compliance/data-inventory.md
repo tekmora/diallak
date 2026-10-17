@@ -239,6 +239,9 @@ Check: `TestHandleAsk_Negative_LogCaptureNeverContainsQuestionOrError`,
   model settings are: posts are answered with excerpts only
   (`TestExcerpts_Positive_NeverCallsTheGenerator` in
   [`internal/answer`](../../internal/answer/forum_test.go)).
+- The embedding endpoint receives nothing from the support forum either: posts
+  are searched by keyword only (`TestExcerpts_KeywordRetrieverOnly` in
+  [`internal/answer`](../../internal/answer/answer_test.go)).
 - In excerpt mode the question goes nowhere unless hybrid retrieval is
   configured: with embeddings configured, the question goes to the
   embedding endpoint once, and the reply carries the receipt button.
