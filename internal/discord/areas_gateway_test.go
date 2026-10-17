@@ -30,6 +30,11 @@ type areasCall struct {
 	raw                  string
 }
 
+// clientObserver is a componentsFake that looks at the client once the frames are delivered.
+type clientObserver interface {
+	observe(client *bot.Client)
+}
+
 // componentsFake is a fake Discord for runComponentsOverGateway: it serves the requests, signals
 // every answer the test waits for and returns the requests it received.
 type componentsFake interface {
@@ -281,16 +286,11 @@ func runComponentsOverGateway(t *testing.T, fake componentsFake, cfg BotConfig, 
 	opts := clientOptions{
 		restURL: srv.URL,
 		openGateway: func(_ context.Context, client *bot.Client, _ string) error {
-			for _, raw := range frames {
-				var msg gateway.Message
-				if err := json.Unmarshal(raw, &msg); err != nil {
-					return fmt.Errorf("decode frame: %w", err)
-				}
-				ev, ok := msg.D.(gateway.EventData)
-				if !ok {
-					return fmt.Errorf("frame %s holds %T, no event", msg.T, msg.D)
-				}
-				client.EventManager.HandleGatewayEvent(client.Gateway, msg.T, msg.S, ev)
+			if err := deliverFrames(client, frames); err != nil {
+				return err
+			}
+			if o, ok := fake.(clientObserver); ok {
+				o.observe(client)
 			}
 			return nil
 		},
@@ -315,6 +315,22 @@ func runComponentsOverGateway(t *testing.T, fake componentsFake, cfg BotConfig, 
 		t.Fatalf("Run: %v", err)
 	}
 	return fake.recorded()
+}
+
+// deliverFrames hands each gateway frame to the event manager of client, in order.
+func deliverFrames(client *bot.Client, frames [][]byte) error {
+	for _, raw := range frames {
+		var msg gateway.Message
+		if err := json.Unmarshal(raw, &msg); err != nil {
+			return fmt.Errorf("decode frame: %w", err)
+		}
+		ev, ok := msg.D.(gateway.EventData)
+		if !ok {
+			return fmt.Errorf("frame %s holds %T, no event", msg.T, msg.D)
+		}
+		client.EventManager.HandleGatewayEvent(client.Gateway, msg.T, msg.S, ev)
+	}
+	return nil
 }
 
 // areasInteractionCalls returns the answers of one interaction in order, with the role calls on

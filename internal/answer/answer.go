@@ -135,6 +135,8 @@ const (
 	LabelExcerpts = "Automated excerpts from the documentation. No AI model wrote this reply."
 	// LabelModelUnavailable is the secondary note when model generation fails.
 	LabelModelUnavailable = "The AI model is unavailable right now, so these are excerpts only."
+	// FooterForum ends every reply in the support forum (ADR-0009, "The label").
+	FooterForum = "Automated first reply. A person can help here in this post."
 	// DefaultPlace is the wording for where a person helps when the configuration names no place.
 	// Footer and Refusal hold the only copies of the two sentences it is put into.
 	DefaultPlace = "the support channel"
@@ -228,40 +230,69 @@ func (p *Pipeline) Stats() Stats {
 
 // Ask processes a user inquiry through retrieval, generation, citation verification, and assembly.
 func (p *Pipeline) Ask(ctx context.Context, question string) (Answer, error) {
+	q, hits, err := p.retrieve(question)
+	if err != nil {
+		return Answer{}, err
+	}
+	if len(hits) == 0 {
+		return p.refuseNoSource(), nil
+	}
+	sources := p.buildSources(hits)
+	if p.generator == nil {
+		return p.excerptsOnly(sources), nil
+	}
+	return p.generateAndAssemble(ctx, q, hits, sources)
+}
+
+// Excerpts answers with documentation excerpts only and never calls the generator, whatever the
+// model settings are: the forum answer of ADR-0009 sends no text to the model endpoint.
+func (p *Pipeline) Excerpts(_ context.Context, question string) (Answer, error) {
+	_, hits, err := p.retrieve(question)
+	if err != nil {
+		return Answer{}, err
+	}
+	if len(hits) == 0 {
+		return p.refuseNoSource(), nil
+	}
+	return p.excerptsOnly(p.buildSources(hits)), nil
+}
+
+// retrieve checks the question and searches the passages for it. It returns the trimmed question
+// and at most retrieval.MaxLimit hits; no hit means no passage passed the threshold.
+func (p *Pipeline) retrieve(question string) (string, []retrieval.Hit, error) {
 	if !utf8.ValidString(question) {
-		return Answer{}, errors.New("question is not valid UTF-8")
+		return "", nil, errors.New("question is not valid UTF-8")
 	}
 	q := strings.TrimSpace(question)
 	if q == "" {
-		return Answer{}, errors.New("question is empty")
+		return "", nil, errors.New("question is empty")
 	}
 	if utf8.RuneCountInString(q) > p.maxQuestionRunes {
-		return Answer{}, fmt.Errorf("question exceeds maximum %d runes", p.maxQuestionRunes)
+		return "", nil, fmt.Errorf("question exceeds maximum %d runes", p.maxQuestionRunes)
 	}
 
 	hits, err := p.retriever.Search(q, p.options)
 	if err != nil {
-		return Answer{}, fmt.Errorf("retrieve: %w", err)
+		return "", nil, fmt.Errorf("retrieve: %w", err)
 	}
-	if len(hits) == 0 {
-		p.asked.Add(1)
-		p.refused.Add(1)
-		return Answer{Kind: KindRefusal, Reason: ReasonNoSource}, nil
-	}
-
 	// The prompt offers at most retrieval.MaxLimit sources. Sources and prompt are built from the
 	// same slice, so an id is valid exactly when it was offered.
 	if len(hits) > retrieval.MaxLimit {
 		hits = hits[:retrieval.MaxLimit]
 	}
-	sources := p.buildSources(hits)
-	if p.generator == nil {
-		p.asked.Add(1)
-		p.excerpts.Add(1)
-		return Answer{Kind: KindExcerpts, Reason: ReasonNoModel, Sources: sources}, nil
-	}
+	return q, hits, nil
+}
 
-	return p.generateAndAssemble(ctx, q, hits, sources)
+func (p *Pipeline) refuseNoSource() Answer {
+	p.asked.Add(1)
+	p.refused.Add(1)
+	return Answer{Kind: KindRefusal, Reason: ReasonNoSource}
+}
+
+func (p *Pipeline) excerptsOnly(sources []Source) Answer {
+	p.asked.Add(1)
+	p.excerpts.Add(1)
+	return Answer{Kind: KindExcerpts, Reason: ReasonNoModel, Sources: sources}
 }
 
 func (p *Pipeline) generateAndAssemble(ctx context.Context, q string, hits []retrieval.Hit, sources []Source) (Answer, error) {
@@ -464,7 +495,7 @@ func Render(a Answer, opts RenderOptions) string {
 	case KindAnswer:
 		body = renderAnswer(a, place, maxRunes)
 	case KindExcerpts:
-		body = renderExcerpts(a, place, maxRunes)
+		body = renderExcerpts(a, Footer(place), maxRunes)
 	case KindRefusal:
 		body = Refusal(place)
 	default:
@@ -536,8 +567,9 @@ type excerptBlock struct {
 	excerpt string
 }
 
-func renderExcerpts(a Answer, place string, maxRunes int) string {
-	footerRunes := 2 + utf8.RuneCountInString(Footer(place))
+// renderExcerpts is the body of an excerpt reply that leaves room for footer within maxRunes.
+func renderExcerpts(a Answer, footer string, maxRunes int) string {
+	footerRunes := 2 + utf8.RuneCountInString(footer)
 	bodyMax := maxRunes - footerRunes
 
 	header := LabelExcerpts
@@ -587,4 +619,17 @@ func renderExcerptsCandidate(header string, blocks []excerptBlock) string {
 		}
 	}
 	return sb.String()
+}
+
+// RenderForum formats an excerpt reply for a post in the support forum (ADR-0009): the excerpt
+// label first and FooterForum last, within maxRunes (DefaultMaxRenderRunes when zero). Every other
+// kind renders as the empty string, because the forum gets no model answer and no refusal.
+func RenderForum(a Answer, maxRunes int) string {
+	if a.Kind != KindExcerpts {
+		return ""
+	}
+	if maxRunes <= 0 {
+		maxRunes = DefaultMaxRenderRunes
+	}
+	return renderExcerpts(a, FooterForum, maxRunes) + "\n\n" + FooterForum
 }
