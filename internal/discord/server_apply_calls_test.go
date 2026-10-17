@@ -12,17 +12,23 @@ import (
 	"github.com/tekmora/diallak/server"
 )
 
-// allowedCallShapes holds every call the tool may make against the platform. No call on it needs
-// MANAGE_GUILD (ADR-0015): Discord's pages on servers and on channels ask for MANAGE_ROLES or
-// MANAGE_CHANNELS for the calls that change something and for no right for the calls that read.
+// allowedCallShapes holds every call the tool may make against the platform. Discord's pages on
+// servers and on channels ask for MANAGE_ROLES or MANAGE_CHANNELS for the calls that change roles
+// and channels and for no right for the calls that read them. MANAGE_GUILD opens the filter rules
+// and the server object (ADR-0015); of what it opens, the tool calls the filter rules and the
+// one PATCH of the server that sets the verification level, and nothing else.
 var allowedCallShapes = []string{
 	"GET /applications/@me",
 	"GET /guilds/{id}",
+	"GET /guilds/{id}/auto-moderation/rules",
 	"GET /guilds/{id}/channels",
 	"GET /guilds/{id}/members/{id}",
 	"GET /guilds/{id}/roles",
+	"PATCH /guilds/{id}",
+	"PATCH /guilds/{id}/auto-moderation/rules/{id}",
 	"PATCH /guilds/{id}/roles",
 	"PATCH /guilds/{id}/roles/{id}",
+	"POST /guilds/{id}/auto-moderation/rules",
 	"POST /guilds/{id}/channels",
 	"POST /guilds/{id}/roles",
 	"PUT /channels/{id}/permissions/{id}",
@@ -108,7 +114,7 @@ func runDisplayChangeForCallsTest(
 	}
 }
 
-// mutateServerStateForDriftTest simulates client drag, role display change, and dropped channel overwrite.
+// mutateServerStateForDriftTest simulates client drag, role display change, and dropped channel overwrite, and filter rule drift.
 func mutateServerStateForDriftTest(t *testing.T, fake *fakePlatform) {
 	t.Helper()
 	// The operator sorts the roles in the client, which numbers them without
@@ -141,6 +147,14 @@ func mutateServerStateForDriftTest(t *testing.T, fake *fakePlatform) {
 	if !dropped {
 		t.Fatal("no channel of the local server holds an entry to drop")
 	}
+	// A moderator raises a filter rule's mention limit by hand: the run sets the rule back.
+	for i := range fake.filterRules {
+		if fake.filterRules[i].Name == "Mass mentions" {
+			fake.filterRules[i].TriggerMetadata.MentionTotalLimit++
+			return
+		}
+	}
+	t.Fatal("the local server holds no filter rule named Mass mentions")
 }
 
 // assertAllowedCallShapes verifies recorded calls match the allowed shapes allow-list.
@@ -201,9 +215,9 @@ func TestServerApplyCalls_Negative_SyntheticCallsOutsideList(t *testing.T) {
 		call recordedCall
 		want string
 	}{
-		{recordedCall{method: "PATCH", path: "/guilds/1001"}, "PATCH /guilds/{id}"},
-		{recordedCall{method: "GET", path: "/guilds/1001/auto-moderation/rules"}, "GET /guilds/{id}/auto-moderation/rules"},
-		{recordedCall{method: "POST", path: "/guilds/1001/auto-moderation/rules"}, "POST /guilds/{id}/auto-moderation/rules"},
+		{recordedCall{method: "DELETE", path: "/guilds/1001/auto-moderation/rules/4001"}, "DELETE /guilds/{id}/auto-moderation/rules/{id}"},
+		{recordedCall{method: "GET", path: "/guilds/1001/audit-logs"}, "GET /guilds/{id}/audit-logs"},
+		{recordedCall{method: "PUT", path: "/guilds/1001/onboarding"}, "PUT /guilds/{id}/onboarding"},
 		{recordedCall{method: "DELETE", path: "/guilds/1001/integrations/2001"}, "DELETE /guilds/{id}/integrations/{id}"},
 		{recordedCall{method: "GET", path: "/guilds/1001/invites"}, "GET /guilds/{id}/invites"},
 		{recordedCall{method: "PATCH", path: "/guilds/1001/widget"}, "PATCH /guilds/{id}/widget"},
@@ -222,9 +236,9 @@ func TestServerApplyCalls_Negative_SyntheticCallsOutsideList(t *testing.T) {
 
 func TestServerApplyCalls_Boundary_ListExclusionsAndDifferentMethod(t *testing.T) {
 	test2Shapes := []string{
-		"PATCH /guilds/{id}",
-		"GET /guilds/{id}/auto-moderation/rules",
-		"POST /guilds/{id}/auto-moderation/rules",
+		"DELETE /guilds/{id}/auto-moderation/rules/{id}",
+		"GET /guilds/{id}/audit-logs",
+		"PUT /guilds/{id}/onboarding",
 		"DELETE /guilds/{id}/integrations/{id}",
 		"GET /guilds/{id}/invites",
 		"PATCH /guilds/{id}/widget",

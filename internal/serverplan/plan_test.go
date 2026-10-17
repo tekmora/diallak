@@ -18,59 +18,26 @@ func raiseBotRole(t *testing.T, s *Snapshot, extraPerm string) {
 }
 
 func raisedFirstSetupSnapshot() *Snapshot {
-	callerPerms := []string{
-		"MANAGE_ROLES",
-		"MANAGE_MESSAGES",
-		"MODERATE_MEMBERS",
-		"MANAGE_GUILD",
-		"MANAGE_CHANNELS",
-		"CREATE_PRIVATE_THREADS",
-		"CONNECT",
-		// everyone permissions
-		"VIEW_CHANNEL",
-		"SEND_MESSAGES",
-		"SEND_MESSAGES_IN_THREADS",
-		"CREATE_PUBLIC_THREADS",
-		"READ_MESSAGE_HISTORY",
-		"ADD_REACTIONS",
-		"EMBED_LINKS",
-		"ATTACH_FILES",
-		"USE_APPLICATION_COMMANDS",
-		"SPEAK",
+	botPerms := []string{
+		"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_GUILD",
+		"MANAGE_CHANNELS", "CREATE_PRIVATE_THREADS", "CONNECT",
 	}
-
+	everyonePerms := []string{
+		"VIEW_CHANNEL", "SEND_MESSAGES", "SEND_MESSAGES_IN_THREADS", "CREATE_PUBLIC_THREADS",
+		"READ_MESSAGE_HISTORY", "ADD_REACTIONS", "EMBED_LINKS", "ATTACH_FILES",
+		"USE_APPLICATION_COMMANDS", "SPEAK",
+	}
 	return &Snapshot{
 		Features: []string{"COMMUNITY", "NEWS"},
 		Caller: Caller{
 			Role:        "Diallak",
 			Position:    1,
-			Permissions: callerPerms,
+			Permissions: slices.Concat(botPerms, everyonePerms),
 		},
 		Roles: []Role{
-			{Name: "Operator", Everyone: false, Managed: false, Permissions: []string{"ADMINISTRATOR"}},
-			{
-				Name:        "Diallak",
-				Everyone:    false,
-				Managed:     true,
-				Permissions: []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_GUILD", "MANAGE_CHANNELS", "CREATE_PRIVATE_THREADS", "CONNECT"},
-			},
-			{
-				Name:     "@everyone",
-				Everyone: true,
-				Managed:  false,
-				Permissions: []string{
-					"VIEW_CHANNEL",
-					"SEND_MESSAGES",
-					"SEND_MESSAGES_IN_THREADS",
-					"CREATE_PUBLIC_THREADS",
-					"READ_MESSAGE_HISTORY",
-					"ADD_REACTIONS",
-					"EMBED_LINKS",
-					"ATTACH_FILES",
-					"USE_APPLICATION_COMMANDS",
-					"SPEAK",
-				},
-			},
+			{Name: "Operator", Permissions: []string{"ADMINISTRATOR"}},
+			{Name: "Diallak", Managed: true, Permissions: botPerms},
+			{Name: "@everyone", Everyone: true, Permissions: everyonePerms},
 		},
 		Categories:        []Category{},
 		Channels:          []Channel{},

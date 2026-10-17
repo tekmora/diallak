@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/tekmora/diallak/internal/serverdef"
 	"github.com/tekmora/diallak/internal/serverplan"
@@ -140,6 +141,8 @@ type fakePlatform struct {
 	getRolesOverride   []fakeRole
 	delaySuffix        string
 	delay              time.Duration
+	verificationLevel  int
+	filterRules        []discord.AutoModerationRule
 }
 
 func newFakePlatform(t *testing.T, guildID, botUserID, botRoleID uint64) *fakePlatform {
@@ -299,6 +302,8 @@ func (f *fakePlatform) routeGetRequest(w http.ResponseWriter, r *http.Request) {
 		f.handleGetChannels(w)
 	case fmt.Sprintf("/guilds/%d/roles", f.guildID):
 		f.handleGetRoles(w)
+	case fmt.Sprintf("/guilds/%d/auto-moderation/rules", f.guildID):
+		f.handleGetFilterRules(w)
 	default:
 		http.NotFound(w, r)
 	}
@@ -312,6 +317,8 @@ func (f *fakePlatform) routePostRequest(w http.ResponseWriter, r *http.Request, 
 		f.handleCreateRole(w, body)
 	case fmt.Sprintf("/guilds/%d/channels", f.guildID):
 		f.handleCreateChannel(w, body)
+	case fmt.Sprintf("/guilds/%d/auto-moderation/rules", f.guildID):
+		f.handleCreateFilterRule(w, body)
 	default:
 		http.NotFound(w, r)
 	}
@@ -327,6 +334,10 @@ func (f *fakePlatform) routePatchRequest(w http.ResponseWriter, r *http.Request,
 		f.handleUpdateRole(w, path, body)
 	case strings.HasPrefix(path, "/channels/"):
 		f.handleUpdateChannel(w, path, body)
+	case path == fmt.Sprintf("/guilds/%d", f.guildID):
+		f.handleUpdateGuild(w, body)
+	case strings.HasPrefix(path, fmt.Sprintf("/guilds/%d/auto-moderation/rules/", f.guildID)):
+		f.handleUpdateFilterRule(w, path, body)
 	default:
 		http.NotFound(w, r)
 	}
@@ -349,9 +360,10 @@ func (f *fakePlatform) handleGetApplication(w http.ResponseWriter) {
 func (f *fakePlatform) handleGetGuild(w http.ResponseWriter) {
 	f.mu.Lock()
 	rolesJSON := f.rolesToJSONLocked()
+	level := f.verificationLevel
 	f.mu.Unlock()
 
-	writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"Test Hub","features":["COMMUNITY","NEWS"],"roles":%s}`, f.guildID, rolesJSON))
+	writeTestResponse(w, http.StatusOK, fmt.Sprintf(`{"id":"%d","name":"Test Hub","features":["COMMUNITY","NEWS"],"verification_level":%d,"roles":%s}`, f.guildID, level, rolesJSON))
 }
 
 func (f *fakePlatform) handleGetMember(w http.ResponseWriter) {
@@ -906,7 +918,7 @@ func runGateWrongPlanDigestTest(t *testing.T, def *serverdef.Definition, defDige
 	if !strings.Contains(err.Error(), expectedDigest) {
 		t.Errorf("error %q does not contain new digest %q", err.Error(), expectedDigest)
 	}
-	assertRequestCounts(t, fake.recorded, 4, 0)
+	assertRequestCounts(t, fake.recorded, 5, 0)
 }
 
 // runGateOtherDefinitionDigestTest tests apply rejection when the definition digest does not match.
@@ -937,7 +949,7 @@ func runGateOtherDefinitionDigestTest(t *testing.T, def *serverdef.Definition, d
 	if !strings.Contains(err.Error(), otherExpectedDigest) {
 		t.Errorf("error %q does not contain new digest %q", err.Error(), otherExpectedDigest)
 	}
-	assertRequestCounts(t, fake.recorded, 4, 0)
+	assertRequestCounts(t, fake.recorded, 5, 0)
 }
 
 // runGateRefusedPlanTest tests that a plan holding refusals is never applied.
@@ -977,14 +989,14 @@ func runGateRefusedPlanTest(t *testing.T, def *serverdef.Definition, defDigest, 
 	if err.Error() != wantRefusalErr {
 		t.Errorf("error = %q, want %q", err.Error(), wantRefusalErr)
 	}
-	assertRequestCounts(t, fake.recorded, 4, 0)
+	assertRequestCounts(t, fake.recorded, 5, 0)
 }
 
 // runGateExactDefinitionTest tests that applying when server matches definition succeeds with 0 changes.
 func runGateExactDefinitionTest(t *testing.T, def *serverdef.Definition, defDigest, fakeToken string, guildID, botUserID, botRoleID uint64) {
 	t.Helper()
-	appJSON, guildJSON, memberJSON, channelsJSON := buildPlatformFixtureFromDef(t, guildID, botUserID, botRoleID)
-	srv := newStandardServer(guildID, botUserID, appJSON, guildJSON, memberJSON, channelsJSON)
+	fx := buildPlatformFixture(t, guildID, botUserID, botRoleID)
+	srv := newStandardServerWithRules(guildID, botUserID, fx.app, fx.guild, fx.member, fx.channels, fx.rules)
 	defer srv.Close()
 
 	_, planDigest := planServerSnapshot(t, fakeToken, guildID, srv.URL, def, defDigest)
@@ -1294,7 +1306,8 @@ func assertSetAccessPut(t *testing.T, recorded []recordedCall) {
 // runSetRolePermissionsFixtureTest tests that changing role permissions issues a single PATCH request for permissions.
 func runSetRolePermissionsFixtureTest(t *testing.T, def *serverdef.Definition, defDigest, fakeToken string, guildID, botUserID, botRoleID uint64) {
 	t.Helper()
-	_, guildJSON, _, channelsJSON := buildPlatformFixtureFromDef(t, guildID, botUserID, botRoleID)
+	pf := buildPlatformFixture(t, guildID, botUserID, botRoleID)
+	guildJSON, channelsJSON := pf.guild, pf.channels
 	roles, chs := unmarshalFixtureGuildAndChannels(t, guildJSON, channelsJSON)
 	for i := range roles {
 		if roles[i].name == "Diallak" {
@@ -1308,6 +1321,7 @@ func runSetRolePermissionsFixtureTest(t *testing.T, def *serverdef.Definition, d
 	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
 	fake.roles = roles
 	fake.channels = chs
+	fake.holdFixtureSettings(t, pf)
 	fakeSrv := fake.server()
 	defer fakeSrv.Close()
 
@@ -1334,7 +1348,8 @@ func runSetRolePermissionsFixtureTest(t *testing.T, def *serverdef.Definition, d
 // runMoveChannelFixtureTest tests that moving a channel issues a single PATCH request with parent_id.
 func runMoveChannelFixtureTest(t *testing.T, def *serverdef.Definition, defDigest, fakeToken string, guildID, botUserID, botRoleID uint64) {
 	t.Helper()
-	_, guildJSON, _, channelsJSON := buildPlatformFixtureFromDef(t, guildID, botUserID, botRoleID)
+	pf := buildPlatformFixture(t, guildID, botUserID, botRoleID)
+	guildJSON, channelsJSON := pf.guild, pf.channels
 	roles, chs := unmarshalFixtureGuildAndChannels(t, guildJSON, channelsJSON)
 	for i := range roles {
 		if roles[i].name == "Diallak" {
@@ -1350,6 +1365,7 @@ func runMoveChannelFixtureTest(t *testing.T, def *serverdef.Definition, defDiges
 	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
 	fake.roles = roles
 	fake.channels = chs
+	fake.holdFixtureSettings(t, pf)
 	fakeSrv := fake.server()
 	defer fakeSrv.Close()
 
@@ -1375,7 +1391,8 @@ func runMoveChannelFixtureTest(t *testing.T, def *serverdef.Definition, defDiges
 // runSetAccessFixtureTest tests that setting channel access issues a PUT request for permissions.
 func runSetAccessFixtureTest(t *testing.T, def *serverdef.Definition, defDigest, fakeToken string, guildID, botUserID, botRoleID uint64) {
 	t.Helper()
-	_, guildJSON, _, channelsJSON := buildPlatformFixtureFromDef(t, guildID, botUserID, botRoleID)
+	pf := buildPlatformFixture(t, guildID, botUserID, botRoleID)
+	guildJSON, channelsJSON := pf.guild, pf.channels
 	roles, chs := unmarshalFixtureGuildAndChannels(t, guildJSON, channelsJSON)
 	for i := range roles {
 		if roles[i].name == "Diallak" {
@@ -1391,6 +1408,7 @@ func runSetAccessFixtureTest(t *testing.T, def *serverdef.Definition, defDigest,
 	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
 	fake.roles = roles
 	fake.channels = chs
+	fake.holdFixtureSettings(t, pf)
 	fakeSrv := fake.server()
 	defer fakeSrv.Close()
 
@@ -1442,7 +1460,8 @@ func TestApplyServer_Positive_PerActionFixtures(t *testing.T) {
 // runRoleOrderPositionsMatchSubtest tests that no PATCH roles is called when positions match definition order.
 func runRoleOrderPositionsMatchSubtest(t *testing.T, def *serverdef.Definition, defDigest, fakeToken string, guildID, botUserID, botRoleID uint64) {
 	t.Helper()
-	_, guildJSON, _, channelsJSON := buildPlatformFixtureFromDef(t, guildID, botUserID, botRoleID)
+	pf := buildPlatformFixture(t, guildID, botUserID, botRoleID)
+	guildJSON, channelsJSON := pf.guild, pf.channels
 	roles, chs := unmarshalFixtureGuildAndChannels(t, guildJSON, channelsJSON)
 	for i := range roles {
 		if roles[i].name == "Diallak" {
@@ -1467,6 +1486,7 @@ func runRoleOrderPositionsMatchSubtest(t *testing.T, def *serverdef.Definition, 
 	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
 	fake.roles = roles
 	fake.channels = chs
+	fake.holdFixtureSettings(t, pf)
 	fake.getRolesOverride = wantedRoles
 	fakeSrv := fake.server()
 	defer fakeSrv.Close()
@@ -1608,7 +1628,8 @@ func runRoleOrderBoundaryFailCase(t *testing.T, def *serverdef.Definition, fakeT
 // runRoleOrderSwappedBelowSubtest tests that swapping roles below the caller triggers a PATCH roles call.
 func runRoleOrderSwappedBelowSubtest(t *testing.T, def *serverdef.Definition, defDigest, fakeToken string, guildID, botUserID, botRoleID uint64) {
 	t.Helper()
-	_, guildJSON, _, channelsJSON := buildPlatformFixtureFromDef(t, guildID, botUserID, botRoleID)
+	pf := buildPlatformFixture(t, guildID, botUserID, botRoleID)
+	guildJSON, channelsJSON := pf.guild, pf.channels
 	roles, chs := unmarshalFixtureGuildAndChannels(t, guildJSON, channelsJSON)
 	for i := range roles {
 		if roles[i].name == "Diallak" {
@@ -1630,6 +1651,7 @@ func runRoleOrderSwappedBelowSubtest(t *testing.T, def *serverdef.Definition, de
 	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
 	fake.roles = roles
 	fake.channels = chs
+	fake.holdFixtureSettings(t, pf)
 	fakeSrv := fake.server()
 	defer fakeSrv.Close()
 

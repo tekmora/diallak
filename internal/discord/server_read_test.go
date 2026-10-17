@@ -44,6 +44,8 @@ type fixtureAPIGuild struct {
 	Name     string           `json:"name"`
 	Features []string         `json:"features"`
 	Roles    []fixtureAPIRole `json:"roles"`
+	// VerificationLevel is the platform's number of the level.
+	VerificationLevel int `json:"verification_level"`
 }
 
 type fixtureAPIMember struct {
@@ -180,13 +182,14 @@ func appendEveryoneRole(t *testing.T, def *serverdef.Definition, guildID uint64,
 }
 
 // buildFixtureGuildJSON serializes guild and role fixtures to JSON.
-func buildFixtureGuildJSON(t *testing.T, guildID uint64, apiRoles []fixtureAPIRole) string {
+func buildFixtureGuildJSON(t *testing.T, def *serverdef.Definition, guildID uint64, apiRoles []fixtureAPIRole) string {
 	t.Helper()
 	g := fixtureAPIGuild{
-		ID:       strconv.FormatUint(guildID, 10),
-		Name:     "Test Hub",
-		Features: []string{"COMMUNITY", "NEWS"},
-		Roles:    apiRoles,
+		ID:                strconv.FormatUint(guildID, 10),
+		Name:              "Test Hub",
+		Features:          []string{"COMMUNITY", "NEWS"},
+		Roles:             apiRoles,
+		VerificationLevel: fixtureVerificationLevel(t, def),
 	}
 	gBytes, err := json.Marshal(g)
 	if err != nil {
@@ -301,12 +304,21 @@ func buildPlatformFixtureFromDef(t *testing.T, guildID uint64, botUserID uint64,
 	channelsJSON string,
 ) {
 	t.Helper()
+	f := buildPlatformFixture(t, guildID, botUserID, botRoleID)
+	return f.app, f.guild, f.member, f.channels
+}
+
+// platformFixture holds the platform's replies for a server built as server.Definition() says.
+type platformFixture struct {
+	app, guild, member, channels, rules string
+}
+
+func buildPlatformFixture(t *testing.T, guildID uint64, botUserID uint64, botRoleID uint64) platformFixture {
+	t.Helper()
 	def, err := server.Definition()
 	if err != nil {
 		t.Fatalf("server.Definition(): %v", err)
 	}
-
-	appJSON = fmt.Sprintf(`{"id":"9001","name":"diallak-app","bot":{"id":"%d","username":"diallak"}}`, botUserID)
 
 	roleIDMap := make(map[string]uint64, len(def.Roles))
 	var apiRoles []fixtureAPIRole
@@ -316,11 +328,13 @@ func buildPlatformFixtureFromDef(t *testing.T, guildID uint64, botUserID uint64,
 	appendManagedRoles(t, def, &nextRoleID, roleIDMap, &apiRoles)
 	appendEveryoneRole(t, def, guildID, roleIDMap, &apiRoles)
 
-	guildJSON = buildFixtureGuildJSON(t, guildID, apiRoles)
-	memberJSON = buildFixtureMemberJSON(t, botUserID, botRoleID)
-	channelsJSON = buildFixtureChannelsJSON(t, def, roleIDMap)
-
-	return appJSON, guildJSON, memberJSON, channelsJSON
+	return platformFixture{
+		app:      fmt.Sprintf(`{"id":"9001","name":"diallak-app","bot":{"id":"%d","username":"diallak"}}`, botUserID),
+		guild:    buildFixtureGuildJSON(t, def, guildID, apiRoles),
+		member:   buildFixtureMemberJSON(t, botUserID, botRoleID),
+		channels: buildFixtureChannelsJSON(t, def, roleIDMap),
+		rules:    buildFixtureRulesJSON(t, def, guildID, roleIDMap),
+	}
 }
 
 func serverdefPermissionMask(names []string) (uint64, error) {
@@ -328,7 +342,16 @@ func serverdefPermissionMask(names []string) (uint64, error) {
 }
 
 func newStandardServer(guildID, botUserID uint64, appJSON, guildJSON, memberJSON, channelsJSON string) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return newStandardServerWithRules(guildID, botUserID, appJSON, guildJSON, memberJSON, channelsJSON, `[]`)
+}
+
+// newStandardServerWithRules answers the four reads and the read of the filter rules.
+func newStandardServerWithRules(guildID, botUserID uint64, appJSON, guildJSON, memberJSON, channelsJSON, rulesJSON string) *httptest.Server {
+	return httptest.NewServer(standardHandler(guildID, botUserID, appJSON, guildJSON, memberJSON, channelsJSON, rulesJSON))
+}
+
+func standardHandler(guildID, botUserID uint64, appJSON, guildJSON, memberJSON, channelsJSON, rulesJSON string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/applications/@me":
 			writeTestResponse(w, http.StatusOK, appJSON)
@@ -338,10 +361,12 @@ func newStandardServer(guildID, botUserID uint64, appJSON, guildJSON, memberJSON
 			writeTestResponse(w, http.StatusOK, memberJSON)
 		case fmt.Sprintf("/guilds/%d/channels", guildID):
 			writeTestResponse(w, http.StatusOK, channelsJSON)
+		case fmt.Sprintf("/guilds/%d/auto-moderation/rules", guildID):
+			writeTestResponse(w, http.StatusOK, rulesJSON)
 		default:
 			http.NotFound(w, r)
 		}
-	}))
+	}
 }
 
 func TestReadServer_Positive_FixtureMatchesDefinition(t *testing.T) {
@@ -350,9 +375,9 @@ func TestReadServer_Positive_FixtureMatchesDefinition(t *testing.T) {
 		botUserID uint64 = 2001
 		botRoleID uint64 = 3001
 	)
-	appJSON, guildJSON, memberJSON, channelsJSON := buildPlatformFixtureFromDef(t, guildID, botUserID, botRoleID)
+	f := buildPlatformFixture(t, guildID, botUserID, botRoleID)
 
-	srv := newStandardServer(guildID, botUserID, appJSON, guildJSON, memberJSON, channelsJSON)
+	srv := newStandardServerWithRules(guildID, botUserID, f.app, f.guild, f.member, f.channels, f.rules)
 	defer srv.Close()
 
 	opts := clientOptions{
@@ -387,34 +412,22 @@ func TestReadServer_Positive_FixtureMatchesDefinition(t *testing.T) {
 	}
 }
 
-func TestReadServer_Positive_FourRequestsInOrderAndNothingElse(t *testing.T) {
+func TestReadServer_Positive_FiveRequestsInOrderAndNothingElse(t *testing.T) {
 	const (
 		guildID   uint64 = 1001
 		botUserID uint64 = 2001
 		botRoleID uint64 = 3001
 	)
-	appJSON, guildJSON, memberJSON, channelsJSON := buildPlatformFixtureFromDef(t, guildID, botUserID, botRoleID)
+	f := buildPlatformFixture(t, guildID, botUserID, botRoleID)
 
 	var mu sync.Mutex
 	var recorded []recordedReq
-
+	answer := standardHandler(guildID, botUserID, f.app, f.guild, f.member, f.channels, f.rules)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		recorded = append(recorded, recordedReq{method: r.Method, path: r.URL.Path})
 		mu.Unlock()
-
-		switch r.URL.Path {
-		case "/applications/@me":
-			writeTestResponse(w, http.StatusOK, appJSON)
-		case fmt.Sprintf("/guilds/%d", guildID):
-			writeTestResponse(w, http.StatusOK, guildJSON)
-		case fmt.Sprintf("/guilds/%d/members/%d", guildID, botUserID):
-			writeTestResponse(w, http.StatusOK, memberJSON)
-		case fmt.Sprintf("/guilds/%d/channels", guildID):
-			writeTestResponse(w, http.StatusOK, channelsJSON)
-		default:
-			http.NotFound(w, r)
-		}
+		answer(w, r)
 	}))
 	defer srv.Close()
 
@@ -431,14 +444,15 @@ func TestReadServer_Positive_FourRequestsInOrderAndNothingElse(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if len(recorded) != 4 {
-		t.Fatalf("recorded %d requests, want exactly 4: %+v", len(recorded), recorded)
+	if len(recorded) != 5 {
+		t.Fatalf("recorded %d requests, want exactly 5: %+v", len(recorded), recorded)
 	}
 	wantPaths := []string{
 		"/applications/@me",
 		fmt.Sprintf("/guilds/%d", guildID),
 		fmt.Sprintf("/guilds/%d/members/%d", guildID, botUserID),
 		fmt.Sprintf("/guilds/%d/channels", guildID),
+		fmt.Sprintf("/guilds/%d/auto-moderation/rules", guildID),
 	}
 	for i, want := range wantPaths {
 		if recorded[i].method != http.MethodGet {
