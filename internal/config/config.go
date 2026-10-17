@@ -71,6 +71,12 @@ const (
 	// EnvForumOptInTagID names the variable holding the snowflake of the forum tag a member sets to
 	// ask for the automated answer. It is required when EnvForumChannelID is set.
 	EnvForumOptInTagID = "DIALLAK_FORUM_OPT_IN_TAG_ID"
+	// EnvNewsStateFile names the optional variable holding the absolute path of the news state file
+	// (ADR-0019). Unset, the news function is off and reads nothing.
+	EnvNewsStateFile = "DIALLAK_NEWS_STATE_FILE"
+	// EnvNewsGitHubTokenFile names the optional variable holding the path of a read-only GitHub
+	// token file for the advisory reads. It needs EnvNewsStateFile.
+	EnvNewsGitHubTokenFile = "DIALLAK_NEWS_GITHUB_TOKEN_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
 
 	// MaxTokenBytes bounds secret files (both bot token and model key).
 	MaxTokenBytes = 4096
@@ -156,6 +162,12 @@ type Config struct {
 	// ForumOptInTagID is the forum tag that asks for the automated answer. It is set exactly when
 	// ForumChannelID is set.
 	ForumOptInTagID uint64
+	// NewsStateFile is the absolute path of the news state file. It is empty when the variable is
+	// not set; the news function is then off.
+	NewsStateFile string
+	// NewsGitHubToken is the optional read-only GitHub token of the advisory reads. It is never
+	// logged and is left out of JSON encodings.
+	NewsGitHubToken string `json:"-"`
 }
 
 // HasModel reports whether a model endpoint is configured.
@@ -168,13 +180,19 @@ func (c Config) HasForum() bool {
 	return c.ForumChannelID != 0
 }
 
-// String returns a redacted representation of Config. Token and ModelKey are never printed.
+// HasNews reports whether the news function is on.
+func (c Config) HasNews() bool {
+	return c.NewsStateFile != ""
+}
+
+// String returns a redacted representation of Config. Token, ModelKey and NewsGitHubToken are
+// never printed.
 func (c Config) String() string {
-	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelGuardrail:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d}",
+	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelGuardrail:%q, ModelKey:%q, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d, NewsStateFile:%q, NewsGitHubToken:%q}",
 		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, c.ModelPolicy, c.ModelGuardrail, redactSecret(c.ModelKey), c.CorpusDir, c.SupportChannel,
 		c.TopPassages, c.MinScore, c.QuestionMaxChars, c.ExcerptChars, c.ReplyMaxChars, c.MaxConcurrentAsks,
 		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate, c.HealthAddr, c.TrailRetention,
-		c.ForumChannelID, c.ForumOptInTagID)
+		c.ForumChannelID, c.ForumOptInTagID, c.NewsStateFile, redactSecret(c.NewsGitHubToken))
 }
 
 // GoString returns a redacted representation of Config for Go syntax formatting.
@@ -207,6 +225,8 @@ func (c Config) LogValue() slog.Value {
 		slog.Duration("TrailRetention", c.TrailRetention),
 		slog.Uint64("ForumChannelID", c.ForumChannelID),
 		slog.Uint64("ForumOptInTagID", c.ForumOptInTagID),
+		slog.String("NewsStateFile", c.NewsStateFile),
+		slog.String("NewsGitHubToken", redactSecret(c.NewsGitHubToken)),
 	)
 }
 
@@ -249,7 +269,7 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	forumChannel, forumTag, err := parseForum(getenv)
+	feat, err := parseFeatures(getenv)
 	if err != nil {
 		return Config{}, err
 	}
@@ -274,8 +294,10 @@ func Load(getenv func(string) string) (Config, error) {
 		SourceLinkTemplate: linkTmpl,
 		HealthAddr:         healthAddr,
 		TrailRetention:     retention,
-		ForumChannelID:     forumChannel,
-		ForumOptInTagID:    forumTag,
+		ForumChannelID:     feat.forumChannel,
+		ForumOptInTagID:    feat.forumTag,
+		NewsStateFile:      feat.newsState,
+		NewsGitHubToken:    feat.newsToken,
 	}, nil
 }
 
@@ -304,6 +326,25 @@ func parseHealthAndRetention(getenv func(string) string) (string, time.Duration,
 	return healthAddr, retention, nil
 }
 
+// features are the settings of the functions that are off unless configured.
+type features struct {
+	forumChannel, forumTag uint64
+	newsState, newsToken   string
+}
+
+// parseFeatures reads the support forum's and the news function's settings.
+func parseFeatures(getenv func(string) string) (features, error) {
+	var f features
+	var err error
+	if f.forumChannel, f.forumTag, err = parseForum(getenv); err != nil {
+		return features{}, err
+	}
+	if f.newsState, f.newsToken, err = parseNews(getenv); err != nil {
+		return features{}, err
+	}
+	return f, nil
+}
+
 // parseForum reads the support forum and its opt-in tag. Neither set means the forum answer is off.
 // One without the other is an error: the forum answer never runs without the opt-in tag (ADR-0009
 // case 18, ADR-0020), and a tag without a forum would be a setting that does nothing.
@@ -321,6 +362,29 @@ func parseForum(getenv func(string) string) (uint64, uint64, error) {
 		return 0, 0, err
 	}
 	return channel, tag, nil
+}
+
+// parseNews reads the news state file and the optional GitHub token. No state file means the news
+// function is off; a token without it would be a setting that does nothing, so it stops the start.
+func parseNews(getenv func(string) string) (string, string, error) {
+	state, tokenFile := getenv(EnvNewsStateFile), getenv(EnvNewsGitHubTokenFile)
+	if state == "" {
+		if tokenFile != "" {
+			return "", "", fmt.Errorf("%s is set but %s is not", EnvNewsGitHubTokenFile, EnvNewsStateFile)
+		}
+		return "", "", nil
+	}
+	if !filepath.IsAbs(state) {
+		return "", "", fmt.Errorf("%s must be an absolute path: %q", EnvNewsStateFile, state)
+	}
+	if tokenFile == "" {
+		return state, "", nil
+	}
+	token, err := readSecretFile(tokenFile, EnvNewsGitHubTokenFile, "GitHub token")
+	if err != nil {
+		return "", "", fmt.Errorf("%s: %w", EnvNewsGitHubTokenFile, err)
+	}
+	return state, token, nil
 }
 
 // parseHealthAddr validates the optional listen address of the health listener. The host is

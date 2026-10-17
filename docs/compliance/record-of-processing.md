@@ -27,7 +27,9 @@ pass on more data changes this record in the same pull request, like the
 
 A general description, as Article 30(1)(g) asks:
 
-- **Nothing is stored.** The bot has no database and writes no file
+- **Nothing about members is stored.** The bot has no database. The only
+  file it writes is the news state file when the news function is on, and it
+  holds public feed items and read times only
   ([data inventory](data-inventory.md), "What the bot stores").
 - **Logs hold no content.** No question, no answer and no member id reach the
   log; tests pin it (data inventory, "What the bot logs").

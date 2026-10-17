@@ -69,6 +69,9 @@ type Result struct {
 type Reader struct {
 	client *http.Client
 	now    func() time.Time
+	// apiToken is sent with advisory reads to apiHost only; empty sends none.
+	apiToken string
+	apiHost  string
 }
 
 // NewReader returns a Reader. If hc is nil, the Reader makes its own client: it follows at most
@@ -78,7 +81,7 @@ func NewReader(hc *http.Client) *Reader {
 	if hc == nil {
 		hc = &http.Client{CheckRedirect: checkRedirect, Timeout: ReadTimeout}
 	}
-	return &Reader{client: hc, now: time.Now}
+	return &Reader{client: hc, now: time.Now, apiHost: apiHost}
 }
 
 func checkRedirect(req *http.Request, via []*http.Request) error {

@@ -379,6 +379,10 @@ func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotC
 	if err != nil {
 		return discord.BotConfig{}, err
 	}
+	newsCfg, err := newNews(cfg, def)
+	if err != nil {
+		return discord.BotConfig{}, err
+	}
 	return discord.BotConfig{
 		Token:      cfg.Token,
 		GuildID:    cfg.GuildID,
@@ -386,6 +390,7 @@ func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotC
 		Areas:      areas,
 		Moderation: moderation,
 		Forum:      forum,
+		News:       newsCfg,
 		Logger:     slog.Default(),
 	}, nil
 }

@@ -7,9 +7,11 @@ checked. A value that was not measured says so.
 
 ## In short
 
-- One container, one replica, no database, no volume to write to.
-- Outbound: Discord, and the model endpoint when one is configured. Inbound:
-  nothing, or the platform's probes when the health listener is switched on.
+- One container, one replica, no database. No volume to write to, unless the
+  news function is on: then one small volume holds its state file.
+- Outbound: Discord, the model endpoint when one is configured, and GitHub
+  plus the definition's feeds when the news function is on. Inbound: nothing,
+  or the platform's probes when the health listener is switched on.
 - Configuration comes from environment variables; the two credentials come from
   mounted files.
 - The documentation the bot answers from is a directory the deployment fills
@@ -30,9 +32,11 @@ checked. A value that was not measured says so.
 | Visibility | Public: a pull needs no login | `crane digest ghcr.io/tekmora/diallak:0.1.1` without credentials returned the digest above on 2026-10-11 |
 <!-- markdownlint-enable MD013 -->
 
-The bot writes no file, so the root filesystem can be read-only and no temporary
-directory is needed ([data inventory](compliance/data-inventory.md), "What the
-bot stores").
+The root filesystem can be read-only and no temporary directory is needed. The
+only file the bot writes is the news state file, when the news function is on;
+it lies on a writable volume that user `65532` owns, and the bot replaces it
+through a temporary file in the same directory
+([data inventory](compliance/data-inventory.md), "What the bot stores").
 
 ## Configuration
 
@@ -58,6 +62,18 @@ is missing or out of range stops the start with a message that names it.
   well as the chat route. At start it sends a fixed sentence with an invented
   address there: an address that comes back unmasked, or a refusal, ends the
   start with exit code 1.
+- **The news function is off unless `DIALLAK_NEWS_STATE_FILE` is set**
+  ([ADR-0019](adr/0019-news-posts.md), issue #180). It names an absolute path
+  on the writable volume. A damaged state file stops the start, because an
+  empty state would post every release again. The bot finds the announcement
+  channel, the release role and the feed channels by their names in the server
+  definition before every read, so a renamed channel needs no restart.
+- **The GitHub token is optional and read-only.**
+  `DIALLAK_NEWS_GITHUB_TOKEN_FILE` names a file of at most 4096 bytes with a
+  fine-grained token that can only read public repositories. The bot sends it
+  only to `api.github.com`, for the advisory reads, and never logs it. Without
+  it those reads are unauthenticated and may be refused; the bot then waits for
+  the reset the reply names.
 
 ## Start, stop and replace
 
@@ -87,7 +103,8 @@ is missing or out of range stops the start with a message that names it.
   Configurations of v0.1.2 and v0.4.2 under
   [`internal/config/testdata/upgrade`](../internal/config/testdata/upgrade)
   hold this in a test ([`upgrade_test.go`](../internal/config/upgrade_test.go)).
-  Nothing else carries over: the bot stores no state (see "Database").
+  Nothing else carries over: the bot stores no state but the news state file
+  (see "Database").
 - **Commands are registered by a separate run.** `diallak -register-commands`
   with the same environment sets the server's command list and exits. Starting
   the bot never does. It is the operator's act at the cutover, and it is needed
@@ -155,11 +172,14 @@ platform's probes; a deployment does not publish the port.
 | Out | The gateway host names Discord returns, port 443 | Always: the gateway connection | The address is not in the code: the library asks the platform for it and the gateway later sends a resume address (`bot/config.go`, `gateway/gateway_config.go`) |
 | Out | The host of `DIALLAK_MODEL_BASE_URL` | Model mode only | [`internal/model`](../internal/model/model.go); the client follows no redirect |
 | Out | DNS | Always | |
+| Out | `github.com`, port 443 | News on: the releases feed of each own repository, every 10 minutes | [`internal/news`](../internal/news/advisory.go), `ReleasesAddress`; redirects only to https, at most a fixed number |
+| Out | `api.github.com`, port 443 | News on: the published advisories of each own repository, every 15 minutes | `AdvisoriesAddress` in the same file; the token goes to this host only |
+| Out | The hosts of the definition's feeds, port 443 | News on and feeds listed: each feed once an hour | `news.feeds` in [`server/definition.json`](../server/definition.json); none listed today |
 | In | The health listener | Only when `DIALLAK_HEALTH_ADDR` is set | See "Health checks" |
 <!-- markdownlint-enable MD013 -->
 
 The bot contacts nothing else. It has no telemetry and fetches no documentation
-itself.
+itself. Every news read obeys the back-off the reply asks for.
 
 ## Resources
 
@@ -180,7 +200,8 @@ documentation, because the index is held in memory
 
 ## Database
 
-None. The bot stores nothing ([data inventory](compliance/data-inventory.md)).
+None. The bot stores nothing but the news state file when the news function is
+on ([data inventory](compliance/data-inventory.md)).
 Features that need stored state come with their own record
 ([ADR-0001](adr/0001-architecture-and-boundaries.md), "Open decisions").
 

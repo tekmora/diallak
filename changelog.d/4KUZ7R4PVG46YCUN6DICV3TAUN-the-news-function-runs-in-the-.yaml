@@ -1,0 +1,2 @@
+type: added
+title: 'The news function runs in the bot when its state file is configured: own releases and advisories to the announcement channel, feed digests to their area channels, with an optional read-only GitHub token'

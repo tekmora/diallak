@@ -52,6 +52,9 @@ func checkNewsRepositories(v *validator, repos []string) {
 	} else {
 		checkAnnouncementBot(v, ch)
 	}
+	if findRole(v.def.Roles, ReleaseRole) == nil {
+		v.add(CodeNews, "news.repositories", fmt.Sprintf("own repositories need the release role %q", ReleaseRole))
+	}
 	seen := make(map[string]struct{}, len(repos))
 	for _, r := range repos {
 		p := fmt.Sprintf("news.repositories[%s]", r)

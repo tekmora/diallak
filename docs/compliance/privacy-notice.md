@@ -17,7 +17,8 @@ against the code.
 
 ## In short
 
-- The bot stores nothing about you. It has no database and writes no file.
+- The bot stores nothing about you. It has no database; the one file it may
+  write holds public news items, nothing about members.
 - It reads two things from `/ask`: the question you pass and the id of the
   server the command came from.
 - With `/areas` you choose interest, language and notification roles. For that
@@ -263,6 +264,12 @@ the support forum that carries the tag "Automated answer": the bot reads its
 first message.
 
 ## Changes to this notice
+
+The news function, when the operator switches it on, posts own releases,
+security advisories and digests of public feeds. It reads only public sources
+and processes no data about members: its posts mention a role, never a
+member, and the file it keeps holds feed items and read times only
+([data inventory](data-inventory.md), "What the bot stores").
 
 Features that are planned will process more data: support tickets, GitHub
 Discussions and supporter roles
