@@ -25,7 +25,8 @@ generated agent context against `AGENTS.md`.
 Community bot for the Lusoris Discord hub.
 
 > **Status: first slice built, not live.** The bot answers `/ask` from project
-> documentation with cited sources. It has been tested against a fake Discord
+> documentation with cited sources, and `/areas` lets a member choose interest,
+> language and notification roles. It has been tested against a fake Discord
 > only; the live test and the switch from the bot that runs today are still to
 > come.
 
@@ -43,7 +44,9 @@ Community bot for the Lusoris Discord hub.
 - **Answers from the docs:** a locally run model answers from the projects'
   documentation. Every answer cites its sources and is labelled as AI-generated.
 
-Of this list only the answers from the docs are built. Issue drafts, wishes and
+Of this list only the answers from the docs are built. Besides the list, a
+member chooses interest, language and notification roles with `/areas`
+([ADR-0011](docs/adr/0011-area-roles-from-member-choice.md)). Issue drafts, wishes and
 polls will not be built in this repository: they belong to a shared core the
 projects plan to use from every channel, and the bot will be its Discord
 adapter. That core has no record here yet.
@@ -186,9 +189,10 @@ link that leaves the directory.
 diallak
 ```
 
-It loads the documentation, connects to Discord and answers `/ask` until it
-receives a termination signal. A reply is visible only to the member who asked
-and can never mention anyone.
+It loads the documentation and the server definition, reads the server's roles,
+connects to Discord and answers `/ask` and `/areas` until it receives a
+termination signal. A reply is visible only to the member who asked and can
+never mention anyone. A failed read of the roles stops the start.
 
 ### Health checks
 
@@ -215,7 +219,8 @@ is not ready still answers with excerpts.
 diallak -register-commands
 ```
 
-This sets the server's command list for the application to `/ask` and exits. It
+This sets the server's command list for the application to `/ask` and `/areas`
+and exits. It
 needs the same environment as a normal start. Starting the bot never registers
 or changes a command.
 

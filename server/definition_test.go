@@ -89,9 +89,9 @@ func TestDefinition_Positive_AreaChoicesIsTheBotsDecidedAutomation(t *testing.T)
 			continue
 		}
 		found++
-		if a.By != "bot" || a.State != "decided" ||
+		if a.By != "bot" || a.State != "built" ||
 			a.Record != "docs/adr/0011-area-roles-from-member-choice.md" {
-			t.Errorf("area-choices = %+v, want by bot, decided, record 0011", a)
+			t.Errorf("area-choices = %+v, want by bot, built, record 0011", a)
 		}
 	}
 	if found != 1 {
