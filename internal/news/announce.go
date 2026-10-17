@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -51,8 +52,11 @@ type AnnounceReport struct {
 // longer than Discord allows.
 func Announcement(kind Kind, repo, roleID string, it Item) (string, bool) {
 	what := "New release of"
-	if kind == KindAdvisory {
+	switch {
+	case kind == KindAdvisory:
 		what = "Security advisory for"
+	case earlyBuild(it):
+		what = "New early build of"
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "<@&%s> %s **%s**: [%s](<%s>)", roleID, what, escapeMarkdown(repo),
@@ -61,6 +65,24 @@ func Announcement(kind Kind, repo, roleID string, it Item) (string, bool) {
 		fmt.Fprintf(&b, ", <t:%d>", it.Published.Unix())
 	}
 	return b.String(), utf8.RuneCountInString(b.String()) <= MaxDigestRunes
+}
+
+// releaseTagPath precedes the tag in the path of a release's page on the forge.
+const releaseTagPath = "/releases/tag/"
+
+// earlyBuild reports whether release it is an early build: the tag its page names carries a
+// SemVer pre-release suffix, a hyphen with text after it before any build metadata ("+"). The
+// release feed has no pre-release flag; the tag suffix matched the forge's flag on every release
+// checked (ledger diallak-decided-prerelease-by-tag).
+func earlyBuild(it Item) bool {
+	u, err := url.Parse(it.Link)
+	if err != nil {
+		return false
+	}
+	_, tag, _ := strings.Cut(u.Path, releaseTagPath) // no tag path: empty tag, no early build
+	version, _, _ := strings.Cut(tag, "+")
+	_, suffix, ok := strings.Cut(version, "-")
+	return ok && suffix != ""
 }
 
 // Announce posts each of items, which a Store's Record of feed feedID returned in feed order, at
