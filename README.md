@@ -306,8 +306,9 @@ followed by the image by tag and by digest, and the credits note.
 Merging to `main` releases nothing; only a pushed tag does. Before its first
 release, a deployment sets repository variable `CREDITS_URL` (the https URL of
 the live credits page) and repository secret `SUPPORTER_NAMES` (the supporter
-names to refuse in release notes, one name per line). The release workflow
-stops if either is unset.
+names to refuse in release notes, one name per line; blank lines and lines
+starting with `#` are skipped, so a list with no supporters yet is the single
+line `# none`). The release workflow stops if either is unset.
 
 ### Verifying a release
 
