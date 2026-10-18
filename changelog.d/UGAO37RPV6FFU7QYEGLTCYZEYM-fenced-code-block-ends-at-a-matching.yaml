@@ -1,0 +1,2 @@
+type: fixed
+title: 'A fenced code block now ends only at a fence of the same character that is at least as long, so a hash line inside it no longer starts a new section of the corpus.'
