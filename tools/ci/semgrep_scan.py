@@ -7,8 +7,10 @@ build, vet or gosec run ever loads the code the rules are meant to report.
 Semgrep's test mode replays every fixture; only when all pass is the scan of
 the tracked Go files trusted. The scan fails on any finding, on any Semgrep
 error, and when the report does not list exactly the files that were passed.
+With --sarif, the scan also writes its findings as SARIF to that file, for
+upload to code scanning; the file is written before the scan fails.
 
-Usage: python3 -I tools/ci/semgrep_scan.py --image NAME:TAG@sha256:DIGEST
+Usage: python3 -I tools/ci/semgrep_scan.py --image NAME:TAG@sha256:DIGEST [--sarif FILE]
 """
 
 import argparse
@@ -42,11 +44,21 @@ def run(command, root):
         raise ScanError(f"{command[0]} did not complete: {err}") from err
 
 
-def semgrep(docker, image, root, args):
-    command = [docker, "run", "--rm", "--network", "none",
-               "--volume", f"{root}:/src:ro", "--workdir", "/src",
+def semgrep(docker, image, root, args, out_dir=None):
+    volumes = ["--volume", f"{root}:/src:ro"]
+    if out_dir is not None:
+        volumes += ["--volume", f"{out_dir}:/out"]
+    command = [docker, "run", "--rm", "--network", "none", *volumes, "--workdir", "/src",
                "--entrypoint", "semgrep", image, *args]
     return run(command, root)
+
+
+def sarif_args(sarif):
+    """The output flag and the directory to mount for a SARIF copy of the report."""
+    if sarif is None:
+        return [], None
+    sarif.parent.mkdir(parents=True, exist_ok=True)
+    return [f"--sarif-output=/out/{sarif.name}"], sarif.parent
 
 
 def rule_ids(root):
@@ -98,10 +110,14 @@ def targets(root):
     return names
 
 
-def scan(docker, image, root):
+def scan(docker, image, root, sarif):
     names = targets(root)
+    output, out_dir = sarif_args(sarif)
     result = semgrep(docker, image, root,
-                     ["scan", "--config", RULES, "--error", "--strict", "--json", *SEMGREP_FLAGS, "--", *names])
+                     ["scan", "--config", RULES, "--error", "--strict", "--json", *output,
+                      *SEMGREP_FLAGS, "--", *names], out_dir)
+    if sarif is not None and not sarif.is_file():
+        raise ScanError(f"semgrep wrote no SARIF report to {sarif}")
     try:
         report = json.loads(result.stdout)
     except json.JSONDecodeError as err:
@@ -128,14 +144,16 @@ def main():
     parser.add_argument("--image", required=True, help="Semgrep image pinned by digest")
     parser.add_argument("--docker", default="docker")
     parser.add_argument("--root", default=".")
+    parser.add_argument("--sarif", type=pathlib.Path, help="also write the findings as SARIF here")
     args = parser.parse_args()
     root = pathlib.Path(args.root).resolve()
+    sarif = args.sarif.resolve() if args.sarif else None
     try:
         if not IMAGE_RE.match(args.image):
             raise ScanError(f"image '{args.image}' is not pinned as NAME:TAG@sha256:DIGEST")
         ids = rule_ids(root)
         self_test(args.docker, args.image, root, ids)
-        scan(args.docker, args.image, root)
+        scan(args.docker, args.image, root, sarif)
     except ScanError as err:
         print(f"Semgrep scan failed: {err}", file=sys.stderr)
         return 1

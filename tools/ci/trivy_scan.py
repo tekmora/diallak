@@ -13,11 +13,13 @@ only then is the real scan trusted.
 The real scan fails on any HIGH or CRITICAL finding that has a fix, on any
 Trivy error, and on a report that leaves out what it was given: a tracked
 go.mod or Dockerfile (fs), or the image's OS packages or its binary (image).
-No .trivyignore is read, so no finding is excepted.
+No .trivyignore is read, so no finding is excepted. With --sarif, the real
+scan's report is also converted to SARIF in that file, for upload to code
+scanning; the file is written before the scan fails.
 
 Usage:
-  python3 -I tools/ci/trivy_scan.py --trivy NAME:TAG@sha256:DIGEST fs
-  python3 -I tools/ci/trivy_scan.py --trivy NAME:TAG@sha256:DIGEST image --image REF
+  python3 -I tools/ci/trivy_scan.py --trivy NAME:TAG@sha256:DIGEST [--sarif FILE] fs
+  python3 -I tools/ci/trivy_scan.py --trivy NAME:TAG@sha256:DIGEST [--sarif FILE] image --image REF
 """
 
 import argparse
@@ -83,18 +85,36 @@ def findings(report):
     return found
 
 
-def trivy_fs(docker, trivy, tar_bytes):
+def trivy_fs(docker, trivy, tar_bytes, sarif=None):
     command = [docker, "run", "--rm", "-i", "--volume", f"{CACHE_VOLUME}:/var/cache/trivy",
                "--entrypoint", "sh", trivy, "-ec", UNPACK_AND_SCAN, "trivy",
                "--cache-dir", "/var/cache/trivy", "fs", *SCAN_FLAGS, "."]
-    return report_of(run(command, tar_bytes))
+    return sarif_of(docker, trivy, run(command, tar_bytes), sarif)
 
 
-def trivy_image(docker, trivy, image_tar):
+def trivy_image(docker, trivy, image_tar, sarif=None):
     command = [docker, "run", "--rm", "--volume", f"{CACHE_VOLUME}:/var/cache/trivy",
                "--volume", f"{image_tar}:/in/image.tar:ro", trivy,
                "--cache-dir", "/var/cache/trivy", "image", *SCAN_FLAGS, "--input", "/in/image.tar"]
-    return report_of(run(command))
+    return sarif_of(docker, trivy, run(command), sarif)
+
+
+def sarif_of(docker, trivy, result, sarif):
+    """Checks the report and, with a SARIF path, converts it there before any finding fails."""
+    report = report_of(result)
+    if sarif is None:
+        return report
+    sarif.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as temp:
+        (pathlib.Path(temp) / "report.json").write_bytes(result.stdout)
+        converted = run([docker, "run", "--rm", "--network", "none",
+                         "--volume", f"{temp}:/in:ro", "--volume", f"{sarif.parent}:/out", trivy,
+                         "convert", "--format", "sarif", "--output", f"/out/{sarif.name}",
+                         "/in/report.json"])
+    if converted.returncode != 0 or not sarif.is_file():
+        sys.stderr.write(converted.stderr.decode("utf-8", "replace")[-4000:])
+        raise ScanError(f"trivy convert wrote no SARIF report (exit {converted.returncode})")
+    return report
 
 
 def tar_of(root, names):
@@ -158,9 +178,9 @@ def fail_on(found):
         raise ScanError(f"{len(found)} finding(s)")
 
 
-def scan_fs(docker, trivy, root):
+def scan_fs(docker, trivy, root, sarif):
     names = tracked(root)
-    report = trivy_fs(docker, trivy, tar_of(root, names))
+    report = trivy_fs(docker, trivy, tar_of(root, names), sarif)
     fail_on(findings(report))
     modules = {n for n in names if pathlib.PurePosixPath(n).name == "go.mod"}
     dockerfiles = {n for n in names if is_dockerfile(n)}
@@ -192,9 +212,9 @@ def self_test_image(docker, trivy):
     print(f"Trivy image self-test: planted image reported ({len(found)} vulnerabilities)")
 
 
-def scan_image(docker, trivy, image, binary):
+def scan_image(docker, trivy, image, binary, sarif):
     with tempfile.TemporaryDirectory() as temp:
-        report = trivy_image(docker, trivy, saved(docker, image, pathlib.Path(temp)))
+        report = trivy_image(docker, trivy, saved(docker, image, pathlib.Path(temp)), sarif)
     fail_on(findings(report))
     os_results = [r for r in report.get("Results") or [] if r.get("Class") == "os-pkgs"]
     binaries = by_type(report, "gobinary")
@@ -210,6 +230,7 @@ def parse_args():
     parser.add_argument("--trivy", required=True, help="Trivy image pinned by digest")
     parser.add_argument("--docker", default="docker")
     parser.add_argument("--root", default=".")
+    parser.add_argument("--sarif", type=pathlib.Path, help="also write the real scan's findings as SARIF here")
     modes = parser.add_subparsers(dest="mode", required=True)
     modes.add_parser("fs", help="scan the tracked files")
     image = modes.add_parser("image", help="scan an image from the local Docker daemon")
@@ -220,15 +241,16 @@ def parse_args():
 
 def main():
     args = parse_args()
+    sarif = args.sarif.resolve() if args.sarif else None
     try:
         if not IMAGE_RE.match(args.trivy):
             raise ScanError(f"image '{args.trivy}' is not pinned as NAME:TAG@sha256:DIGEST")
         if args.mode == "fs":
             self_test_fs(args.docker, args.trivy)
-            scan_fs(args.docker, args.trivy, pathlib.Path(args.root).resolve())
+            scan_fs(args.docker, args.trivy, pathlib.Path(args.root).resolve(), sarif)
         else:
             self_test_image(args.docker, args.trivy)
-            scan_image(args.docker, args.trivy, args.image, args.binary)
+            scan_image(args.docker, args.trivy, args.image, args.binary, sarif)
     except ScanError as err:
         print(f"Trivy scan failed: {err}", file=sys.stderr)
         return 1
