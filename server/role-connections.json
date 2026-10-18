@@ -1,0 +1,10 @@
+{
+  "records": [
+    {
+      "type": 7,
+      "key": "merged_contribution",
+      "name": "Merged contribution",
+      "description": "A pull request by the linked forge account was merged into a public repository of the project."
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "platform_name": "GitHub",
+  "values": [
+    {
+      "key": "merged_contribution",
+      "rule": "1 when the linked forge account authored at least one merged pull request in a repository that is public and not a fork and belongs to one of the listed organisations; otherwise 0. The repository set is read from the forge at each evaluation; private repositories are never read.",
+      "met": "1",
+      "not_met": "0",
+      "organisations": [
+        "lusoris",
+        "cordanaLLM",
+        "golusoris",
+        "VMAFx",
+        "jellysin",
+        "plurano",
+        "tekmora"
+      ],
+      "visibility": "public",
+      "fork": false
+    }
+  ]
+}
