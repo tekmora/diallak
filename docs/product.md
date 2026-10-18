@@ -56,7 +56,8 @@ closed:
 - the server definition applied to the hub
   ([#197](https://github.com/tekmora/diallak/issues/197));
 - every built function switched on and checked once in the hub
-  ([#198](https://github.com/tekmora/diallak/issues/198));
+  ([#198](https://github.com/tekmora/diallak/issues/198), protocol in
+  [live test](live-test.md));
 - the supporter roles ([#196](https://github.com/tekmora/diallak/issues/196)).
 
 Milestones between 0.5.0 and 1.0.0 keep the 0.x.0 sequence.
