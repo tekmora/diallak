@@ -207,6 +207,18 @@ func gatewayRemoveCustomID() string {
 	return fmt.Sprintf("moderation-remove:%d:%d:%d", modChannelID, modGatewayMessageID, modMemberID)
 }
 
+// answersTo returns only the requests made with one interaction's token, in order.
+func answersTo(calls []areasCall, id uint64) []areasCall {
+	token := fmt.Sprintf("interaction-token-%d", id)
+	var out []areasCall
+	for _, c := range calls {
+		if strings.Contains(c.path, token) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // callsTo returns the requests of one interaction and the acts and lines, in order.
 func callsTo(calls []areasCall, id uint64) []areasCall {
 	token := fmt.Sprintf("interaction-token-%d", id)
@@ -226,7 +238,9 @@ func TestModerationGateway_Positive_RemoveMessageAsksForAReasonThenActs(t *testi
 		removeMessageFrame(t, 1, 900000000000000001, modRoleID),
 		removeFormFrame(t, 2, 900000000000000002, gatewayRemoveCustomID(), "Spam link", modRoleID))
 
-	form := callsTo(calls, 900000000000000001)
+	// Only the interaction's own requests: the gateway may run the second
+	// interaction's delete and line before the first one's form answer.
+	form := answersTo(calls, 900000000000000001)
 	if len(form) == 0 || !strings.Contains(form[0].raw, `"type":9`) ||
 		!strings.Contains(form[0].raw, gatewayRemoveCustomID()) || !strings.Contains(form[0].raw, `"max_length":512`) {
 		t.Fatalf("first answer = %+v, want the reason form of the message", form)
