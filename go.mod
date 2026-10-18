@@ -11,7 +11,7 @@ require (
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/gorilla/websocket v1.5.3
 	github.com/klauspost/compress v1.20.3
-	github.com/yuin/goldmark v1.8.6
+	github.com/yuin/goldmark/v2 v2.1.6
 )
 
 require (

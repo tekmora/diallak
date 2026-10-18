@@ -6,9 +6,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/v2/ast"
+	"github.com/yuin/goldmark/v2/parser"
 )
 
 type rawChunk struct {
@@ -173,13 +172,12 @@ func offsetToLine(starts []int, pos int) int {
 // headingText extracts the text of an AST heading, HTML comments removed and trimmed.
 func headingText(h *ast.Heading, src []byte) string {
 	var parts []string
-	lines := h.Lines()
-	limit := lines.Len()
+	srcs := h.Source()
+	limit := len(srcs)
 	inComment := false
 	for i := 0; i < limit; i++ {
-		seg := lines.At(i)
 		var stripped string
-		stripped, inComment = stripHTMLComments(string(seg.Value(src)), inComment)
+		stripped, inComment = stripHTMLComments(srcs[i].Str(src), inComment)
 		parts = append(parts, strings.TrimSpace(stripped))
 	}
 	return strings.TrimSpace(strings.Join(parts, " "))
@@ -192,12 +190,17 @@ func markHeading(h *ast.Heading, src []byte, starts []int, lines []string, actio
 	actions[startLine] = kindHeading
 	headings[startLine] = headingInfo{level: h.Level, text: text}
 
-	limit := h.Lines().Len()
-	for i := 1; i < limit && startLine+i < len(actions); i++ {
-		actions[startLine+i] = kindHeading
+	srcs := h.Source()
+	limit := len(srcs)
+	for i := 0; i < limit; i++ {
+		line := offsetToLine(starts, srcs[i].Start)
+		if line < len(actions) {
+			actions[line] = kindHeading
+		}
 	}
-	if limit > 0 {
-		underlineLine := startLine + limit
+	if h.HeadingKind == ast.HeadingKindSetext && limit > 0 {
+		lastLine := offsetToLine(starts, srcs[limit-1].Start)
+		underlineLine := lastLine + 1
 		if underlineLine < len(lines) && actions[underlineLine] == kindNormal {
 			trimmed := strings.TrimSpace(lines[underlineLine])
 			if len(trimmed) > 0 && (trimmed[0] == '=' || trimmed[0] == '-') {
@@ -208,13 +211,13 @@ func markHeading(h *ast.Heading, src []byte, starts []int, lines []string, actio
 }
 
 // markFencedCodeBlock records verbatim line actions for a fenced code block node.
-func markFencedCodeBlock(fcb *ast.FencedCodeBlock, starts []int, lines []string, actions []lineKind) {
+func markFencedCodeBlock(fcb *ast.CodeBlock, starts []int, lines []string, actions []lineKind) {
 	startLine := offsetToLine(starts, fcb.Pos())
 	actions[startLine] = kindVerbatim
-	limit := fcb.Lines().Len()
+	segs := fcb.Value.Segments()
+	limit := len(segs)
 	for i := 0; i < limit; i++ {
-		seg := fcb.Lines().At(i)
-		actions[offsetToLine(starts, seg.Start)] = kindVerbatim
+		actions[offsetToLine(starts, segs[i].Start)] = kindVerbatim
 	}
 	closeLine := startLine + 1 + limit
 	if closeLine < len(lines) {
@@ -235,8 +238,10 @@ func classifyLines(doc ast.Node, src []byte, starts []int, lines []string) ([]li
 		switch n := child.(type) {
 		case *ast.Heading:
 			markHeading(n, src, starts, lines, actions, headings)
-		case *ast.FencedCodeBlock:
-			markFencedCodeBlock(n, starts, lines, actions)
+		case *ast.CodeBlock:
+			if n.CodeBlockKind == ast.CodeBlockKindFenced {
+				markFencedCodeBlock(n, starts, lines, actions)
+			}
 		}
 	}
 	return actions, headings
@@ -276,9 +281,7 @@ func collectRawChunks(lines []string, actions []lineKind, headings map[int]headi
 	return firstTitle, rawChunks
 }
 
-var gmParser = parser.NewParser(
-	parser.WithBlockParsers(parser.DefaultBlockParsers()...),
-)
+var gmParser = parser.New()
 
 // parseFileChunks parses content into chunks using goldmark CommonMark block parsing.
 func parseFileChunks(repo, rev, filePath, content string, maxChunkBytes int) []Chunk {
@@ -286,7 +289,7 @@ func parseFileChunks(repo, rev, filePath, content string, maxChunkBytes int) []C
 	lines := strings.Split(normalized, "\n")
 	starts := lineOffsets(lines)
 	src := []byte(normalized)
-	doc := gmParser.Parse(text.NewReader(src))
+	doc := gmParser.Parse(src)
 	actions, headings := classifyLines(doc, src, starts, lines)
 	firstTitle, rawChunks := collectRawChunks(lines, actions, headings)
 	return buildKeptChunks(repo, rev, filePath, firstTitle, rawChunks, maxChunkBytes)
