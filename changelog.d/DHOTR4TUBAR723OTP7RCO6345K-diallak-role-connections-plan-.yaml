@@ -1,0 +1,2 @@
+type: added
+title: diallak -role-connections=plan checks the Linked Roles metadata record and its value rule and prints the request without sending it; push=<digest> sets the record once.

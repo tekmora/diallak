@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -27,28 +28,33 @@ import (
 	"github.com/tekmora/diallak/internal/serverdef"
 	"github.com/tekmora/diallak/internal/serverplan"
 	"github.com/tekmora/diallak/server"
+
+	disgodiscord "github.com/disgoorg/disgo/discord"
 )
 
 const (
-	startTimeout    = 30 * time.Second
-	registerTimeout = 30 * time.Second
-	serverTimeout   = 60 * time.Second
-	applyTimeout    = 15 * time.Minute // chosen, not measured; covers a full apply run under 429 back-off
+	startTimeout           = 30 * time.Second
+	registerTimeout        = 30 * time.Second
+	serverTimeout          = 60 * time.Second
+	applyTimeout           = 15 * time.Minute // chosen, not measured; covers a full apply run under 429 back-off
+	roleConnectionsTimeout = 60 * time.Second
 )
 
 type dependencies struct {
-	registerCommands func(ctx context.Context, token string, guildID uint64, maxQuestionChars int) error
-	runDiscord       func(ctx context.Context, cfg discord.BotConfig) error
-	readServer       func(ctx context.Context, token string, guildID uint64) (*serverplan.Snapshot, error)
-	applyServer      func(ctx context.Context, token string, guildID uint64, in discord.ApplyInput, out io.Writer) error
+	registerCommands    func(ctx context.Context, token string, guildID uint64, maxQuestionChars int) error
+	runDiscord          func(ctx context.Context, cfg discord.BotConfig) error
+	readServer          func(ctx context.Context, token string, guildID uint64) (*serverplan.Snapshot, error)
+	applyServer         func(ctx context.Context, token string, guildID uint64, in discord.ApplyInput, out io.Writer) error
+	pushRoleConnections func(ctx context.Context, token string, records []disgodiscord.ApplicationRoleConnectionMetadata, out io.Writer) error
 }
 
 func defaultDependencies() dependencies {
 	return dependencies{
-		registerCommands: discord.RegisterCommands,
-		runDiscord:       discord.Run,
-		readServer:       discord.ReadServer,
-		applyServer:      discord.ApplyServer,
+		registerCommands:    discord.RegisterCommands,
+		runDiscord:          discord.Run,
+		readServer:          discord.ReadServer,
+		applyServer:         discord.ApplyServer,
+		pushRoleConnections: discord.PushRoleConnections,
 	}
 }
 
@@ -80,12 +86,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, out io.
 	fs.SetOutput(io.Discard)
 	registerCmds := fs.Bool("register-commands", false, "register guild commands and exit")
 	serverMode := fs.String("server", "", "plan, compare, or apply Discord server configuration")
+	roleConnMode := fs.String("role-connections", "", "plan or push Discord role-connection metadata")
 	if parseErr := fs.Parse(args); parseErr != nil {
 		return fmt.Errorf("parse flags: %w", parseErr)
 	}
 
-	if err := validateServerFlags(*serverMode, *registerCmds); err != nil {
+	if err := validateCommandFlags(*serverMode, *registerCmds, *roleConnMode); err != nil {
 		return err
+	}
+
+	if *roleConnMode == "plan" {
+		return executeRoleConnectionsPlan(out)
 	}
 
 	cfg, err := config.Load(getenv)
@@ -93,6 +104,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, out io.
 		return fmt.Errorf("load configuration: %w", err)
 	}
 
+	if strings.HasPrefix(*roleConnMode, "push=") {
+		planDigest := strings.TrimPrefix(*roleConnMode, "push=")
+		return executeRoleConnectionsPush(ctx, cfg, planDigest, out, deps.pushRoleConnections)
+	}
 	if *registerCmds {
 		return executeRegisterCommands(ctx, cfg, out, deps.registerCommands)
 	}
@@ -104,6 +119,80 @@ func run(ctx context.Context, args []string, getenv func(string) string, out io.
 		return executeServerCommand(ctx, cfg, *serverMode, out, deps.readServer)
 	}
 	return executeBotRun(ctx, cfg, out, deps.runDiscord)
+}
+
+func validateCommandFlags(serverMode string, registerCmds bool, roleConnMode string) error {
+	if roleConnMode != "" && (serverMode != "" || registerCmds) {
+		return errors.New("-role-connections cannot be used with -server or -register-commands")
+	}
+	if err := validateRoleConnFlags(roleConnMode); err != nil {
+		return err
+	}
+	return validateServerFlags(serverMode, registerCmds)
+}
+
+func validateRoleConnFlags(roleConnMode string) error {
+	if roleConnMode == "" || roleConnMode == "plan" {
+		return nil
+	}
+	if strings.HasPrefix(roleConnMode, "push=") {
+		planDigest := strings.TrimPrefix(roleConnMode, "push=")
+		if !isValidPlanDigest(planDigest) {
+			return fmt.Errorf("invalid -role-connections mode %q: push needs the digest that -role-connections=plan printed, as push=sha256:<64 hex digits>", roleConnMode)
+		}
+		return nil
+	}
+	return fmt.Errorf("invalid -role-connections mode %q: must be plan or push=sha256:<64 hex digits>", roleConnMode)
+}
+
+func executeRoleConnectionsPlan(out io.Writer) error {
+	recs, _, err := server.RoleConnections()
+	if err != nil {
+		return fmt.Errorf("load role connections: %w", err)
+	}
+	body, err := json.MarshalIndent(recs.Records, "", "  ")
+	if err != nil {
+		return fmt.Errorf("format role connections: %w", err)
+	}
+	digest := server.RoleConnectionsDigest()
+	if _, err := fmt.Fprintln(out, "PUT /applications/{application.id}/role-connections/metadata"); err != nil {
+		return fmt.Errorf("write plan method: %w", err)
+	}
+	if _, err := fmt.Fprintln(out, string(body)); err != nil {
+		return fmt.Errorf("write plan body: %w", err)
+	}
+	if _, err := fmt.Fprintf(out, "digest %s\n", digest); err != nil {
+		return fmt.Errorf("write plan digest: %w", err)
+	}
+	if _, err := fmt.Fprintf(out, "dry run: nothing sent; push with -role-connections=push=%s\n", digest); err != nil {
+		return fmt.Errorf("write plan footer: %w", err)
+	}
+	return nil
+}
+
+func executeRoleConnectionsPush(
+	ctx context.Context,
+	cfg config.Config,
+	planDigest string,
+	out io.Writer,
+	pushRoleConnections func(ctx context.Context, token string, records []disgodiscord.ApplicationRoleConnectionMetadata, out io.Writer) error,
+) error {
+	if planDigest != server.RoleConnectionsDigest() {
+		return errors.New("records changed since plan")
+	}
+
+	pushCtx, cancel := context.WithTimeout(ctx, roleConnectionsTimeout)
+	defer cancel()
+
+	recs, _, err := server.RoleConnections()
+	if err != nil {
+		return fmt.Errorf("load role connections: %w", err)
+	}
+
+	if err := pushRoleConnections(pushCtx, cfg.Token, recs.Records, out); err != nil {
+		return fmt.Errorf("push role connections: %w", err)
+	}
+	return nil
 }
 
 func validateServerFlags(serverMode string, registerCmds bool) error {

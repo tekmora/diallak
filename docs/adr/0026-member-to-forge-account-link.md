@@ -149,8 +149,14 @@ request it first deletes the role connection, so Discord takes the role.
   address, how it reads merged contributions from the forge, and how often it
   refreshes the value: named by the cluster's own record, on order
   k8s-idp-linked-roles-20261018.
-- **The metadata record.** Its key and name, set once by the provider or by
-  hand in the developer portal.
+- **The metadata record.** Answered: one boolean record, key
+  `merged_contribution`, in `server/role-connections.json`, with its value
+  rule in `server/role-connection-values.json` (merged pull request in a
+  public, non-fork repository of the seven listed organisations; private
+  repositories are never read; decision diallak-linked-roles-merge-scope,
+  2026-10-18). `diallak -role-connections=plan` prints the request without
+  sending it; `-role-connections=push=<digest>` sets the record once, after
+  the provider's card closes. Evaluating the rule stays the provider's.
 - **Whether a linked role's condition can be set through the API.** The pages
   read show no such parameter; not tried.
 

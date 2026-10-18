@@ -346,7 +346,11 @@ decided, planned, or observed on the server.
   step. It is a linked role: the member links a forge account through the
   cluster's identity provider, which writes whether a contribution was merged,
   and Discord gives the role. The bot takes no part and keeps no link
-  ([ADR-0026](adr/0026-member-to-forge-account-link.md)).
+  ([ADR-0026](adr/0026-member-to-forge-account-link.md)). The record the
+  role's condition names is `merged_contribution` in
+  `server/role-connections.json`, and the provider's value rule is in
+  `server/role-connection-values.json`; `diallak -role-connections=plan`
+  checks both and prints the request that would set the record.
 - **Supporter roles** are decided: one role for supporters and one cosmetic
   role after a year of support. Nothing attaches to either, and there is no
   channel for supporters only (ADR-0014). The bot gives "Supporter" to a
