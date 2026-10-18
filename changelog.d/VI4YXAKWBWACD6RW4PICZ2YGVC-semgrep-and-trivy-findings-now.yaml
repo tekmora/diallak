@@ -1,0 +1,2 @@
+type: security
+title: Semgrep and Trivy findings now reach code scanning as SARIF; the scan jobs still fail on any finding.
