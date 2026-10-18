@@ -293,7 +293,11 @@ nothing written on the server goes to GitHub.
 Features that are planned will process more data: support tickets, GitHub
 Discussions as a source of answers, and supporter roles
 ([data inventory](data-inventory.md), "Not yet built"). This notice gains the
-matching entries before such a feature goes live. One
+matching entries before such a feature goes live. For supporter roles the
+data is decided already: the bot will receive an event when a member joins,
+changes or leaves the server, and the list of members once after it starts.
+It reads the member's id and roles to give or take "Supporter", and keeps
+nothing beyond a timer in memory. One
 period is decided already: a support ticket is kept 30 days after it is
 closed.
 

@@ -44,6 +44,8 @@ memory until its reply is sent.
 | Whether the author of that message is an application | Discord, with the message | Leaving such a post without a reply | Not kept |
 | Whether a new post carries the opt-in tag | Discord, with the thread event | Reading only a tagged post: the first message of any other post is not requested | Not kept |
 | Events about channels, roles and threads of the server, with the title of each new thread and the id of its creator | Discord, with the standard intent that carries thread events, only when the support forum is configured | Nothing, except telling a new opted-in post in the configured forum from everything else by the id of the parent channel, the kind of thread, the mark of a new thread and its tags | Not kept |
+| Events about members of the server: a member who joins, changes or leaves, with the member's id and roles; once after a start, the list of all members | Discord, with the privileged members intent, only when the supporter function is switched on ([ADR-0027](../adr/0027-members-intent-for-supporter-roles.md)) | Giving "Supporter" to a member who holds "Ko-fi supporter" or "Patreon supporter", and taking it after a grace period from a member who holds neither | In memory while the event or the list is handled; a grace timer per member in memory until it runs out or is cleared; lost on a restart |
+| Other fields of a member event or the member list, such as the name, nickname and avatar | Discord, with the event | Nothing: the bot reads none of them | Not kept |
 | Other fields of the first message of a post: author id and name, attachments, embeds, polls, components | Discord, with the message | Nothing: the bot reads none of them | Not kept |
 | Other fields Discord sends with a command or a button press, such as the member's name and locale, the member's id and roles with `/ask`, and the text of the message a `Remove message` names | Discord, with the command | Nothing: the bot reads none of them | Not kept |
 <!-- markdownlint-enable MD013 -->
@@ -70,7 +72,9 @@ member or presence event reaches the bot (`gatewayIntents` in
 [`internal/discord/disgo.go`](../../internal/discord/disgo.go)). Only when
 `DIALLAK_FORUM_CHANNEL_ID` and `DIALLAK_FORUM_OPT_IN_TAG_ID` are set does it
 request the one standard intent that carries thread events, still no message
-intent and no privileged intent
+intent and no privileged intent. Only the supporter function, when it is built
+and switched on, adds the members intent, and never presences or message
+content ([ADR-0027](../adr/0027-members-intent-for-supporter-roles.md))
 ([ADR-0009](../adr/0009-support-forum-first-answer.md),
 [ADR-0020](../adr/0020-forum-answers-only-opted-in-posts.md)). For the support
 forum the bot compares the parent channel, the kind of thread, the mark of a
@@ -289,4 +293,7 @@ These will add entries here when they are built:
 - Discussions as a source of answers
   ([ADR-0004](../adr/0004-community-questions.md)); the bridge that posts new
   discussions is built (issue #99).
-- Supporter roles.
+- Supporter roles. What they will receive is decided and listed above: member
+  events and the member list, held in memory only
+  ([ADR-0024](../adr/0024-supporter-roles-from-funding-platforms.md),
+  [ADR-0027](../adr/0027-members-intent-for-supporter-roles.md)).

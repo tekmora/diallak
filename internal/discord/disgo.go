@@ -327,13 +327,18 @@ func normalizeBotConfig(cfg BotConfig) (BotConfig, error) {
 }
 
 // gatewayIntents is the intent set of the gateway session. Application command interactions
-// arrive without any intent, and the bot requests no privileged one (ADR-0001). Only the forum
-// answer adds the one standard intent that carries thread events (ADR-0009).
-func gatewayIntents(forum bool) gateway.Intents {
+// arrive without any intent. The forum answer adds the one standard intent that carries thread
+// events (ADR-0009). The supporter function adds the members intent and no other privileged one
+// (ADR-0027); presences and message content are never requested (ADR-0001).
+func gatewayIntents(forum, supporter bool) gateway.Intents {
+	intents := gateway.IntentsNone
 	if forum {
-		return gateway.IntentGuilds
+		intents |= gateway.IntentGuilds
 	}
-	return gateway.IntentsNone
+	if supporter {
+		intents |= gateway.IntentGuildMembers
+	}
+	return intents
 }
 
 // libraryLogFloor is the lowest level at which the Discord library may write to the log. Below it
@@ -534,7 +539,8 @@ func buildClient(
 	botOpts := []bot.ConfigOpt{
 		bot.WithLogger(libraryLogger(cfg.Logger)),
 		bot.WithGatewayConfigOpts(
-			gateway.WithIntents(gatewayIntents(cfg.Forum != nil)),
+			// The supporter function (#196) is not built yet, so nothing requests the members intent.
+			gateway.WithIntents(gatewayIntents(cfg.Forum != nil, false)),
 			gateway.WithAutoReconnect(true),
 		),
 		bot.WithRestConfigOpts(

@@ -3,6 +3,8 @@
 - **Status**: Accepted
 - **Date**: 2026-10-10
 - **Authors**: Maintainers
+- **Amended by**: [ADR-0027](0027-members-intent-for-supporter-roles.md),
+  "The bot requests no privileged intent"
 
 ## Context
 

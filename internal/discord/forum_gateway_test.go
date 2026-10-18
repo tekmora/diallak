@@ -316,12 +316,38 @@ func TestHasMessageContentRight_Boundary_EitherFlag(t *testing.T) {
 }
 
 func TestGatewayIntents_Positive_ForumAddsOnlyTheGuildsIntent(t *testing.T) {
-	intents := gatewayIntents(true)
+	intents := gatewayIntents(true, false)
 	if intents != gateway.IntentGuilds {
 		t.Fatalf("gateway intents = %d, want %d", intents, gateway.IntentGuilds)
 	}
 	if intents.Has(gateway.IntentMessageContent) || intents.Has(gateway.IntentGuildMessages) {
 		t.Fatalf("gateway intents %d include a message intent", intents)
+	}
+}
+
+// ADR-0027: the supporter function adds the members intent and no other privileged one.
+func TestGatewayIntents_Positive_SupporterAddsOnlyTheMembersIntent(t *testing.T) {
+	cases := map[[2]bool]gateway.Intents{
+		{false, true}: gateway.IntentGuildMembers,
+		{true, true}:  gateway.IntentGuilds | gateway.IntentGuildMembers,
+	}
+	for in, want := range cases {
+		got := gatewayIntents(in[0], in[1])
+		if got != want {
+			t.Errorf("gatewayIntents(%v, %v) = %d, want %d", in[0], in[1], got, want)
+		}
+		if got.Has(gateway.IntentGuildPresences) || got.Has(gateway.IntentMessageContent) {
+			t.Errorf("gatewayIntents(%v, %v) = %d includes presences or message content", in[0], in[1], got)
+		}
+	}
+}
+
+// ADR-0027: without the supporter function the members intent is never requested.
+func TestGatewayIntents_Negative_NoMembersIntentWithoutSupporter(t *testing.T) {
+	for _, forum := range []bool{false, true} {
+		if gatewayIntents(forum, false).Has(gateway.IntentGuildMembers) {
+			t.Errorf("gatewayIntents(%v, false) requests the members intent", forum)
+		}
 	}
 }
 
