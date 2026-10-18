@@ -72,9 +72,12 @@ member or presence event reaches the bot (`gatewayIntents` in
 [`internal/discord/disgo.go`](../../internal/discord/disgo.go)). Only when
 `DIALLAK_FORUM_CHANNEL_ID` and `DIALLAK_FORUM_OPT_IN_TAG_ID` are set does it
 request the one standard intent that carries thread events, still no message
-intent and no privileged intent. Only the supporter function, when it is built
-and switched on, adds the members intent, and never presences or message
-content ([ADR-0027](../adr/0027-members-intent-for-supporter-roles.md))
+intent and no privileged intent. Only the supporter function, when
+`DIALLAK_SUPPORTER_ROLES` is `on`, adds the members intent, and never presences
+or message content; it keeps a member's id and roles, and the member cache of
+the library stays off (`supporterMemberOf` in
+[`internal/discord/disgo_supporter.go`](../../internal/discord/disgo_supporter.go),
+[ADR-0027](../adr/0027-members-intent-for-supporter-roles.md))
 ([ADR-0009](../adr/0009-support-forum-first-answer.md),
 [ADR-0020](../adr/0020-forum-answers-only-opted-in-posts.md)). For the support
 forum the bot compares the parent channel, the kind of thread, the mark of a
@@ -293,7 +296,3 @@ These will add entries here when they are built:
 - Discussions as a source of answers
   ([ADR-0004](../adr/0004-community-questions.md)); the bridge that posts new
   discussions is built (issue #99).
-- Supporter roles. What they will receive is decided and listed above: member
-  events and the member list, held in memory only
-  ([ADR-0024](../adr/0024-supporter-roles-from-funding-platforms.md),
-  [ADR-0027](../adr/0027-members-intent-for-supporter-roles.md)).

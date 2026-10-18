@@ -52,6 +52,7 @@ type clientOptions struct {
 	serverCallTimeout time.Duration
 	applyCallTimeout  time.Duration
 	trailSweepEvery   time.Duration
+	supporterEvery    time.Duration
 }
 
 // lookupDeadline is the configured deadline of the application lookup, or the default.
@@ -83,6 +84,13 @@ func (o clientOptions) sweepInterval() time.Duration {
 	return trailSweepInterval
 }
 
+func (o clientOptions) supporterCheck() time.Duration {
+	if o.supporterEvery > 0 {
+		return o.supporterEvery
+	}
+	return supporterCheckInterval
+}
+
 func (o clientOptions) getApplyCallTimeout() time.Duration {
 	if o.applyCallTimeout > 0 {
 		return o.applyCallTimeout
@@ -105,7 +113,10 @@ type BotConfig struct {
 	// any intent and handles no thread event (ADR-0009 case 1).
 	Forum *ForumHandler
 	// News runs the news function while the bot runs. Nil leaves it off; it then reads nothing.
-	News            *NewsConfig
+	News *NewsConfig
+	// Supporter gives and takes Supporter from the funding platform roles (ADR-0024). Nil leaves
+	// it off: the session then asks for no members intent and handles no member event (ADR-0027).
+	Supporter       *SupporterHandler
 	Logger          *slog.Logger
 	ShutdownTimeout time.Duration
 	// ReportReady reports whether the bot is ready to serve. It is called with true
@@ -251,6 +262,13 @@ func runWithOptions(ctx context.Context, cfg BotConfig, opts clientOptions) erro
 			runNews(ctx, client.Rest, cfg, opts)
 		}()
 	}
+	if cfg.Supporter != nil {
+		d.componentsRunning.Add(1)
+		go func() {
+			defer d.componentsRunning.Done()
+			runSupporter(ctx, client.Rest, cfg, opts)
+		}()
+	}
 	if cfg.ReportReady != nil {
 		cfg.ReportReady(true)
 	}
@@ -296,6 +314,11 @@ func preGatewayStep(
 	}
 	if cfg.Moderation != nil {
 		if err := startModeration(ctx, client, cfg, opts); err != nil {
+			return 0, err
+		}
+	}
+	if cfg.Supporter != nil {
+		if err := readSupporterRoles(ctx, client, cfg, opts); err != nil {
 			return 0, err
 		}
 	}
@@ -539,8 +562,7 @@ func buildClient(
 	botOpts := []bot.ConfigOpt{
 		bot.WithLogger(libraryLogger(cfg.Logger)),
 		bot.WithGatewayConfigOpts(
-			// The supporter function (#196) is not built yet, so nothing requests the members intent.
-			gateway.WithIntents(gatewayIntents(cfg.Forum != nil, false)),
+			gateway.WithIntents(gatewayIntents(cfg.Forum != nil, cfg.Supporter != nil)),
 			gateway.WithAutoReconnect(true),
 		),
 		bot.WithRestConfigOpts(
@@ -554,6 +576,9 @@ func buildClient(
 		botOpts = append(botOpts, bot.WithEventListenerFunc(func(e *events.ThreadCreate) {
 			d.handleThreadCreate(ctx, e)
 		}))
+	}
+	if cfg.Supporter != nil {
+		botOpts = append(botOpts, supporterListeners(ctx, d)...)
 	}
 	if opts.restURL != "" {
 		botOpts = append(botOpts, bot.WithRestClientConfigOpts(rest.WithURL(opts.restURL)))

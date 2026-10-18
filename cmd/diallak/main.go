@@ -364,6 +364,24 @@ func newBug(def *serverdef.Definition, guildID uint64) (*discord.BugHandler, err
 	return bug, nil
 }
 
+// newSupporter builds the supporter function when it is switched on (ADR-0024, ADR-0027). Off, the
+// bot asks for no members intent.
+func newSupporter(cfg config.Config, def *serverdef.Definition) (*discord.SupporterHandler, error) {
+	if !cfg.HasSupporterRoles() {
+		return nil, nil
+	}
+	supporter, err := discord.NewSupporterHandler(discord.SupporterConfig{
+		Definition: def,
+		GuildID:    cfg.GuildID,
+		Grace:      cfg.SupporterGrace,
+		Logger:     slog.Default(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create supporter handler: %w", err)
+	}
+	return supporter, nil
+}
+
 func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotConfig, error) {
 	receipts, err := newReceipts(assembly)
 	if err != nil {
@@ -403,25 +421,33 @@ func buildDiscordConfig(cfg config.Config, assembly *app.Assembly) (discord.BotC
 	if err != nil {
 		return discord.BotConfig{}, fmt.Errorf("create moderation handler: %w", err)
 	}
-	forum, err := newForum(cfg, assembly)
-	if err != nil {
-		return discord.BotConfig{}, err
-	}
-	newsCfg, err := newNews(cfg, def)
-	if err != nil {
-		return discord.BotConfig{}, err
-	}
-	return discord.BotConfig{
+	bc := discord.BotConfig{
 		Token:      cfg.Token,
 		GuildID:    cfg.GuildID,
 		Handler:    handler,
 		Areas:      areas,
 		Bug:        bug,
 		Moderation: moderation,
-		Forum:      forum,
-		News:       newsCfg,
 		Logger:     slog.Default(),
-	}, nil
+	}
+	if err := addOptionalFunctions(&bc, cfg, def, assembly); err != nil {
+		return discord.BotConfig{}, err
+	}
+	return bc, nil
+}
+
+// addOptionalFunctions sets the functions that are off unless configured: the forum answer, the
+// news function and the supporter function.
+func addOptionalFunctions(bc *discord.BotConfig, cfg config.Config, def *serverdef.Definition, assembly *app.Assembly) error {
+	var err error
+	if bc.Forum, err = newForum(cfg, assembly); err != nil {
+		return err
+	}
+	if bc.News, err = newNews(cfg, def); err != nil {
+		return err
+	}
+	bc.Supporter, err = newSupporter(cfg, def)
+	return err
 }
 
 type healthHarness struct {

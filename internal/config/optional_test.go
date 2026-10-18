@@ -65,7 +65,7 @@ func TestReadOptional_Boundary_EveryFieldNamesADeclaredVariable(t *testing.T) {
 	declared := map[string]bool{
 		EnvTopPassages: true, EnvMinScore: true, EnvQuestionMaxChars: true, EnvExcerptChars: true,
 		EnvReplyMaxChars: true, EnvMaxConcurrentAsks: true, EnvAskTimeout: true, EnvModelTimeout: true,
-		EnvTrailRetention: true, EnvEmbedTimeout: true, EnvEmbedMinSimilarity: true,
+		EnvTrailRetention: true, EnvEmbedTimeout: true, EnvEmbedMinSimilarity: true, EnvSupporterGrace: true,
 	}
 	keys, err := optionalKeys()
 	if err != nil {

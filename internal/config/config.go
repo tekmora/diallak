@@ -93,6 +93,13 @@ const (
 	// EnvDiscussionsAppKeyFile names the optional variable holding the path of the GitHub App RSA key.
 	EnvDiscussionsAppKeyFile = "DIALLAK_DISCUSSIONS_APP_KEY_FILE" // #nosec G101 -- the name of an environment variable, not a credential.
 
+	// EnvSupporterRoles names the optional switch of the supporter function (ADR-0024). "on" switches
+	// it on, together with the members intent (ADR-0027); unset leaves it off.
+	EnvSupporterRoles = "DIALLAK_SUPPORTER_ROLES"
+	// EnvSupporterGrace names the optional variable setting how long a member keeps Supporter after
+	// holding neither platform role. It needs EnvSupporterRoles.
+	EnvSupporterGrace = "DIALLAK_SUPPORTER_GRACE"
+
 	// MaxTokenBytes bounds secret files (both bot token and model key).
 	MaxTokenBytes = 4096
 	// MaxKeyFileBytes bounds secret files for GitHub App RSA private keys.
@@ -114,6 +121,11 @@ const (
 	MinTrailRetention = 24 * time.Hour
 	// MaxTrailRetention is the upper bound for DIALLAK_TRAIL_RETENTION: 365 days.
 	MaxTrailRetention = 365 * 24 * time.Hour
+	// MinSupporterGrace is the lower bound for DIALLAK_SUPPORTER_GRACE: one day, Patreon's sync
+	// interval (ADR-0024).
+	MinSupporterGrace = 24 * time.Hour
+	// MaxSupporterGrace is the upper bound for DIALLAK_SUPPORTER_GRACE: 90 days.
+	MaxSupporterGrace = 90 * 24 * time.Hour
 )
 
 // Config is the validated configuration of one bot process.
@@ -203,6 +215,11 @@ type Config struct {
 	// DiscussionsAppKey is the private key PEM text of the GitHub App. It is never logged
 	// and is left out of JSON encodings.
 	DiscussionsAppKey string `json:"-"`
+	// SupporterRoles reports whether the supporter function is on.
+	SupporterRoles bool
+	// SupporterGrace is the grace period of the supporter function. It is 0 when the variable is not
+	// set; discord then uses its built-in default.
+	SupporterGrace time.Duration
 }
 
 // HasModel reports whether a model endpoint is configured.
@@ -230,17 +247,22 @@ func (c Config) HasDiscussions() bool {
 	return c.DiscussionsAppClientID != "" && c.DiscussionsAppKey != "" && c.HasNews()
 }
 
+// HasSupporterRoles reports whether the supporter function is on.
+func (c Config) HasSupporterRoles() bool {
+	return c.SupporterRoles
+}
+
 // String returns a redacted representation of Config. Token, ModelKey, EmbedKey and NewsGitHubToken are
 // never printed.
 func (c Config) String() string {
-	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelGuardrail:%q, ModelKey:%q, EmbedBaseURL:%q, EmbedAlias:%q, EmbedKey:%q, EmbedTimeout:%v, EmbedMinSimilarity:%g, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d, NewsStateFile:%q, NewsGitHubToken:%q, DiscussionsAppClientID:%q, DiscussionsAppKey:%q}",
+	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelGuardrail:%q, ModelKey:%q, EmbedBaseURL:%q, EmbedAlias:%q, EmbedKey:%q, EmbedTimeout:%v, EmbedMinSimilarity:%g, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d, NewsStateFile:%q, NewsGitHubToken:%q, DiscussionsAppClientID:%q, DiscussionsAppKey:%q, SupporterRoles:%t, SupporterGrace:%v}",
 		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, c.ModelPolicy, c.ModelGuardrail, redactSecret(c.ModelKey),
 		c.EmbedBaseURL, c.EmbedAlias, redactSecret(c.EmbedKey), c.EmbedTimeout, c.EmbedMinSimilarity,
 		c.CorpusDir, c.SupportChannel,
 		c.TopPassages, c.MinScore, c.QuestionMaxChars, c.ExcerptChars, c.ReplyMaxChars, c.MaxConcurrentAsks,
 		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate, c.HealthAddr, c.TrailRetention,
 		c.ForumChannelID, c.ForumOptInTagID, c.NewsStateFile, redactSecret(c.NewsGitHubToken),
-		c.DiscussionsAppClientID, redactSecret(c.DiscussionsAppKey))
+		c.DiscussionsAppClientID, redactSecret(c.DiscussionsAppKey), c.SupporterRoles, c.SupporterGrace)
 }
 
 // GoString returns a redacted representation of Config for Go syntax formatting.
@@ -282,6 +304,8 @@ func (c Config) LogValue() slog.Value {
 		slog.String("NewsGitHubToken", redactSecret(c.NewsGitHubToken)),
 		slog.String("DiscussionsAppClientID", c.DiscussionsAppClientID),
 		slog.String("DiscussionsAppKey", redactSecret(c.DiscussionsAppKey)),
+		slog.Bool("SupporterRoles", c.SupporterRoles),
+		slog.Duration("SupporterGrace", c.SupporterGrace),
 	)
 }
 
@@ -328,7 +352,7 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	feat, err := parseFeatures(getenv)
+	feat, err := parseFeatures(getenv, opt)
 	if err != nil {
 		return Config{}, err
 	}
@@ -377,6 +401,8 @@ type features struct {
 	forumChannel, forumTag uint64
 	newsState, newsToken   string
 	discClientID, discKey  string
+	supporter              bool
+	supporterGrace         time.Duration
 }
 
 // set copies the features' settings into c.
@@ -384,10 +410,12 @@ func (f features) set(c *Config) {
 	c.ForumChannelID, c.ForumOptInTagID = f.forumChannel, f.forumTag
 	c.NewsStateFile, c.NewsGitHubToken = f.newsState, f.newsToken
 	c.DiscussionsAppClientID, c.DiscussionsAppKey = f.discClientID, f.discKey
+	c.SupporterRoles, c.SupporterGrace = f.supporter, f.supporterGrace
 }
 
-// parseFeatures reads the support forum's, the news function's, and discussions settings.
-func parseFeatures(getenv func(string) string) (features, error) {
+// parseFeatures reads the support forum's, the news function's, discussions and the supporter
+// function's settings.
+func parseFeatures(getenv func(string) string, opt optionals) (features, error) {
 	var f features
 	var err error
 	if f.forumChannel, f.forumTag, err = parseForum(getenv); err != nil {
@@ -399,7 +427,31 @@ func parseFeatures(getenv func(string) string) (features, error) {
 	if f.discClientID, f.discKey, err = parseDiscussions(getenv, f.newsState != ""); err != nil {
 		return features{}, err
 	}
+	if f.supporter, f.supporterGrace, err = parseSupporter(getenv(EnvSupporterRoles), opt); err != nil {
+		return features{}, err
+	}
 	return f, nil
+}
+
+// parseSupporter reads the switch of the supporter function and its grace period. Unset means off;
+// any value but "on" is an error, and a grace period without the switch would be a setting that
+// does nothing, so it stops the start too.
+func parseSupporter(raw string, opt optionals) (bool, time.Duration, error) {
+	grace, err := opt.durationIn(EnvSupporterGrace, opt.values.SupporterGrace, MinSupporterGrace, MaxSupporterGrace)
+	if err != nil {
+		return false, 0, err
+	}
+	switch raw {
+	case "":
+		if _, set := opt.raw[EnvSupporterGrace]; set {
+			return false, 0, fmt.Errorf("%s is set but %s is not", EnvSupporterGrace, EnvSupporterRoles)
+		}
+		return false, 0, nil
+	case "on":
+		return true, grace, nil
+	default:
+		return false, 0, fmt.Errorf("%s must be \"on\" or unset: %q", EnvSupporterRoles, raw)
+	}
 }
 
 // parseForum reads the support forum and its opt-in tag. Neither set means the forum answer is off.

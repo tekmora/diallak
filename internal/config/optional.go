@@ -25,6 +25,7 @@ type optionalValues struct {
 	TrailRetention     time.Duration `env:"DIALLAK_TRAIL_RETENTION"`
 	EmbedTimeout       time.Duration `env:"DIALLAK_EMBED_TIMEOUT"`
 	EmbedMinSimilarity float64       `env:"DIALLAK_EMBED_MIN_SIMILARITY"`
+	SupporterGrace     time.Duration `env:"DIALLAK_SUPPORTER_GRACE"`
 }
 
 // optionals holds the converted values and the raw text of every variable that was set. A

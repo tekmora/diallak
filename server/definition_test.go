@@ -224,6 +224,7 @@ var builtCode = map[string]string{
 	"discussions-bridge":   "internal/news/discussions.go",
 	"news":                 "internal/news/run.go",
 	"bug-report-link":      "internal/discord/bugreport.go",
+	"supporter-roles":      "internal/discord/supporter.go",
 }
 
 func TestDefinition_Negative_BotAutomationStateMatchesCode(t *testing.T) {

@@ -268,6 +268,15 @@ func runAreasOverGateway(t *testing.T, wantAnswers int, frames ...[]byte) []area
 // and builds a handler without receipts when cfg.Handler is nil.
 func runComponentsOverGateway(t *testing.T, fake componentsFake, cfg BotConfig, wantAnswers int, frames ...[]byte) []areasCall {
 	t.Helper()
+	return runComponentsOverGatewayWith(t, fake, cfg, clientOptions{}, wantAnswers, frames...)
+}
+
+// runComponentsOverGatewayWith is runComponentsOverGateway with the options of base; it sets the
+// REST address and the gateway itself.
+func runComponentsOverGatewayWith(t *testing.T, fake componentsFake, cfg BotConfig, base clientOptions,
+	wantAnswers int, frames ...[]byte,
+) []areasCall {
+	t.Helper()
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
 
@@ -283,17 +292,16 @@ func runComponentsOverGateway(t *testing.T, fake componentsFake, cfg BotConfig, 
 		cfg.Handler = handler
 	}
 	cfg.Token, cfg.GuildID, cfg.Logger = makeFakeToken(gatewayAppID), areasGuildID, logger
-	opts := clientOptions{
-		restURL: srv.URL,
-		openGateway: func(_ context.Context, client *bot.Client, _ string) error {
-			if err := deliverFrames(client, frames); err != nil {
-				return err
-			}
-			if o, ok := fake.(clientObserver); ok {
-				o.observe(client)
-			}
-			return nil
-		},
+	opts := base
+	opts.restURL = srv.URL
+	opts.openGateway = func(_ context.Context, client *bot.Client, _ string) error {
+		if err := deliverFrames(client, frames); err != nil {
+			return err
+		}
+		if o, ok := fake.(clientObserver); ok {
+			o.observe(client)
+		}
+		return nil
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
