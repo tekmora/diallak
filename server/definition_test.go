@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 
@@ -585,6 +587,80 @@ func TestDefinition_Negative_OptInTagOutsideSupportReported(t *testing.T) {
 	tags, findings := channelOptInTags(ch)
 	if len(tags) != 1 || len(findings) != 2 {
 		t.Errorf("channelOptInTags(general) = %d tags, findings %q; want 1 tag and 2 findings", len(tags), findings)
+	}
+}
+
+// productRepositories names each product that gets a tag in the support forum, with its own
+// repository. A product without a repository gets no tag. Products get a tag, not a channel of
+// their own (decision diallak-product-channels).
+var productRepositories = map[string]string{
+	"Diallak": "tekmora/diallak",
+	"Epitrop": "tekmora/epitrop",
+	"Amussis": "plurano/amussis",
+	"VMAFx":   "VMAFx/vmafx",
+	"Pelorus": "VMAFx/pelorus",
+}
+
+// productTagFindings reports each product of productRepositories without a tag in the support
+// forum ch, a product tag only moderators or the opt-in can carry, and a channel named after a
+// product in channels.
+func productTagFindings(ch serverdef.Channel, channels []serverdef.Channel) []string {
+	have := map[string]serverdef.Tag{}
+	for _, tag := range ch.Tags {
+		have[tag.Name] = tag
+	}
+	var findings []string
+	for product := range productRepositories {
+		tag, ok := have[product]
+		switch {
+		case !ok:
+			findings = append(findings, fmt.Sprintf("channels[%s] lacks the product tag %q", ch.ID, product))
+		case tag.OptIn || tag.Moderated:
+			findings = append(findings, fmt.Sprintf("channels[%s] tag %q is not a plain tag every member can set", ch.ID, product))
+		}
+		for _, c := range channels {
+			if strings.EqualFold(c.Name, product) {
+				findings = append(findings, fmt.Sprintf("channels[%s] is a channel of its own for product %q", c.ID, product))
+			}
+		}
+	}
+	sort.Strings(findings)
+	return findings
+}
+
+func TestDefinition_Positive_SupportForumHasAProductTagPerRepository(t *testing.T) {
+	def, err := Definition()
+	if err != nil {
+		t.Fatalf("Definition() error = %v, want nil", err)
+	}
+	for _, ch := range def.Channels {
+		if ch.ID != "support" {
+			continue
+		}
+		for _, f := range productTagFindings(ch, def.Channels) {
+			t.Error(f)
+		}
+		return
+	}
+	t.Fatal("no channel support in the definition")
+}
+
+// The check above reports a missing product tag, a product tag behind the opt-in and a channel
+// of its own for a product.
+func TestDefinition_Negative_ProductTagMissingOrChannelReported(t *testing.T) {
+	support := serverdef.Channel{ID: "support", Tags: []serverdef.Tag{
+		{Name: "Epitrop", OptIn: true},
+		{Name: "Amussis"}, {Name: "VMAFx"}, {Name: "Pelorus"},
+	}}
+	channels := []serverdef.Channel{support, {ID: "diallak", Name: "diallak"}}
+	got := productTagFindings(support, channels)
+	want := []string{
+		`channels[diallak] is a channel of its own for product "Diallak"`,
+		`channels[support] lacks the product tag "Diallak"`,
+		`channels[support] tag "Epitrop" is not a plain tag every member can set`,
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("productTagFindings = %q, want %q", got, want)
 	}
 }
 

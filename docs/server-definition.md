@@ -17,6 +17,15 @@ and applying one plan. None of it was run against Discord
 - **From the first day:** the rules, announcements, one lounge, the support
   forum, a ticket channel, a voice room for scheduled events, and two channels
   for the moderators.
+- **Products get a tag, not a channel.** The support forum carries one tag
+  for each product with a repository of its own:
+  [Diallak](https://github.com/tekmora/diallak),
+  [Epitrop](https://github.com/tekmora/epitrop),
+  [Amussis](https://github.com/plurano/amussis),
+  [VMAFx](https://github.com/VMAFx/vmafx) and
+  [Pelorus](https://github.com/VMAFx/pelorus). Each repository explains its
+  name. A product gets a channel of its own only as an area, once it passes a
+  threshold (`TestDefinition_Positive_SupportForumHasAProductTagPerRepository`).
 - **Later, at a threshold:** four topic areas (home lab and self-hosting, media
   and video, games, AI news and tools) and social rooms for languages. Each
   opens when enough members asked for it and closes when it stays empty. A

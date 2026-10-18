@@ -417,7 +417,12 @@
         {"name": "Español", "opt_in": false, "moderated": false},
         {"name": "Français", "opt_in": false, "moderated": false},
         {"name": "Deutsch", "opt_in": false, "moderated": false},
-        {"name": "Italiano", "opt_in": false, "moderated": false}
+        {"name": "Italiano", "opt_in": false, "moderated": false},
+        {"name": "Diallak", "opt_in": false, "moderated": false},
+        {"name": "Epitrop", "opt_in": false, "moderated": false},
+        {"name": "Amussis", "opt_in": false, "moderated": false},
+        {"name": "VMAFx", "opt_in": false, "moderated": false},
+        {"name": "Pelorus", "opt_in": false, "moderated": false}
       ],
       "access": [
         {
