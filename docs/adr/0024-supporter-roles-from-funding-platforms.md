@@ -126,9 +126,29 @@ ADR-0002 keeps a role that rests on that data is part of this open point.
   tried on the server before acceptance. The search results read on
   2026-10-18 (Sources) say both integrations can give a chosen role; the full
   pages could not be fetched that day.
-- **What the platforms' interfaces offer** (option C): whether Patreon's member
-  data names the Discord account the member connected, and whether Ko-fi offers
-  anything but a webhook. Not read from primary sources.
+- **What the platforms' interfaces offer** (option C). Patreon's API reference
+  was read on 2026-10-18 (Sources). What it says:
+  - A user's `social_connections` field is a "mapping from user's connected app
+    names to external user id on the respective app". The reference does not
+    say whether a Discord account is always among them; that is tried before
+    acceptance.
+  - A campaign's members are listed by `GET
+    /api/oauth2/v2/campaigns/{campaign_id}/members`, one member by `GET
+    /api/oauth2/v2/members/{member_id}`. The bot could poll these without
+    inbound traffic.
+  - A member carries `patron_status`, `currently_entitled_amount_cents`,
+    `pledge_relationship_start` (the start of the most recent pledge chain,
+    not changed by pledge updates), `last_charge_date`, `last_charge_status`,
+    `next_charge_date`, `pledge_cadence`, `campaign_lifetime_support_cents`,
+    `is_free_trial` and `is_gifted`. The e-mail address needs a scope of its
+    own, and the name may be empty.
+  - Webhooks report members and pledges being created, updated and deleted.
+    They need an inbound address, which the bot does not have.
+  - The changelog lists member identity masking (2026-05-26) and the end of
+    API v1 on 2026-10-07.
+
+  Whether Ko-fi offers anything but a webhook is still not read: its help
+  pages refused the fetch on 2026-10-18.
 - **The decision itself.** The three open points above.
 
 ## Decided in this record
@@ -153,9 +173,13 @@ Acceptance waits for the operator.
   Discord server?",
   <https://help.ko-fi.com/hc/en-us/articles/8664701197073>: search result
   summaries read 2026-10-18 (roles for one-time support and for membership
-  tiers); the pages themselves not read.
+  tiers); the pages themselves not read. A second fetch of the help page on
+  2026-10-18 was refused with HTTP 403.
 - Patreon Developers forum, "Campaign members list with their
   social_connections" (2024-07-07),
   <https://www.patreondevelopers.com/t/campaign-members-list-with-their-social-connections/8999>:
-  search result summary read 2026-10-18; Patreon's API reference
-  <https://docs.patreon.com/> could not be fetched that day.
+  search result summary read 2026-10-18.
+- Patreon, API reference, <https://docs.patreon.com/>: sections "User v2"
+  (`social_connections`), "Member" attributes, the members endpoints of API
+  v2, webhook triggers v2 and the changelog (newest entry 2026-10-07), read
+  2026-10-18. A first fetch earlier that day failed.
