@@ -106,6 +106,7 @@ No data protection officer is appointed.
 | Title and first message of a new post in the support forum | Finding documentation passages for a first reply in that post | Legitimate interests, Article 6(1)(f) |
 | Whether a post was written by an application | Leaving such a post without a reply | Legitimate interests, Article 6(1)(f) |
 | Whether a post carries the tag "Automated answer" | Reading only a post that carries it | Legitimate interests, Article 6(1)(f) |
+| When you link a forge account for the Contributor role, at the cluster's identity provider: your Discord user id, a Discord token that lets the provider write your role connection, your forge account's id and name, and whether a contribution of that account was merged | Writing that value so that Discord gives you the Contributor role, and keeping it current after a later merge ([ADR-0026](../adr/0026-member-to-forge-account-link.md)). The bot receives none of it | Open; see "Legal points still open" |
 | Other fields Discord sends with a post or with events about channels, roles and threads, such as the id of the member who created a thread | None: the bot compares the channel and the kind of thread and reads nothing else | Not used |
 | Other fields Discord sends with a command or a button press, such as your name and locale, your member id and roles with `/ask`, and the text of a message a moderator removes | None: the bot reads none of them and keeps none | Not used |
 <!-- markdownlint-enable MD013 -->
@@ -221,6 +222,7 @@ provider, the country of its data centre and the agreement that binds it.
 | Your member id, when you press for the receipt as a direct message | In memory until the direct message is sent |
 | The trail line of a moderator's act, in the server's log channel | 90 days, unless the operator configures 1 to 365 days; the bot deletes it once a day after that |
 | Title and first message of your post in the support forum, in the bot | In memory until the reply is sent or the attempt ends |
+| The link for the Contributor role, at the cluster's identity provider: your Discord user id, the Discord tokens, your forge account's id and name, and the value written | Until you remove the application's authorisation in Discord, which ends the next token refresh, or ask for deletion. On a deletion request the provider first deletes your role connection, so Discord takes the role. The access token also ends after seven days |
 | Log lines of the bot, which hold no personal data | 30 days |
 <!-- markdownlint-enable MD013 -->
 
@@ -342,7 +344,11 @@ gate for the launch:
 - whether legitimate interests covers reading a member's roles and giving and
   taking the roles the member chose with `/areas`, given that other members can
   see the roles, and that language roles can hint at where someone is from
-  ([ADR-0011](../adr/0011-area-roles-from-member-choice.md)).
+  ([ADR-0011](../adr/0011-area-roles-from-member-choice.md));
+- the legal basis for the link the identity provider keeps for the Contributor
+  role; consent given in Discord's authorisation screen, Article 6(1)(a), and
+  withdrawn by removing the authorisation, is the candidate
+  ([ADR-0026](../adr/0026-member-to-forge-account-link.md)).
 
 ## Sources
 

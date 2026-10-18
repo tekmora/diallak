@@ -1,0 +1,3 @@
+type: changed
+title: 'Record 0026 is accepted: the Contributor role becomes a Discord linked role, verified by the cluster''s identity provider; the bot gets no inbound route and keeps no link, and the privacy texts name what the provider keeps'
+issue: '#56'

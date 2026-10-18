@@ -162,7 +162,7 @@ does the same for the fourth.
 <!-- markdownlint-disable MD013 -->
 | Right of the bot's role | Label in the role's settings | For |
 | :--- | :--- | :--- |
-| `MANAGE_ROLES` | Manage Roles | Giving and taking the Supporter roles and the Contributor role; giving and taking the area roles a member chooses with `/areas` ([ADR-0011](adr/0011-area-roles-from-member-choice.md)); opening and closing an area by the entry of its role on its channel |
+| `MANAGE_ROLES` | Manage Roles | Giving and taking the Supporter roles; giving and taking the area roles a member chooses with `/areas` ([ADR-0011](adr/0011-area-roles-from-member-choice.md)); opening and closing an area by the entry of its role on its channel |
 | `MANAGE_MESSAGES` | Manage Messages | Deleting a message when a moderator acts through the bot |
 | `MODERATE_MEMBERS` | Time Out Members | Timing a member out when a moderator acts through the bot |
 | `MANAGE_GUILD` | Manage Server | Comparing and applying the platform's filter rules and the server's verification level as data of the definition. The data, its validator, compare and apply are built; the tool calls the filter rules and the one change of the server that sets the level, and nothing else the right opens ([Applying the server definition](server-apply.md)) |
@@ -309,11 +309,13 @@ decided, planned, or observed on the server.
   posts: own releases and advisories as they happen, every other feed as one
   digest per channel per day; off until `DIALLAK_NEWS_STATE_FILE` is set
   ([ADR-0019](adr/0019-news-posts.md)).
-- **The bot, planned:** opening and closing the areas, the supporter roles
-  and the Contributor role. Each needs its own decision record
-  first; until then the operator opens and closes areas by hand.
+- **The bot, planned:** opening and closing the areas. It needs its own
+  decision record first; until then the operator opens and closes areas by
+  hand.
 - **The platform:** the spam filter, which writes each flagged case into the
-  moderators' queue channel by itself.
+  moderators' queue channel by itself, and the Contributor role, a linked role
+  that Discord gives on the value the cluster's identity provider writes
+  ([ADR-0026](adr/0026-member-to-forge-account-link.md)).
 - **The operator:** inviting people and granting the moderator, the subject
   guide and the other recognition roles above the bot's role, reading the
   ticket threads, scheduling events and opening the voice room for them.
@@ -341,8 +343,10 @@ decided, planned, or observed on the server.
   [ADR-0011](adr/0011-area-roles-from-member-choice.md).
 - **The contributor ladder** is decided: one role, Contributor, after one
   merged contribution, and the subject guide roles above it. There is no third
-  step. The bot gives the role; how it learns which member a contribution
-  belongs to is not decided and gets its own record.
+  step. It is a linked role: the member links a forge account through the
+  cluster's identity provider, which writes whether a contribution was merged,
+  and Discord gives the role. The bot takes no part and keeps no link
+  ([ADR-0026](adr/0026-member-to-forge-account-link.md)).
 - **Supporter roles** are decided: one role for supporters and one cosmetic
   role after a year of support. Nothing attaches to either, and there is no
   channel for supporters only (ADR-0014). The bot gives "Supporter" to a

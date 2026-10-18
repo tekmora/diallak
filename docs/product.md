@@ -78,7 +78,7 @@ operator's decision and no milestone carries it yet.
 | Function | Where it stays | Why |
 | :--- | :--- | :--- |
 | Opening and closing threshold areas and language rooms | Backlog; the operator does it by hand | No threshold is measured yet ([server definition](server-definition.md)) |
-| Contributor role from merged contributions | Backlog | Needs a link between a member and a forge account, which is its own record ([#56](https://github.com/tekmora/diallak/issues/56)) |
+| Contributor role from merged contributions | The cluster's identity provider and Discord | A linked role: the provider verifies the forge account and Discord gives the role; the bot takes no part ([ADR-0026](adr/0026-member-to-forge-account-link.md)) |
 | Tickets | Operator-run | The operator reads and answers the private ticket threads; the bot does not |
 | Events | Operator-run | The operator schedules events and opens the voice room |
 | Granting moderator and guide roles | Operator-run | The bot grants neither ([ADR-0005](adr/0005-moderation-and-escalation.md)) |

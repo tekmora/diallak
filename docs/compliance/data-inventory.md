@@ -287,6 +287,26 @@ moderator's reason. A timeout shows on the member while it lasts.
 For the support forum, Discord holds the post and the bot's public reply under
 its own terms. The bot keeps no copy of the reply and no reference to it.
 
+## What the identity provider holds for the Contributor role
+
+The Contributor role is a linked role ([ADR-0026](../adr/0026-member-to-forge-account-link.md)). The
+bot takes no part in it and receives none of this data. The cluster's identity
+provider, which the operator runs, serves the verification address and the
+OAuth2 callback and keeps, per member who links a forge account:
+
+- the member's Discord user id;
+- the Discord refresh token with the scope `role_connections.write`, and the
+  access token it yields, which expires after seven days;
+- the forge account's id and name;
+- the value written to the role connection, whether a contribution of that
+  account was merged, which Discord also holds.
+
+All four are kept until the link ends: the member removes the application's
+authorisation in Discord, which makes the provider's next token refresh fail,
+or asks for deletion. On a deletion request the provider first deletes the
+role connection, so Discord takes the role. How the provider's setup meets
+this is named by the cluster's own record.
+
 ## Not yet built
 
 These will add entries here when they are built:
