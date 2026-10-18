@@ -43,7 +43,11 @@ A general description, as Article 30(1)(g) asks:
   carries thread events, so no message event reaches the bot; it requests one
   message per new opted-in post in one channel. The application holds the
   platform's right to read message content and uses it for that request only
-  ([`internal/discord`](../../internal/discord/disgo_forum.go)).
+  ([`internal/discord`](../../internal/discord/disgo_forum.go)). The
+  supporter function, when it is switched on, adds the members intent and no
+  other privileged one; it reads a member's id and roles and keeps them in
+  memory only
+  ([ADR-0027](../adr/0027-members-intent-for-supporter-roles.md)).
 - **One destination for member text.** In model mode the question goes to the
   configured endpoint only; the client follows no redirect
   ([`internal/model`](../../internal/model/model.go)).

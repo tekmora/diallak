@@ -144,7 +144,7 @@ func TestHandleAsk_Positive_SuccessLogsOutcomeWithoutContent(t *testing.T) {
 }
 
 func TestGatewayIntents_Negative_NoIntentAndNoPrivilegedOne(t *testing.T) {
-	intents := gatewayIntents(false)
+	intents := gatewayIntents(false, false)
 	if intents != gateway.IntentsNone {
 		t.Fatalf("gateway intents = %d, want none", intents)
 	}
