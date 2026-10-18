@@ -92,3 +92,32 @@ func TestParseFileChunks_Boundary_TextAfterCommentBlockKept(t *testing.T) {
 		t.Fatalf("chunks = %+v, want %q kept before heading %q", chunks, "tail", "H")
 	}
 }
+
+func TestParseFileChunks_Boundary_ListItemRightAfterATXHeadingIsKept(t *testing.T) {
+	doc := "# Guide\n- first step\n- second step"
+	chunks := parseFileChunks("o/r", "v1", "a.md", doc, 4000)
+	if len(chunks) != 1 {
+		t.Fatalf("chunks = %+v (len %d), want 1 chunk", chunks, len(chunks))
+	}
+	if chunks[0].Heading != "Guide" {
+		t.Errorf("chunks[0].Heading = %q, want %q", chunks[0].Heading, "Guide")
+	}
+	want := "- first step\n- second step"
+	if chunks[0].Text != want {
+		t.Errorf("chunks[0].Text = %q, want %q", chunks[0].Text, want)
+	}
+}
+
+func TestParseFileChunks_Boundary_MultiLineSetextHeadingDropsOnlyItsUnderline(t *testing.T) {
+	doc := "Two line\nheading\n-------\n- item"
+	chunks := parseFileChunks("o/r", "v1", "a.md", doc, 4000)
+	if len(chunks) != 1 {
+		t.Fatalf("chunks = %+v (len %d), want 1 chunk", chunks, len(chunks))
+	}
+	if chunks[0].Heading != "Two line heading" {
+		t.Errorf("chunks[0].Heading = %q, want %q", chunks[0].Heading, "Two line heading")
+	}
+	if chunks[0].Text != "- item" {
+		t.Errorf("chunks[0].Text = %q, want %q", chunks[0].Text, "- item")
+	}
+}

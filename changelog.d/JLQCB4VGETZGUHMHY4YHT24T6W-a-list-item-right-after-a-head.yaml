@@ -1,0 +1,2 @@
+type: fixed
+title: A list item right after a heading stays in the documentation the bot answers from; the Markdown reader moves to goldmark v2
