@@ -122,8 +122,42 @@ func groupParagraphs(paras []string, maxBytes int) []string {
 	return parts
 }
 
+// fenceRun returns the run of fence characters a trimmed line starts with: three or more
+// backticks or tildes, or "" when the line starts no fence.
+func fenceRun(trimmed string) string {
+	if len(trimmed) < 3 || (trimmed[0] != '`' && trimmed[0] != '~') {
+		return ""
+	}
+	n := 0
+	for n < len(trimmed) && trimmed[n] == trimmed[0] {
+		n++
+	}
+	if n < 3 {
+		return ""
+	}
+	return trimmed[:n]
+}
+
+// opensFence returns the run that opens a fenced code block, or "". CommonMark refuses a
+// backtick in the info string of a backtick fence, since that line is inline code.
+func opensFence(trimmed string) string {
+	run := fenceRun(trimmed)
+	if run != "" && run[0] == '`' && strings.ContainsRune(trimmed[len(run):], '`') {
+		return ""
+	}
+	return run
+}
+
+// closesFence reports whether a trimmed line closes the fence opened by open: CommonMark
+// wants the same character, a run at least as long, and nothing after it. A shorter run or
+// the other character is code inside the block.
+func closesFence(trimmed, open string) bool {
+	run := fenceRun(trimmed)
+	return run != "" && run[0] == open[0] && len(run) >= len(open) && len(run) == len(trimmed)
+}
+
 type fileParser struct {
-	inFence        bool
+	fence          string
 	inComment      bool
 	firstTitle     string
 	currentHeading string
@@ -133,18 +167,17 @@ type fileParser struct {
 
 func (p *fileParser) parseLine(line string) {
 	trimmed := strings.TrimSpace(line)
-	isFence := strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")
-	if p.inFence {
-		if isFence {
-			p.inFence = false
+	if p.fence != "" {
+		if closesFence(trimmed, p.fence) {
+			p.fence = ""
 		}
 		p.currentLines = append(p.currentLines, line)
 		return
 	}
 	stripped, nextComment := stripHTMLComments(line, p.inComment)
 	p.inComment = nextComment
-	if !p.inComment && isFence {
-		p.inFence = true
+	if run := opensFence(trimmed); !p.inComment && run != "" {
+		p.fence = run
 		p.currentLines = append(p.currentLines, line)
 		return
 	}
