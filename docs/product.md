@@ -1,6 +1,6 @@
 # Product definition
 
-What Diallak is when it is finished: who it serves, what version 1.0
+What Diallak is when it is finished: who it serves, what version 0.10
 contains, and what stays out. Milestones on the forge follow this page; when
 the scope changes, this page changes in the same pull request.
 
@@ -21,9 +21,9 @@ the scope changes, this page changes in the same pull request.
 
 The bot is not a product for other servers.
 
-## Version 1.0
+## Version 0.10
 
-Version 1.0 is every function built today, live in the hub, plus the supporter
+Version 0.10 is every function built today, live in the hub, plus the supporter
 roles. Each row names the record that decides it and its state in
 [`server/definition.json`](../server/definition.json) (`automation`).
 
@@ -43,13 +43,13 @@ roles. Each row names the record that decides it and its state in
 
 Model-written answers are part of the answer function but stay off until the
 gates of [ADR-0006](adr/0006-ai-act-role.md) and
-[ADR-0013](adr/0013-guardrail-policy-and-receipt.md) are passed. Version 1.0
-does not wait for them: excerpt answers are the 1.0 mode.
+[ADR-0013](adr/0013-guardrail-policy-and-receipt.md) are passed. Version 0.10
+does not wait for them: excerpt answers are the 0.10 mode.
 
-## When 1.0 is done
+## When 0.10 is done
 
-1.0 is done when the issues of the milestone "1.0.0 — Complete hub bot" are
-closed:
+0.10 is done when the issues of the milestone "0.10.0 — Complete hub bot"
+are closed:
 
 - the launch (milestone 0.5.0): live test, cutover, published legal texts and
   the forum answer;
@@ -60,18 +60,19 @@ closed:
   [live test](live-test.md));
 - the supporter roles ([#196](https://github.com/tekmora/diallak/issues/196)).
 
-Milestones between 0.5.0 and 1.0.0 keep the 0.x.0 sequence.
+Milestones up to 0.10.0 keep the 0.x.0 sequence. A stable 1.0.0 is the
+operator's decision and no milestone carries it yet.
 
-## After 1.0
+## After 0.10
 
 - **Wishes and polls.** The bot becomes the Discord adapter of a shared core
   that the projects plan to use from every channel; it keeps no count of its
   own ([#100](https://github.com/tekmora/diallak/issues/100),
   [#101](https://github.com/tekmora/diallak/issues/101)). The core does not
-  exist yet, so wishes and polls ship in the first 1.x minor release after it
-  does, not in 1.0.
+  exist yet, so wishes and polls ship in the first minor release after it
+  does, not in 0.10.
 
-## Not in 1.0, and why
+## Not in 0.10, and why
 
 <!-- markdownlint-disable MD013 -->
 | Function | Where it stays | Why |
