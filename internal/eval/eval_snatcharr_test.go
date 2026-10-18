@@ -256,6 +256,9 @@ func TestSnatchArrEval_EmbedSweep(t *testing.T) {
 		t.Skip("skipping embed sweep: DIALLAK_EVAL_EMBED_BASE_URL and DIALLAK_EVAL_EMBED_ALIAS must be set")
 	}
 	cfg := liveEmbedConfig(t, alias)
+	// The first batch may load the model on the route; the longest timeout the client allows
+	// covers that cold start.
+	cfg.Timeout = embed.MaxTimeout
 	embClient, err := embed.New(cfg, nil)
 	if err != nil {
 		t.Fatalf("embed.New: %v", err)
@@ -263,24 +266,9 @@ func TestSnatchArrEval_EmbedSweep(t *testing.T) {
 
 	set, chunks, ix := loadSnatchArrFixture(t)
 	checkRefusedAliases(t, cfg, ix, chunks)
-	bars := Bars{MinAnswerableHit: 28, MinOffTopicRefused: 5}
-
-	t.Log("similarity | answerable_hit | off_topic_refused | undocumented_refused | paraphrase_hit | bars_hold")
-	t.Log("-----------|----------------|-------------------|----------------------|----------------|----------")
-
-	const sweepSteps = 11 // 0.30 .. 0.80 step 0.05
-	for i := 0; i < sweepSteps; i++ {
-		sim := 0.30 + float64(i)*0.05
-		hybrid, hErr := retrieval.NewHybrid(context.Background(), ix, chunks, embClient, sim)
-		if hErr != nil {
-			t.Fatalf("NewHybrid similarity %.2f: %v", sim, hErr)
-		}
-		rep, rErr := Run(context.Background(), set, hybrid, retrieval.DefaultOptions())
-		if rErr != nil {
-			t.Fatalf("Run similarity %.2f: %v", sim, rErr)
-		}
-		barsHold := Check(rep, bars) == nil
-		t.Logf("%10.2f | %14d | %17d | %20d | %14d | %9t",
-			sim, rep.AnswerableHit, rep.OffTopicRefused, rep.UndocumentedRefused, rep.ParaphraseHit, barsHold)
+	emb := newSweepEmbedder(embClient, realClock{}, sweepCallInterval)
+	if sweepErr := runEmbedSweep(t, set, chunks, ix, emb); sweepErr != nil {
+		t.Fatalf("sweep: %v", sweepErr)
 	}
+	t.Logf("endpoint calls: %d", emb.calls)
 }
