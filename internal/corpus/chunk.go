@@ -2,8 +2,13 @@ package corpus
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/text"
 )
 
 type rawChunk struct {
@@ -11,27 +16,18 @@ type rawChunk struct {
 	lines   []string
 }
 
-// parseATXHeading parses a CommonMark ATX heading with 1 to 6 '#' characters.
-// Setext headings (underlined with = or -) are unsupported.
-func parseATXHeading(line string) (int, string, bool) {
-	i := 0
-	for i < len(line) && i < 3 && line[i] == ' ' {
-		i++
-	}
-	rem := line[i:]
-	hashes := 0
-	for hashes < len(rem) && hashes < 7 && rem[hashes] == '#' {
-		hashes++
-	}
-	if hashes < 1 || hashes > 6 {
-		return 0, "", false
-	}
-	if len(rem) <= hashes || rem[hashes] != ' ' {
-		return 0, "", false
-	}
-	raw := rem[hashes+1:]
-	heading := strings.TrimRight(raw, " #\t\r\n")
-	return hashes, heading, true
+type lineKind int
+
+const (
+	kindNormal lineKind = iota
+	kindHeading
+	kindSetextUnderline
+	kindVerbatim
+)
+
+type headingInfo struct {
+	level int
+	text  string
 }
 
 func stripHTMLComments(line string, inComment bool) (string, bool) {
@@ -138,16 +134,6 @@ func fenceRun(trimmed string) string {
 	return trimmed[:n]
 }
 
-// opensFence returns the run that opens a fenced code block, or "". CommonMark refuses a
-// backtick in the info string of a backtick fence, since that line is inline code.
-func opensFence(trimmed string) string {
-	run := fenceRun(trimmed)
-	if run != "" && run[0] == '`' && strings.ContainsRune(trimmed[len(run):], '`') {
-		return ""
-	}
-	return run
-}
-
 // closesFence reports whether a trimmed line closes the fence opened by open: CommonMark
 // wants the same character, a run at least as long, and nothing after it. A shorter run or
 // the other character is code inside the block.
@@ -156,62 +142,154 @@ func closesFence(trimmed, open string) bool {
 	return run != "" && run[0] == open[0] && len(run) >= len(open) && len(run) == len(trimmed)
 }
 
-type fileParser struct {
-	fence          string
-	inComment      bool
-	firstTitle     string
-	currentHeading string
-	currentLines   []string
-	rawChunks      []rawChunk
+// lineOffsets builds the starting byte offset for every line in lines.
+func lineOffsets(lines []string) []int {
+	starts := make([]int, len(lines))
+	offset := 0
+	for i := 0; i < len(lines); i++ {
+		starts[i] = offset
+		offset += len(lines[i]) + 1
+	}
+	return starts
 }
 
-func (p *fileParser) parseLine(line string) {
-	trimmed := strings.TrimSpace(line)
-	if p.fence != "" {
-		if closesFence(trimmed, p.fence) {
-			p.fence = ""
+// offsetToLine finds the line index containing byte offset pos.
+func offsetToLine(starts []int, pos int) int {
+	if pos <= 0 || len(starts) == 0 {
+		return 0
+	}
+	idx := sort.Search(len(starts), func(i int) bool {
+		return starts[i] > pos
+	}) - 1
+	if idx < 0 {
+		return 0
+	}
+	if idx >= len(starts) {
+		return len(starts) - 1
+	}
+	return idx
+}
+
+// headingText extracts the text of an AST heading, HTML comments removed and trimmed.
+func headingText(h *ast.Heading, src []byte) string {
+	var parts []string
+	lines := h.Lines()
+	limit := lines.Len()
+	inComment := false
+	for i := 0; i < limit; i++ {
+		seg := lines.At(i)
+		var stripped string
+		stripped, inComment = stripHTMLComments(string(seg.Value(src)), inComment)
+		parts = append(parts, strings.TrimSpace(stripped))
+	}
+	return strings.TrimSpace(strings.Join(parts, " "))
+}
+
+// markHeading records line actions and heading info for a heading node.
+func markHeading(h *ast.Heading, src []byte, starts []int, lines []string, actions []lineKind, headings map[int]headingInfo) {
+	startLine := offsetToLine(starts, h.Pos())
+	text := headingText(h, src)
+	actions[startLine] = kindHeading
+	headings[startLine] = headingInfo{level: h.Level, text: text}
+
+	limit := h.Lines().Len()
+	for i := 1; i < limit && startLine+i < len(actions); i++ {
+		actions[startLine+i] = kindHeading
+	}
+	if limit > 0 {
+		underlineLine := startLine + limit
+		if underlineLine < len(lines) && actions[underlineLine] == kindNormal {
+			trimmed := strings.TrimSpace(lines[underlineLine])
+			if len(trimmed) > 0 && (trimmed[0] == '=' || trimmed[0] == '-') {
+				actions[underlineLine] = kindSetextUnderline
+			}
 		}
-		p.currentLines = append(p.currentLines, line)
-		return
 	}
-	stripped, nextComment := stripHTMLComments(line, p.inComment)
-	p.inComment = nextComment
-	if run := opensFence(trimmed); !p.inComment && run != "" {
-		p.fence = run
-		p.currentLines = append(p.currentLines, line)
-		return
-	}
-	if p.handleHeading(stripped) {
-		return
-	}
-	p.currentLines = append(p.currentLines, stripped)
 }
 
-func (p *fileParser) handleHeading(stripped string) bool {
-	if p.inComment {
-		return false
+// markFencedCodeBlock records verbatim line actions for a fenced code block node.
+func markFencedCodeBlock(fcb *ast.FencedCodeBlock, starts []int, lines []string, actions []lineKind) {
+	startLine := offsetToLine(starts, fcb.Pos())
+	actions[startLine] = kindVerbatim
+	limit := fcb.Lines().Len()
+	for i := 0; i < limit; i++ {
+		seg := fcb.Lines().At(i)
+		actions[offsetToLine(starts, seg.Start)] = kindVerbatim
 	}
-	level, heading, ok := parseATXHeading(stripped)
-	if !ok {
-		return false
+	closeLine := startLine + 1 + limit
+	if closeLine < len(lines) {
+		openTrimmed := strings.TrimSpace(lines[startLine])
+		trimmed := strings.TrimSpace(lines[closeLine])
+		if closesFence(trimmed, fenceRun(openTrimmed)) {
+			actions[closeLine] = kindVerbatim
+		}
 	}
-	if level == 1 && p.firstTitle == "" {
-		p.firstTitle = heading
-	}
-	p.rawChunks = append(p.rawChunks, rawChunk{heading: p.currentHeading, lines: p.currentLines})
-	p.currentHeading = heading
-	p.currentLines = nil
-	return true
 }
 
+// classifyLines maps AST block nodes to per-line handling actions.
+func classifyLines(doc ast.Node, src []byte, starts []int, lines []string) ([]lineKind, map[int]headingInfo) {
+	actions := make([]lineKind, len(lines))
+	headings := make(map[int]headingInfo)
+	maxChildren := doc.ChildCount() + 1
+	for child, i := doc.FirstChild(), 0; child != nil && i < maxChildren; child, i = child.NextSibling(), i+1 {
+		switch n := child.(type) {
+		case *ast.Heading:
+			markHeading(n, src, starts, lines, actions, headings)
+		case *ast.FencedCodeBlock:
+			markFencedCodeBlock(n, starts, lines, actions)
+		}
+	}
+	return actions, headings
+}
+
+// collectRawChunks gathers rawChunks and identifies the file's first title.
+func collectRawChunks(lines []string, actions []lineKind, headings map[int]headingInfo) (string, []rawChunk) {
+	var firstTitle string
+	var currentHeading string
+	var currentLines []string
+	var rawChunks []rawChunk
+	inComment := false
+
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+		switch actions[i] {
+		case kindHeading:
+			if hInfo, ok := headings[i]; ok {
+				if hInfo.level == 1 && firstTitle == "" {
+					firstTitle = hInfo.text
+				}
+				rawChunks = append(rawChunks, rawChunk{heading: currentHeading, lines: currentLines})
+				currentHeading = hInfo.text
+				currentLines = nil
+			}
+		case kindSetextUnderline:
+			continue
+		case kindVerbatim:
+			currentLines = append(currentLines, line)
+		case kindNormal:
+			stripped, nextComment := stripHTMLComments(line, inComment)
+			inComment = nextComment
+			currentLines = append(currentLines, stripped)
+		}
+	}
+	rawChunks = append(rawChunks, rawChunk{heading: currentHeading, lines: currentLines})
+	return firstTitle, rawChunks
+}
+
+var gmParser = parser.NewParser(
+	parser.WithBlockParsers(parser.DefaultBlockParsers()...),
+)
+
+// parseFileChunks parses content into chunks using goldmark CommonMark block parsing.
 func parseFileChunks(repo, rev, filePath, content string, maxChunkBytes int) []Chunk {
-	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
-	p := &fileParser{}
-	for _, line := range lines {
-		p.parseLine(line)
-	}
-	p.rawChunks = append(p.rawChunks, rawChunk{heading: p.currentHeading, lines: p.currentLines})
-	return buildKeptChunks(repo, rev, filePath, p.firstTitle, p.rawChunks, maxChunkBytes)
+	normalized := strings.ReplaceAll(content, "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+	starts := lineOffsets(lines)
+	src := []byte(normalized)
+	doc := gmParser.Parse(text.NewReader(src))
+	actions, headings := classifyLines(doc, src, starts, lines)
+	firstTitle, rawChunks := collectRawChunks(lines, actions, headings)
+	return buildKeptChunks(repo, rev, filePath, firstTitle, rawChunks, maxChunkBytes)
 }
 
 func buildKeptChunks(repo, rev, filePath, firstTitle string, rawChunks []rawChunk, maxBytes int) []Chunk {
