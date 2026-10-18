@@ -152,11 +152,15 @@ jobs:
   # by digest; no rule pack is fetched from the registry. The scan script,
   # tools/ci/semgrep_scan.py, first replays the fixture of every rule in both
   # directions and fails unless each passes; only then is the scan of the
-  # tracked Go files trusted.
+  # tracked Go files trusted. Its findings go to code scanning as SARIF; the
+  # job still fails on any finding.
   semgrep:
     name: semgrep
     runs-on: ubuntu-26.04
     timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Stop on a draft pull request
         if: github.event.pull_request.draft == true
@@ -183,7 +187,17 @@ jobs:
         run: |
           set -euo pipefail
           docker pull --quiet "$SEMGREP_IMAGE"
-          python3 -I tools/ci/semgrep_scan.py --image "$SEMGREP_IMAGE"
+          python3 -I tools/ci/semgrep_scan.py --image "$SEMGREP_IMAGE" \
+            --sarif sarif-out/semgrep.sarif
+      # The run on main is the one that opens and closes the alerts of the
+      # default branch.
+      - name: Upload the Semgrep findings to code scanning
+        if: ${{ !cancelled() && hashFiles('sarif-out/semgrep.sarif') != '' }}
+        # yamllint disable-line rule:line-length
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
+        with:
+          sarif_file: sarif-out/semgrep.sarif
+          category: semgrep
 
   # Trivy in the image pinned by digest, in two steps. The tracked files are
   # scanned for vulnerable Go modules, secrets and Dockerfile misconfigurations;
@@ -191,11 +205,15 @@ jobs:
   # it for amd64 and arm64) is scanned for vulnerable OS packages and the Go
   # modules in its binary. tools/ci/trivy_scan.py first scans a case planted
   # at run time and fails unless Trivy reports it. HIGH and CRITICAL findings
-  # with a fix fail the job; no .trivyignore is read.
+  # with a fix fail the job; no .trivyignore is read. Both reports go to code
+  # scanning as SARIF; the job still fails on any finding.
   trivy:
     name: trivy
     runs-on: ubuntu-26.04
     timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
     env:
       # yamllint disable-line rule:line-length
       TRIVY_IMAGE: aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
@@ -222,7 +240,8 @@ jobs:
         run: |
           set -euo pipefail
           docker pull --quiet "$TRIVY_IMAGE"
-          python3 -I tools/ci/trivy_scan.py --trivy "$TRIVY_IMAGE" fs
+          python3 -I tools/ci/trivy_scan.py --trivy "$TRIVY_IMAGE" \
+            --sarif sarif-out/trivy-fs.sarif fs
       - name: Build the image
         if: github.event.pull_request.draft != true
         run: docker build --tag diallak-scan:ci .
@@ -230,4 +249,18 @@ jobs:
         if: github.event.pull_request.draft != true
         run: >-
           python3 -I tools/ci/trivy_scan.py --trivy "$TRIVY_IMAGE"
-          image --image diallak-scan:ci
+          --sarif sarif-out/trivy-image.sarif image --image diallak-scan:ci
+      - name: Upload the Trivy file findings to code scanning
+        if: ${{ !cancelled() && hashFiles('sarif-out/trivy-fs.sarif') != '' }}
+        # yamllint disable-line rule:line-length
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
+        with:
+          sarif_file: sarif-out/trivy-fs.sarif
+          category: trivy/fs
+      - name: Upload the Trivy image findings to code scanning
+        if: ${{ !cancelled() && hashFiles('sarif-out/trivy-image.sarif') != '' }}
+        # yamllint disable-line rule:line-length
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
+        with:
+          sarif_file: sarif-out/trivy-image.sarif
+          category: trivy/image
