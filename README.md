@@ -137,6 +137,8 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 | `DIALLAK_DISCUSSIONS_APP_CLIENT_ID` | with the key file and the state file | Client ID of the GitHub App that reads Discussions; the bridge is off without it |
 | `DIALLAK_DISCUSSIONS_APP_KEY_FILE` | with the client ID and the state file | Path of the file that holds the app's private key; sent nowhere, it signs the app's short-lived tokens |
 | `DIALLAK_TRAIL_RETENTION` | no | How long a line of the moderation trail stays, as a Go duration from `24h` to `8760h`; default 90 days |
+| `DIALLAK_SUPPORTER_ROLES` | no | `on` switches on the supporter function, which gives and takes "Supporter" from the funding platforms' roles and asks Discord for the members intent; off when unset ([ADR-0024](docs/adr/0024-supporter-roles-from-funding-platforms.md), [ADR-0027](docs/adr/0027-members-intent-for-supporter-roles.md)) |
+| `DIALLAK_SUPPORTER_GRACE` | no, with the supporter switch | How long a member keeps "Supporter" after holding neither platform role, as a Go duration from `24h` to `2160h`; default 72 hours |
 <!-- markdownlint-enable MD013 -->
 
 Without the model variables the bot replies with cited excerpts and says

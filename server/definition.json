@@ -926,10 +926,10 @@
     },
     {
       "id": "supporter-roles",
-      "what": "Gives and takes the supporter roles from the funding platforms.",
+      "what": "Gives Supporter to a member who holds a funding platform's role and takes it after a grace period once the member holds neither. Off until a deployment switches it on.",
       "by": "bot",
-      "state": "planned",
-      "needs_record": true
+      "state": "built",
+      "record": "docs/adr/0024-supporter-roles-from-funding-platforms.md"
     },
     {
       "id": "contributor-role",
