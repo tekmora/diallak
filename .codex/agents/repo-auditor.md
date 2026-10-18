@@ -1,7 +1,6 @@
 ---
 name: repo-auditor
 description: "Autonomous agent for repository HISS invariant sweeps and praetorctl compliance."
-model: flash
 mainAgent: true
 subagent: true
 commandExecutionPolicy: auto

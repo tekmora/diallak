@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"net"
 	"net/url"
 	"os"
@@ -301,6 +300,10 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	opt, err := readOptional(getenv)
+	if err != nil {
+		return Config{}, err
+	}
 	corpusDir, err := parseCorpusDir(getenv(EnvCorpusDir))
 	if err != nil {
 		return Config{}, err
@@ -309,7 +312,7 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	emb, err := parseEmbedConfig(getenv)
+	emb, err := parseEmbedConfig(getenv, opt)
 	if err != nil {
 		return Config{}, err
 	}
@@ -317,15 +320,11 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	passages, minScore, qMax, excerpt, reply, err := parseOptionalLimits(getenv)
+	lim, err := parseLimits(opt, getenv(EnvSourceLinkTemplate), m.baseURL != "")
 	if err != nil {
 		return Config{}, err
 	}
-	concurrent, askTimeout, modelTimeout, linkTmpl, err := parseOptionalTimeoutsAndTemplate(getenv, m.baseURL != "")
-	if err != nil {
-		return Config{}, err
-	}
-	healthAddr, retention, err := parseHealthAndRetention(getenv)
+	healthAddr, retention, err := parseHealthAndRetention(getenv(EnvHealthAddr), opt)
 	if err != nil {
 		return Config{}, err
 	}
@@ -334,22 +333,14 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, err
 	}
 	cfg := Config{
-		Token:              token,
-		GuildID:            guild,
-		CorpusDir:          corpusDir,
-		SupportChannel:     supportChannel,
-		TopPassages:        passages,
-		MinScore:           minScore,
-		QuestionMaxChars:   qMax,
-		ExcerptChars:       excerpt,
-		ReplyMaxChars:      reply,
-		MaxConcurrentAsks:  concurrent,
-		AskTimeout:         askTimeout,
-		ModelTimeout:       modelTimeout,
-		SourceLinkTemplate: linkTmpl,
-		HealthAddr:         healthAddr,
-		TrailRetention:     retention,
+		Token:          token,
+		GuildID:        guild,
+		CorpusDir:      corpusDir,
+		SupportChannel: supportChannel,
+		HealthAddr:     healthAddr,
+		TrailRetention: retention,
 	}
+	lim.set(&cfg)
 	m.set(&cfg)
 	emb.set(&cfg)
 	feat.set(&cfg)
@@ -369,12 +360,12 @@ func parseDiscordAccess(getenv func(string) string) (uint64, string, error) {
 	return guild, token, nil
 }
 
-func parseHealthAndRetention(getenv func(string) string) (string, time.Duration, error) {
-	healthAddr, err := parseHealthAddr(getenv(EnvHealthAddr))
+func parseHealthAndRetention(rawHealthAddr string, opt optionals) (string, time.Duration, error) {
+	healthAddr, err := parseHealthAddr(rawHealthAddr)
 	if err != nil {
 		return "", 0, err
 	}
-	retention, err := parseOptionalDuration(getenv(EnvTrailRetention), EnvTrailRetention, MinTrailRetention, MaxTrailRetention)
+	retention, err := opt.durationIn(EnvTrailRetention, opt.values.TrailRetention, MinTrailRetention, MaxTrailRetention)
 	if err != nil {
 		return "", 0, err
 	}
@@ -625,7 +616,7 @@ func (e embedSettings) set(c *Config) {
 	c.EmbedMinSimilarity = e.minSimilarity
 }
 
-func parseEmbedConfig(getenv func(string) string) (embedSettings, error) {
+func parseEmbedConfig(getenv func(string) string, opt optionals) (embedSettings, error) {
 	e := embedSettings{
 		baseURL: getenv(EnvEmbedBaseURL),
 		alias:   getenv(EnvEmbedAlias),
@@ -663,13 +654,13 @@ func parseEmbedConfig(getenv func(string) string) (embedSettings, error) {
 		e.key = readKey
 	}
 
-	timeout, err := parseOptionalDuration(getenv(EnvEmbedTimeout), EnvEmbedTimeout, embed.MinTimeout, embed.MaxTimeout)
+	timeout, err := opt.durationIn(EnvEmbedTimeout, opt.values.EmbedTimeout, embed.MinTimeout, embed.MaxTimeout)
 	if err != nil {
 		return embedSettings{}, err
 	}
 	e.timeout = timeout
 
-	minSim, err := parseOptionalFloat(getenv(EnvEmbedMinSimilarity), EnvEmbedMinSimilarity, 0.0, 1.0)
+	minSim, err := opt.floatIn(EnvEmbedMinSimilarity, opt.values.EmbedMinSimilarity, 0.0, 1.0)
 	if err != nil {
 		return embedSettings{}, err
 	}
@@ -755,93 +746,80 @@ func parseSupportChannel(raw string) (string, error) {
 	return trimmed, nil
 }
 
-func parseOptionalLimits(getenv func(string) string) (int, float64, int, int, int, error) {
-	passages, err := parseOptionalInt(getenv(EnvTopPassages), EnvTopPassages, 1, retrieval.MaxLimit)
+// limits are the answer path's optional bounds, timeouts and link template.
+type limits struct {
+	passages, qMax, excerpt, reply, concurrent int
+	minScore                                   float64
+	askTimeout, modelTimeout                   time.Duration
+	linkTmpl                                   string
+}
+
+// set copies the limits into c.
+func (l limits) set(c *Config) {
+	c.TopPassages, c.MinScore, c.QuestionMaxChars = l.passages, l.minScore, l.qMax
+	c.ExcerptChars, c.ReplyMaxChars, c.MaxConcurrentAsks = l.excerpt, l.reply, l.concurrent
+	c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate = l.askTimeout, l.modelTimeout, l.linkTmpl
+}
+
+// parseLimits checks the answer path's optional bounds, timeouts and link template.
+func parseLimits(opt optionals, rawLinkTemplate string, hasModel bool) (limits, error) {
+	var l limits
+	var err error
+	if l.passages, l.minScore, l.qMax, l.excerpt, l.reply, err = parseOptionalLimits(opt); err != nil {
+		return limits{}, err
+	}
+	l.concurrent, l.askTimeout, l.modelTimeout, l.linkTmpl, err = parseOptionalTimeoutsAndTemplate(opt, rawLinkTemplate, hasModel)
+	if err != nil {
+		return limits{}, err
+	}
+	return l, nil
+}
+
+func parseOptionalLimits(opt optionals) (int, float64, int, int, int, error) {
+	passages, err := opt.intIn(EnvTopPassages, opt.values.TopPassages, 1, retrieval.MaxLimit)
 	if err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
-	minScore, err := parseOptionalFloat(getenv(EnvMinScore), EnvMinScore, 0.0, 1.0)
+	minScore, err := opt.floatIn(EnvMinScore, opt.values.MinScore, 0.0, 1.0)
 	if err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
-	qMax, err := parseOptionalInt(getenv(EnvQuestionMaxChars), EnvQuestionMaxChars, 1, answer.MaxQuestionRunes)
+	qMax, err := opt.intIn(EnvQuestionMaxChars, opt.values.QuestionMaxChars, 1, answer.MaxQuestionRunes)
 	if err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
-	excerpt, err := parseOptionalInt(getenv(EnvExcerptChars), EnvExcerptChars, answer.MinExcerptRunes, answer.MaxExcerptRunesLimit)
+	excerpt, err := opt.intIn(EnvExcerptChars, opt.values.ExcerptChars, answer.MinExcerptRunes, answer.MaxExcerptRunesLimit)
 	if err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
-	reply, err := parseOptionalInt(getenv(EnvReplyMaxChars), EnvReplyMaxChars, answer.MinRenderRunes, answer.MaxAllowedRenderRunes)
+	reply, err := opt.intIn(EnvReplyMaxChars, opt.values.ReplyMaxChars, answer.MinRenderRunes, answer.MaxAllowedRenderRunes)
 	if err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
 	return passages, minScore, qMax, excerpt, reply, nil
 }
 
-func parseOptionalTimeoutsAndTemplate(getenv func(string) string, hasModel bool) (int, time.Duration, time.Duration, string, error) {
-	concurrent, err := parseOptionalInt(getenv(EnvMaxConcurrentAsks), EnvMaxConcurrentAsks, MinConcurrentAsks, MaxConcurrentAsksLimit)
+func parseOptionalTimeoutsAndTemplate(opt optionals, rawLinkTemplate string, hasModel bool) (int, time.Duration, time.Duration, string, error) {
+	concurrent, err := opt.intIn(EnvMaxConcurrentAsks, opt.values.MaxConcurrentAsks, MinConcurrentAsks, MaxConcurrentAsksLimit)
 	if err != nil {
 		return 0, 0, 0, "", err
 	}
-	askTimeout, err := parseOptionalDuration(getenv(EnvAskTimeout), EnvAskTimeout, MinAskTimeout, MaxAskTimeout)
+	askTimeout, err := opt.durationIn(EnvAskTimeout, opt.values.AskTimeout, MinAskTimeout, MaxAskTimeout)
 	if err != nil {
 		return 0, 0, 0, "", err
 	}
-	modelTimeout, err := parseOptionalDuration(getenv(EnvModelTimeout), EnvModelTimeout, model.MinTimeout, model.MaxTimeout)
+	modelTimeout, err := opt.durationIn(EnvModelTimeout, opt.values.ModelTimeout, model.MinTimeout, model.MaxTimeout)
 	if err != nil {
 		return 0, 0, 0, "", err
 	}
 	if err := validateTimeoutCrossConstraint(modelTimeout, askTimeout, hasModel); err != nil {
 		return 0, 0, 0, "", err
 	}
-	linkTmpl, err := parseSourceLinkTemplate(getenv(EnvSourceLinkTemplate))
+	linkTmpl, err := parseSourceLinkTemplate(rawLinkTemplate)
 	if err != nil {
 		return 0, 0, 0, "", err
 	}
 	return concurrent, askTimeout, modelTimeout, linkTmpl, nil
-}
-
-func parseOptionalInt(raw, envVar string, minVal, maxVal int) (int, error) {
-	if raw == "" {
-		return 0, nil
-	}
-	val, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, fmt.Errorf("%s must be an integer between %d and %d: %q", envVar, minVal, maxVal, raw)
-	}
-	if val < minVal || val > maxVal {
-		return 0, fmt.Errorf("%s (%s) outside accepted range [%d, %d]", envVar, raw, minVal, maxVal)
-	}
-	return val, nil
-}
-
-func parseOptionalFloat(raw, envVar string, minValExclusive, maxValInclusive float64) (float64, error) {
-	if raw == "" {
-		return 0, nil
-	}
-	f, err := strconv.ParseFloat(raw, 64)
-	if err != nil {
-		return 0, fmt.Errorf("%s must be a decimal number above %g and at most %g: %q", envVar, minValExclusive, maxValInclusive, raw)
-	}
-	if math.IsNaN(f) || math.IsInf(f, 0) || f <= minValExclusive || f > maxValInclusive {
-		return 0, fmt.Errorf("%s (%s) outside accepted range: above %g and at most %g", envVar, raw, minValExclusive, maxValInclusive)
-	}
-	return f, nil
-}
-
-func parseOptionalDuration(raw, envVar string, minVal, maxVal time.Duration) (time.Duration, error) {
-	if raw == "" {
-		return 0, nil
-	}
-	d, err := time.ParseDuration(raw)
-	if err != nil {
-		return 0, fmt.Errorf("%s must be a valid duration between %v and %v: %q", envVar, minVal, maxVal, raw)
-	}
-	if d < minVal || d > maxVal {
-		return 0, fmt.Errorf("%s (%s) outside accepted range [%v, %v]", envVar, raw, minVal, maxVal)
-	}
-	return d, nil
 }
 
 func parseSourceLinkTemplate(raw string) (string, error) {

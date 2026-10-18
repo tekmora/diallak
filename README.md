@@ -24,45 +24,54 @@ generated agent context against `AGENTS.md`.
 
 Community bot for the Lusoris Discord hub.
 
-> **Status: first slice built, not live.** The bot answers `/ask` from project
-> documentation with cited sources, `/areas` lets a member choose interest,
-> language and notification roles, and moderators remove a message or time a
-> member out through the bot, which keeps a trail of every act. It has been
-> tested against a fake Discord only; the live test and the switch from the bot that runs today are still to
-> come.
+> **Status: built, not live.** The functions of version 1.0 except the
+> supporter roles are built and have been tested against a fake Discord only;
+> the live test and the switch from the bot that runs today are still to come.
+> What 1.0 contains and what stays out is in the
+> [product definition](docs/product.md).
 
-## What it will do
+## What it does
 
-- **Support and tickets:** a member opens a ticket, the bot keeps the thread and
-  its state.
-- **Bug reports:** a report in Discord becomes a GitHub issue draft with a link
-  back to the thread.
-- **Votes and wishes:** community polls whose results feed the projects'
-  planning.
-- **Thanks to supporters:** a cosmetic role and a public credit in plain text.
-  Nothing is sold: the perks are a thank-you only, there is no priority
-  support, and early builds are announced to everybody.
-- **Answers from the docs:** a locally run model answers from the projects'
-  documentation. Every answer cites its sources and is labelled as AI-generated.
+- **Answers from the docs:** `/ask` replies with cited excerpts from the
+  projects' documentation, visible to the asker only and labelled as automated
+  ([ADR-0003](docs/adr/0003-answer-pipeline.md)). In the support forum the bot
+  can reply first to a new post that carries the tag "Automated answer", with
+  excerpts only
+  ([ADR-0009](docs/adr/0009-support-forum-first-answer.md),
+  [ADR-0020](docs/adr/0020-forum-answers-only-opted-in-posts.md)); it is off
+  until a deployment sets the two forum variables. A locally run model can
+  write the answers; it stays off until its gates are passed.
+- **Bug reports:** `/bug` answers with a link that opens a filled-in new issue
+  of the repository the server definition names, and the member submits it
+  under their own GitHub account; the bot calls no GitHub interface for it
+  ([ADR-0001](docs/adr/0001-architecture-and-boundaries.md)).
+- **Areas:** a member chooses interest, language and notification roles with
+  `/areas` ([ADR-0011](docs/adr/0011-area-roles-from-member-choice.md)).
+- **Moderation:** a moderator acts with `Remove message` and `/timeout`, and
+  the bot keeps a trail of every act
+  ([ADR-0021](docs/adr/0021-moderation-commands-and-trail.md),
+  [moderator guide](docs/moderator-guide.md)).
+- **News and discussions:** own releases and security advisories as they
+  happen, everything else as one digest per channel per day
+  ([ADR-0019](docs/adr/0019-news-posts.md)); new Q&A and Ideas discussions
+  announced with a link back
+  ([ADR-0004](docs/adr/0004-community-questions.md)).
 
-Of this list only the answers from the docs are built. Besides the list, a
-member chooses interest, language and notification roles with `/areas`
-([ADR-0011](docs/adr/0011-area-roles-from-member-choice.md)), and a moderator
-acts with `Remove message` and `/timeout`
-([ADR-0021](docs/adr/0021-moderation-commands-and-trail.md),
-[moderator guide](docs/moderator-guide.md)). A member reports a bug with `/bug`:
-the bot answers with a link that opens a filled-in new issue of the repository
-the server definition names, and the member submits it under their own GitHub
-account; the bot calls no GitHub interface for it
-([ADR-0001](docs/adr/0001-architecture-and-boundaries.md)). In the support forum the bot can
-reply first to a new post that carries the tag "Automated answer", with
-excerpts from the documentation only
-([ADR-0009](docs/adr/0009-support-forum-first-answer.md),
-[ADR-0020](docs/adr/0020-forum-answers-only-opted-in-posts.md)); it is off
-until a deployment sets the two forum variables. Issue drafts, wishes and
-polls will not be built in this repository: they belong to a shared core the
-projects plan to use from every channel, and the bot will be its Discord
-adapter. That core has no record here yet.
+## What 1.0 adds, and what comes after
+
+- **Thanks to supporters (1.0):** a cosmetic role from the funding platforms
+  and a public credit in plain text
+  ([issue 196](https://github.com/tekmora/diallak/issues/196)). The credit is
+  on a page the operator keeps outside the repository, names only with the
+  supporter's consent, release notes link it and never name anyone
+  ([issue 125](https://github.com/tekmora/diallak/issues/125)). Nothing is
+  sold: the perks are a thank-you only, there is no priority support, and
+  early builds are announced to everybody.
+- **Wishes and polls (after 1.0):** they belong to a shared core the projects
+  plan to use from every channel, and the bot will be its Discord adapter. The
+  core does not exist yet; wishes and polls ship in the first 1.x minor release
+  after it does.
+- **Tickets** stay with the operator: the bot does not read the ticket threads.
 
 ## What it will not do
 
@@ -283,7 +292,8 @@ A release is cut in three steps:
 3. The tag starts [`release.yml`](.github/workflows/release.yml). It refuses a
    version that has no section in `CHANGELOG.md`, builds the container image
    `ghcr.io/tekmora/diallak:X.Y.Z`, and publishes the release. Its notes are
-   the changelog section, followed by the image by tag and by digest. There is
+   the changelog section, followed by the image by tag and by digest, and the
+   credits note linking the page from variable `CREDITS_URL`. There is
    no `latest` tag.
 
 The image is built in a reusable workflow of its own
@@ -297,9 +307,14 @@ on `main` is tagged `vX.Y.Z-rc.N`, with no changelog step. The workflow builds
 becomes the latest release. Its notes are the fragments in `changelog.d/` that
 are not yet in `CHANGELOG.md`
 ([`release-candidate-notes.sh`](.github/scripts/release-candidate-notes.sh)),
-followed by the image by tag and by digest.
+followed by the image by tag and by digest, and the credits note.
 
-Merging to `main` releases nothing; only a pushed tag does.
+Merging to `main` releases nothing; only a pushed tag does. Before its first
+release, a deployment sets repository variable `CREDITS_URL` (the https URL of
+the live credits page) and repository secret `SUPPORTER_NAMES` (the supporter
+names to refuse in release notes, one name per line; blank lines and lines
+starting with `#` are skipped, so a list with no supporters yet is the single
+line `# none`). The release workflow stops if either is unset.
 
 ### Verifying a release
 

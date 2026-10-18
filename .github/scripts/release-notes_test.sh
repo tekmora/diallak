@@ -148,6 +148,98 @@ if sh "$rc" 0.5.0-rc.1 "$frag" > /dev/null 2>&1; then
   fail "candidate notes accept a fragment without a title"
 fi
 
+# release-credits-note.sh prints the release note block linking the credits page.
+# It must refuse missing/empty arguments, anything not starting with https://,
+# and URLs with whitespace, backticks, <, >, (, or ).
+credits_note=.github/scripts/release-credits-note.sh
+url="https://example.com/credits"
+want=$(printf '%s\n' '' '## Supporters' '' \
+  'Thanks to the people who back this project. See the [credits page](https://example.com/credits).')
+got=$(sh "$credits_note" "$url") || fail "credits note exits non-zero"
+[ "$got" = "$want" ] || fail "credits note prints the wrong block"
+
+for bad in 'http://example.com/credits' '' 'https://a b' 'https://x)' 'https://x(' \
+  'https://x`y' 'https://x<y' 'https://x>y'; do
+  if sh "$credits_note" "$bad" > /dev/null 2>&1; then
+    fail "credits note accepts invalid url '$bad'"
+  fi
+done
+if sh "$credits_note" > /dev/null 2>&1; then
+  fail "credits note accepts missing argument"
+fi
+
+# release-notes-names.sh exits 1 when any supporter name from a names file
+# appears in a notes file, and 0 otherwise.
+names_script=.github/scripts/release-notes-names.sh
+names_file="$dir/supporters.txt"
+notes_file="$dir/notes.md"
+
+printf '%s\n' 'Planted Supporter' > "$names_file"
+printf '%s\n' '### Added' '' '- Refuse a long question for Planted Supporter' > "$notes_file"
+if sh "$names_script" "$notes_file" "$names_file" > /dev/null 2>&1; then
+  fail "planted name in CHANGELOG-style section is accepted"
+fi
+
+printf '%s\n' '### Added' '' '- Refuse a long question for planted supporter' > "$notes_file"
+if sh "$names_script" "$notes_file" "$names_file" > /dev/null 2>&1; then
+  fail "differently cased name is accepted"
+fi
+
+printf '%s\n' 'Ann' > "$names_file"
+printf '%s\n' '### Added' '' '- Annual report of changes' > "$notes_file"
+sh "$names_script" "$notes_file" "$names_file" > /dev/null 2>&1 ||
+  fail "name as part of longer word is refused"
+
+printf '%s\n' 'Planted Supporter' > "$names_file"
+printf '%s\n' '### Added' '' '- Thanks to Planted Supporters today' > "$notes_file"
+sh "$names_script" "$notes_file" "$names_file" > /dev/null 2>&1 ||
+  fail "name as prefix of longer word is refused"
+
+printf '%s\n' 'Planted Supporter' > "$names_file"
+printf '%s\n' '### Added' '' '- Thanks to Planted Supporter today' > "$notes_file"
+if sh "$names_script" "$notes_file" "$names_file" > /dev/null 2>&1; then
+  fail "two-word name is accepted"
+fi
+
+printf '%s\n' '' '   # Comment line' '' '  # Another comment' '  ' > "$names_file"
+printf '%s\n' '### Added' '' '- Clean note without any names' > "$notes_file"
+sh "$names_script" "$notes_file" "$names_file" > /dev/null 2>&1 ||
+  fail "blank line and comment in names file with clean notes is refused"
+
+: > "$names_file"
+sh "$names_script" "$notes_file" "$names_file" > /dev/null 2>&1 ||
+  fail "empty names file with clean notes is refused"
+
+if sh "$names_script" "$notes_file" "$dir/nonexistent.txt" > /dev/null 2>&1; then
+  fail "missing names file is accepted"
+fi
+if sh "$names_script" "$dir/nonexistent.md" "$names_file" > /dev/null 2>&1; then
+  fail "missing notes file is accepted"
+fi
+if sh "$names_script" "$notes_file" > /dev/null 2>&1; then
+  fail "missing argument is accepted"
+fi
+if sh "$names_script" > /dev/null 2>&1; then
+  fail "missing arguments are accepted"
+fi
+
+printf '%s\n' 'Planted Supporter' > "$names_file"
+printf '%s\n' 'Line 1: clean' 'Line 2: SensitiveText Planted Supporter here' 'Line 3: clean' > "$notes_file"
+hit_err=
+if hit_err=$(sh "$names_script" "$notes_file" "$names_file" 2>&1 > /dev/null); then
+  fail "hit exits zero"
+fi
+case "$hit_err" in
+  *"Planted"*|*"Supporter"*) fail "stderr contains the supporter name" ;;
+  *"SensitiveText"*|*"Line 2:"*) fail "stderr contains line text" ;;
+  *"2"*) ;;
+  *) fail "stderr does not contain line number 2" ;;
+esac
+case "$hit_err" in
+  *"1 hit"*) ;;
+  *) fail "stderr does not report 1 hit" ;;
+esac
+
 if [ "$failures" -ne 0 ]; then
   echo "release-notes self-test: $failures failure(s)" >&2
   exit 1

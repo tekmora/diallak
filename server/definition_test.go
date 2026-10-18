@@ -222,6 +222,7 @@ var builtCode = map[string]string{
 	"area-choices":         "internal/discord/areas.go",
 	"server-settings":      "internal/discord/server_apply_settings.go",
 	"discussions-bridge":   "internal/news/discussions.go",
+	"news":                 "internal/news/run.go",
 	"bug-report-link":      "internal/discord/bugreport.go",
 }
 
