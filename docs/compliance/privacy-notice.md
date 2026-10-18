@@ -106,6 +106,7 @@ No data protection officer is appointed.
 | Title and first message of a new post in the support forum | Finding documentation passages for a first reply in that post | Legitimate interests, Article 6(1)(f) |
 | Whether a post was written by an application | Leaving such a post without a reply | Legitimate interests, Article 6(1)(f) |
 | Whether a post carries the tag "Automated answer" | Reading only a post that carries it | Legitimate interests, Article 6(1)(f) |
+| When the supporter function is switched on, for every member of the server: your member id and the roles you hold, when you join, change or leave the server, and once after the bot starts | Giving you "Supporter" while you hold "Ko-fi supporter" or "Patreon supporter", and taking it after a grace period when you hold neither ([ADR-0024](../adr/0024-supporter-roles-from-funding-platforms.md), [ADR-0027](../adr/0027-members-intent-for-supporter-roles.md)) | Legitimate interests, Article 6(1)(f); see "Legal points still open" |
 | When you link a forge account for the Contributor role, at the cluster's identity provider: your Discord user id, a Discord token that lets the provider write your role connection, your forge account's id and name, and whether a contribution of that account was merged | Writing that value so that Discord gives you the Contributor role, and keeping it current after a later merge ([ADR-0026](../adr/0026-member-to-forge-account-link.md)). The bot receives none of it | Open; see "Legal points still open" |
 | Other fields Discord sends with a post or with events about channels, roles and threads, such as the id of the member who created a thread | None: the bot compares the channel and the kind of thread and reads nothing else | Not used |
 | Other fields Discord sends with a command or a button press, such as your name and locale, your member id and roles with `/ask`, and the text of a message a moderator removes | None: the bot reads none of them and keeps none | Not used |
@@ -116,8 +117,10 @@ fields come from Discord, which attaches them to every command and event.
 
 The legitimate interest is to answer the question a member puts to the bot, in
 the server the bot is meant for, to give a member the roles that member
-chose, to keep the server moderated with a record of every act, and to give a
-question in the support forum a first answer from the documentation at once.
+chose, to keep the server moderated with a record of every act, to give a
+question in the support forum a first answer from the documentation at once,
+and to give the Supporter role to a member who supports the project on a
+funding platform.
 You did not call the bot in the forum, so the forum's guidelines say that it
 reads the first message before you post. The bot
 asks for no consent. This basis is the
@@ -138,7 +141,9 @@ why not, with no title, text, post id or member id
 
 - **Discord** receives the reply, because the bot answers through Discord. With
   `/areas` Discord also receives the role change, with a fixed reason that says
-  it was your own choice. Discord shows the role to the other members and keeps
+  it was your own choice. With the supporter function, Discord receives the
+  change of "Supporter", with a fixed reason that names the funding platform
+  roles. Discord shows the role to the other members and keeps
   an entry in the server's audit log for 45 days, visible to roles that may
   view that log. When you press for it, Discord also receives your receipt as
   a direct message to you. When a moderator acts, Discord receives the act
@@ -222,6 +227,7 @@ provider, the country of its data centre and the agreement that binds it.
 | Your member id, when you press for the receipt as a direct message | In memory until the direct message is sent |
 | The trail line of a moderator's act, in the server's log channel | 90 days, unless the operator configures 1 to 365 days; the bot deletes it once a day after that |
 | Title and first message of your post in the support forum, in the bot | In memory until the reply is sent or the attempt ends |
+| Your member id and roles from a member event or the member list, in the bot (supporter function only) | In memory while the event or list is handled. When you hold neither platform role, your member id and a timer stay in memory until the grace period ends, 72 hours unless the operator configures 1 to 90 days, or until you hold a platform role again; lost on a restart. "Supporter" itself stays on you until the grace period ends |
 | The link for the Contributor role, at the cluster's identity provider: your Discord user id, the Discord tokens, your forge account's id and name, and the value written | Until you remove the application's authorisation in Discord, which ends the next token refresh, or ask for deletion. On a deletion request the provider first deletes your role connection, so Discord takes the role. The access token also ends after seven days |
 | Log lines of the bot, which hold no personal data | 30 days |
 <!-- markdownlint-enable MD013 -->
@@ -292,14 +298,10 @@ category and link of each new public Q&A or Ideas discussion of the project's
 repositories into one channel. It names no author and mentions no one, and
 nothing written on the server goes to GitHub.
 
-Features that are planned will process more data: support tickets, GitHub
-Discussions as a source of answers, and supporter roles
+Features that are planned will process more data: support tickets and GitHub
+Discussions as a source of answers
 ([data inventory](data-inventory.md), "Not yet built"). This notice gains the
-matching entries before such a feature goes live. For supporter roles the
-data is decided already: the bot will receive an event when a member joins,
-changes or leaves the server, and the list of members once after it starts.
-It reads the member's id and roles to give or take "Supporter", and keeps
-nothing beyond a timer in memory. One
+matching entries before such a feature goes live. One
 period is decided already: a support ticket is kept 30 days after it is
 closed.
 
@@ -345,6 +347,9 @@ gate for the launch:
   taking the roles the member chose with `/areas`, given that other members can
   see the roles, and that language roles can hint at where someone is from
   ([ADR-0011](../adr/0011-area-roles-from-member-choice.md));
+- whether legitimate interests covers reading the roles of every member for
+  the supporter function, when only supporters gain from it
+  ([ADR-0024](../adr/0024-supporter-roles-from-funding-platforms.md), [ADR-0027](../adr/0027-members-intent-for-supporter-roles.md));
 - the legal basis for the link the identity provider keeps for the Contributor
   role; consent given in Discord's authorisation screen, Article 6(1)(a), and
   withdrawn by removing the authorisation, is the candidate
