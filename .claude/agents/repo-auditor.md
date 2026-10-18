@@ -1,7 +1,7 @@
 ---
 name: repo-auditor
 description: "Autonomous agent for repository HISS invariant sweeps and praetorctl compliance."
-model: flash
+model: haiku
 mainAgent: true
 subagent: true
 commandExecutionPolicy: auto
