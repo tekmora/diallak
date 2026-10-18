@@ -89,13 +89,20 @@ a source.
 
 ### Follow-up with the forum feature
 
-These change when the forum feature is built, not with this record:
+These change when the forum feature is built, not with this record. All
+three are done:
 
-- The server definition: the forum's `opt_out` tag becomes an opt-in tag, and
-  the `first-answer` check of the definition asks for exactly one.
-- The drafts in [support forum answer](../compliance/support-forum-answer.md)
-  and the privacy notice: the opt-in tag and the new guidelines text.
-- The acceptance cases 17 to 19 of ADR-0009, for the opt-in tag.
+- [x] The server definition: the forum's `opt_out` tag becomes an opt-in tag,
+  and the `first-answer` check of the definition asks for exactly one (#169;
+  `server/definition.json`, tag "Automated answer";
+  `internal/serverdef/review_test.go`, "exactly one opt_in").
+- [x] The drafts in [support forum answer](../compliance/support-forum-answer.md)
+  and the privacy notice: the opt-in tag and the new guidelines text (#169;
+  privacy notice, rows on the tag "Automated answer").
+- [x] The acceptance cases 17 to 19 of ADR-0009, for the opt-in tag: the tests
+  that name them are in `internal/discord/forum_test.go` and
+  `internal/config/forum_test.go` ([support forum
+  answer](../compliance/support-forum-answer.md), gates).
 
 ## Consequences
 
