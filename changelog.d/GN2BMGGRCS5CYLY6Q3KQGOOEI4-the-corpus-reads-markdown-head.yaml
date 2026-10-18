@@ -1,0 +1,2 @@
+type: fixed
+title: 'The corpus reads Markdown headings as CommonMark does: a tab after the hash, setext headings and indented code no longer split or hide sections'

@@ -222,7 +222,7 @@ Nothing here is measured on a running bot: it has never run against Discord.
 | Fact | Value | How it was obtained |
 | :--- | :--- | :--- |
 | Binary | 12,202,144 bytes (`linux/amd64`), 11,272,352 bytes (`linux/arm64`) | Image builds of 2026-10-17, read by [`image_smoke.py`](../tools/ci/image_smoke.py), which fails above 13,420,000 bytes on every pull request |
-| Memory of building the index and answering the evaluation questions | 16.7 MiB peak for the whole test process; the work itself holds about 0.33 MB and allocates about 2 MB, and a test fails above 700,000 bytes held or 4,000,000 bytes allocated | The evaluation test process over the fixture corpus (18 files, 44,616 bytes), 2026-10-10; the heap figures and limits from `TestEvalMemory_Positive_UnderTheLimits` in `internal/eval/eval_memory_test.go`, 2026-10-13 |
+| Memory of building the index and answering the evaluation questions | 16.7 MiB peak for the whole test process; the work itself holds about 0.3 MB and allocates about 3.4 MB (4.2 MB with `-race`) since the chunker parses Markdown with goldmark, and a test fails above 700,000 bytes held or 5,000,000 bytes allocated | The evaluation test process over the fixture corpus (18 files, 44,616 bytes), 2026-10-10; the heap figures and limits from `TestEvalMemory_Positive_UnderTheLimits` in `internal/eval/eval_memory_test.go`, 2026-10-18 |
 <!-- markdownlint-enable MD013 -->
 
 Starting values, chosen, not measured: a memory request of 64 MiB with a limit

@@ -10,13 +10,15 @@ import (
 )
 
 // Limits on the memory of building the index over the fixture corpus and
-// answering every evaluation question, about twice the use measured on
-// 2026-10-13 (309,832 to 349,320 bytes held, 1,793,176 to 2,004,056 bytes
-// allocated, with and without -race). docs/hosting.md cites them; the
-// container memory limit rests on them, so raising one is a reviewed change.
+// answering every evaluation question. The held limit is about twice the use
+// measured on 2026-10-13 (309,832 to 349,320 bytes). The allocated limit was
+// raised on 2026-10-18 when the chunker moved to goldmark: 2,999,176 bytes
+// before and 3,356,328 after, 3,360,168 and 4,154,696 with -race; the held
+// heap did not move. docs/hosting.md cites them; the container memory limit
+// rests on them, so raising one is a reviewed change.
 const (
 	maxEvalLiveHeapBytes  = 700_000
-	maxEvalAllocatedBytes = 4_000_000
+	maxEvalAllocatedBytes = 5_000_000
 )
 
 // evalMemory is the heap the evaluation keeps while the index is alive and
