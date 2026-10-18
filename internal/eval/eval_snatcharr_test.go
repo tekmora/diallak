@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/tekmora/diallak/internal/corpus"
@@ -209,40 +210,65 @@ func TestSnatchArrEval_Hybrid(t *testing.T) {
 	}
 }
 
+// liveEmbedConfig reads the sweep's endpoint from the environment. The key file is optional;
+// /dev/stdin lets a run pipe the key in without writing it to disk.
+func liveEmbedConfig(t *testing.T, alias string) embed.Config {
+	t.Helper()
+	cfg := embed.Config{BaseURL: os.Getenv("DIALLAK_EVAL_EMBED_BASE_URL"), Alias: alias}
+	keyFile := os.Getenv("DIALLAK_EVAL_EMBED_KEY_FILE")
+	if keyFile == "" {
+		return cfg
+	}
+	data, err := os.ReadFile(keyFile) // #nosec G304 -- the person running the sweep names the key file.
+	if err != nil {
+		t.Fatalf("read embed key file: %v", err)
+	}
+	cfg.APIKey = strings.TrimSpace(string(data))
+	return cfg
+}
+
+// checkRefusedAliases builds the start-time index once per alias that the endpoint must refuse
+// (a hosted model, or one the key may not call); each must fail, as the bot's start does.
+func checkRefusedAliases(t *testing.T, base embed.Config, ix *retrieval.Index, chunks []corpus.Chunk) {
+	t.Helper()
+	list := os.Getenv("DIALLAK_EVAL_EMBED_REFUSED_ALIASES")
+	if list == "" {
+		return
+	}
+	for _, alias := range strings.Split(list, ",") {
+		cfg := base
+		cfg.Alias = strings.TrimSpace(alias)
+		client, err := embed.New(cfg, nil)
+		if err != nil {
+			t.Fatalf("embed.New alias %q: %v", cfg.Alias, err)
+		}
+		_, hErr := retrieval.NewHybrid(context.Background(), ix, chunks, client, retrieval.DefaultMinSimilarity)
+		if hErr == nil {
+			t.Fatalf("alias %q: the endpoint answered; it must refuse this model", cfg.Alias)
+		}
+		t.Logf("alias %q refused: %s", cfg.Alias, embed.Classify(hErr))
+	}
+}
+
 func TestSnatchArrEval_EmbedSweep(t *testing.T) {
-	baseURL := os.Getenv("DIALLAK_EVAL_EMBED_BASE_URL")
 	alias := os.Getenv("DIALLAK_EVAL_EMBED_ALIAS")
-	if baseURL == "" || alias == "" {
+	if os.Getenv("DIALLAK_EVAL_EMBED_BASE_URL") == "" || alias == "" {
 		t.Skip("skipping embed sweep: DIALLAK_EVAL_EMBED_BASE_URL and DIALLAK_EVAL_EMBED_ALIAS must be set")
 	}
-
-	embClient, err := embed.New(embed.Config{
-		BaseURL: baseURL,
-		Alias:   alias,
-	}, nil)
+	cfg := liveEmbedConfig(t, alias)
+	// The first batch may load the model on the route; the longest timeout the client allows
+	// covers that cold start.
+	cfg.Timeout = embed.MaxTimeout
+	embClient, err := embed.New(cfg, nil)
 	if err != nil {
 		t.Fatalf("embed.New: %v", err)
 	}
 
 	set, chunks, ix := loadSnatchArrFixture(t)
-	bars := Bars{MinAnswerableHit: 28, MinOffTopicRefused: 5}
-
-	t.Log("similarity | answerable_hit | off_topic_refused | undocumented_refused | paraphrase_hit | bars_hold")
-	t.Log("-----------|----------------|-------------------|----------------------|----------------|----------")
-
-	const sweepSteps = 11 // 0.30 .. 0.80 step 0.05
-	for i := 0; i < sweepSteps; i++ {
-		sim := 0.30 + float64(i)*0.05
-		hybrid, hErr := retrieval.NewHybrid(context.Background(), ix, chunks, embClient, sim)
-		if hErr != nil {
-			t.Fatalf("NewHybrid similarity %.2f: %v", sim, hErr)
-		}
-		rep, rErr := Run(context.Background(), set, hybrid, retrieval.DefaultOptions())
-		if rErr != nil {
-			t.Fatalf("Run similarity %.2f: %v", sim, rErr)
-		}
-		barsHold := Check(rep, bars) == nil
-		t.Logf("%10.2f | %14d | %17d | %20d | %14d | %9t",
-			sim, rep.AnswerableHit, rep.OffTopicRefused, rep.UndocumentedRefused, rep.ParaphraseHit, barsHold)
+	checkRefusedAliases(t, cfg, ix, chunks)
+	emb := newSweepEmbedder(embClient, realClock{}, sweepCallInterval)
+	if sweepErr := runEmbedSweep(t, set, chunks, ix, emb); sweepErr != nil {
+		t.Fatalf("sweep: %v", sweepErr)
 	}
+	t.Logf("endpoint calls: %d", emb.calls)
 }

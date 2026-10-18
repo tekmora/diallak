@@ -46,7 +46,13 @@ RECORD: hits 2/12, due true, date 2026-10-17
 Hybrid retrieval (ADR-0022) measured with `TestSnatchArrEval_EmbedSweep` on
 2026-10-17, model `hf.co/unsloth/embeddinggemma-2-GGUF:Q8_0` on a local Ollama
 endpoint. The sweep runs only when `DIALLAK_EVAL_EMBED_BASE_URL` and
-`DIALLAK_EVAL_EMBED_ALIAS` are set.
+`DIALLAK_EVAL_EMBED_ALIAS` are set. `DIALLAK_EVAL_EMBED_KEY_FILE` names the
+endpoint's key file, and `DIALLAK_EVAL_EMBED_REFUSED_ALIASES` lists models,
+comma separated, that the endpoint must refuse: each must make the start-time
+embedding step fail, or the sweep fails.
+[`tools/embed_route_probe.py`](../../../../tools/embed_route_probe.py) runs the
+sweep against a live route with the key on standard input and at least one
+refused model.
 
 | Similarity | Answerable hit | Off-topic refused | Undocumented refused | Paraphrase hit | Bars hold |
 | ---: | ---: | ---: | ---: | ---: | :--- |
@@ -59,6 +65,28 @@ endpoint. The sweep runs only when `DIALLAK_EVAL_EMBED_BASE_URL` and
 `retrieval.DefaultMinSimilarity` is 0.75: the lowest value that keeps the
 keyword-only undocumented refusals (5/6). Another embedding model needs its own
 sweep and `DIALLAK_EMBED_MIN_SIMILARITY`.
+
+The same sweep against the live on-premises route, alias
+`cordana/auto-embedding` through the cluster's gateway, run by the cluster
+maintainers with `tools/embed_route_probe.py` on 2026-10-18 (58 endpoint calls
+in 66 s, about 53 a minute, no 429; the refused models `gemini-embedding` and
+`cordana/qwen3-vl` were refused):
+
+| Similarity | Answerable hit | Off-topic refused | Undocumented refused | Paraphrase hit | Bars hold |
+| ---: | ---: | ---: | ---: | ---: | :--- |
+| 0.30 | 29/32 | 1/6 | 1/6 | 12/12 | no |
+| 0.35 to 0.40 | 29/32 | 4/6 | 1/6 | 12/12 | no |
+| 0.45 | 29/32 | 5/6 | 1/6 | 12/12 | yes |
+| 0.50 | 29/32 | 6/6 | 2/6 | 11/12 | yes |
+| 0.55 | 29/32 | 6/6 | 4/6 | 10/12 | yes |
+| 0.60 | 29/32 | 6/6 | 5/6 | 7/12 | yes |
+| 0.65 | 29/32 | 6/6 | 5/6 | 4/12 | yes |
+| 0.70 to 0.80 | 29/32 | 6/6 | 5/6 | 2/12 | yes |
+
+On this route the rule above gives 0.60, not 0.75. The default is not changed
+here; a deployment on this route sets `DIALLAK_EMBED_MIN_SIMILARITY`. How long
+the route's first, cold batch takes was not measured: it stayed within the
+sweep's 60 second timeout.
 
 Do not edit a question to make a test pass. A failing case is a finding about
 retrieval. To refresh the corpus, replace `corpus/` from a newer commit, update
