@@ -52,9 +52,31 @@ What is already decided and is not reopened here:
 | B. A keyed pseudonym | The adapter sends a keyed hash of the user id; the key stays with the bot. | The core never holds a Discord identifier. | A deletion request has to pass through the bot; losing or rotating the key splits a member's votes. |
 <!-- markdownlint-enable MD013 -->
 
-Whichever is chosen, the privacy notice, the data inventory and the record of
-processing gain the entry in the pull request that builds the adapter, not
-before (ADR-0002).
+**Option B is chosen** (operator decision through the controller, decision id
+diallak-adr-0025-identifier, 2026-10-18). The core never holds a Discord
+identifier:
+
+- **The pseudonym** is an HMAC-SHA-256 of the user id under a key that only the
+  bot holds, sent with the key's version as `<version>:<hash>`. The version
+  names the key, never its value.
+- **A deletion request** is one bot command. The bot computes the member's
+  pseudonym under every key it still holds and asks the core to delete each.
+  Nothing else in the bot needs to be looked up, since the bot keeps no
+  record of who voted.
+- **A key rotation keeps a member's votes joinable.** The bot adds the new key
+  and keeps the old one, for lookups only. While both are held, the adapter
+  sends a member's choice under the new pseudonym, together with the old
+  pseudonym once, so the core can join the two. A deletion request covers both
+  keys. The old key is retired only once no open vote holds a pseudonym under
+  it. A member who never returns stays under the old pseudonym and still
+  counts as one member.
+- **A lost key** cannot be recovered by design. Votes under it stay countable,
+  but a deletion request for them can no longer be matched to a member. The
+  proposal is to hold the key as a cluster secret with a backup, decided with
+  the adapter's deployment.
+
+The privacy notice, the data inventory and the record of processing gain the
+entry in the pull request that builds the adapter, not before (ADR-0002).
 
 ### 3. While the core cannot be reached
 
@@ -88,15 +110,15 @@ to the core carries a deadline (ADR-0001).
 - **The core's interface.** Address, authentication, the shape of a choice and
   of a result, and how the core tells the adapter that a vote closed. Settled
   by the core's own record.
-- **Option A or B** for the identifier (point 2).
 - **How a vote is opened in Discord**: who may open one, in which channels,
   and whether a command or the core starts it.
 
 ## Decided in this record
 
-Nothing beyond what #100 already holds. The proposals in points 1 and 3 and
-the options in point 2 were written here, on an order through the controller,
-and stay proposals until the record is accepted.
+Point 2: option B, the keyed pseudonym (decision id
+diallak-adr-0025-identifier, 2026-10-18). The proposals in points 1 and 3
+were written here, on an order through the controller, and stay proposals
+until the record is accepted.
 
 Acceptance waits for the operator and for the core's record.
 
