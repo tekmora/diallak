@@ -1,0 +1,2 @@
+type: changed
+title: 'Optional numeric settings are read through the env parser library; a value of the wrong type names the variable and keeps failing at startup.'
