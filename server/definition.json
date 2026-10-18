@@ -95,8 +95,8 @@
       "id": "contributor",
       "name": "Contributor",
       "kind": "recognition",
-      "purpose": "The one role of the contributor ladder: a contribution of this member was merged. Credited in releases. The subject guide roles stand above it; there is no third step.",
-      "assigned_by": "bot",
+      "purpose": "The one role of the contributor ladder: a contribution of this member was merged. Credited in releases. The subject guide roles stand above it; there is no third step. A linked role: Discord gives it on the value the cluster's identity provider writes after the member links a forge account (ADR-0026).",
+      "assigned_by": "integration",
       "basis": "decided",
       "permissions": []
     },
@@ -933,10 +933,10 @@
     },
     {
       "id": "contributor-role",
-      "what": "Gives the Contributor role to a member whose contribution was merged. Needs a link between a member and a forge account, which is its own record.",
-      "by": "bot",
-      "state": "planned",
-      "needs_record": true
+      "what": "Gives the Contributor role to a member whose contribution was merged: a linked role, verified by the cluster's identity provider, which keeps the link between the member and the forge account; the bot takes no part.",
+      "by": "platform",
+      "state": "decided",
+      "record": "docs/adr/0026-member-to-forge-account-link.md"
     },
     {
       "id": "spam-filter",

@@ -34,6 +34,6 @@ record that supersedes it.
 | [0023](0023-contributor-agreement-beside-the-eupl.md) | 2026-10-17 | Contributor agreement beside the EUPL | Accepted |
 | [0024](0024-supporter-roles-from-funding-platforms.md) | 2026-10-18 | Supporter roles from the funding platforms | Accepted |
 | [0025](0025-wishes-and-polls-adapter.md) | 2026-10-18 | The bot as adapter for wishes and polls | Proposed |
-| [0026](0026-member-to-forge-account-link.md) | 2026-10-18 | The link between a member and a forge account | Proposed |
+| [0026](0026-member-to-forge-account-link.md) | 2026-10-18 | The link between a member and a forge account | Accepted |
 | [0027](0027-members-intent-for-supporter-roles.md) | 2026-10-18 | The members intent for the supporter function | Accepted |
 <!-- markdownlint-enable MD013 -->

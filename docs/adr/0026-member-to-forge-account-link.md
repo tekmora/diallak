@@ -1,6 +1,6 @@
 # ADR-0026: The link between a member and a forge account
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-18
 - **Authors**: Maintainers
 
@@ -63,11 +63,7 @@ A second Discord path exists: the OAuth2 scope `connections` lets
 (`resources/user.mdx`, "Connection Object"). It also needs the member to sign
 in through OAuth2.
 
-## Decision
-
-Nothing is decided here. The record lays out the options for the operator.
-
-### Open: how a member is linked to a forge account
+## The options weighed
 
 <!-- markdownlint-disable MD013 -->
 | Option | How it works | For | Against |
@@ -78,26 +74,66 @@ Nothing is decided here. The record lays out the options for the operator.
 | D. By hand | A maintainer gives the role when a member asks and the merge is seen. | No code, no stored data. | The definition's `assigned_by: bot` changes; nobody takes the role away if that is ever wanted. |
 <!-- markdownlint-enable MD013 -->
 
-### Open: what is kept and for how long
+Row A is as first written, with the bot as the verifier; the decision moves
+that part to the identity provider. Under A the verifier keeps a refresh token per member to keep the value
+current; under B and C the bot keeps one member id and one forge account per
+member; under D nothing is kept.
 
-- **Under A** the bot keeps a refresh token per member for as long as the value
-  is kept current, unless it is used once and dropped, in which case a later
-  merge does not reach the role.
-- **Under B and C** the bot keeps one member id and one forge account per
-  member. How long, and what a deletion request removes (the link, the role or
-  both), is to be listed field by field before anything is built.
-- **Under D** nothing is kept.
+## Decision
 
-The privacy notice, the data inventory and the record of processing change with
-the chosen option, in the pull request that builds it.
+Option A, Discord's Linked Roles, with the cluster's existing identity
+provider as the verifier. The bot serves no part of it.
+
+- **The identity provider serves the verification address and the OAuth2
+  callback.** The application's `role_connections_verification_url` points at
+  the provider. The member signs in there to Discord, with the scopes
+  `identify` and `role_connections.write`, and to the forge. The provider
+  writes the value "has a merged contribution" to the member's role connection
+  with the member's own token.
+- **The bot keeps no inbound route.** [ADR-0001](0001-architecture-and-boundaries.md)
+  is unchanged: the deployment of the bot still accepts no inbound traffic, and
+  no record supersedes it. The bot holds no token of a member, no forge account
+  and no link.
+- **Discord gives the role.** Contributor becomes a linked role whose
+  condition names the provider's metadata record. In the server definition
+  the role is `assigned_by: integration`, like the roles the funding platforms
+  give ([ADR-0024](0024-supporter-roles-from-funding-platforms.md)), and the
+  function `contributor-role` is done by the platform, not the bot.
+
+### What the identity provider keeps
+
+The data is the provider's, not the bot's. It is listed here, in the
+[data inventory](../compliance/data-inventory.md), the
+[record of processing](../compliance/record-of-processing.md) and the
+[privacy notice](../compliance/privacy-notice.md), because the operator runs
+the provider for the same server.
+
+<!-- markdownlint-disable MD013 -->
+| Field | Why | Kept until |
+| :--- | :--- | :--- |
+| The member's Discord user id | Ties the link to the member | The link ends |
+| The Discord refresh token with `role_connections.write`, and the access token it yields | Keeps the value current after a later merge; the access token expires after seven days | The link ends; the access token also at its expiry |
+| The forge account's id and name | Proves the account and finds its merged contributions | The link ends |
+| The value written to the role connection | What Discord compares with the role's condition | The link ends; Discord also holds it |
+<!-- markdownlint-enable MD013 -->
+
+The link ends when the member removes the application's authorisation in
+Discord, which makes the provider's next token refresh fail, or when the member
+asks for deletion. On either, the provider deletes the four fields; on a
+request it first deletes the role connection, so Discord takes the role.
 
 ## Consequences
 
 - **Positive**: The open point of ADR-0010 is written down with the platform's
   answer beside the bot's own, before any member data is read.
-- **Negative**: The Contributor role stays unbuilt until the operator decides.
-- **Negative**: Options A and C need an inbound web address, which a
-  superseding record to ADR-0001 would have to allow.
+- **Positive**: The bot's boundary stays as ADR-0001 draws it; the one
+  inbound path is the identity provider's, which the cluster runs already.
+- **Positive**: Discord's own flow asks the member's consent and shows the
+  link on the profile.
+- **Negative**: Member data is kept for this, by the provider: a refresh token
+  per linked member for as long as the link stands.
+- **Negative**: The role's condition is set by hand in the server's settings;
+  the definition's apply path cannot set it.
 
 ## Alternatives considered
 
@@ -109,18 +145,23 @@ the chosen option, in the pull request that builds it.
 
 ## Open points
 
-- **The choice among A to D** and the retention under it.
-- **Option B's comment place.** Which forge object the code is written on (an
-  issue made for this, the merged pull request), and whether the bot's forge
-  access already reads it.
+- **The provider's setup.** Which provider version serves the flow, at which
+  address, how it reads merged contributions from the forge, and how often it
+  refreshes the value: named by the cluster's own record, on order
+  k8s-idp-linked-roles-20261018.
+- **The metadata record.** Its key and name, set once by the provider or by
+  hand in the developer portal.
 - **Whether a linked role's condition can be set through the API.** The pages
   read show no such parameter; not tried.
 
 ## Decided in this record
 
-Nothing. The options and their costs were written here, on an order through
-the controller, from issue #56 and Discord's documentation. Acceptance waits
-for the operator.
+Option A, with the cluster's identity provider as the verifier and Discord
+giving the role. The bot gets no inbound route and keeps no data for it.
+Accepted on an operator decision through the controller (decision ids
+diallak-adr-0026-accept and diallak-adr-0026-accept-refined, 2026-10-18), after
+earlier fleet decisions that one identity runs through the existing identity
+provider with Discord's linked roles (2026-10-10 and 2026-10-11).
 
 ## Sources
 

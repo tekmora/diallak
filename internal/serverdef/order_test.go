@@ -68,9 +68,9 @@ func TestRoleOrder_Negative_Conditions(t *testing.T) {
 		{"guide-coding moved below bot", func(_ *testing.T, def *Definition) {
 			def.RoleOrder = moveAfter(def.RoleOrder, "guide-coding", "bot")
 		}, CodeRoleOrder, "role_order[guide-coding]", "above"},
-		{"contributor moved above bot", func(_ *testing.T, def *Definition) {
-			def.RoleOrder = moveBefore(def.RoleOrder, "contributor", "bot")
-		}, CodeRoleOrder, "role_order[contributor]", "below"},
+		{"supporter moved above bot", func(_ *testing.T, def *Definition) {
+			def.RoleOrder = moveBefore(def.RoleOrder, "supporter", "bot")
+		}, CodeRoleOrder, "role_order[supporter]", "below"},
 		{"interest-games moved above bot", func(_ *testing.T, def *Definition) {
 			def.RoleOrder = moveBefore(def.RoleOrder, "interest-games", "bot")
 		}, CodeRoleOrder, "role_order[interest-games]", "below"},
@@ -113,11 +113,23 @@ func verifyRoleOrderSwapHonorarySupporterAbove(t *testing.T) {
 	}
 }
 
-// verifyRoleOrderSwapContributorBelow verifies finding when bot is swapped with contributor directly below.
-func verifyRoleOrderSwapContributorBelow(t *testing.T) {
+// verifyRoleOrderIntegrationAboveBot verifies that a role Discord gives as a
+// linked role (contributor, ADR-0026) may stand above the bot: the bot never
+// gives it.
+func verifyRoleOrderIntegrationAboveBot(t *testing.T) {
 	t.Helper()
 	d := valid(t)
-	swapRoles(d.RoleOrder, "bot", "contributor")
+	d.RoleOrder = moveBefore(d.RoleOrder, "contributor", "bot")
+	if got := roleOrderFindings(d); len(got) != 0 {
+		t.Fatalf("integration role above the bot gave findings: %+v", got)
+	}
+}
+
+// verifyRoleOrderSwapSupporterBelow verifies finding when bot is swapped with supporter, the first bot role below it.
+func verifyRoleOrderSwapSupporterBelow(t *testing.T) {
+	t.Helper()
+	d := valid(t)
+	swapRoles(d.RoleOrder, "bot", "supporter")
 	var orderFindings []Finding
 	for _, f := range Validate(d) {
 		if f.Code == CodeRoleOrder {
@@ -127,8 +139,8 @@ func verifyRoleOrderSwapContributorBelow(t *testing.T) {
 	if len(orderFindings) != 1 {
 		t.Fatalf("expected exactly 1 role-order finding, got %d: %+v", len(orderFindings), orderFindings)
 	}
-	if orderFindings[0].Path != "role_order[contributor]" {
-		t.Errorf("finding path = %q, want role_order[contributor]", orderFindings[0].Path)
+	if orderFindings[0].Path != "role_order[supporter]" {
+		t.Errorf("finding path = %q, want role_order[supporter]", orderFindings[0].Path)
 	}
 	if !strings.Contains(orderFindings[0].Message, "below") {
 		t.Errorf("finding message %q does not contain 'below'", orderFindings[0].Message)
@@ -138,7 +150,8 @@ func verifyRoleOrderSwapContributorBelow(t *testing.T) {
 func TestRoleOrder_Boundary_NeighboursOfTheBot(t *testing.T) {
 	verifyRoleOrderCommittedNoFindings(t)
 	t.Run("swap bot with honorary-supporter directly above", verifyRoleOrderSwapHonorarySupporterAbove)
-	t.Run("swap bot with contributor directly below", verifyRoleOrderSwapContributorBelow)
+	t.Run("swap bot with supporter below", verifyRoleOrderSwapSupporterBelow)
+	t.Run("integration role above the bot", verifyRoleOrderIntegrationAboveBot)
 }
 
 // verifyRoleOrderNil verifies findings when role_order is nil.
@@ -226,9 +239,9 @@ func TestRoleOrder_Boundary_SecondListingOfAnID(t *testing.T) {
 	})
 	t.Run("the first listing decides the position", func(t *testing.T) {
 		def := valid(t)
-		def.RoleOrder = append([]string{"contributor"}, def.RoleOrder...)
+		def.RoleOrder = append([]string{"supporter"}, def.RoleOrder...)
 		got := roleOrderFindings(def)
-		if !hasFinding(got, CodeRoleOrder, "role_order[contributor]", "below") {
+		if !hasFinding(got, CodeRoleOrder, "role_order[supporter]", "below") {
 			t.Errorf("no finding for a first listing above the bot: %+v", got)
 		}
 	})
