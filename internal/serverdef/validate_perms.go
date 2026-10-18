@@ -275,8 +275,8 @@ func (v *validator) checkRoleAssignedBy() {
 }
 
 func checkSingleRoleAssignedBy(v *validator, p string, r Role) {
-	if r.AssignedBy == "integration" && r.Kind != "managed" {
-		v.add(CodeRoleGrant, p, "assigned_by integration is only for role kind managed")
+	if r.AssignedBy == "integration" && r.Kind != "managed" && r.Kind != "recognition" {
+		v.add(CodeRoleGrant, p, "assigned_by integration is only for role kinds managed and recognition")
 		return
 	}
 	switch r.Kind {
@@ -298,8 +298,8 @@ func checkSingleRoleAssignedBy(v *validator, p string, r Role) {
 }
 
 func checkMultiGrantRoleAssignedBy(v *validator, p string, r Role) {
-	if r.Kind == "recognition" && r.AssignedBy != "operator" && r.AssignedBy != "bot" {
-		v.add(CodeRoleGrant, p, "recognition role must have assigned_by operator or bot")
+	if r.Kind == "recognition" && r.AssignedBy != "operator" && r.AssignedBy != "bot" && r.AssignedBy != "integration" {
+		v.add(CodeRoleGrant, p, "recognition role must have assigned_by operator, bot or integration")
 	}
 	if r.Kind == "managed" && r.AssignedBy != "platform" && r.AssignedBy != "integration" {
 		v.add(CodeRoleGrant, p, "role kind managed must have assigned_by platform or integration")
