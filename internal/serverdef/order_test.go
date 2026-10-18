@@ -152,8 +152,8 @@ func verifyRoleOrderNil(t *testing.T) {
 			orderFindings = append(orderFindings, f)
 		}
 	}
-	if len(orderFindings) != 26 {
-		t.Fatalf("expected 26 role-order findings, got %d: %+v", len(orderFindings), orderFindings)
+	if len(orderFindings) != 28 {
+		t.Fatalf("expected 28 role-order findings, got %d: %+v", len(orderFindings), orderFindings)
 	}
 	for _, f := range orderFindings {
 		if !strings.Contains(f.Message, "not listed") {

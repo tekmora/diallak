@@ -50,17 +50,18 @@ func TestValidate_C1_ManagedAssignedBy(t *testing.T) {
 	})
 }
 
-func TestValidate_C2_IntegrationAssignedByOnlyForManaged(t *testing.T) {
-	t.Run("negative integration assigned_by on recognition", func(t *testing.T) {
+func TestValidate_C2_IntegrationAssignedByOnlyForManagedAndRecognition(t *testing.T) {
+	const want = "assigned_by integration is only for role kinds managed and recognition"
+
+	t.Run("negative integration assigned_by on interest", func(t *testing.T) {
 		def := valid(t)
-		r := findRole(def.Roles, "contributor")
+		r := findRole(def.Roles, "interest-home-lab")
 		if r == nil {
-			t.Fatal("role contributor not found")
+			t.Fatal("role interest-home-lab not found")
 		}
 		r.AssignedBy = "integration"
 		findings := Validate(def)
-		const want = "assigned_by integration is only for role kind managed"
-		if !hasFinding(findings, CodeRoleGrant, "roles[contributor].assigned_by", want) {
+		if !hasFinding(findings, CodeRoleGrant, "roles[interest-home-lab].assigned_by", want) {
 			t.Errorf("missing finding %q; got %+v", want, findings)
 		}
 	})
@@ -72,8 +73,41 @@ func TestValidate_C2_IntegrationAssignedByOnlyForManaged(t *testing.T) {
 			AssignedBy: "integration", Basis: "decided", Permissions: []string{},
 		})
 		findings := Validate(def)
-		if hasFinding(findings, CodeRoleGrant, "roles[test-managed].assigned_by", "assigned_by integration is only for role kind managed") {
+		if hasFinding(findings, CodeRoleGrant, "roles[test-managed].assigned_by", want) {
 			t.Errorf("unexpected finding for managed role with integration")
+		}
+	})
+
+}
+
+// ADR-0024: a funding integration gives a recognition role of its own, which the bot reads.
+func TestValidate_C2_RecognitionRoleFromIntegration(t *testing.T) {
+	t.Run("positive recognition role with integration", func(t *testing.T) {
+		def := valid(t)
+		r := findRole(def.Roles, "supporter-patreon")
+		if r == nil {
+			t.Fatal("role supporter-patreon not found")
+		}
+		if r.Kind != "recognition" || r.AssignedBy != "integration" {
+			t.Fatalf("supporter-patreon is %s by %s, want recognition by integration", r.Kind, r.AssignedBy)
+		}
+		for _, f := range Validate(def) {
+			if f.Path == "roles[supporter-patreon].assigned_by" {
+				t.Errorf("unexpected finding %+v", f)
+			}
+		}
+	})
+
+	t.Run("negative recognition role by choice", func(t *testing.T) {
+		def := valid(t)
+		r := findRole(def.Roles, "supporter-ko-fi")
+		if r == nil {
+			t.Fatal("role supporter-ko-fi not found")
+		}
+		r.AssignedBy = "choice"
+		const wantGrant = "recognition role must have assigned_by operator, bot or integration"
+		if !hasFinding(Validate(def), CodeRoleGrant, "roles[supporter-ko-fi].assigned_by", wantGrant) {
+			t.Errorf("missing finding %q", wantGrant)
 		}
 	})
 }

@@ -79,8 +79,8 @@ after the definition and a file over one mebibyte are refused
 | Part | Content | In the file today |
 | :--- | :--- | :--- |
 | `metrics` | What a threshold rule may measure, and from which data | 2 |
-| `roles` | Every role with its kind, who assigns it, its server-wide permissions and, where stated, how it is shown | 30 |
-| `role_order` | The roles from the highest to the lowest, without the role every member holds and the roles another party manages | 26 |
+| `roles` | Every role with its kind, who assigns it, its server-wide permissions and, where stated, how it is shown | 32 |
+| `role_order` | The roles from the highest to the lowest, without the role every member holds and the roles another party manages | 28 |
 | `categories` | The groups channels are shown in | 6 |
 | `channels` | Every channel with type, purpose, owner and the permissions it changes per role | 16 |
 | `areas` | The rooms that open at a threshold, each with an opening and a closing rule | 8 |
@@ -187,6 +187,11 @@ names it
 The three managed roles stand outside the order. A run checks that each is on
 the server and managed, and that the two funding roles stand below the
 Moderator role; the operator moves one that does not.
+
+"Ko-fi supporter" and "Patreon supporter" are given by the integrations, not by
+the bot, and stand at the end of `role_order`, below both integrations' roles,
+which must stand above the roles they give. The bot only reads who holds them
+([ADR-0024](adr/0024-supporter-roles-from-funding-platforms.md)).
 
 In channels the bot's role has an entry only where a function needs one: the
 support forum, the two moderators' channels, the eight area channels and the
@@ -340,8 +345,12 @@ decided, planned, or observed on the server.
   belongs to is not decided and gets its own record.
 - **Supporter roles** are decided: one role for supporters and one cosmetic
   role after a year of support. Nothing attaches to either, and there is no
-  channel for supporters only (ADR-0014). How the bot learns who supports is
-  not decided.
+  channel for supporters only (ADR-0014). The bot gives "Supporter" to a
+  member who holds "Ko-fi supporter" or "Patreon supporter", the hidden roles
+  each platform's integration gives, and takes it after a grace period once
+  the member holds neither. No member data is stored. "Supporter for a year"
+  has no source yet
+  ([ADR-0024](adr/0024-supporter-roles-from-funding-platforms.md)).
 - **Honorary supporter** is decided: a role the operator gives by hand, for
   good and tied to no funding platform. It stands above the bot's role, so the
   bot can neither give nor take it, and no file holds who has it. Whatever is

@@ -1,0 +1,2 @@
+type: changed
+title: 'Record 0024 is accepted: each funding integration gives a hidden role of its own, "Ko-fi supporter" or "Patreon supporter", and the bot gives Supporter to a member who holds either and takes it after a grace period; no member data is stored'

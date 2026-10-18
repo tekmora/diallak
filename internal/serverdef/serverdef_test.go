@@ -34,8 +34,8 @@ func TestLoad_Positive_RoleOrderKeyAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load valid definition with role_order: %v", err)
 	}
-	if len(def.RoleOrder) != 26 {
-		t.Errorf("len(RoleOrder) = %d, want 26", len(def.RoleOrder))
+	if len(def.RoleOrder) != 28 {
+		t.Errorf("len(RoleOrder) = %d, want 28", len(def.RoleOrder))
 	}
 }
 

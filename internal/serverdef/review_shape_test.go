@@ -300,7 +300,7 @@ func TestValidate_Negative_WhoGrantsARole(t *testing.T) {
 		{"the operator assigns the role of every member", by("everyone", "operator"),
 			CodeRoleGrant, "roles[everyone].assigned_by", "platform"},
 		{"choice gives a recognition role", by("contributor", "choice"),
-			CodeRoleGrant, "roles[contributor].assigned_by", "operator or bot"},
+			CodeRoleGrant, "roles[contributor].assigned_by", "operator, bot or integration"},
 		{"a choice option gives the contributor role", option("contributor"),
 			CodeRoleGrant, "choices.questions[interests].options[contributor]", "neither interest nor language"},
 		{"a choice option gives the moderator role", option("moderator"),

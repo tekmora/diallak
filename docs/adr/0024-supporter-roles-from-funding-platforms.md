@@ -1,6 +1,6 @@
 # ADR-0024: Supporter roles from the funding platforms
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-18
 - **Authors**: Maintainers
 
@@ -42,10 +42,31 @@ What bounds the choices:
   ([ADR-0010](0010-bot-rights-and-apply-path.md), "The role order bounds the
   right to manage roles"). Both supporter roles do.
 
-This record is a proposal. It names what the function needs to decide and the
-options for each point. Every point that touches member data, the link between
-a member and a funding platform, or the taking away of a role is left open for
-the operator; nothing below is built until this record is accepted.
+### What the integrations do
+
+The platforms' help articles were read in full on 2026-10-18 (Sources). They
+show:
+
+- **Both integrations give a role the creator chooses** for a membership tier,
+  and take it away when the membership ends. Neither gives its own bot role
+  ("Ko-fi Bot", "Patreon") to a member: that role is the integration's
+  identity on the server.
+- **Ko-fi** takes a monthly or tier role away when the subscription ends. A
+  role for one-time support never expires; the creator takes it away by hand.
+  On an overdue payment the articles disagree: the rewards article says the
+  role goes at once, the memberships article says it stays while the payment
+  is retried. Ko-fi asks that a role it gives is not managed by another
+  party, and its integration needs a creator account with Contributor or
+  Standard status.
+- **Patreon** gives roles for paid tiers only, takes a role away when a pledge
+  is deleted or a payment is declined, and syncs once a day. It removes
+  anyone added by hand to a role it manages, and its own bot role must never
+  be set on a tier.
+- **Both integrations' bots need** the rights to manage roles and to create
+  invites, and must stand above the roles they give.
+
+One role shared by both integrations would therefore break: Patreon would take
+away what Ko-fi gave, and Ko-fi asks for a role nobody else manages.
 
 ## Decision
 
@@ -53,111 +74,111 @@ the operator; nothing below is built until this record is accepted.
 
 The function covers the two platforms whose integrations the server already
 has and the definition already names: Ko-fi and Patreon. Another platform needs
-a change to this record. This is the only point the proposal states as its
-choice, since the definition fixes it already.
+a change to this record.
 
-### Open: how a member is linked to a payment
+### Link: the bot follows one role per platform
 
-<!-- markdownlint-disable MD013 -->
-| Option | How it works | For | Against |
-| :--- | :--- | :--- | :--- |
-| A. The integrations give "Supporter" themselves | Each platform's own Discord integration is set to give the Supporter role for a payment or a membership tier; the bot does nothing. | No code, no stored data, no platform credentials; the member links their account on the platform, under the platform's terms. | The definition's `assigned_by: bot` and the function's `by: bot` change to the integration; "Supporter for a year" has no source unless a platform offers a matching tier; the bot cannot check that the integrations are set up as intended. |
-| B. The bot follows the integrations' roles | The integrations give their own roles as today; the bot gives "Supporter" to a member who holds one of them and takes it from a member who holds none. | No platform credentials and no inbound traffic; the bot reads only role membership it already sees. | Depends on what each integration gives and when it takes it away, which is not read yet (Open points); "Supporter for a year" needs a start date the bot would have to keep. |
-| C. The bot reads the platforms' interfaces | The bot asks each platform which members support and how long, and links them to server members by the Discord account they connected there. | Exact durations; both roles from one source. | Platform credentials in the bot; a webhook-only platform needs inbound traffic, which the bot does not have; the bot reads and may keep payment-adjacent data. |
-| D. Discord's Linked Roles | The member signs in once through the bot's own connection page, and Discord gives the role from metadata the bot reports (issue #56). | The member consents in Discord's own flow. | A public web address, an OAuth2 token per member and a second sign-in; the definition's `assigned_by` cannot describe it yet. |
-<!-- markdownlint-enable MD013 -->
+Each integration gives a role of its own to its supporters. The definition
+holds them as two hidden recognition roles without rights:
 
-### Open: what the bot reads and keeps
+- "Ko-fi supporter" (`supporter-ko-fi`), given by the Ko-fi integration;
+- "Patreon supporter" (`supporter-patreon`), given by the Patreon integration.
 
-The answer follows from the link above.
+Both have `assigned_by: integration`, so the bot never gives or takes them.
+Nothing attaches to them: no channel, no right, no perk. They are no thanks on
+their own; they only tell the bot who supports.
 
-- **Under A** the bot reads and keeps nothing.
-- **Under B** the bot reads role membership, which it sees today. Giving
-  "Supporter for a year" needs a first-seen date per member. Options: keep that
-  date (one identifier and one timestamp per member, with an inventory entry
-  and a retention period), or leave "Supporter for a year" to be given by hand
-  until a platform reports the duration itself.
-- **Under C and D** the bot reads data from outside Discord. Which fields, how
-  long they are kept and how a member asks for their deletion would have to be
-  listed field by field before anything is built.
+The bot gives "Supporter" to a member who holds either role and takes it from
+a member who has held neither for longer than the grace period below.
 
-The privacy texts and the data inventory change with the chosen option. They
-are not part of this record.
+The bot needs no platform credentials and no inbound traffic, and asks no
+platform anything.
 
-### Open: when a role is taken away
+### Data: none stored
 
-<!-- markdownlint-disable MD013 -->
-| Option | For | Against |
-| :--- | :--- | :--- |
-| At once, when support ends | The role says what is true today. | A failed payment or a short gap takes the role and gives it back. |
-| After a grace period | Short gaps do not show. | A period is configuration and a timer; the bot needs to remember when support ended. |
-| "Supporter for a year" stays once given | It thanks for a year that happened. | It is then a lasting role the bot gives, close to "Honorary supporter"; ADR-0016 keeps those apart. |
-<!-- markdownlint-enable MD013 -->
+The bot reads role membership on the server and stores nothing about a
+member: no link to a platform account, no amount, no date. The data inventory
+gains no field.
 
-Whatever is chosen, the function never touches "Honorary supporter"
-(ADR-0016). Whether a member who asks for deletion of their data under
-ADR-0002 keeps a role that rests on that data is part of this open point.
+The state of a grace period, the time a member was last seen without either
+role, is held in memory only. A restart loses it and starts the grace period
+again; it never takes a role earlier than the period allows.
+
+### Removal: after a grace period
+
+"Supporter" is taken away once a member has held neither platform role for a
+grace period. The period is configuration. It is at least one day, because
+Patreon syncs once a day; its default is set when the function is built
+(#196).
+
+A member who asks for their data to be deleted under ADR-0002 has no stored
+data here. The roles stay as the integrations and the grace period leave them.
+
+### Ko-fi: monthly support and tiers only
+
+The Ko-fi integration is set up for monthly support and membership tiers only.
+One-time support gets no role from it, since Ko-fi never takes such a role
+away. One-time support is credited by hand on the credit page.
+
+### What the function does not touch
+
+- "Honorary supporter" (ADR-0016).
+- The integrations' own bot roles and the two platform roles.
+- "Supporter for a year". It has no source under this record: no platform role
+  carries a duration, and no member data is kept from which one could be
+  counted. The function does not give it. It stays open until a platform
+  reports the duration through its role or a new record decides.
+
+### Set up on the server by the operator
+
+The platform roles exist in the definition and are created like any other
+recognition role. Setting up the integrations needs the operator's accounts on
+Ko-fi and Patreon:
+
+- the Ko-fi integration for monthly support and tiers, each mapped to "Ko-fi
+  supporter";
+- each paid Patreon tier mapped to "Patreon supporter";
+- both integration bot roles placed above the two platform roles.
 
 ## Consequences
 
-- **Positive**: The open points are written down before any member data is
-  read, so the privacy texts and the code follow a decision instead of making
-  it.
-- **Positive**: Option A or B keeps the bot without platform credentials and
-  without inbound traffic.
-- **Negative**: Nothing ships until the operator decides the three open points.
-  Version 1.0 waits on this record.
-- **Negative**: Every option except A puts a new reason to change roles into
-  the bot. A wrong role given to a member is visible to the server.
+- **Positive**: The bot holds no platform credentials, no inbound address and
+  no member data. The privacy texts change only to say that the bot reads who
+  holds a role.
+- **Positive**: Each integration stays the only party that manages its own
+  role, as both platforms require.
+- **Negative**: The bot cannot check how the integrations are set up on the
+  platforms. A tier mapped to the wrong role shows on the server only.
+- **Negative**: "Supporter for a year" stays without a giver.
+- **Negative**: A restart starts a running grace period again, so a role can
+  stay longer than the period.
 
 ## Alternatives considered
 
-- **Give both supporter roles by hand.** It needs no code. ADR-0016 already
-  added "Honorary supporter" for standing given by hand; a supporter role given
-  by hand would then be taken by nobody when support ends.
-- **A private channel or a perk for supporters.** Declined by the operator
-  earlier (ADR-0014, product). Not reopened.
+- **The integrations give "Supporter" themselves.** No code at all, but both
+  integrations would manage the same role, which Patreon breaks by removing
+  what Ko-fi gave.
+- **The bot follows the integrations' bot roles.** No member holds those roles;
+  they are the integrations' own identity.
+- **The bot reads the platforms' interfaces.** Exact durations, but platform
+  credentials in the bot, inbound traffic for Ko-fi's webhook and stored
+  payment-adjacent data.
+- **Discord's Linked Roles** (issue #56). A public web address, a token per
+  member and a second sign-in.
+- **Keep a first-seen date per member** for "Supporter for a year". Declined:
+  no member data is stored.
+- **Give both supporter roles by hand.** A role given by hand is then taken by
+  nobody when support ends.
 
 ## Open points
 
-- **What the integrations give.** Which role each integration gives for a
-  payment or a tier, whether it gives one of this server's roles or only its
-  own, and when it takes it away. Read from the platforms' own help pages and
-  tried on the server before acceptance. The search results read on
-  2026-10-18 (Sources) say both integrations can give a chosen role; the full
-  pages could not be fetched that day.
-- **What the platforms' interfaces offer** (option C). Patreon's API reference
-  was read on 2026-10-18 (Sources). What it says:
-  - A user's `social_connections` field is a "mapping from user's connected app
-    names to external user id on the respective app". The reference does not
-    say whether a Discord account is always among them; that is tried before
-    acceptance.
-  - A campaign's members are listed by `GET
-    /api/oauth2/v2/campaigns/{campaign_id}/members`, one member by `GET
-    /api/oauth2/v2/members/{member_id}`. The bot could poll these without
-    inbound traffic.
-  - A member carries `patron_status`, `currently_entitled_amount_cents`,
-    `pledge_relationship_start` (the start of the most recent pledge chain,
-    not changed by pledge updates), `last_charge_date`, `last_charge_status`,
-    `next_charge_date`, `pledge_cadence`, `campaign_lifetime_support_cents`,
-    `is_free_trial` and `is_gifted`. The e-mail address needs a scope of its
-    own, and the name may be empty.
-  - Webhooks report members and pledges being created, updated and deleted.
-    They need an inbound address, which the bot does not have.
-  - The changelog lists member identity masking (2026-05-26) and the end of
-    API v1 on 2026-10-07.
-
-  Whether Ko-fi offers anything but a webhook is still not read: its help
-  pages refused the fetch on 2026-10-18.
-- **The decision itself.** The three open points above.
-
-## Decided in this record
-
-Nothing about member data, the link to a funding platform or the taking away
-of a role. The record proposes only that the function covers Ko-fi and
-Patreon, the two platforms the definition names.
-
-Acceptance waits for the operator.
+- **How the bot learns who holds a platform role.** Listing a role's members
+  needs Discord's server members intent, which the bot's connection does not
+  ask for today ([ADR-0001](0001-architecture-and-boundaries.md)). Decided
+  when the function is built (#196).
+- **The default grace period.** At least one day; set in #196.
+- **Ko-fi on an overdue payment.** Its articles disagree; tried on the server
+  once the integration is set up. The grace period covers either reading.
 
 ## Sources
 
@@ -166,20 +187,24 @@ Acceptance waits for the operator.
 - Diallak repository issue #56 (Linked Roles):
   <https://github.com/tekmora/diallak/issues/56>.
 - `server/definition.json`: roles `supporter`, `supporter-12-months`,
-  `honorary-supporter`, `funding-ko-fi`, `funding-patreon`; function
-  `supporter-roles`.
-- Ko-fi, "NEW: Discord Integration - Give Roles and Invites to Supporters",
-  <https://ko-fi.com/discord>, and Ko-fi Help, "How do supporters join my
-  Discord server?",
-  <https://help.ko-fi.com/hc/en-us/articles/8664701197073>: search result
-  summaries read 2026-10-18 (roles for one-time support and for membership
-  tiers); the pages themselves not read. A second fetch of the help page on
-  2026-10-18 was refused with HTTP 403.
-- Patreon Developers forum, "Campaign members list with their
-  social_connections" (2024-07-07),
-  <https://www.patreondevelopers.com/t/campaign-members-list-with-their-social-connections/8999>:
-  search result summary read 2026-10-18.
-- Patreon, API reference, <https://docs.patreon.com/>: sections "User v2"
-  (`social_connections`), "Member" attributes, the members endpoints of API
-  v2, webhook triggers v2 and the changelog (newest entry 2026-10-07), read
-  2026-10-18. A first fetch earlier that day failed.
+  `honorary-supporter`, `supporter-ko-fi`, `supporter-patreon`,
+  `funding-ko-fi`, `funding-patreon`; function `supporter-roles`.
+- Ko-fi Help, read in full 2026-10-18 through the help centre's article
+  interface:
+  - "Setting up Discord rewards with Ko-fi", article 360020363857, updated
+    2026-09-30;
+  - "How do supporters join my Discord server?", article 8664701197073,
+    updated 2026-10-17;
+  - "Ko-fi Memberships and Membership Tiers", article 4402945994001, updated
+    2026-10-15.
+- Patreon Help Center, read in full 2026-10-18 through the help centre's
+  article interface:
+  - "Setting up Discord for your members", article 213552323, updated
+    2026-10-08;
+  - "Getting Discord access", article 212052266, updated 2026-10-18;
+  - "Discord isn't working for my members", article 360037465012, updated
+    2026-09-10;
+  - "Troubleshooting Discord issues", article 4408372541581, updated
+    2026-10-16.
+- Patreon, API reference, <https://docs.patreon.com/>, read 2026-10-18 for the
+  interface option.

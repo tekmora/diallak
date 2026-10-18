@@ -301,6 +301,24 @@
       "assigned_by": "integration",
       "basis": "decided",
       "permissions": []
+    },
+    {
+      "id": "supporter-ko-fi",
+      "name": "Ko-fi supporter",
+      "kind": "recognition",
+      "purpose": "Given and taken by the Ko-fi integration for a monthly supporter or a member of a membership tier; never for one-time support. Shown with the other members and carries no right. The bot reads it to give Supporter (ADR-0024).",
+      "assigned_by": "integration",
+      "basis": "decided",
+      "permissions": []
+    },
+    {
+      "id": "supporter-patreon",
+      "name": "Patreon supporter",
+      "kind": "recognition",
+      "purpose": "Given and taken by the Patreon integration for a paid member of a tier. Shown with the other members and carries no right. The bot reads it to give Supporter (ADR-0024).",
+      "assigned_by": "integration",
+      "basis": "decided",
+      "permissions": []
     }
   ],
   "role_order": [
@@ -329,7 +347,9 @@
     "lang-es",
     "lang-fr",
     "lang-de",
-    "lang-it"
+    "lang-it",
+    "supporter-ko-fi",
+    "supporter-patreon"
   ],
   "categories": [
     {"id": "start", "name": "Start", "purpose": "What a member reads first."},
