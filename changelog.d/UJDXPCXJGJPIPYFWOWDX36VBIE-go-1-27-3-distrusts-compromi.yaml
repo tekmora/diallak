@@ -1,0 +1,2 @@
+type: security
+title: The bot and its image build with Go 1.27.3, which distrusts the compromised intermediate certificates of GO-2026-6809
