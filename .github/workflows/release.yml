@@ -71,19 +71,9 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
           CREDITS_URL: ${{ vars.CREDITS_URL }}
           SUPPORTER_NAMES: ${{ secrets.SUPPORTER_NAMES }}
+        # Unset CREDITS_URL means no credits note; unset SUPPORTER_NAMES means
+        # an empty names list.
         run: |
-          failed=no
-          if [ -z "$CREDITS_URL" ]; then
-            echo "::error::CREDITS_URL is unset"
-            failed=yes
-          fi
-          if [ -z "$SUPPORTER_NAMES" ]; then
-            echo "::error::SUPPORTER_NAMES is unset"
-            failed=yes
-          fi
-          if [ "$failed" = yes ]; then
-            exit 1
-          fi
           v=${TAG#v}
           notes="$RUNNER_TEMP/notes.md"
           names="$RUNNER_TEMP/supporter-names.txt"
@@ -149,19 +139,9 @@ jobs:
           DIGEST: ${{ needs.image.outputs.digest }}
           CREDITS_URL: ${{ vars.CREDITS_URL }}
           SUPPORTER_NAMES: ${{ secrets.SUPPORTER_NAMES }}
+        # Unset CREDITS_URL means no credits note; unset SUPPORTER_NAMES means
+        # an empty names list.
         run: |
-          failed=no
-          if [ -z "$CREDITS_URL" ]; then
-            echo "::error::CREDITS_URL is unset"
-            failed=yes
-          fi
-          if [ -z "$SUPPORTER_NAMES" ]; then
-            echo "::error::SUPPORTER_NAMES is unset"
-            failed=yes
-          fi
-          if [ "$failed" = yes ]; then
-            exit 1
-          fi
           v=${TAG#v}
           flags=
           case "$TAG" in
@@ -182,7 +162,12 @@ jobs:
           else
             echo "::warning::$TAG has no image note script: no digest in notes"
           fi
-          sh .github/scripts/release-credits-note.sh "$CREDITS_URL" >> notes.md
+          # Checked here, not in the script: the scripts come from the tag, and
+          # a tag from before this change refuses an empty address.
+          if [ -n "$CREDITS_URL" ]; then
+            sh .github/scripts/release-credits-note.sh "$CREDITS_URL" \
+              >> notes.md
+          fi
           names="$RUNNER_TEMP/supporter-names.txt"
           touch "$names"
           chmod 600 "$names"
