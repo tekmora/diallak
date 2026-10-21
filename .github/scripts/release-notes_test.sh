@@ -149,16 +149,19 @@ if sh "$rc" 0.5.0-rc.1 "$frag" > /dev/null 2>&1; then
 fi
 
 # release-credits-note.sh prints the release note block linking the credits page.
-# It must refuse missing/empty arguments, anything not starting with https://,
-# and URLs with whitespace, backticks, <, >, (, or ).
+# An empty argument prints nothing and exits 0. It must refuse a missing
+# argument, anything not starting with https://, and URLs with whitespace,
+# backticks, <, >, (, or ).
 credits_note=.github/scripts/release-credits-note.sh
 url="https://example.com/credits"
 want=$(printf '%s\n' '' '## Supporters' '' \
   'Thanks to the people who back this project. See the [credits page](https://example.com/credits).')
 got=$(sh "$credits_note" "$url") || fail "credits note exits non-zero"
 [ "$got" = "$want" ] || fail "credits note prints the wrong block"
+got=$(sh "$credits_note" "") || fail "credits note exits non-zero on empty argument"
+[ "$got" = "" ] || fail "credits note prints output on empty argument"
 
-for bad in 'http://example.com/credits' '' 'https://a b' 'https://x)' 'https://x(' \
+for bad in 'http://example.com/credits' 'https://a b' 'https://x)' 'https://x(' \
   'https://x`y' 'https://x<y' 'https://x>y'; do
   if sh "$credits_note" "$bad" > /dev/null 2>&1; then
     fail "credits note accepts invalid url '$bad'"
@@ -209,6 +212,10 @@ sh "$names_script" "$notes_file" "$names_file" > /dev/null 2>&1 ||
 : > "$names_file"
 sh "$names_script" "$notes_file" "$names_file" > /dev/null 2>&1 ||
   fail "empty names file with clean notes is refused"
+
+printf '%s\n' '### Added' '- Clean note' "$want" > "$notes_file"
+sh "$names_script" "$notes_file" "$names_file" > /dev/null 2>&1 ||
+  fail "empty names file with notes holding credits block is refused"
 
 if sh "$names_script" "$notes_file" "$dir/nonexistent.txt" > /dev/null 2>&1; then
   fail "missing names file is accepted"
