@@ -1,0 +1,3 @@
+type: changed
+title: The release workflow runs with CREDITS_URL and SUPPORTER_NAMES unset; the notes then carry no credits note
+issue: '#125'
