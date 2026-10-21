@@ -2,8 +2,9 @@
 # Prints the release note block that thanks supporters and links the credits
 # page.
 # usage: release-credits-note.sh <url>
-# Exits 1 when the argument is missing, empty, does not start with https://,
-# or contains whitespace, backticks, <, >, (, or ).
+# An empty argument prints nothing and exits 0. Exits 1 when the argument is
+# missing, does not start with https://, or contains whitespace, backticks, <,
+# >, (, or ).
 set -eu
 
 if [ "$#" -ne 1 ]; then
@@ -13,8 +14,7 @@ fi
 url=$1
 
 if [ -z "$url" ]; then
-  echo "release-credits-note: empty url" >&2
-  exit 1
+  exit 0
 fi
 
 case "$url" in
