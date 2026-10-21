@@ -1171,3 +1171,135 @@ func TestRegisterCommands_Negative_PlatformRefusalKeepsCodeAndMessage(t *testing
 		}
 	})
 }
+
+func TestDispatcher_Positive_RunTrackedExecutesBeforeStop(t *testing.T) {
+	d := &dispatcher{
+		cfg:       BotConfig{Logger: slog.New(slog.DiscardHandler), Handler: &Handler{}},
+		workerSem: make(chan struct{}, 5),
+	}
+	d.dispatching.Store(true)
+	ran := false
+	done := make(chan struct{})
+	d.runTracked(func() {
+		ran = true
+		close(done)
+	})
+	<-done
+	d.componentsRunning.Wait()
+	if !ran {
+		t.Error("work did not execute")
+	}
+}
+
+func TestDispatcher_Negative_RunTrackedDropsAfterStop(t *testing.T) {
+	d := &dispatcher{
+		cfg:       BotConfig{Logger: slog.New(slog.DiscardHandler), Handler: &Handler{}},
+		workerSem: make(chan struct{}, 5),
+	}
+	d.stop()
+	ran := false
+	d.runTracked(func() {
+		ran = true
+	})
+	d.componentsRunning.Wait()
+	if ran {
+		t.Error("work executed after stop")
+	}
+}
+
+func TestDispatcher_Boundary_ConcurrentRunTrackedAndStopNoRace(t *testing.T) {
+	d := &dispatcher{
+		cfg:       BotConfig{Logger: slog.New(slog.DiscardHandler), Handler: &Handler{}},
+		workerSem: make(chan struct{}, 10),
+	}
+	d.dispatching.Store(true)
+
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 50 {
+				d.runTracked(func() {
+					time.Sleep(10 * time.Microsecond)
+				})
+			}
+		}()
+	}
+
+	time.Sleep(500 * time.Microsecond)
+	d.stop()
+	wg.Wait()
+	d.componentsRunning.Wait()
+}
+
+func TestTimeoutRequest_Positive_NumericMinutes(t *testing.T) {
+	raw := `{"id":"1","name":"timeout","type":1,"options":[
+		{"name":"member","type":6,"value":"821000000000000002"},
+		{"name":"minutes","type":4,"value":15},
+		{"name":"reason","type":3,"value":"Rule violation"}
+	]}`
+	var slash discord.SlashCommandInteractionData
+	if err := json.Unmarshal([]byte(raw), &slash); err != nil {
+		t.Fatalf("unmarshal slash: %v", err)
+	}
+	req, ok := timeoutRequest(slash)
+	if !ok || req.Minutes != 15 || req.MemberID != 821000000000000002 || req.Reason != "Rule violation" {
+		t.Errorf("timeoutRequest = %+v, ok %v; want valid request", req, ok)
+	}
+}
+
+func TestTimeoutRequest_Negative_StringMinutesOptionRecovers(t *testing.T) {
+	raw := `{"id":"1","name":"timeout","type":1,"options":[
+		{"name":"member","type":6,"value":"821000000000000002"},
+		{"name":"minutes","type":4,"value":"90"},
+		{"name":"reason","type":3,"value":"Rule violation"}
+	]}`
+	var slash discord.SlashCommandInteractionData
+	if err := json.Unmarshal([]byte(raw), &slash); err != nil {
+		t.Fatalf("unmarshal slash: %v", err)
+	}
+	req, ok := timeoutRequest(slash)
+	if ok {
+		t.Errorf("timeoutRequest returned ok = true, want false on string minutes")
+	}
+	if req.MemberID != 0 || req.Minutes != 0 {
+		t.Errorf("timeoutRequest = %+v, want zero request", req)
+	}
+}
+
+func TestTimeoutRequest_Boundary_MalformedOptionTypesRecover(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+	}{
+		{
+			name: "member as bool",
+			raw: `{"id":"1","name":"timeout","type":1,"options":[
+				{"name":"member","type":6,"value":true},
+				{"name":"minutes","type":4,"value":10},
+				{"name":"reason","type":3,"value":"test"}
+			]}`,
+		},
+		{
+			name: "reason as int",
+			raw: `{"id":"1","name":"timeout","type":1,"options":[
+				{"name":"member","type":6,"value":"821000000000000002"},
+				{"name":"minutes","type":4,"value":10},
+				{"name":"reason","type":3,"value":1234}
+			]}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var slash discord.SlashCommandInteractionData
+			if err := json.Unmarshal([]byte(tc.raw), &slash); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			req, ok := timeoutRequest(slash)
+			if ok || req.MemberID != 0 {
+				t.Errorf("timeoutRequest = %+v, ok %v; want zero request false", req, ok)
+			}
+		})
+	}
+}

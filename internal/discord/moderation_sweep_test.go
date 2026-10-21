@@ -172,3 +172,62 @@ func TestModerationSweep_Boundary_ShortPageEndsTheSweep(t *testing.T) {
 		t.Errorf("%d pages read, want 1", len(trail.lists))
 	}
 }
+
+type cursorStuckTrail struct {
+	*fakeTrail
+}
+
+func (c *cursorStuckTrail) ListLines(ctx context.Context, channelID, before uint64) ([]TrailMessage, error) {
+	if before == 0 {
+		return c.fakeTrail.ListLines(ctx, channelID, before)
+	}
+	c.lists = append(c.lists, before)
+	page := make([]TrailMessage, trailPageSize)
+	for i := range page {
+		page[i] = TrailMessage{ID: before, AuthorID: modBotUserID, Sent: modNow.Add(-48 * time.Hour)}
+	}
+	return page, nil
+}
+
+func TestModerationSweep_Positive_DecreasingOldestPagesAcrossMultiplePages(t *testing.T) {
+	h := newSweepHandler(t, MinTrailRetention)
+	trail := trailOf(200)
+	n, err := h.Sweep(context.Background(), trail)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if len(trail.lists) != 3 { // 100, 100, 0
+		t.Errorf("lists = %d, want 3", len(trail.lists))
+	}
+	_ = n
+}
+
+func TestModerationSweep_Negative_FullPageWithZeroIDStops(t *testing.T) {
+	h := newSweepHandler(t, MinTrailRetention)
+	trail := &fakeTrail{}
+	for range trailPageSize {
+		trail.messages = append(trail.messages, TrailMessage{
+			ID: 0, AuthorID: modBotUserID, Sent: modNow.Add(-48 * time.Hour),
+		})
+	}
+	_, err := h.Sweep(context.Background(), trail)
+	if err == nil {
+		t.Fatal("Sweep on full page of ID 0 succeeded, want error")
+	}
+	if len(trail.lists) != 1 {
+		t.Errorf("lists = %d, want 1", len(trail.lists))
+	}
+}
+
+func TestModerationSweep_Boundary_OldestNotMovingStopsSweep(t *testing.T) {
+	h := newSweepHandler(t, MinTrailRetention)
+	base := trailOf(trailPageSize)
+	stuck := &cursorStuckTrail{fakeTrail: base}
+	_, err := h.Sweep(context.Background(), stuck)
+	if err == nil {
+		t.Fatal("Sweep on stuck cursor succeeded, want error")
+	}
+	if len(stuck.lists) != 2 {
+		t.Errorf("lists = %d, want 2", len(stuck.lists))
+	}
+}

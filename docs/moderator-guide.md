@@ -53,6 +53,9 @@ server's audit log.
 The trail is the only record. There is no list of warnings and no note on a
 member.
 
+The remove command refuses a line in the log channel: the lines stay until the
+bot deletes them after 90 days.
+
 ## What you may remove
 
 Remove a message when it breaks the [server rules](compliance/server-rules.md)

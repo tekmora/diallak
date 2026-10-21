@@ -448,3 +448,142 @@ func TestModerationConfig_Boundary_ConfigBoundsLieInsideTheHandlerBounds(t *test
 			config.MinTrailRetention, config.MaxTrailRetention, MinTrailRetention, MaxTrailRetention)
 	}
 }
+
+func modCategoryChannel(id uint64, name string) discord.GuildChannel {
+	var u discord.UnmarshalChannel
+	raw := fmt.Sprintf(`{"id":"%d","guild_id":"%d","type":4,"name":%q}`, id, modGuildID, name)
+	if err := json.Unmarshal([]byte(raw), &u); err != nil {
+		panic(err)
+	}
+	ch, ok := u.Channel.(discord.GuildChannel)
+	if !ok {
+		panic(fmt.Sprintf("channel %d decodes as %T, want a guild channel", id, u.Channel))
+	}
+	return ch
+}
+
+func TestModeration_Positive_RemoveNonTrailMessageProceeds(t *testing.T) {
+	h := newModHandler(t)
+	in, calls := newModInteraction(modRoleID), &fakeModCalls{}
+	target := MessageTarget{ChannelID: modChannelID, MessageID: modMessageID, AuthorID: modMemberID}
+	h.HandleRemoveCommand(context.Background(), in, target)
+	if len(in.forms) != 1 {
+		t.Fatalf("forms = %d, want 1 reason form", len(in.forms))
+	}
+	h.HandleRemoveReason(context.Background(), in, in.forms[0], "Spam", calls)
+	if len(calls.deletes) != 1 || len(calls.lines) != 1 {
+		t.Fatalf("deletes = %d, lines = %d; want 1 each", len(calls.deletes), len(calls.lines))
+	}
+}
+
+func TestModeration_Negative_RemoveTrailMessageRefused(t *testing.T) {
+	h := newModHandler(t)
+	in, calls := newModInteraction(modRoleID), &fakeModCalls{}
+	target := MessageTarget{ChannelID: modTrailID, MessageID: modMessageID, AuthorID: modMemberID}
+	h.HandleRemoveCommand(context.Background(), in, target)
+	if len(in.forms) != 0 {
+		t.Errorf("forms = %d, want 0 (no AskReason)", len(in.forms))
+	}
+	if ans := in.answers(); len(ans) != 1 || ans[0] != TextModerationTrailLine {
+		t.Errorf("answers = %q, want [%q]", ans, TextModerationTrailLine)
+	}
+	in2 := newModInteraction(modRoleID)
+	trailForm := fmt.Sprintf("moderation-remove:%d:%d:%d", modTrailID, modMessageID, modMemberID)
+	h.HandleRemoveReason(context.Background(), in2, trailForm, "Clean trail", calls)
+	if len(calls.deletes) != 0 {
+		t.Errorf("deletes = %d, want 0 (no DeleteMessage)", len(calls.deletes))
+	}
+	if ans := in2.answers(); len(ans) != 1 || ans[0] != TextModerationTrailLine {
+		t.Errorf("answers = %q, want [%q]", ans, TextModerationTrailLine)
+	}
+}
+
+func TestModeration_Boundary_RemoveChannelIDBoundaries(t *testing.T) {
+	h := newModHandler(t)
+	for _, cid := range []uint64{modTrailID - 1, modTrailID + 1} {
+		in := newModInteraction(modRoleID)
+		target := MessageTarget{ChannelID: cid, MessageID: modMessageID, AuthorID: modMemberID}
+		h.HandleRemoveCommand(context.Background(), in, target)
+		if len(in.forms) != 1 {
+			t.Errorf("cid %d: forms = %d, want 1", cid, len(in.forms))
+		}
+	}
+}
+
+func TestModeration_Positive_CategoryAndTextSameNameResolvesText(t *testing.T) {
+	h, err := NewModerationHandler(ModerationConfig{Definition: modTestDefinition(), GuildID: modGuildID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	channels := []discord.GuildChannel{
+		modTextChannel(modChannelID, "general"),
+		modCategoryChannel(modTrailID+100, "mod-log"),
+		modTextChannel(modTrailID, "mod-log"),
+	}
+	h.SetServer(modTestRoles(), channels, modBotUserID)
+	srv := h.server.Load()
+	if srv == nil || srv.trailChannelID != modTrailID {
+		t.Fatalf("srv = %v, want trailChannelID = %d", srv, modTrailID)
+	}
+}
+
+func TestModeration_Negative_CategoryOnlyTrailUnavailable(t *testing.T) {
+	h, err := NewModerationHandler(ModerationConfig{Definition: modTestDefinition(), GuildID: modGuildID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	channels := []discord.GuildChannel{
+		modTextChannel(modChannelID, "general"),
+		modCategoryChannel(modTrailID, "mod-log"),
+	}
+	h.SetServer(modTestRoles(), channels, modBotUserID)
+	if srv := h.server.Load(); srv != nil {
+		t.Fatalf("srv = %v, want nil (unavailable)", srv)
+	}
+}
+
+func TestModeration_Boundary_TwoTextChannelsUnavailable(t *testing.T) {
+	h, err := NewModerationHandler(ModerationConfig{Definition: modTestDefinition(), GuildID: modGuildID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	channels := []discord.GuildChannel{
+		modTextChannel(modChannelID, "general"),
+		modTextChannel(modTrailID, "mod-log"),
+		modTextChannel(modTrailID+1, "mod-log"),
+	}
+	h.SetServer(modTestRoles(), channels, modBotUserID)
+	if srv := h.server.Load(); srv != nil {
+		t.Fatalf("srv = %v, want nil (unavailable for 2 text channels)", srv)
+	}
+}
+
+func TestModeration_Positive_RefuseSenderAcceptsValidMember(t *testing.T) {
+	h := newModHandler(t)
+	in := &fakeModInteraction{guildID: modGuildID, memberID: modMemberID, roles: []uint64{modRoleID}}
+	srv, refusal, ok := h.refuseSender(in)
+	if ok || refusal != "" || srv == nil {
+		t.Fatalf("refuseSender = srv %v, refusal %q, ok %v; want srv, empty, false", srv, refusal, ok)
+	}
+}
+
+func TestModeration_Negative_RefuseSenderRefusesZeroMember(t *testing.T) {
+	h := newModHandler(t)
+	in := &fakeModInteraction{guildID: modGuildID, memberID: 0, roles: []uint64{modRoleID}}
+	srv, refusal, ok := h.refuseSender(in)
+	if !ok || refusal != TextModerationNotModerator || srv != nil {
+		t.Fatalf("refuseSender = srv %v, refusal %q, ok %v; want nil, TextModerationNotModerator, true", srv, refusal, ok)
+	}
+}
+
+func TestModeration_Boundary_ZeroMemberWithRolesRefusedBeforeRoleCheck(t *testing.T) {
+	h := newModHandler(t)
+	in0 := &fakeModInteraction{guildID: modGuildID, memberID: 0, roles: []uint64{modRoleID, modOtherRoleID}}
+	if _, refusal, ok := h.refuseSender(in0); !ok || refusal != TextModerationNotModerator {
+		t.Errorf("memberID 0: refusal %q ok %v, want %q true", refusal, ok, TextModerationNotModerator)
+	}
+	in1 := &fakeModInteraction{guildID: modGuildID, memberID: 1, roles: []uint64{modRoleID}}
+	if _, refusal, ok := h.refuseSender(in1); ok || refusal != "" {
+		t.Errorf("memberID 1: refusal %q ok %v, want empty false", refusal, ok)
+	}
+}

@@ -1,0 +1,2 @@
+type: fixed
+title: Moderation refuses to remove lines in the log channel, survives malformed command options and shuts down without a counter race
