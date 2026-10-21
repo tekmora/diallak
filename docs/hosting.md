@@ -76,9 +76,9 @@ is missing or out of range stops the start with a message that names it.
   `.home.arpa`, or `.lan`) and refuses any other host. When embeddings are not
   configured or when the embedding call fails, retrieval is keyword only and
   the reply carries a notice saying so. Support forum posts are always searched
-  by keyword only and never reach the embedding endpoint. At start the bot computes embedding
-  vectors for all documentation chunks in memory; if the endpoint fails at start,
-  the start stops with an exit code of 1.
+  by keyword only and never reach the embedding endpoint. At start the bot
+  computes embedding vectors for all documentation chunks in memory; if the
+  endpoint fails at start, the start stops with an exit code of 1.
 - **The news function is off unless `DIALLAK_NEWS_STATE_FILE` is set**
   ([ADR-0019](adr/0019-news-posts.md), issue #180). It names an absolute path
   on the writable volume. A damaged state file stops the start, because an
@@ -105,6 +105,71 @@ is missing or out of range stops the start with a message that names it.
   discussion into the channel `news.discussions_channel` of the server
   definition, the lounge today, with no mention and no crosspost. The first
   read after the state file is new posts nothing.
+
+## Cluster deployment contract
+
+A cluster deployment supplies the bot's settings through environment variables,
+mounted secret files, and volumes
+([ADR-0001](adr/0001-architecture-and-boundaries.md)). The table below lists
+every variable the application reads, how it reaches the pod, and when it is
+needed ([`internal/config`](../internal/config/config.go)). A Go test keeps
+this contract synchronized with the codebase
+([`deploy_contract_test.go`](../cmd/diallak/deploy_contract_test.go)).
+
+<!-- markdownlint-disable MD013 -->
+| Variable | Reaches the pod as | Needed when |
+| :--- | :--- | :--- |
+| `DIALLAK_ASK_TIMEOUT` | environment | optional: tuning question timeout |
+| `DIALLAK_CORPUS_DIR` | read-only volume | always |
+| `DIALLAK_DISCUSSIONS_APP_CLIENT_ID` | environment | discussions bridge |
+| `DIALLAK_DISCUSSIONS_APP_KEY_FILE` | secret file | discussions bridge |
+| `DIALLAK_EMBED_ALIAS` | environment | embedding mode |
+| `DIALLAK_EMBED_BASE_URL` | environment | embedding mode |
+| `DIALLAK_EMBED_KEY_FILE` | secret file | embedding mode with authentication |
+| `DIALLAK_EMBED_MIN_SIMILARITY` | environment | optional: tuning embedding similarity threshold |
+| `DIALLAK_EMBED_TIMEOUT` | environment | optional: tuning embedding timeout |
+| `DIALLAK_EXCERPT_CHARS` | environment | optional: tuning excerpt length |
+| `DIALLAK_FORUM_CHANNEL_ID` | environment | support forum answer |
+| `DIALLAK_FORUM_OPT_IN_TAG_ID` | environment | support forum answer |
+| `DIALLAK_GUILD_ID` | environment | always |
+| `DIALLAK_HEALTH_ADDR` | environment | health probes |
+| `DIALLAK_MAX_CONCURRENT_ASKS` | environment | optional: tuning concurrent asks limit |
+| `DIALLAK_MIN_SCORE` | environment | optional: tuning minimum score threshold |
+| `DIALLAK_MODEL_ALIAS` | environment | model mode |
+| `DIALLAK_MODEL_BASE_URL` | environment | model mode |
+| `DIALLAK_MODEL_GUARDRAIL` | environment | model mode with gateway guardrail |
+| `DIALLAK_MODEL_KEY_FILE` | secret file | model mode with endpoint authentication |
+| `DIALLAK_MODEL_POLICY` | environment | model mode |
+| `DIALLAK_MODEL_TIMEOUT` | environment | optional: tuning model timeout |
+| `DIALLAK_NEWS_GITHUB_TOKEN_FILE` | secret file | news function with GitHub authentication |
+| `DIALLAK_NEWS_STATE_FILE` | writable volume | news function |
+| `DIALLAK_QUESTION_MAX_CHARS` | environment | optional: tuning question length limit |
+| `DIALLAK_REPLY_MAX_CHARS` | environment | optional: tuning reply length limit |
+| `DIALLAK_SOURCE_LINK_TEMPLATE` | environment | optional: custom source link template |
+| `DIALLAK_SUPPORTER_GRACE` | environment | supporter function |
+| `DIALLAK_SUPPORTER_ROLES` | environment | supporter function |
+| `DIALLAK_SUPPORT_CHANNEL` | environment | optional: custom support channel wording |
+| `DIALLAK_TOKEN_FILE` | secret file | always |
+| `DIALLAK_TOP_PASSAGES` | environment | optional: tuning retrieved passages limit |
+| `DIALLAK_TRAIL_RETENTION` | environment | optional: tuning moderation trail retention |
+<!-- markdownlint-enable MD013 -->
+
+- **User `65532:65532`.** The container runs as unprivileged user `65532` and
+  group `65532` ([`Dockerfile`](../Dockerfile), and "Image" above).
+- **Read-only root filesystem.** The container needs no writable root
+  filesystem; only the news state file requires a writable volume when enabled
+  ("Image" above, and
+  [`compliance/data-inventory.md`](compliance/data-inventory.md)).
+- **One replica.** One token serves one gateway session
+  ([ADR-0001](adr/0001-architecture-and-boundaries.md)). The deployment
+  replaces the instance rather than rolling it ("Start, stop and replace"
+  below).
+- **Image pinned by digest.** The deployment pins the image by content digest
+  from the release page rather than a mutable tag ("Image" above, and
+  [README](../README.md)).
+- **Health probes.** When `DIALLAK_HEALTH_ADDR` is set, probes target
+  `/healthz` for liveness and `/readyz` for readiness ("Health checks" below,
+  and [ADR-0007](adr/0007-health-listener.md)).
 
 ## Start, stop and replace
 
