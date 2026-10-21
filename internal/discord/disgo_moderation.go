@@ -153,12 +153,18 @@ func removeMessageTarget(data discord.MessageCommandInteractionData) MessageTarg
 }
 
 // timeoutRequest returns the options of a timeout command.
-func timeoutRequest(data discord.SlashCommandInteractionData) TimeoutRequest {
+func timeoutRequest(data discord.SlashCommandInteractionData) (req TimeoutRequest, ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			req = TimeoutRequest{}
+			ok = false
+		}
+	}()
 	return TimeoutRequest{
 		MemberID: uint64(data.Snowflake(OptionTimeoutMember)),
 		Minutes:  data.Int(OptionTimeoutMinutes),
 		Reason:   data.String(OptionTimeoutReason),
-	}
+	}, true
 }
 
 // removeReasonForm returns the custom id and the reason of a submitted reason form.
@@ -238,9 +244,14 @@ func sweepTrail(ctx context.Context, restClient rest.Rest, cfg BotConfig, opts c
 		case <-timer.C:
 		}
 		if err := readModerationServer(ctx, restClient, cfg.GuildID, cfg.Moderation, opts.callTimeout()); err != nil {
-			cfg.Logger.Warn("moderation server read failed", slog.Any("error", err))
-		} else if n, err := cfg.Moderation.Sweep(ctx, calls); err != nil {
-			cfg.Logger.Warn("trail sweep failed", slog.Int("deleted", n), slog.Any("error", err))
+			cfg.Logger.Warn("moderation server read failed", slog.String("error_class", classifyError(err)))
+			if cfg.Moderation == nil || cfg.Moderation.server.Load() == nil {
+				timer.Reset(opts.sweepInterval())
+				continue
+			}
+		}
+		if n, err := cfg.Moderation.Sweep(ctx, calls); err != nil {
+			cfg.Logger.Warn("trail sweep failed", slog.Int("deleted", n), slog.String("error_class", classifyError(err)))
 		} else {
 			cfg.Logger.Info("trail swept", slog.Int("deleted", n))
 		}

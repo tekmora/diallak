@@ -1,6 +1,7 @@
 package discord
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -172,4 +173,105 @@ func TestSweepTrail_Positive_SweepsAgainAfterTheInterval(t *testing.T) {
 	}
 	cancel()
 	<-done
+}
+
+func TestSweepTrail_Positive_RefreshFailsKeepsHeldServerAndSweeps(t *testing.T) {
+	trailPath := fmt.Sprintf("/channels/%d/messages", modTrailID)
+	client, _, seen := recordingRest(t, map[string]string{
+		trailPath: "[]",
+	})
+	mod, err := NewModerationHandler(ModerationConfig{
+		Definition: modTestDefinition(), GuildID: modGuildID, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod.SetServer(modTestRoles(), modTestChannels(), modBotUserID)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		sweepTrail(ctx, client.Rest, BotConfig{GuildID: modGuildID, Moderation: mod, Logger: slog.New(slog.DiscardHandler)},
+			clientOptions{trailSweepEvery: time.Millisecond})
+	}()
+
+	deadline := time.After(5 * time.Second)
+	found := false
+	for !found {
+		select {
+		case <-deadline:
+			t.Fatalf("trail was not swept after refresh failure; requests %q", seen())
+		case <-time.After(5 * time.Millisecond):
+		}
+		for _, r := range seen() {
+			if strings.HasPrefix(r, "GET "+trailPath+"?") {
+				found = true
+				break
+			}
+		}
+	}
+	cancel()
+	<-done
+}
+
+func TestSweepTrail_Negative_RefreshFailsWithoutServerSkipsSweep(t *testing.T) {
+	trailPath := fmt.Sprintf("/channels/%d/messages", modTrailID)
+	client, _, seen := recordingRest(t, map[string]string{
+		trailPath: "[]",
+	})
+	mod, err := NewModerationHandler(ModerationConfig{
+		Definition: modTestDefinition(), GuildID: modGuildID, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		sweepTrail(ctx, client.Rest, BotConfig{GuildID: modGuildID, Moderation: mod, Logger: slog.New(slog.DiscardHandler)},
+			clientOptions{trailSweepEvery: 5 * time.Millisecond})
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	<-done
+
+	for _, r := range seen() {
+		if strings.HasPrefix(r, "GET "+trailPath+"?") {
+			t.Errorf("sweep ran on unresolved server: %v", r)
+		}
+	}
+}
+
+func TestSweepTrail_Boundary_LogsClassifiedErrorOnSweepAndReadFailure(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	client, _, _ := recordingRest(t, map[string]string{})
+	mod, err := NewModerationHandler(ModerationConfig{
+		Definition: modTestDefinition(), GuildID: modGuildID, Logger: logger,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		sweepTrail(ctx, client.Rest, BotConfig{GuildID: modGuildID, Moderation: mod, Logger: logger},
+			clientOptions{trailSweepEvery: time.Millisecond})
+	}()
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+	<-done
+
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, `"error_class"`) {
+		t.Errorf("log output missing error_class: %s", logOutput)
+	}
+	if strings.Contains(logOutput, `"error":`) {
+		t.Errorf("log output contains raw error: %s", logOutput)
+	}
 }

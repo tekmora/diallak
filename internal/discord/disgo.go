@@ -277,7 +277,7 @@ func runWithOptions(ctx context.Context, cfg BotConfig, opts clientOptions) erro
 	if cfg.ReportReady != nil {
 		cfg.ReportReady(false)
 	}
-	d.dispatching.Store(false)
+	d.stop()
 
 	return shutdownClient(cfg, client, &d.componentsRunning, cfg.ShutdownTimeout)
 }
@@ -593,8 +593,15 @@ type dispatcher struct {
 	cfg         BotConfig
 	workerSem   chan struct{}
 	dispatching atomic.Bool
+	stopMu      sync.Mutex
 	// componentsRunning counts the areas and receipt work the shutdown waits for.
 	componentsRunning sync.WaitGroup
+}
+
+func (d *dispatcher) stop() {
+	d.stopMu.Lock()
+	d.dispatching.Store(false)
+	d.stopMu.Unlock()
 }
 
 func (d *dispatcher) handle(ctx context.Context, e *events.InteractionCreate) {
@@ -634,7 +641,10 @@ func (d *dispatcher) handleCommand(ctx context.Context, e *events.InteractionCre
 	case data.CommandName() == TimeoutCommandName && d.cfg.Moderation != nil:
 		adapter := &moderationAdapter{client: e.Client(), interaction: appCmd, respond: e.Respond}
 		calls := restModerationCalls{rest: e.Client().Rest, guildID: snowflake.ID(d.cfg.GuildID)}
-		req := timeoutRequest(data)
+		req, ok := timeoutRequest(data)
+		if !ok {
+			d.cfg.Logger.Warn("timeout command options malformed")
+		}
 		d.runTracked(func() { d.cfg.Moderation.HandleTimeout(ctx, adapter, req, calls) })
 	case data.CommandName() == BugCommandName && d.cfg.Bug != nil:
 		adapter := &bugAdapter{interaction: appCmd, data: data, respond: e.Respond}
@@ -688,7 +698,14 @@ func (d *dispatcher) handleModal(ctx context.Context, e *events.InteractionCreat
 
 // runTracked runs work on a worker and lets the shutdown wait for it.
 func (d *dispatcher) runTracked(work func()) {
+	d.stopMu.Lock()
+	if !d.dispatching.Load() {
+		d.stopMu.Unlock()
+		return
+	}
 	d.componentsRunning.Add(1)
+	d.stopMu.Unlock()
+
 	if !d.run(func() { defer d.componentsRunning.Done(); work() }) {
 		d.componentsRunning.Done()
 	}

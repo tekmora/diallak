@@ -72,6 +72,8 @@ const (
 	TextModerationTimedOut = "The member is timed out until %s and the trail line written."
 	// TextModerationNoLine says that the act was done but its trail line was not written.
 	TextModerationNoLine = "The act was done, but its trail line could not be written. Tell the operator."
+	// TextModerationTrailLine refuses a removal in the trail channel (ADR-0021).
+	TextModerationTrailLine = "Nothing was done: lines in the log channel stay until they expire."
 
 	// defaultModerationCallTimeout is chosen, not measured.
 	defaultModerationCallTimeout = 10 * time.Second
@@ -232,7 +234,13 @@ func (h *ModerationHandler) SetServer(roles []discord.Role, channels []discord.G
 		idx.addRole(r.Name, r.ID)
 	}
 	for _, ch := range channels {
-		idx.addChannel(ch.Name(), ch.ID())
+		if ch.Type() == discord.ChannelTypeGuildCategory {
+			idx.addCategory(ch.Name(), ch.ID())
+			continue
+		}
+		if ch.Type() == discord.ChannelTypeGuildText {
+			idx.addChannel(ch.Name(), ch.ID())
+		}
 	}
 	roleID, roleErr := idx.lookupRole(h.roleName)
 	trailID, trailErr := idx.lookupChannel(h.trailName)
@@ -249,12 +257,17 @@ func (h *ModerationHandler) SetServer(roles []discord.Role, channels []discord.G
 // HandleRemoveCommand answers the message command with the reason form. It makes no other call.
 func (h *ModerationHandler) HandleRemoveCommand(ctx context.Context, in ModerationInteraction, target MessageTarget) {
 	defer h.recoverPanic("HandleRemoveCommand")
-	if _, refusal, ok := h.refuseSender(in); ok {
+	srv, refusal, ok := h.refuseSender(in)
+	if ok {
 		h.reply(ctx, in, refusal)
 		return
 	}
 	if target.ChannelID == 0 || target.MessageID == 0 || target.AuthorID == 0 {
 		h.reply(ctx, in, TextModerationGone)
+		return
+	}
+	if target.ChannelID == srv.trailChannelID {
+		h.reply(ctx, in, TextModerationTrailLine)
 		return
 	}
 	customID := fmt.Sprintf("%s%d:%d:%d", removeCustomIDPrefix, target.ChannelID, target.MessageID, target.AuthorID)
@@ -276,6 +289,10 @@ func (h *ModerationHandler) HandleRemoveReason(ctx context.Context, in Moderatio
 	target, ok := parseRemoveCustomID(customID)
 	if !ok {
 		h.reply(ctx, in, TextModerationBadForm)
+		return
+	}
+	if target.ChannelID == srv.trailChannelID {
+		h.reply(ctx, in, TextModerationTrailLine)
 		return
 	}
 	reason, ok = checkReason(reason)
@@ -421,6 +438,10 @@ func (h *ModerationHandler) refuseSender(in ModerationInteraction) (*moderationS
 		h.logger.Info("moderation refused", slog.String("reason", "unavailable"))
 		return nil, TextModerationUnavailable, true
 	}
+	if in.MemberID() == 0 {
+		h.logger.Info("moderation refused", slog.String("reason", "no-member"))
+		return nil, TextModerationNotModerator, true
+	}
 	if !slices.Contains(in.MemberRoleIDs(), srv.moderatorRoleID) {
 		h.logger.Info("moderation refused", slog.String("reason", "not-moderator"))
 		return nil, TextModerationNotModerator, true
@@ -489,7 +510,11 @@ func (h *ModerationHandler) Sweep(ctx context.Context, calls TrailCalls) (int, e
 		if len(page) < trailPageSize {
 			return deleted, nil
 		}
-		before = oldestID(page)
+		oldest := oldestID(page)
+		if oldest == 0 || (before != 0 && oldest >= before) {
+			return deleted, errors.New("trail sweep cursor not moving")
+		}
+		before = oldest
 	}
 	h.logger.Warn("trail sweep stopped at its page bound", slog.Int("pages", maxTrailPages))
 	return deleted, nil
