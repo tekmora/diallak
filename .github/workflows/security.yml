@@ -194,7 +194,7 @@ jobs:
       - name: Upload the Semgrep findings to code scanning
         if: ${{ !cancelled() && hashFiles('sarif-out/semgrep.sarif') != '' }}
         # yamllint disable-line rule:line-length
-        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370  # v4.39.1
         with:
           sarif_file: sarif-out/semgrep.sarif
           category: semgrep
@@ -253,14 +253,14 @@ jobs:
       - name: Upload the Trivy file findings to code scanning
         if: ${{ !cancelled() && hashFiles('sarif-out/trivy-fs.sarif') != '' }}
         # yamllint disable-line rule:line-length
-        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370  # v4.39.1
         with:
           sarif_file: sarif-out/trivy-fs.sarif
           category: trivy/fs
       - name: Upload the Trivy image findings to code scanning
         if: ${{ !cancelled() && hashFiles('sarif-out/trivy-image.sarif') != '' }}
         # yamllint disable-line rule:line-length
-        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370  # v4.39.1
         with:
           sarif_file: sarif-out/trivy-image.sarif
           category: trivy/image
