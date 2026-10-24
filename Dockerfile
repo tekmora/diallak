@@ -1,7 +1,7 @@
 # Build stage. It always runs on the platform of the machine that builds, and Go compiles for
 # the platform the image is for (TARGETOS, TARGETARCH, set by BuildKit). An image for another
 # architecture therefore needs no emulation.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-trixie@sha256:604106102d33b1084e37ca08adf98ac0813624ae8595bd0d7f3965ecebded09c AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.3-trixie@sha256:fbb7ae40b62ff8afe31662df570d39b4f5052ac32b90dae8e60d7657a20a74f4 AS builder
 WORKDIR /src
 COPY go.mod go.sum* ./
 # The builder runs the toolchain go.mod names, or the build stops. The image sets
