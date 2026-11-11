@@ -9,7 +9,7 @@ module github.com/tekmora/diallak/tools/go
 
 go 1.27
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 tool (
 	github.com/securego/gosec/v2/cmd/gosec
