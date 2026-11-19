@@ -124,25 +124,44 @@ here keeps its messages.
 
 ## Projects
 
-The support forum carries one tag per project. A tag also names the
-documentation that rule-based answers for that project quote from (step 3).
+The support forum carries one tag per project. A project here is every
+public, active product repository of the fleet's organisations, since the
+hub's invite goes into each of their READMEs (replan step 5). A tag also names
+the documentation that rule-based answers for that project quote from (step
+3): the repository's `docs/` folder on its default branch, or its README where
+it has no `docs/` folder.
 
 <!-- markdownlint-disable MD013 -->
-| Tag | Repository | Docs source for rule answers |
-| :--- | :--- | :--- |
-| Diallak | [tekmora/diallak](https://github.com/tekmora/diallak) | `README.md`, `docs/` |
-| Epitrop | [tekmora/epitrop](https://github.com/tekmora/epitrop) | `README.md`, `docs/` |
-| Amussis | [plurano/amussis](https://github.com/plurano/amussis) | `README.md`, `docs/` |
-| VMAFx | [VMAFx/vmafx](https://github.com/VMAFx/vmafx) | `README.md`, `docs/` |
-| Pelorus | [VMAFx/pelorus](https://github.com/VMAFx/pelorus) | `README.md`, `docs/` |
+| Tag | Repository | Default branch | Docs source for rule answers |
+| :--- | :--- | :--- | :--- |
+| Diallak | [tekmora/diallak](https://github.com/tekmora/diallak) | `main` | `docs/` |
+| Epitrop | [tekmora/epitrop](https://github.com/tekmora/epitrop) | `main` | `docs/` |
+| Amussis | [plurano/amussis](https://github.com/plurano/amussis) | `main` | `docs/` |
+| Horistes | [plurano/horistes](https://github.com/plurano/horistes) | `main` | `docs/` (decision records only) |
+| Saeptum | [plurano/saeptum](https://github.com/plurano/saeptum) | `main` | `docs/` (decision records only) |
+| Tornus | [plurano/tornus](https://github.com/plurano/tornus) | `main` | `docs/` (decision records only) |
+| Cistula | [plurano/cistula](https://github.com/plurano/cistula) | `main` | `docs/` (decision records only) |
+| Peritia | [plurano/peritia](https://github.com/plurano/peritia) | `main` | `docs/` (decision records and research only) |
+| VMAFx | [VMAFx/vmafx](https://github.com/VMAFx/vmafx) | `master` | `docs/` |
+| Pelorus | [VMAFx/pelorus](https://github.com/VMAFx/pelorus) | `master` | `docs/` |
+| SnatchArr | [lusoris/SnatchArr](https://github.com/lusoris/SnatchArr) | `main` | `docs/` |
+| Rhizomorph | [lusoris/rhizomorph](https://github.com/lusoris/rhizomorph) | `main` | `docs/` |
+| Embodied | [lusoris/embodied](https://github.com/lusoris/embodied) | `main` | `docs/` |
 <!-- markdownlint-enable MD013 -->
 
-These are the five products the definition names today. Whether further
-repositories of the same organisations join is an open point. A forum holds
-at most 20 tags (Discord API documentation, channel resource,
-`available_tags`, read at commit `9b737ec51ee8`); the definition gives the
-forum ten (one "Automated answer", four languages, five projects), so ten
-are left.
+The forge was read on 2026-11-19: all 13 are public and none is archived.
+Forks and supporting repositories give no tag of their own; they fold into
+the tag of the product they serve (the VMAFx organisation's patch and
+contribution repositories into VMAFx). A private or parked repository gets no
+tag. The definition carries the 13 tags, and
+`TestDefinition_Positive_SupportForumHasAProductTagPerRepository` fails when
+one is missing.
+
+A forum holds at most 20 tags (Discord API documentation, channel resource,
+`available_tags`, read at commit `9b737ec51ee8`). The definition gives the
+forum 18 (one "Automated answer", four languages, 13 projects), so two are
+left. The validator refuses a 21st (`MaxForumTags` in
+`internal/serverdef/serverdef.go`).
 
 ## Order of application
 
@@ -174,8 +193,12 @@ entry restores the hub as it was read.
 
 ## Open points
 
-- **Which projects.** Whether the plurano libraries and other public fleet
-  repositories get a tag.
+- **Docs source of five libraries.** The `docs/` folders of Horistes,
+  Saeptum, Tornus, Cistula and Peritia hold decision records only, so a rule
+  answer for them would quote a decision record. Whether their README serves
+  instead is open until their first trigger is written.
+- **Two tags left.** A new product repository past the 18th tag needs a
+  decision on which tags to merge.
 - **The two unseen channels.** `moderator-only` and `cauda-alerts`, until a
   read can see them.
 - **Topics and tags as data.** Whether the apply path learns to set channel
