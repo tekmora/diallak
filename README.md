@@ -1,27 +1,5 @@
 # Diallak
 
-<!-- praetor:readme-governance:start -->
-[![HISS Adopted][praetor-hiss-badge]][praetor-hiss-agents]
-
-Praetor manages this repository's declared governance policy. This managed
-block records adoption state; it is not a verification certificate.
-
-**Verification**: `make verify-all` runs the repository's configured
-verification cascade.
-
-**HISS Audit**: `praetorctl audit` enforces policy, generated-surface
-integrity, and the debt ratchet.
-
-**Context Sync**: `praetorctl compile-context --verify` verifies every
-generated agent context against `AGENTS.md`.
-
-**Debt Baseline**: `.standards-baseline.json` anchors the debt ratchet at
-0 recorded infractions; audit forbids growth.
-
-[praetor-hiss-badge]: https://img.shields.io/badge/Standards-HISS%20Adopted-blue
-[praetor-hiss-agents]: https://github.com/tekmora/diallak/blob/HEAD/AGENTS.md
-<!-- praetor:readme-governance:end -->
-
 Community bot for the Lusoris Discord hub.
 
 > **Status: built, not live.** The functions of version 1.0 except the
@@ -410,3 +388,25 @@ Code: [EUPL-1.2](LICENSE). Documentation text, which is this file and everything
 under [`docs/`](docs/): [CC BY-SA 4.0](LICENSES/CC-BY-SA-4.0.txt).
 [`REUSE.toml`](REUSE.toml) states the licence of every path, and `reuse lint`
 checks it.
+
+<!-- praetor:readme-governance:start -->
+[![HISS Adopted][praetor-hiss-badge]][praetor-hiss-agents]
+
+Praetor manages this repository's declared governance policy. This managed
+block records adoption state; it is not a verification certificate.
+
+**Verification**: `make verify-all` runs the repository's configured
+verification cascade.
+
+**HISS Audit**: `praetorctl audit` enforces policy, generated-surface
+integrity, and the debt ratchet.
+
+**Context Sync**: `praetorctl compile-context --verify` verifies every
+generated agent context against `AGENTS.md`.
+
+**Debt Baseline**: `.standards-baseline.json` anchors the debt ratchet at
+0 recorded infractions; audit forbids growth.
+
+[praetor-hiss-badge]: https://img.shields.io/badge/Standards-HISS%20Adopted-blue
+[praetor-hiss-agents]: https://github.com/tekmora/diallak/blob/HEAD/AGENTS.md
+<!-- praetor:readme-governance:end -->
