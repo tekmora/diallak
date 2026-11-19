@@ -316,7 +316,7 @@ func (h *ModerationHandler) saveForm(key string, target MessageTarget, memberID 
 		var oldestTime time.Time
 		first := true
 		for k, f := range h.forms {
-			if first || f.opened.Before(oldestTime) {
+			if first || f.opened.Before(oldestTime) || (f.opened.Equal(oldestTime) && k < oldestKey) {
 				oldestKey = k
 				oldestTime = f.opened
 				first = false

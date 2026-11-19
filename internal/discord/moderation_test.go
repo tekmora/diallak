@@ -656,6 +656,38 @@ func TestModeration_Negative_FormUsedTwiceRefused(t *testing.T) {
 	}
 }
 
+func TestModeration_Negative_FormSubmittedTwiceConcurrently(t *testing.T) {
+	h := newModHandler(t)
+	cmd := newModInteraction(modRoleID)
+	h.HandleRemoveCommand(context.Background(), cmd, removeTarget())
+	if len(cmd.forms) != 1 {
+		t.Fatalf("forms = %d, want 1", len(cmd.forms))
+	}
+	interactions := [2]*fakeModInteraction{newModInteraction(modRoleID), newModInteraction(modRoleID)}
+	calls := &fakeModCalls{}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	for i := range 2 {
+		go func() {
+			defer wg.Done()
+			h.HandleRemoveReason(context.Background(), interactions[i], cmd.forms[0], "Spam", calls)
+		}()
+	}
+	wg.Wait()
+	if len(calls.deletes) != 1 || len(calls.lines) != 1 {
+		t.Errorf("deletes = %d, lines = %d; want 1 each", len(calls.deletes), len(calls.lines))
+	}
+	badForms := 0
+	for _, in := range interactions {
+		if answers := in.answers(); len(answers) == 1 && answers[0] == TextModerationBadForm {
+			badForms++
+		}
+	}
+	if badForms != 1 {
+		t.Errorf("bad form responses = %d, want 1", badForms)
+	}
+}
+
 func TestModeration_Boundary_FormExpiry(t *testing.T) {
 	clock := modNow
 	h, err := NewModerationHandler(ModerationConfig{
@@ -733,6 +765,22 @@ func TestModeration_Boundary_PendingFormsBounded(t *testing.T) {
 	h.HandleRemoveReason(context.Background(), lastIn, forms[maxPendingForms], "Spam", calls)
 	if len(calls.deletes) != 1 {
 		t.Fatalf("last form deletes = %d; want 1", len(calls.deletes))
+	}
+}
+
+func TestModeration_Boundary_EqualTimeFormEviction(t *testing.T) {
+	h := newModHandler(t)
+	for i := range maxPendingForms + 1 {
+		h.saveForm(fmt.Sprintf("%03d", i), removeTarget(), modModeratorID)
+	}
+	if len(h.forms) != maxPendingForms {
+		t.Fatalf("pending forms = %d, want %d", len(h.forms), maxPendingForms)
+	}
+	if _, ok := h.forms["000"]; ok {
+		t.Error("smallest key remains, want it evicted")
+	}
+	if _, ok := h.forms["256"]; !ok {
+		t.Error("newest form missing")
 	}
 }
 
