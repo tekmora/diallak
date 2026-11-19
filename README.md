@@ -40,7 +40,9 @@ Community bot for the Lusoris Discord hub.
   ([ADR-0009](docs/adr/0009-support-forum-first-answer.md),
   [ADR-0020](docs/adr/0020-forum-answers-only-opted-in-posts.md)); it is off
   until a deployment sets the two forum variables. Version 1 carries no AI
-  model: today cited excerpts answer every question. A trigger table that
+  model: today a question gets cited excerpts, or the refusal when no
+  source matches (in the forum the bot then stays silent)
+  ([ADR-0003](docs/adr/0003-answer-pipeline.md)). A trigger table that
   answers common questions by rules is decided and not built yet
   ([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md),
   [#251](https://github.com/tekmora/diallak/issues/251)).
@@ -145,7 +147,9 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 <!-- markdownlint-enable MD013 -->
 
 Without the model variables the bot replies with cited excerpts and says
-that no model wrote them. That is the only mode of version 1: no deployment of
+that no model wrote them. When no passage matches, it refuses as
+ADR-0003 says ([ADR-0003](docs/adr/0003-answer-pipeline.md)). That is
+the only mode of version 1: no deployment of
 version 1 sets a `DIALLAK_MODEL_*` or `DIALLAK_EMBED_*` variable
 ([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md)). The model
 path below stays built and tested for a later record.
