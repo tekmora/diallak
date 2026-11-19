@@ -5,8 +5,10 @@ contains, and what stays out. Milestones on the forge follow this page; when
 the scope changes, this page changes in the same pull request.
 
 Version 1, every release up to and including 1.0.0, carries no AI model: the
-bot answers by rules and with excerpts from the documentation
-([ADR-0028](adr/0028-version-1-answers-without-a-model.md)). The plan of
+bot answers with excerpts from the documentation, and by rules once the
+trigger table is built
+([ADR-0028](adr/0028-version-1-answers-without-a-model.md),
+[#251](https://github.com/tekmora/diallak/issues/251)). The plan of
 2026-11-19 that led there is under [The replan](#the-replan-of-2026-11-19).
 
 ## Who it serves

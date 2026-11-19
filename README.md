@@ -40,8 +40,10 @@ Community bot for the Lusoris Discord hub.
   ([ADR-0009](docs/adr/0009-support-forum-first-answer.md),
   [ADR-0020](docs/adr/0020-forum-answers-only-opted-in-posts.md)); it is off
   until a deployment sets the two forum variables. Version 1 carries no AI
-  model: common questions get answers by rules, the rest cited excerpts
-  ([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md)).
+  model: today cited excerpts answer every question. A trigger table that
+  answers common questions by rules is decided and not built yet
+  ([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md),
+  [#251](https://github.com/tekmora/diallak/issues/251)).
 - **Bug reports:** `/bug` answers with a link that opens a filled-in new issue
   of the repository the server definition names, and the member submits it
   under their own GitHub account; the bot calls no GitHub interface for it
