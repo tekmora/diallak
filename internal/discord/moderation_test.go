@@ -185,16 +185,12 @@ func removeTarget() MessageTarget {
 	return MessageTarget{ChannelID: modChannelID, MessageID: modMessageID, AuthorID: modMemberID}
 }
 
-func removeCustomID() string {
-	return fmt.Sprintf("moderation-remove:%d:%d:%d", modChannelID, modMessageID, modMemberID)
-}
-
 func TestModeration_Positive_RemoveAsksForAReasonThenDeletesAndWritesTheLine(t *testing.T) {
 	h := newModHandler(t)
 	cmd := newModInteraction(modRoleID)
 	h.HandleRemoveCommand(context.Background(), cmd, removeTarget())
-	if len(cmd.forms) != 1 || cmd.forms[0] != removeCustomID() || len(cmd.replies) != 0 {
-		t.Fatalf("forms = %q, replies = %q; want one form %q", cmd.forms, cmd.replies, removeCustomID())
+	if len(cmd.forms) != 1 || !strings.HasPrefix(cmd.forms[0], removeCustomIDPrefix) || len(cmd.replies) != 0 {
+		t.Fatalf("forms = %q, replies = %q; want one form with prefix %q", cmd.forms, cmd.replies, removeCustomIDPrefix)
 	}
 
 	submit := newModInteraction(modRoleID)
@@ -267,7 +263,12 @@ func removeCommand(h *ModerationHandler, in *fakeModInteraction, _ *fakeModCalls
 
 func removeReason(reason string) func(*ModerationHandler, *fakeModInteraction, *fakeModCalls) {
 	return func(h *ModerationHandler, in *fakeModInteraction, calls *fakeModCalls) {
-		h.HandleRemoveReason(context.Background(), in, removeCustomID(), reason, calls)
+		cmd := newModInteraction(modRoleID)
+		h.HandleRemoveCommand(context.Background(), cmd, removeTarget())
+		if len(cmd.forms) != 1 {
+			return
+		}
+		h.HandleRemoveReason(context.Background(), in, cmd.forms[0], reason, calls)
 	}
 }
 
@@ -365,7 +366,12 @@ func TestModeration_Negative_DiscordRefusesTheActAndNoLineIsWritten(t *testing.T
 			in := newModInteraction(modRoleID)
 			calls := &fakeModCalls{timeoutErr: c.err, deleteErr: c.err}
 			h.HandleTimeout(context.Background(), in, TimeoutRequest{MemberID: modMemberID, Minutes: 10, Reason: "Spam"}, calls)
-			h.HandleRemoveReason(context.Background(), in, removeCustomID(), "Spam", calls)
+			cmd := newModInteraction(modRoleID)
+			h.HandleRemoveCommand(context.Background(), cmd, removeTarget())
+			if len(cmd.forms) != 1 {
+				t.Fatalf("forms = %d, want 1", len(cmd.forms))
+			}
+			h.HandleRemoveReason(context.Background(), in, cmd.forms[0], "Spam", calls)
 			if len(calls.lines) != 0 {
 				t.Errorf("lines = %q, want none", calls.lines)
 			}
@@ -413,7 +419,11 @@ func TestModeration_Boundary_TimeoutLimitsAndReasonLength(t *testing.T) {
 func TestModeration_Boundary_LineHoldsTheReasonOnOneLine(t *testing.T) {
 	h := newModHandler(t)
 	in, calls := newModInteraction(modRoleID), &fakeModCalls{}
-	h.HandleRemoveReason(context.Background(), in, removeCustomID(), "first\nsecond\r\nthird", calls)
+	h.HandleRemoveCommand(context.Background(), in, removeTarget())
+	if len(in.forms) != 1 {
+		t.Fatalf("forms = %d, want 1", len(in.forms))
+	}
+	h.HandleRemoveReason(context.Background(), in, in.forms[0], "first\nsecond\r\nthird", calls)
 	if len(calls.lines) != 1 || !strings.HasSuffix(calls.lines[0], "· reason: first second  third") {
 		t.Errorf("lines = %q, want the reason on one line", calls.lines)
 	}
@@ -488,8 +498,10 @@ func TestModeration_Negative_RemoveTrailMessageRefused(t *testing.T) {
 		t.Errorf("answers = %q, want [%q]", ans, TextModerationTrailLine)
 	}
 	in2 := newModInteraction(modRoleID)
-	trailForm := fmt.Sprintf("moderation-remove:%d:%d:%d", modTrailID, modMessageID, modMemberID)
-	h.HandleRemoveReason(context.Background(), in2, trailForm, "Clean trail", calls)
+	h.formsMu.Lock()
+	h.forms["trail-test"] = pendingForm{target: target, memberID: modModeratorID, opened: modNow}
+	h.formsMu.Unlock()
+	h.HandleRemoveReason(context.Background(), in2, removeCustomIDPrefix+"trail-test", "Clean trail", calls)
 	if len(calls.deletes) != 0 {
 		t.Errorf("deletes = %d, want 0 (no DeleteMessage)", len(calls.deletes))
 	}
@@ -585,5 +597,162 @@ func TestModeration_Boundary_ZeroMemberWithRolesRefusedBeforeRoleCheck(t *testin
 	in1 := &fakeModInteraction{guildID: modGuildID, memberID: 1, roles: []uint64{modRoleID}}
 	if _, refusal, ok := h.refuseSender(in1); ok || refusal != "" {
 		t.Errorf("memberID 1: refusal %q ok %v, want empty false", refusal, ok)
+	}
+}
+
+func TestModeration_Negative_ForgedFormIDRefused(t *testing.T) {
+	h := newModHandler(t)
+	in, calls := newModInteraction(modRoleID), &fakeModCalls{}
+	forged := fmt.Sprintf("moderation-remove:%d:%d:%d", modChannelID, modMessageID, modMemberID)
+	h.HandleRemoveReason(context.Background(), in, forged, "Spam", calls)
+	if len(calls.deletes) != 0 || len(calls.lines) != 0 {
+		t.Fatalf("calls = %d deletes, %d lines; want 0", len(calls.deletes), len(calls.lines))
+	}
+	if got := in.answers(); len(got) != 1 || got[0] != TextModerationBadForm {
+		t.Fatalf("answers = %q, want [%q]", got, TextModerationBadForm)
+	}
+}
+
+func TestModeration_Negative_FormFromOtherMemberRefused(t *testing.T) {
+	h := newModHandler(t)
+	inA := newModInteraction(modRoleID)
+	h.HandleRemoveCommand(context.Background(), inA, removeTarget())
+	if len(inA.forms) != 1 {
+		t.Fatalf("forms = %d, want 1", len(inA.forms))
+	}
+
+	inB := &fakeModInteraction{guildID: modGuildID, memberID: modModeratorID + 99, roles: []uint64{modRoleID}}
+	calls := &fakeModCalls{}
+	h.HandleRemoveReason(context.Background(), inB, inA.forms[0], "Spam", calls)
+	if len(calls.deletes) != 0 || len(calls.lines) != 0 {
+		t.Fatalf("calls = %d deletes, %d lines; want 0", len(calls.deletes), len(calls.lines))
+	}
+	if got := inB.answers(); len(got) != 1 || got[0] != TextModerationBadForm {
+		t.Fatalf("answers = %q, want [%q]", got, TextModerationBadForm)
+	}
+}
+
+func TestModeration_Negative_FormUsedTwiceRefused(t *testing.T) {
+	h := newModHandler(t)
+	in := newModInteraction(modRoleID)
+	h.HandleRemoveCommand(context.Background(), in, removeTarget())
+	if len(in.forms) != 1 {
+		t.Fatalf("forms = %d, want 1", len(in.forms))
+	}
+
+	calls := &fakeModCalls{}
+	h.HandleRemoveReason(context.Background(), in, in.forms[0], "Spam", calls)
+	if len(calls.deletes) != 1 {
+		t.Fatalf("deletes = %d, want 1", len(calls.deletes))
+	}
+
+	in2 := newModInteraction(modRoleID)
+	h.HandleRemoveReason(context.Background(), in2, in.forms[0], "Spam again", calls)
+	if len(calls.deletes) != 1 {
+		t.Fatalf("deletes after second submit = %d, want exactly 1 total", len(calls.deletes))
+	}
+	if got := in2.answers(); len(got) != 1 || got[0] != TextModerationBadForm {
+		t.Fatalf("answers = %q, want [%q]", got, TextModerationBadForm)
+	}
+}
+
+func TestModeration_Boundary_FormExpiry(t *testing.T) {
+	clock := modNow
+	h, err := NewModerationHandler(ModerationConfig{
+		Definition: modTestDefinition(), GuildID: modGuildID, Logger: slog.New(slog.DiscardHandler),
+		Now: func() time.Time { return clock },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.SetServer(modTestRoles(), modTestChannels(), modBotUserID)
+
+	in1 := newModInteraction(modRoleID)
+	h.HandleRemoveCommand(context.Background(), in1, removeTarget())
+	if len(in1.forms) != 1 {
+		t.Fatalf("forms = %d, want 1", len(in1.forms))
+	}
+	clock = modNow.Add(pendingFormTTL)
+	calls1 := &fakeModCalls{}
+	h.HandleRemoveReason(context.Background(), in1, in1.forms[0], "Spam", calls1)
+	if len(calls1.deletes) != 1 {
+		t.Fatalf("at exactly TTL: deletes = %d, want 1", len(calls1.deletes))
+	}
+
+	clock = modNow
+	in2 := newModInteraction(modRoleID)
+	h.HandleRemoveCommand(context.Background(), in2, removeTarget())
+	if len(in2.forms) != 1 {
+		t.Fatalf("forms = %d, want 1", len(in2.forms))
+	}
+	clock = modNow.Add(pendingFormTTL + time.Second)
+	calls2 := &fakeModCalls{}
+	h.HandleRemoveReason(context.Background(), in2, in2.forms[0], "Spam", calls2)
+	if len(calls2.deletes) != 0 || len(in2.answers()) != 1 || in2.answers()[0] != TextModerationBadForm {
+		t.Fatalf("at TTL+1s: deletes = %d, answers = %q; want 0 and [%q]", len(calls2.deletes), in2.answers(), TextModerationBadForm)
+	}
+}
+
+func TestModeration_Boundary_PendingFormsBounded(t *testing.T) {
+	clock := modNow
+	h, err := NewModerationHandler(ModerationConfig{
+		Definition: modTestDefinition(), GuildID: modGuildID, Logger: slog.New(slog.DiscardHandler),
+		Now: func() time.Time { return clock },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.SetServer(modTestRoles(), modTestChannels(), modBotUserID)
+
+	forms := make([]string, maxPendingForms+1)
+	for i := range maxPendingForms + 1 {
+		clock = clock.Add(time.Second)
+		in := newModInteraction(modRoleID)
+		h.HandleRemoveCommand(context.Background(), in, removeTarget())
+		if len(in.forms) != 1 {
+			t.Fatalf("iteration %d: forms = %d", i, len(in.forms))
+		}
+		forms[i] = in.forms[0]
+	}
+
+	h.formsMu.Lock()
+	nForms := len(h.forms)
+	h.formsMu.Unlock()
+	if nForms != maxPendingForms {
+		t.Fatalf("len(h.forms) = %d, want %d", nForms, maxPendingForms)
+	}
+
+	calls := &fakeModCalls{}
+	firstIn := newModInteraction(modRoleID)
+	h.HandleRemoveReason(context.Background(), firstIn, forms[0], "Spam", calls)
+	if len(calls.deletes) != 0 || len(firstIn.answers()) != 1 || firstIn.answers()[0] != TextModerationBadForm {
+		t.Fatalf("first form deletes = %d, answers = %q; want 0 and [%q]", len(calls.deletes), firstIn.answers(), TextModerationBadForm)
+	}
+
+	lastIn := newModInteraction(modRoleID)
+	h.HandleRemoveReason(context.Background(), lastIn, forms[maxPendingForms], "Spam", calls)
+	if len(calls.deletes) != 1 {
+		t.Fatalf("last form deletes = %d; want 1", len(calls.deletes))
+	}
+}
+
+func TestModeration_Positive_IssuedFormDeletesNamedTarget(t *testing.T) {
+	h := newModHandler(t)
+	in, calls := newModInteraction(modRoleID), &fakeModCalls{}
+	target := MessageTarget{ChannelID: modChannelID, MessageID: modMessageID, AuthorID: modMemberID}
+	h.HandleRemoveCommand(context.Background(), in, target)
+	if len(in.forms) != 1 {
+		t.Fatalf("forms = %d, want 1 reason form", len(in.forms))
+	}
+	formID := in.forms[0]
+	if !strings.HasPrefix(formID, removeCustomIDPrefix) {
+		t.Fatalf("formID %q does not start with %q", formID, removeCustomIDPrefix)
+	}
+	if strings.Contains(formID, fmt.Sprint(modMessageID)) {
+		t.Fatalf("formID %q contains message id %d", formID, modMessageID)
+	}
+	h.HandleRemoveReason(context.Background(), in, formID, "Spam", calls)
+	if len(calls.deletes) != 1 || len(calls.lines) != 1 {
+		t.Fatalf("deletes = %d, lines = %d; want 1 each", len(calls.deletes), len(calls.lines))
 	}
 }

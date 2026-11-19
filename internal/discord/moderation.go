@@ -2,12 +2,14 @@ package discord
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
-	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -37,8 +39,13 @@ const (
 	MinTrailRetention = 24 * time.Hour
 	MaxTrailRetention = 365 * 24 * time.Hour
 
-	// removeCustomIDPrefix starts the custom id of the reason form; channel, message and author ids
-	// follow it, separated by colons.
+	// maxPendingForms bounds the number of stored reason forms waiting for submission.
+	maxPendingForms = 256
+	// pendingFormTTL is chosen, not measured.
+	pendingFormTTL = 15 * time.Minute
+
+	// removeCustomIDPrefix starts the custom id of the reason form; a random key follows it, and the
+	// target stays server-side.
 	removeCustomIDPrefix = "moderation-remove:"
 	// removeReasonInputID is the custom id of the reason field of the form.
 	removeReasonInputID = "reason"
@@ -134,6 +141,12 @@ type MessageTarget struct {
 	AuthorID  uint64
 }
 
+type pendingForm struct {
+	target   MessageTarget
+	memberID uint64
+	opened   time.Time
+}
+
 // TimeoutRequest is the input of the timeout command.
 type TimeoutRequest struct {
 	MemberID uint64
@@ -158,6 +171,8 @@ type ModerationHandler struct {
 	retention   time.Duration
 	now         func() time.Time
 	server      atomic.Pointer[moderationServer]
+	formsMu     sync.Mutex
+	forms       map[string]pendingForm
 }
 
 // NewModerationHandler checks cfg and returns a handler that refuses every act until SetServer
@@ -173,6 +188,7 @@ func NewModerationHandler(cfg ModerationConfig) (*ModerationHandler, error) {
 	h := &ModerationHandler{
 		guildID: cfg.GuildID, roleName: roleName, trailName: trailName,
 		logger: cfg.Logger, callTimeout: cfg.CallTimeout, retention: cfg.Retention, now: cfg.Now,
+		forms: make(map[string]pendingForm),
 	}
 	if h.logger == nil {
 		h.logger = slog.New(slog.DiscardHandler)
@@ -270,12 +286,47 @@ func (h *ModerationHandler) HandleRemoveCommand(ctx context.Context, in Moderati
 		h.reply(ctx, in, TextModerationTrailLine)
 		return
 	}
-	customID := fmt.Sprintf("%s%d:%d:%d", removeCustomIDPrefix, target.ChannelID, target.MessageID, target.AuthorID)
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		h.logger.Warn("moderation form key failed", slog.String("error_class", classifyError(err)))
+		h.reply(ctx, in, TextModerationBadForm)
+		return
+	}
+	key := hex.EncodeToString(b[:])
+	h.saveForm(key, target, in.MemberID())
+	customID := removeCustomIDPrefix + key
 	askCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), h.callTimeout)
 	defer cancel()
 	if err := in.AskReason(askCtx, customID); err != nil {
 		h.logger.Warn("moderation form failed", slog.String("error_class", classifyError(err)))
 	}
+}
+
+func (h *ModerationHandler) saveForm(key string, target MessageTarget, memberID uint64) {
+	now := h.now()
+	h.formsMu.Lock()
+	defer h.formsMu.Unlock()
+	for k, f := range h.forms {
+		if now.Sub(f.opened) > pendingFormTTL {
+			delete(h.forms, k)
+		}
+	}
+	if len(h.forms) >= maxPendingForms {
+		var oldestKey string
+		var oldestTime time.Time
+		first := true
+		for k, f := range h.forms {
+			if first || f.opened.Before(oldestTime) {
+				oldestKey = k
+				oldestTime = f.opened
+				first = false
+			}
+		}
+		if !first {
+			delete(h.forms, oldestKey)
+		}
+	}
+	h.forms[key] = pendingForm{target: target, memberID: memberID, opened: now}
 }
 
 // HandleRemoveReason removes the message the form names and writes the trail line.
@@ -286,7 +337,7 @@ func (h *ModerationHandler) HandleRemoveReason(ctx context.Context, in Moderatio
 		h.reply(ctx, in, refusal)
 		return
 	}
-	target, ok := parseRemoveCustomID(customID)
+	target, ok := h.takeForm(customID, in.MemberID())
 	if !ok {
 		h.reply(ctx, in, TextModerationBadForm)
 		return
@@ -305,6 +356,31 @@ func (h *ModerationHandler) HandleRemoveReason(ctx context.Context, in Moderatio
 	}
 	affected := fmt.Sprintf("member %d, channel <#%d>, message %d", target.AuthorID, target.ChannelID, target.MessageID)
 	h.run(ctx, in, srv, calls, act, h.line(in, "removed message", affected, reason), TextModerationRemoved)
+}
+
+func (h *ModerationHandler) takeForm(customID string, memberID uint64) (MessageTarget, bool) {
+	key, ok := strings.CutPrefix(customID, removeCustomIDPrefix)
+	if !ok {
+		h.logger.Info("moderation refused", slog.String("reason", "form-unknown"))
+		return MessageTarget{}, false
+	}
+	h.formsMu.Lock()
+	defer h.formsMu.Unlock()
+	form, ok := h.forms[key]
+	if !ok {
+		h.logger.Info("moderation refused", slog.String("reason", "form-unknown"))
+		return MessageTarget{}, false
+	}
+	delete(h.forms, key)
+	if h.now().Sub(form.opened) > pendingFormTTL {
+		h.logger.Info("moderation refused", slog.String("reason", "form-expired"))
+		return MessageTarget{}, false
+	}
+	if form.memberID != memberID {
+		h.logger.Info("moderation refused", slog.String("reason", "form-other-member"))
+		return MessageTarget{}, false
+	}
+	return form.target, true
 }
 
 // HandleTimeout times the member out and writes the trail line.
@@ -404,26 +480,6 @@ func checkReason(reason string) (string, bool) {
 	reason = strings.TrimSpace(reason)
 	n := utf8.RuneCountInString(reason)
 	return reason, n >= 1 && n <= MaxReasonRunes
-}
-
-func parseRemoveCustomID(customID string) (MessageTarget, bool) {
-	rest, ok := strings.CutPrefix(customID, removeCustomIDPrefix)
-	if !ok {
-		return MessageTarget{}, false
-	}
-	parts := strings.Split(rest, ":")
-	if len(parts) != 3 {
-		return MessageTarget{}, false
-	}
-	var ids [3]uint64
-	for i, p := range parts {
-		id, err := strconv.ParseUint(p, 10, 64)
-		if err != nil || id == 0 {
-			return MessageTarget{}, false
-		}
-		ids[i] = id
-	}
-	return MessageTarget{ChannelID: ids[0], MessageID: ids[1], AuthorID: ids[2]}, true
 }
 
 // refuseSender returns the server read and a refusal for an interaction from another server, while
