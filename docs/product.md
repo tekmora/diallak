@@ -38,9 +38,9 @@ decides it and its state in
 <!-- markdownlint-disable MD013 -->
 | Function | What a member or moderator sees | Record | State |
 | :--- | :--- | :--- | :--- |
-| Answers from the docs | `/ask` replies with cited excerpts, visible to the asker only and labelled as automated | [ADR-0003](adr/0003-answer-pipeline.md) | built |
+| Answers from the docs | `/ask` replies with cited excerpts, visible to the asker only and labelled as automated; when no source matches, it gives a refusal | [ADR-0003](adr/0003-answer-pipeline.md) | built |
 | Rule-based answers | A common question gets the fixed answer of a trigger table, taken from the project's documentation, before any excerpt; every answer and every refusal names the `tickets` channel | [ADR-0028](adr/0028-version-1-answers-without-a-model.md) | planned ([#251](https://github.com/tekmora/diallak/issues/251)) |
-| First answer in the support forum | A new post that carries the tag "Automated answer" gets a public first reply with excerpts | [ADR-0009](adr/0009-support-forum-first-answer.md), [ADR-0020](adr/0020-forum-answers-only-opted-in-posts.md) | built |
+| First answer in the support forum | A new post that carries the tag "Automated answer" gets a public first reply with excerpts; when no source matches, the bot posts nothing | [ADR-0009](adr/0009-support-forum-first-answer.md), [ADR-0020](adr/0020-forum-answers-only-opted-in-posts.md) | built |
 | Bug report link | `/bug` answers with a link that opens a filled-in new issue; the member submits it under their own account | [ADR-0001](adr/0001-architecture-and-boundaries.md) | built |
 | Area roles | `/areas` gives and takes interest, language and notification roles | [ADR-0011](adr/0011-area-roles-from-member-choice.md) | built |
 | Moderation through the bot | `Remove message` and `/timeout`, with the trail and the queue | [ADR-0021](adr/0021-moderation-commands-and-trail.md) | built |
@@ -128,7 +128,7 @@ Steps 2 and 3 do not wait for each other. Step 5 waits for step 4.
 | :--- | :--- | :--- |
 | Opening and closing threshold areas and language rooms | Backlog; the operator does it by hand | No threshold is measured yet ([server definition](server-definition.md)) |
 | Contributor role from merged contributions | The cluster's identity provider and Discord | A linked role: the provider verifies the forge account and Discord gives the role; the bot takes no part ([ADR-0026](adr/0026-member-to-forge-account-link.md)) |
-| Tickets | Operator-run | The operator reads and answers the private ticket threads; the bot does not, and only names the channel in its answers |
+| Tickets | Operator-run | The operator reads and answers the private ticket threads; the bot does not read tickets. Naming the channel in answers comes with rule-based answers ([#251](https://github.com/tekmora/diallak/issues/251)) |
 | Events | Operator-run | The operator schedules events and opens the voice room |
 | Granting moderator and guide roles | Operator-run | The bot grants neither ([ADR-0005](adr/0005-moderation-and-escalation.md)) |
 | Spam filtering | The platform's AutoMod | The bot does not read messages for moderation ([ADR-0005](adr/0005-moderation-and-escalation.md)) |

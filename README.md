@@ -91,7 +91,7 @@ Community bot for the Lusoris Discord hub.
 | :--- | :--- |
 | Language and library | Go with disgo |
 | Server | One hub server; the guild is configuration, not code |
-| Auto-answers, version 1 | No AI model: a trigger table answers common questions from the projects' documentation, cited excerpts answer the rest, and every answer names the ticket channel ([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md)) |
+| Auto-answers, version 1 | No AI model: a trigger table answers common questions from the projects' documentation, cited excerpts answer the rest, and every answer names the ticket channel. The trigger table and naming the ticket channel in answers are planned ([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md), [#251](https://github.com/tekmora/diallak/issues/251)) |
 | Model path | Built and off: the guardrail policy, the receipt and the embeddings ([ADR-0013](docs/adr/0013-guardrail-policy-and-receipt.md), [ADR-0022](docs/adr/0022-embeddings-for-paraphrased-questions.md)) stay in the code, unused in version 1 |
 | Discord application | The existing bot application and its token are reused |
 | Community questions | GitHub Discussions for searchable answers, the hub for live chat; the bot links them |
