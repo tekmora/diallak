@@ -1,0 +1,2 @@
+type: security
+title: The bot and its image build with Go 1.27.4, which fixes GO-2026-6859 in net/http

@@ -28,6 +28,26 @@
         ".github/workflows/reuse.yml"
       ],
       "enabled": false
+    },
+    {
+      "description": "Go toolchain: the toolchain directive of go.mod and the golang builder image of the Dockerfile move in one pull request, because the Dockerfile stops a build whose builder Go differs from the directive. Vulnerability updates are not grouped by Renovate (vulnerabilityAlerts sets groupName null); for those the Dockerfile check still refuses a mismatch.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepTypes": [
+        "toolchain"
+      ],
+      "groupName": "Go toolchain"
+    },
+    {
+      "description": "Go toolchain: the golang builder image joins the group of the toolchain directive (rule above).",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchPackageNames": [
+        "golang"
+      ],
+      "groupName": "Go toolchain"
     }
   ]
 }
