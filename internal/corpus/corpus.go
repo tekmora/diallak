@@ -17,6 +17,9 @@ var (
 	revRegexp  = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 )
 
+// ValidRepository reports whether repository uses the corpus repository syntax.
+func ValidRepository(repository string) bool { return repoRegexp.MatchString(repository) }
+
 const (
 	// DefaultSourceLinkTemplate is the default URL template for document links.
 	// Source: assumes the sources live on a forge with this path shape.

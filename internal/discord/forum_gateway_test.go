@@ -462,3 +462,28 @@ func (b *syncBuffer) String() string {
 	defer b.mu.Unlock()
 	return b.buf.String()
 }
+
+func TestForumTagNames_Positive_MapsAppliedIdsThroughParentForum(t *testing.T) {
+	forum := &discord.GuildForumChannel{AvailableTags: []discord.ChannelTag{
+		{ID: snowflake.ID(1), Name: "Diallak"}, {ID: snowflake.ID(2), Name: "Epitrop"},
+	}}
+	got := forumTagNamesFrom(forum, []uint64{2, 1})
+	if len(got) != 2 || got[0] != "Epitrop" || got[1] != "Diallak" {
+		t.Fatalf("names = %v", got)
+	}
+}
+
+func TestForumTagNames_Negative_UnknownIdLeavesNamesUnresolved(t *testing.T) {
+	forum := &discord.GuildForumChannel{AvailableTags: []discord.ChannelTag{{ID: snowflake.ID(1), Name: "Diallak"}}}
+	if got := forumTagNamesFrom(forum, []uint64{9}); got != nil {
+		t.Fatalf("names = %v, want nil", got)
+	}
+}
+
+func TestForumTagNames_Boundary_EmptyTagsResolveToEmptyNames(t *testing.T) {
+	forum := &discord.GuildForumChannel{}
+	got := forumTagNamesFrom(forum, nil)
+	if got == nil || len(got) != 0 {
+		t.Fatalf("names = %#v", got)
+	}
+}

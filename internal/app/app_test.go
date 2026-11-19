@@ -1,8 +1,10 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -602,5 +604,20 @@ func TestBuild_Negative_EmbedStartFailure(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "initialize hybrid retrieval") {
 		t.Errorf("err = %v, want 'initialize hybrid retrieval'", err)
+	}
+}
+
+func TestLoadRules_ReportsMissingDocumentation(t *testing.T) {
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logs, nil))
+	chunks := []corpus.Chunk{{Repository: "tekmora/diallak", Path: "README.md", Heading: "Other"}}
+	resolved, err := loadRules(chunks, "", logger)
+	if err != nil || resolved.DisabledCount == 0 {
+		t.Fatalf("loadRules = (%v, %v)", resolved, err)
+	}
+	for _, want := range []string{`"trigger_id":"diallak-start"`, `"reason":"answer_missing"`} {
+		if !strings.Contains(logs.String(), want) {
+			t.Errorf("missing %s in logs", want)
+		}
 	}
 }

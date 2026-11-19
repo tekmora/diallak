@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/tekmora/diallak/internal/answer"
+	"github.com/tekmora/diallak/internal/ruleanswer"
 )
 
 const (
@@ -39,6 +40,8 @@ func (f *fakeExcerpts) Excerpts(ctx context.Context, q string) (answer.Answer, e
 		{N: 1, Title: "Install", URL: "https://example.org/install", Revision: "abc123", Excerpt: "Run the installer."},
 	}}, nil
 }
+
+func (f *fakeExcerpts) Rule(ruleanswer.Query) (answer.Answer, bool) { return answer.Answer{}, false }
 
 func (f *fakeExcerpts) asked() []string {
 	f.mu.Lock()

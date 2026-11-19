@@ -129,6 +129,7 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 | `DIALLAK_EMBED_ALIAS` | with the base URL | Name the embedding endpoint routes on, never a model name |
 | `DIALLAK_EMBED_KEY_FILE` | no | Path of the file that holds the embedding endpoint's credential |
 | `DIALLAK_SUPPORT_CHANNEL` | no | Wording for where a person helps, put into every reply; default "the support channel" |
+| `DIALLAK_TICKETS_CHANNEL` | no | Wording for where a person can open a ticket; default "the tickets channel" |
 | `DIALLAK_HEALTH_ADDR` | no | Listen address "host:port" for health probes; off by default |
 | `DIALLAK_FORUM_CHANNEL_ID` | with the tag | Id of the support forum whose new opted-in posts get a first reply; the forum answer is off without it |
 | `DIALLAK_FORUM_OPT_IN_TAG_ID` | with the forum | Id of the forum's tag "Automated answer"; only a post that carries it from its creation is read |
@@ -141,13 +142,7 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 | `DIALLAK_SUPPORTER_GRACE` | no, with the supporter switch | How long a member keeps "Supporter" after holding neither platform role, as a Go duration from `24h` to `2160h`; default 72 hours |
 <!-- markdownlint-enable MD013 -->
 
-Without the model variables the bot replies with cited excerpts and says
-that no model wrote them. In the live server that is the only mode for now: no
-deployment sets the variables until the gates of
-[ADR-0013](docs/adr/0013-guardrail-policy-and-receipt.md) are passed: every
-reply of the model has to name the deployment's guardrail policy, and the
-member can ask for a receipt of the guardrails that ran. Both are built; the
-operator decides when the live server switches model mode on.
+Version 1 deployments leave model and embedding variables unset. Common questions use fixed documentation rules, then cited excerpts, then a refusal. Rule answers and slash refusals name the tickets channel. See [rule answers](docs/rule-answers.md).
 
 With the model variables set the bot sends the endpoint one small request at start
 ([ADR-0012](docs/adr/0012-model-state.md)):

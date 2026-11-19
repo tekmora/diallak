@@ -15,6 +15,7 @@ import (
 	"github.com/tekmora/diallak/internal/embed"
 	"github.com/tekmora/diallak/internal/model"
 	"github.com/tekmora/diallak/internal/retrieval"
+	"github.com/tekmora/diallak/internal/ruleanswer"
 )
 
 // Kind classifies the outcome type of the answer pipeline.
@@ -27,6 +28,7 @@ const (
 	KindExcerpts Kind = "excerpts"
 	// KindRefusal indicates a refusal to answer due to missing sources or invalid citations.
 	KindRefusal Kind = "refusal"
+	KindRule    Kind = "rule"
 )
 
 // Reason specifies the underlying cause for an answer outcome.
@@ -107,6 +109,7 @@ type Config struct {
 	MaxExcerptRunes    int
 	MaxAnswerRunes     int
 	SourceLinkTemplate string
+	Rules              *ruleanswer.Resolved
 }
 
 // Stats holds snapshot metrics of pipeline queries.
@@ -117,6 +120,8 @@ type Stats struct {
 	Refused       uint64
 	ModelFailures uint64
 	EmbedFailures uint64
+	RuleAnswers   uint64
+	DisabledRules int
 }
 
 const (
@@ -184,6 +189,7 @@ type Pipeline struct {
 	maxExcerptRunes    int
 	maxAnswerRunes     int
 	sourceLinkTemplate string
+	rules              *ruleanswer.Resolved
 
 	asked         atomic.Uint64
 	answered      atomic.Uint64
@@ -191,6 +197,7 @@ type Pipeline struct {
 	refused       atomic.Uint64
 	modelFailures atomic.Uint64
 	embedFailures atomic.Uint64
+	ruleAnswers   atomic.Uint64
 }
 
 // New constructs and validates a new Pipeline instance.
@@ -249,19 +256,45 @@ func New(cfg Config) (*Pipeline, error) {
 		maxExcerptRunes:    maxExcerpt,
 		maxAnswerRunes:     maxAnswer,
 		sourceLinkTemplate: cfg.SourceLinkTemplate,
+		rules:              cfg.Rules,
 	}, nil
 }
 
 // Stats returns a point-in-time snapshot of pipeline metric counters.
 func (p *Pipeline) Stats() Stats {
+	disabled := 0
+	if p.rules != nil {
+		disabled = p.rules.DisabledCount
+	}
 	return Stats{
+		DisabledRules: disabled,
 		Asked:         p.asked.Load(),
 		Answered:      p.answered.Load(),
 		Excerpts:      p.excerpts.Load(),
 		Refused:       p.refused.Load(),
 		ModelFailures: p.modelFailures.Load(),
 		EmbedFailures: p.embedFailures.Load(),
+		RuleAnswers:   p.ruleAnswers.Load(),
 	}
+}
+
+// Rule returns the fixed answer for q when a resolved trigger matches.
+func (p *Pipeline) Rule(q ruleanswer.Query) (Answer, bool) {
+	if p.rules == nil || p.rules.Table == nil {
+		return Answer{}, false
+	}
+	resolved, ok := p.rules.Match(q)
+	if !ok {
+		return Answer{}, false
+	}
+	sources := make([]Source, len(resolved.Sources))
+	for i, chunk := range resolved.Sources {
+		sources[i] = Source{N: i + 1, Title: chunk.Title, Heading: chunk.Heading,
+			Path: chunk.Path, URL: chunk.FormatURL(p.sourceLinkTemplate), Revision: chunk.Revision}
+	}
+	p.asked.Add(1)
+	p.ruleAnswers.Add(1)
+	return Answer{Kind: KindRule, Reason: ReasonNone, Text: resolved.Text, Sources: sources}, true
 }
 
 // Ask processes a user inquiry through retrieval, generation, citation verification, and assembly.
@@ -520,6 +553,8 @@ const minAnswerRunes = 200
 type RenderOptions struct {
 	// Place names where a person helps. An empty Place means DefaultPlace.
 	Place string
+	// TicketsChannel names where a person can open a ticket. Empty uses the default wording.
+	TicketsChannel string
 	// MaxRunes is the maximum allowed rendered message length in runes.
 	// 0 uses DefaultMaxRenderRunes.
 	MaxRunes int
@@ -541,8 +576,21 @@ func Footer(place string) string {
 
 // Refusal returns the reply to a question the documentation does not answer. It names the place
 // where a person helps. An empty place means DefaultPlace.
-func Refusal(place string) string {
-	return "I found no documented answer to that. Please ask in " + placeOrDefault(place) + " so a person can help."
+func Refusal(place string, ticketsChannel ...string) string {
+	tickets := ""
+	if len(ticketsChannel) > 0 {
+		tickets = ticketsChannel[0]
+	}
+	return "I found no documented answer to that. Please ask in " + placeOrDefault(place) +
+		" so a person can help.\n\n" + TicketsSentence(tickets)
+}
+
+// TicketsSentence holds the one sentence that names the tickets route.
+func TicketsSentence(channel string) string {
+	if strings.TrimSpace(channel) == "" {
+		channel = "the tickets channel"
+	}
+	return "For more help, contact a person through " + channel + "."
 }
 
 // AppendFooter appends the automated reply footer for place to text, separated by a blank line.
@@ -571,16 +619,36 @@ func Render(a Answer, opts RenderOptions) string {
 
 	var body string
 	switch a.Kind {
+	case KindRule:
+		body = renderRule(a, TicketsSentence(opts.TicketsChannel), Footer(place), maxRunes)
 	case KindAnswer:
 		body = renderAnswer(a, place, maxRunes)
 	case KindExcerpts:
 		body = renderExcerpts(a, Footer(place), maxRunes)
 	case KindRefusal:
-		body = Refusal(place)
+		body = Refusal(place, opts.TicketsChannel)
 	default:
-		body = Refusal(place)
+		body = Refusal(place, opts.TicketsChannel)
 	}
 	return AppendFooter(body, place)
+}
+
+const LabelRule = "Automated answer from the project documentation. No AI model wrote this reply."
+
+func renderRule(a Answer, tickets, footer string, maxRunes int) string {
+	bodyMax := maxRunes - utf8.RuneCountInString(footer) - 2
+	prefix := LabelRule + "\n\n"
+	suffix := "\n\n" + tickets
+	lines := make([]string, len(a.Sources))
+	for i, source := range a.Sources {
+		lines[i] = formatSourceLine(source)
+	}
+	for len(lines) > 0 && utf8.RuneCountInString(prefix)+utf8.RuneCountInString(suffix)+utf8.RuneCountInString(sourcesBlock(lines)) > bodyMax {
+		lines = lines[:len(lines)-1]
+	}
+	budget := bodyMax - utf8.RuneCountInString(prefix) - utf8.RuneCountInString(suffix) - utf8.RuneCountInString(sourcesBlock(lines))
+	body := prefix + cutToRunes(a.Text, budget) + sourcesBlock(lines) + suffix
+	return hardCutTo(body, bodyMax)
 }
 
 func answerHeader(mode retrieval.Mode) string {
@@ -723,15 +791,23 @@ func renderExcerptsCandidate(header string, blocks []excerptBlock) string {
 	return sb.String()
 }
 
-// RenderForum formats an excerpt reply for a post in the support forum (ADR-0009): the excerpt
-// label first and FooterForum last, within maxRunes (DefaultMaxRenderRunes when zero). Every other
-// kind renders as the empty string, because the forum gets no model answer and no refusal.
-func RenderForum(a Answer, maxRunes int) string {
-	if a.Kind != KindExcerpts {
-		return ""
-	}
+// RenderForum formats rule and excerpt replies for the support forum. FooterForum ends
+// each rendered reply, within maxRunes (DefaultMaxRenderRunes when zero).
+func RenderForum(a Answer, maxRunes int, ticketsChannels ...string) string {
 	if maxRunes <= 0 {
 		maxRunes = DefaultMaxRenderRunes
 	}
-	return renderExcerpts(a, FooterForum, maxRunes) + "\n\n" + FooterForum
+	tickets := ""
+	if len(ticketsChannels) > 0 {
+		tickets = ticketsChannels[0]
+	}
+	switch a.Kind {
+	case KindExcerpts:
+		return renderExcerpts(a, FooterForum, maxRunes) + "\n\n" + FooterForum
+	case KindRule:
+		body := renderRule(a, TicketsSentence(tickets), FooterForum, maxRunes)
+		return body + "\n\n" + FooterForum
+	default:
+		return ""
+	}
 }

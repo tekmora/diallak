@@ -1,0 +1,435 @@
+// Package ruleanswer loads, validates, matches, and resolves fixed documentation answers.
+package ruleanswer
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"path"
+	"regexp"
+	"slices"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/tekmora/diallak/internal/corpus"
+	"github.com/tekmora/diallak/internal/retrieval"
+)
+
+const MaxTriggers = 128
+
+var idPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+type Table struct {
+	Version  int       `json:"version"`
+	Triggers []Trigger `json:"triggers"`
+}
+
+type Trigger struct {
+	ID           string   `json:"id"`
+	Repository   string   `json:"repository"`
+	Keywords     Keywords `json:"keywords"`
+	Commands     []string `json:"commands"`
+	Aliases      []string `json:"aliases"`
+	ForumTags    []string `json:"forum_tags"`
+	Answer       Location `json:"answer"`
+	Links        []string `json:"links"`
+	MustMatch    []string `json:"must_match"`
+	MustNotMatch []string `json:"must_not_match"`
+}
+
+type Keywords struct {
+	All  []string `json:"all"`
+	Any  []string `json:"any"`
+	None []string `json:"none"`
+}
+
+type Location struct {
+	Path    string `json:"path"`
+	Heading string `json:"heading"`
+}
+
+type Query struct {
+	Text    string
+	Command string
+	Forum   bool
+	Tags    []string
+}
+
+type Finding struct {
+	Code    string
+	Path    string
+	Message string
+}
+
+type Known struct {
+	Commands  []string
+	ForumTags []string
+}
+
+// Load reads a strict JSON table and rejects unknown fields and trailing data.
+func Load(r io.Reader) (*Table, error) {
+	dec := json.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	var table Table
+	if err := dec.Decode(&table); err != nil {
+		return nil, fmt.Errorf("decode trigger table: %w", err)
+	}
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return nil, errors.New("decode trigger table: trailing JSON value")
+		}
+		return nil, fmt.Errorf("decode trigger table trailing data: %w", err)
+	}
+	return &table, nil
+}
+
+func (t Trigger) entryPoints(q Query) bool {
+	if q.Forum {
+		for _, tag := range t.ForumTags {
+			if slices.Contains(q.Tags, tag) {
+				return true
+			}
+		}
+		return false
+	}
+	return slices.Contains(t.Commands, q.Command) && matchesAny(retrieval.Tokenize(q.Text), t.Aliases)
+}
+
+func matchesAny(question, phrases []string) bool {
+	for _, phrase := range phrases {
+		if containsPhrase(question, retrieval.Tokenize(phrase)) {
+			return true
+		}
+	}
+	return false
+}
+
+// Match returns the first table-order trigger whose entry point and keywords match.
+func (t *Table) Match(q Query) (Trigger, bool) {
+	if t == nil {
+		return Trigger{}, false
+	}
+	tokens := retrieval.Tokenize(q.Text)
+	for _, trigger := range t.Triggers {
+		if trigger.entryPoints(q) && trigger.matches(tokens) {
+			return trigger, true
+		}
+	}
+	return Trigger{}, false
+}
+
+func (t Trigger) matches(question []string) bool {
+	for _, entry := range t.Keywords.All {
+		if !containsPhrase(question, retrieval.Tokenize(entry)) {
+			return false
+		}
+	}
+	if len(t.Keywords.Any) > 0 {
+		found := false
+		for _, entry := range t.Keywords.Any {
+			found = found || containsPhrase(question, retrieval.Tokenize(entry))
+		}
+		if !found {
+			return false
+		}
+	}
+	for _, entry := range t.Keywords.None {
+		if containsPhrase(question, retrieval.Tokenize(entry)) {
+			return false
+		}
+	}
+	return true
+}
+
+func containsPhrase(haystack, needle []string) bool {
+	if len(needle) == 0 || len(needle) > len(haystack) {
+		return false
+	}
+	for start := 0; start <= len(haystack)-len(needle); start++ {
+		if slices.Equal(haystack[start:start+len(needle)], needle) {
+			return true
+		}
+	}
+	return false
+}
+
+// Validate checks shape, references, and replay examples. Findings are capped at MaxFindings.
+func Validate(t *Table, known Known) []Finding {
+	if t == nil {
+		return []Finding{{Code: "table", Path: "$", Message: "table is nil"}}
+	}
+	v := validator{table: t, known: known, seen: make(map[string]bool)}
+	v.checkVersion()
+	for i := range t.Triggers {
+		v.checkTrigger(i, &t.Triggers[i])
+	}
+	if len(v.findings) > MaxTriggers*8 {
+		v.findings = v.findings[:MaxTriggers*8]
+	}
+	return v.findings
+}
+
+type validator struct {
+	table    *Table
+	known    Known
+	seen     map[string]bool
+	findings []Finding
+}
+
+func (v *validator) add(code, p, message string) {
+	v.findings = append(v.findings, Finding{Code: code, Path: p, Message: message})
+}
+
+func (v *validator) checkVersion() {
+	if v.table.Version != 1 {
+		v.add("version", "version", "must be 1")
+	}
+	if len(v.table.Triggers) > MaxTriggers {
+		v.add("trigger_count", "triggers", fmt.Sprintf("exceeds %d", MaxTriggers))
+	}
+}
+
+func (v *validator) checkTrigger(i int, t *Trigger) {
+	p := fmt.Sprintf("triggers[%d]", i)
+	v.checkIdentity(p, t)
+	v.checkKeywords(p, t.Keywords)
+	v.checkEntryPoints(p, t)
+	v.checkLocations(p, t)
+	v.checkExamples(p, t)
+}
+
+func (v *validator) checkIdentity(p string, t *Trigger) {
+	if !idPattern.MatchString(t.ID) || utf8.RuneCountInString(t.ID) > 64 {
+		v.add("id", p+".id", "must be a lowercase slug of at most 64 runes")
+	}
+	if v.seen[t.ID] {
+		v.add("duplicate_id", p+".id", "must be unique")
+	}
+	v.seen[t.ID] = true
+	if !corpus.ValidRepository(t.Repository) {
+		v.add("repository", p+".repository", "does not use corpus repository syntax")
+	}
+}
+
+func (v *validator) checkKeywords(p string, k Keywords) {
+	if len(k.All)+len(k.Any) == 0 {
+		v.add("keywords_all", p+".keywords", "all or any must not be empty")
+	}
+	for _, group := range []struct {
+		name    string
+		entries []string
+	}{{"all", k.All}, {"any", k.Any}, {"none", k.None}} {
+		for i, entry := range group.entries {
+			if utf8.RuneCountInString(entry) > 64 || len(retrieval.Tokenize(entry)) == 0 {
+				v.add("keyword", fmt.Sprintf("%s.keywords.%s[%d]", p, group.name, i), "must be at most 64 runes and contain a searchable token")
+			}
+		}
+	}
+}
+
+func (v *validator) checkEntryPoints(p string, t *Trigger) {
+	if len(t.Commands) > 0 && len(t.Aliases) == 0 {
+		v.add("aliases", p+".aliases", "required for commands")
+	}
+	for _, alias := range t.Aliases {
+		if utf8.RuneCountInString(alias) > 64 || len(retrieval.Tokenize(alias)) == 0 {
+			v.add("alias", p+".aliases", "must be at most 64 runes and contain a searchable token")
+		}
+	}
+	if len(t.Commands)+len(t.ForumTags) == 0 {
+		v.add("entry_point", p, "needs a command or forum tag")
+	}
+	for _, name := range t.Commands {
+		if !slices.Contains(v.known.Commands, name) {
+			v.add("command", p+".commands", "unknown command "+name)
+		}
+	}
+	for _, name := range t.ForumTags {
+		if !slices.Contains(v.known.ForumTags, name) {
+			v.add("forum_tag", p+".forum_tags", "unknown forum tag "+name)
+		}
+	}
+}
+
+func cleanMarkdownPath(p string) bool {
+	return fs.ValidPath(p) && path.Ext(p) == ".md" && path.Clean(p) == p
+}
+
+func cleanRelativePath(p string) bool { return fs.ValidPath(p) && path.Clean(p) == p }
+
+func (v *validator) checkLocations(p string, t *Trigger) {
+	if !cleanMarkdownPath(t.Answer.Path) || strings.TrimSpace(t.Answer.Heading) == "" {
+		v.add("answer", p+".answer", "needs a clean relative Markdown path and non-empty heading")
+	}
+	for i, link := range t.Links {
+		if !cleanRelativePath(link) {
+			v.add("link", fmt.Sprintf("%s.links[%d]", p, i), "must be a clean relative path")
+		}
+	}
+}
+
+func (v *validator) checkExamples(p string, t *Trigger) {
+	if len(t.MustMatch) == 0 || len(t.MustNotMatch) == 0 {
+		v.add("examples", p, "must_match and must_not_match each need an example")
+	}
+	for i, text := range t.MustMatch {
+		v.replayMatch(p, t, i, text)
+	}
+	for i, text := range t.MustNotMatch {
+		for _, q := range triggerQueries(*t, text) {
+			if t.entryPoints(q) && t.matches(retrieval.Tokenize(q.Text)) {
+				v.add("must_not_match", fmt.Sprintf("%s.must_not_match[%d]", p, i), "example matches this trigger")
+				break
+			}
+		}
+	}
+}
+
+func triggerQueries(t Trigger, text string) []Query {
+	qs := make([]Query, 0, len(t.Commands)+len(t.ForumTags))
+	for _, command := range t.Commands {
+		qs = append(qs, Query{Text: text, Command: command})
+	}
+	for _, tag := range t.ForumTags {
+		qs = append(qs, Query{Text: text, Forum: true, Tags: []string{tag}})
+	}
+	return qs
+}
+
+func (v *validator) replayMatch(p string, target *Trigger, i int, text string) {
+	for _, q := range triggerQueries(*target, text) {
+		matches := 0
+		for j := range v.table.Triggers {
+			candidate := &v.table.Triggers[j]
+			if candidate.entryPoints(q) && candidate.matches(retrieval.Tokenize(q.Text)) {
+				matches++
+				if candidate.ID != target.ID {
+					v.add("ambiguous_match", fmt.Sprintf("%s.must_match[%d]", p, i), "example also matches trigger "+candidate.ID)
+				}
+			}
+		}
+		if matches != 1 {
+			v.add("must_match", fmt.Sprintf("%s.must_match[%d]", p, i), "example must match exactly this trigger through each entry point")
+		}
+	}
+}
+
+type ResolvedAnswer struct {
+	Trigger Trigger
+	Text    string
+	Sources []corpus.Chunk
+	Links   []string
+}
+
+type Resolved struct {
+	Table         *Table
+	Answers       map[string]ResolvedAnswer
+	DisabledCount int
+}
+
+// Match returns the first matching trigger that resolved against the loaded corpus.
+func (r *Resolved) Match(q Query) (ResolvedAnswer, bool) {
+	if r == nil || r.Table == nil {
+		return ResolvedAnswer{}, false
+	}
+	tokens := retrieval.Tokenize(q.Text)
+	for _, trigger := range r.Table.Triggers {
+		if trigger.entryPoints(q) && trigger.matches(tokens) {
+			answer, ok := r.Answers[trigger.ID]
+			if ok {
+				return answer, true
+			}
+		}
+	}
+	return ResolvedAnswer{}, false
+}
+
+// Issue records a trigger or link unavailable in the loaded corpus.
+type Issue struct {
+	TriggerID string
+	Reason    string
+}
+
+// Resolve binds triggers to corpus chunks and reports missing documentation.
+func Resolve(t *Table, chunks []corpus.Chunk, linkTemplate string) (*Resolved, []Issue, error) {
+	if t == nil {
+		return nil, nil, errors.New("resolve trigger table: table is nil")
+	}
+	r := &Resolved{Table: t, Answers: make(map[string]ResolvedAnswer)}
+	var issues []Issue
+	for _, trigger := range t.Triggers {
+		answer, foundRepo := resolveAnswer(trigger, chunks)
+		if !foundRepo {
+			issues = append(issues, Issue{trigger.ID, "repository_absent"})
+			r.DisabledCount++
+			continue
+		}
+		if len(answer.Sources) == 0 {
+			issues = append(issues, Issue{trigger.ID, "answer_missing"})
+			r.DisabledCount++
+			continue
+		}
+		var missing []Issue
+		var linkSources []corpus.Chunk
+		answer.Links, linkSources, missing = resolveLinks(trigger, chunks, linkTemplate)
+		answer.Sources = append(answer.Sources, linkSources...)
+		issues = append(issues, missing...)
+		r.Answers[trigger.ID] = answer
+	}
+	return r, issues, nil
+}
+
+func resolveAnswer(trigger Trigger, chunks []corpus.Chunk) (ResolvedAnswer, bool) {
+	answer := ResolvedAnswer{Trigger: trigger}
+	var text strings.Builder
+	foundRepo := false
+	for _, chunk := range chunks {
+		if chunk.Repository != trigger.Repository {
+			continue
+		}
+		foundRepo = true
+		if chunk.Path != trigger.Answer.Path || chunk.Heading != trigger.Answer.Heading {
+			continue
+		}
+		if text.Len() > 0 {
+			text.WriteString("\n\n")
+		}
+		text.WriteString(chunk.Text)
+		if len(answer.Sources) == 0 {
+			answer.Sources = append(answer.Sources, chunk)
+		}
+	}
+	answer.Text = text.String()
+	return answer, foundRepo
+}
+
+func resolveLinks(trigger Trigger, chunks []corpus.Chunk, template string) ([]string, []corpus.Chunk, []Issue) {
+	var links []string
+	var sources []corpus.Chunk
+	var issues []Issue
+	seen := make(map[string]bool)
+	for _, link := range trigger.Links {
+		if seen[link] {
+			continue
+		}
+		seen[link] = true
+		found := false
+		for _, chunk := range chunks {
+			if chunk.Repository == trigger.Repository && chunk.Path == link {
+				links = append(links, chunk.FormatURL(template))
+				if chunk.Path != trigger.Answer.Path {
+					sources = append(sources, chunk)
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			issues = append(issues, Issue{trigger.ID, "link_missing"})
+		}
+	}
+	return links, sources, issues
+}

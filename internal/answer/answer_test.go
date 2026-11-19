@@ -16,6 +16,7 @@ import (
 	"github.com/tekmora/diallak/internal/embed"
 	"github.com/tekmora/diallak/internal/model"
 	"github.com/tekmora/diallak/internal/retrieval"
+	"github.com/tekmora/diallak/internal/ruleanswer"
 )
 
 type stubRetriever struct {
@@ -753,6 +754,116 @@ func verifyRenderPositiveKindRefusal(t *testing.T) {
 	}
 }
 
+func TestRule_Positive_MatchReturnsResolvedDocumentation(t *testing.T) {
+	trigger := ruleanswer.Trigger{ID: "release", Keywords: ruleanswer.Keywords{All: []string{"release"}}, Commands: []string{"ask"}, Aliases: []string{"Diallak"}}
+	resolved := &ruleanswer.Resolved{Table: &ruleanswer.Table{Version: 1, Triggers: []ruleanswer.Trigger{trigger}},
+		Answers: map[string]ruleanswer.ResolvedAnswer{"release": {
+			Trigger: trigger, Text: "Verify the signed release.",
+			Sources: []corpus.Chunk{{Repository: "tekmora/diallak", Revision: "abcdef0123456789", Path: "README.md", Heading: "Verifying a release", Title: "Diallak"}},
+		}}}
+	p, err := New(Config{Retriever: &stubRetriever{}, Rules: resolved, SourceLinkTemplate: "https://example.test/{repository}/{revision}/{path}"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := p.Rule(ruleanswer.Query{Text: "How to verify the Diallak release?", Command: "ask"})
+	if !ok || got.Kind != KindRule || got.Text != "Verify the signed release." {
+		t.Fatalf("Rule = (%+v, %t)", got, ok)
+	}
+	if got.Sources[0].URL != "https://example.test/tekmora/diallak/abcdef0123456789/README.md" {
+		t.Errorf("source URL = %q", got.Sources[0].URL)
+	}
+	if p.Stats().RuleAnswers != 1 {
+		t.Errorf("RuleAnswers = %d", p.Stats().RuleAnswers)
+	}
+}
+
+func TestRule_Negative_NonMatchFallsThrough(t *testing.T) {
+	trigger := ruleanswer.Trigger{ID: "release", Keywords: ruleanswer.Keywords{All: []string{"release"}}, Commands: []string{"ask"}, Aliases: []string{"Diallak"}}
+	p, err := New(Config{Retriever: &stubRetriever{}, Rules: &ruleanswer.Resolved{
+		Table: &ruleanswer.Table{Version: 1, Triggers: []ruleanswer.Trigger{trigger}}, Answers: map[string]ruleanswer.ResolvedAnswer{},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := p.Rule(ruleanswer.Query{Text: "How to start the bot?", Command: "ask"}); ok {
+		t.Fatal("Rule unexpectedly matched")
+	}
+}
+
+func TestRule_Boundary_NilResolvedTableDoesNotMatch(t *testing.T) {
+	p, err := New(Config{Retriever: &stubRetriever{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := p.Rule(ruleanswer.Query{Text: "release", Command: "ask"}); ok {
+		t.Fatal("nil rules matched")
+	}
+}
+
+func TestAsk_Negative_RuleMissUsesExcerptsOrRefusal(t *testing.T) {
+	trigger := ruleanswer.Trigger{ID: "release", Keywords: ruleanswer.Keywords{All: []string{"release"}}, Commands: []string{"ask"}, Aliases: []string{"Diallak"}}
+	resolved := &ruleanswer.Resolved{Table: &ruleanswer.Table{Version: 1, Triggers: []ruleanswer.Trigger{trigger}},
+		Answers: map[string]ruleanswer.ResolvedAnswer{"release": {Trigger: trigger, Text: "fixed answer"}}}
+	for _, tc := range []struct {
+		name string
+		hits []retrieval.Hit
+		want Kind
+	}{
+		{name: "hits", hits: []retrieval.Hit{sampleHit("install", "Install", "Setup", "Install it.", "revision")}, want: KindExcerpts},
+		{name: "no hits", want: KindRefusal},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, err := New(Config{Retriever: &stubRetriever{hits: tc.hits}, Rules: resolved})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := p.Ask(context.Background(), "How do I start the bot?")
+			if err != nil || got.Kind != tc.want {
+				t.Fatalf("Ask = (%+v, %v), want %s", got, err, tc.want)
+			}
+			if got.Kind == KindRule {
+				t.Fatal("non-matching question got a rule answer")
+			}
+		})
+	}
+}
+
+func TestRender_Positive_RuleHasDisclosureTicketSourceAndFooter(t *testing.T) {
+	got := Render(Answer{Kind: KindRule, Text: "The signed image is verified with cosign.", Sources: []Source{{
+		N: 1, Title: "Diallak", Heading: "Verifying a release", URL: "https://example.test/revision/README.md", Revision: "abcdef0123456789",
+	}}}, RenderOptions{TicketsChannel: "#tickets"})
+	for _, want := range []string{LabelRule, "No AI model wrote", "#tickets", "Sources:", "revision abcdef012345", Footer("")} {
+		if !strings.Contains(got, want) {
+			t.Errorf("render lacks %q: %q", want, got)
+		}
+	}
+}
+
+func TestRender_Negative_RefusalNamesTickets(t *testing.T) {
+	got := Render(Answer{Kind: KindRefusal}, RenderOptions{TicketsChannel: "#tickets"})
+	if !strings.Contains(got, TicketsSentence("#tickets")) {
+		t.Errorf("refusal = %q", got)
+	}
+}
+
+func TestRender_Boundary_LongRuleKeepsFooterWithinLimit(t *testing.T) {
+	got := Render(Answer{Kind: KindRule, Text: strings.Repeat("documentation ", 1000)}, RenderOptions{MaxRunes: 500, TicketsChannel: "#tickets"})
+	if utf8.RuneCountInString(got) > 500 || !strings.HasSuffix(got, Footer("")) {
+		t.Fatalf("render length = %d or footer missing", utf8.RuneCountInString(got))
+	}
+}
+
+func TestRenderForum_Positive_RuleCarriesTicketSourceAndForumFooter(t *testing.T) {
+	got := RenderForum(Answer{Kind: KindRule, Text: "Run the signature check.", Sources: []Source{{
+		N: 1, Title: "Diallak", Heading: "Verifying a release", URL: "https://example.test/rev/README.md", Revision: "abcdef0123456789",
+	}}}, 500, "#tickets")
+	for _, want := range []string{LabelRule, "#tickets", "revision abcdef012345", FooterForum} {
+		if !strings.Contains(got, want) {
+			t.Errorf("forum reply lacks %q: %q", want, got)
+		}
+	}
+}
+
 func TestRender_Positive_AllKinds(t *testing.T) {
 	src1 := Source{
 		N:        1,
@@ -842,10 +953,10 @@ func TestRender_Boundary_EmptyHeadingAndRevision(t *testing.T) {
 
 func TestTexts_Positive_ExactStringPins(t *testing.T) {
 	const (
-		wantLabelAnswer    = "AI-generated answer. It can be wrong: check the sources below."
-		wantDefaultFooter  = "Automated reply. A person can help in the support channel."
-		wantDefaultRefusal = "I found no documented answer to that. Please ask in the support channel so a person can help."
+		wantLabelAnswer   = "AI-generated answer. It can be wrong: check the sources below."
+		wantDefaultFooter = "Automated reply. A person can help in the support channel."
 	)
+	wantDefaultRefusal := "I found no documented answer to that. Please ask in the support channel so a person can help.\n\n" + TicketsSentence("")
 
 	if LabelAnswer != wantLabelAnswer {
 		t.Errorf("LabelAnswer = %q, want %q", LabelAnswer, wantLabelAnswer)
@@ -853,7 +964,7 @@ func TestTexts_Positive_ExactStringPins(t *testing.T) {
 	if got := Footer("#help-desk"); got != "Automated reply. A person can help in #help-desk." {
 		t.Errorf("Footer(#help-desk) = %q", got)
 	}
-	if got := Refusal("#help-desk"); got != "I found no documented answer to that. Please ask in #help-desk so a person can help." {
+	if got := Refusal("#help-desk"); got != "I found no documented answer to that. Please ask in #help-desk so a person can help.\n\n"+TicketsSentence("") {
 		t.Errorf("Refusal(#help-desk) = %q", got)
 	}
 	if got := Footer(""); got != wantDefaultFooter {

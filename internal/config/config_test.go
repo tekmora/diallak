@@ -403,6 +403,39 @@ func TestLoad_Boundary_SupportChannelLength(t *testing.T) {
 	})
 }
 
+func TestLoad_Positive_TicketsChannelUsesSharedParser(t *testing.T) {
+	base := validBaseEnv(t)
+	base[EnvTicketsChannel] = "  #tickets  "
+	cfg, err := Load(env(base))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TicketsChannel != "#tickets" {
+		t.Fatalf("TicketsChannel = %q", cfg.TicketsChannel)
+	}
+	if !strings.Contains(cfg.String(), `TicketsChannel:"#tickets"`) {
+		t.Fatalf("String = %q", cfg.String())
+	}
+}
+
+func TestLoad_Negative_TicketsChannelUsesSupportRules(t *testing.T) {
+	base := validBaseEnv(t)
+	base[EnvTicketsChannel] = "#ticket\ndesk"
+	_, err := Load(env(base))
+	if err == nil || !strings.Contains(err.Error(), EnvTicketsChannel) {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
+func TestLoad_Boundary_TicketsChannelLength(t *testing.T) {
+	base := validBaseEnv(t)
+	base[EnvTicketsChannel] = strings.Repeat("t", MaxSupportChannelRunes)
+	cfg, err := Load(env(base))
+	if err != nil || len([]rune(cfg.TicketsChannel)) != MaxSupportChannelRunes {
+		t.Fatalf("Load = (%+v, %v)", cfg, err)
+	}
+}
+
 // testLoadAnswerPathDefaultsUnset tests zero-value defaults when answer path variables are unset.
 func testLoadAnswerPathDefaultsUnset(t *testing.T) {
 	t.Helper()

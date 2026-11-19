@@ -1,0 +1,222 @@
+package ruleanswer
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/tekmora/diallak/internal/corpus"
+)
+
+func fixtureTrigger() Trigger {
+	return Trigger{
+		ID: "release-check", Repository: "tekmora/diallak",
+		Keywords: Keywords{All: []string{"release"}, Any: []string{"verify", "image"}},
+		Commands: []string{"ask"}, Aliases: []string{"Diallak"}, ForumTags: []string{"Diallak"},
+		Answer: Location{Path: "README.md", Heading: "Release"}, Links: []string{},
+		MustMatch:    []string{"How do I verify the Diallak release image?"},
+		MustNotMatch: []string{"How do I start the bot?"},
+	}
+}
+
+func fixtureTable(trigger ...Trigger) *Table { return &Table{Version: 1, Triggers: trigger} }
+
+func knownNames() Known {
+	return Known{Commands: []string{"ask"}, ForumTags: []string{"Diallak"}}
+}
+
+func hasFinding(findings []Finding, code string) bool {
+	for _, finding := range findings {
+		if finding.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+func TestLoad_Positive_StrictValidTable(t *testing.T) {
+	raw := `{"version":1,"triggers":[]}`
+	table, err := Load(strings.NewReader(raw))
+	if err != nil || table.Version != 1 {
+		t.Fatalf("Load = (%v, %v), want version 1", table, err)
+	}
+}
+
+func TestLoad_Negative_UnknownFieldAndTrailingData(t *testing.T) {
+	for _, raw := range []string{`{"version":1,"triggers":[],"extra":true}`, `{"version":1,"triggers":[]} {}`} {
+		if _, err := Load(strings.NewReader(raw)); err == nil {
+			t.Errorf("Load(%s) error = nil", raw)
+		}
+	}
+}
+
+func TestLoad_Boundary_WhitespaceAfterDocument(t *testing.T) {
+	if _, err := Load(strings.NewReader("{\"version\":1,\"triggers\":[]}  \n")); err != nil {
+		t.Fatalf("Load whitespace suffix: %v", err)
+	}
+}
+
+func TestMatch_Positive_EntryPointAndTokenPhrase(t *testing.T) {
+	table := fixtureTable(fixtureTrigger())
+	for _, q := range []Query{
+		{Text: "How do I verify the Diallak release image?", Command: "ask"},
+		{Text: "How do I verify the Diallak release image?", Forum: true, Tags: []string{"Diallak"}},
+	} {
+		got, ok := table.Match(q)
+		if !ok || got.ID != "release-check" {
+			t.Fatalf("Match(%+v) = (%q, %t)", q, got.ID, ok)
+		}
+	}
+}
+
+func TestMatch_Negative_WrongEntryOrMissingKeyword(t *testing.T) {
+	table := fixtureTable(fixtureTrigger())
+	for _, q := range []Query{
+		{Text: "How do I verify the Diallak release image?", Command: "bug"},
+		{Text: "How do I verify a product?", Command: "ask"},
+		{Text: "How do I verify the Diallak release image?", Forum: true, Tags: nil},
+	} {
+		if _, ok := table.Match(q); ok {
+			t.Errorf("Match(%+v) unexpectedly matched", q)
+		}
+	}
+}
+
+func TestMatch_Boundary_NilTableAndEmptyAny(t *testing.T) {
+	if _, ok := (*Table)(nil).Match(Query{Text: "Diallak release", Command: "ask"}); ok {
+		t.Fatal("nil table matched")
+	}
+	trigger := fixtureTrigger()
+	trigger.Keywords.Any = nil
+	if _, ok := fixtureTable(trigger).Match(Query{Text: "Diallak release", Command: "ask"}); !ok {
+		t.Fatal("empty any list should allow all")
+	}
+}
+
+func TestValidate_Positive_ReplaysBothEntryPointKinds(t *testing.T) {
+	if findings := Validate(fixtureTable(fixtureTrigger()), knownNames()); len(findings) != 0 {
+		t.Fatalf("Validate findings = %+v", findings)
+	}
+}
+
+func TestValidate_Negative_AmbiguityStaleAndUnknownFields(t *testing.T) {
+	first := fixtureTrigger()
+	second := fixtureTrigger()
+	second.ID = "release-check-two"
+	second.Commands = []string{"ask"}
+	second.ForumTags = nil
+	findings := Validate(fixtureTable(first, second), knownNames())
+	if !hasFinding(findings, "ambiguous_match") {
+		t.Fatal("missing ambiguity finding")
+	}
+
+	bad := fixtureTrigger()
+	bad.MustMatch = []string{"How do I start the bot?"}
+	bad.MustNotMatch = []string{"How do I verify the Diallak release image?"}
+	bad.Commands = []string{"unknown"}
+	bad.ForumTags = []string{"Unknown"}
+	bad.Keywords.All = []string{"release"}
+	bad.MustNotMatch = []string{"How do I verify the Diallak release image?"}
+	findings = Validate(fixtureTable(bad), knownNames())
+	for _, code := range []string{"must_match", "must_not_match", "command", "forum_tag"} {
+		if !hasFinding(findings, code) {
+			t.Errorf("missing %s finding: %+v", code, findings)
+		}
+	}
+	stopword := fixtureTrigger()
+	stopword.Keywords.All = []string{"the and of"}
+	if !hasFinding(Validate(fixtureTable(stopword), knownNames()), "keyword") {
+		t.Fatal("stopword-only keyword finding missing")
+	}
+}
+
+func TestValidate_Boundary_DuplicateIDAndMaximumCount(t *testing.T) {
+	first := fixtureTrigger()
+	second := fixtureTrigger()
+	if !hasFinding(Validate(fixtureTable(first, second), knownNames()), "duplicate_id") {
+		t.Fatal("duplicate id finding missing")
+	}
+	tooMany := make([]Trigger, MaxTriggers+1)
+	if !hasFinding(Validate(fixtureTable(tooMany...), knownNames()), "trigger_count") {
+		t.Fatal("trigger count finding missing")
+	}
+}
+
+func TestResolve_Positive_ConcatenatesCorpusOrderAndLinks(t *testing.T) {
+	trigger := fixtureTrigger()
+	trigger.Links = []string{"docs/guide.md"}
+	chunks := []corpus.Chunk{
+		{Repository: trigger.Repository, Revision: "abcdef0123456789", Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Text: "first"},
+		{Repository: trigger.Repository, Revision: "abcdef0123456789", Path: "docs/guide.md", Heading: "Guide", Text: "link"},
+		{Repository: trigger.Repository, Revision: "abcdef0123456789", Path: "docs/guide.md", Heading: "More", Text: "link two"},
+		{Repository: trigger.Repository, Revision: "abcdef0123456789", Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Text: "second"},
+	}
+	resolved, off, err := Resolve(fixtureTable(trigger), chunks, "https://example.test/{repository}/{revision}/{path}")
+	if err != nil || len(off) != 0 {
+		t.Fatalf("Resolve = (%v, %v, %v)", resolved, off, err)
+	}
+	if got := resolved.Answers[trigger.ID].Text; got != "first\n\nsecond" {
+		t.Errorf("text = %q", got)
+	}
+	if len(resolved.Answers[trigger.ID].Sources) != 2 {
+		t.Errorf("sources = %+v", resolved.Answers[trigger.ID].Sources)
+	}
+	if len(resolved.Answers[trigger.ID].Links) != 1 {
+		t.Errorf("links = %+v", resolved.Answers[trigger.ID].Links)
+	}
+}
+
+func TestResolve_Negative_MissingHeadingDisablesTrigger(t *testing.T) {
+	trigger := fixtureTrigger()
+	resolved, disabled, err := Resolve(fixtureTable(trigger), []corpus.Chunk{{Repository: trigger.Repository, Path: "README.md", Heading: "Other"}}, "")
+	if err != nil || len(disabled) != 1 || disabled[0].Reason != "answer_missing" || len(resolved.Answers) != 0 || resolved.DisabledCount != 1 {
+		t.Fatalf("Resolve = (%v, %v, %v)", resolved, disabled, err)
+	}
+}
+
+func TestResolve_Negative_MissingLinkIsDropped(t *testing.T) {
+	trigger := fixtureTrigger()
+	trigger.Links = []string{"docs/guide.md"}
+	chunks := []corpus.Chunk{{Repository: trigger.Repository, Path: trigger.Answer.Path, Heading: trigger.Answer.Heading}}
+	resolved, disabled, err := Resolve(fixtureTable(trigger), chunks, "")
+	if err != nil || len(disabled) != 1 || disabled[0].Reason != "link_missing" || len(resolved.Answers[trigger.ID].Links) != 0 || resolved.DisabledCount != 0 {
+		t.Fatalf("Resolve = (%v, %v, %v)", resolved, disabled, err)
+	}
+}
+
+func TestResolve_Boundary_AbsentRepositoryIsOff(t *testing.T) {
+	resolved, off, err := Resolve(fixtureTable(fixtureTrigger()), nil, "")
+	if err != nil || resolved == nil || len(off) != 1 || off[0].TriggerID != "release-check" {
+		t.Fatalf("Resolve = (%v, %v, %v)", resolved, off, err)
+	}
+}
+
+func TestMatch_AliasScope(t *testing.T) {
+	table := fixtureTable(fixtureTrigger())
+	if _, ok := table.Match(Query{Text: "verify release", Command: "ask"}); ok {
+		t.Fatal("command without alias matched")
+	}
+	if _, ok := table.Match(Query{Text: "verify release", Forum: true, Tags: []string{"Diallak"}}); !ok {
+		t.Fatal("scoped forum did not match")
+	}
+}
+
+func TestValidate_CrossProductAmbiguity(t *testing.T) {
+	first := fixtureTrigger()
+	second := fixtureTrigger()
+	second.ID = "other-release"
+	second.Repository = "example/other"
+	second.Aliases = []string{"Other"}
+	second.ForumTags = nil
+	first.MustMatch = []string{"verify Diallak Other release"}
+	if !hasFinding(Validate(fixtureTable(first, second), knownNames()), "ambiguous_match") {
+		t.Fatal("missing cross-product ambiguity")
+	}
+}
+
+func TestValidate_RequiresCommandAlias(t *testing.T) {
+	trigger := fixtureTrigger()
+	trigger.Aliases = nil
+	if !hasFinding(Validate(fixtureTable(trigger), knownNames()), "aliases") {
+		t.Fatal("missing alias finding")
+	}
+}

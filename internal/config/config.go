@@ -54,6 +54,8 @@ const (
 	EnvCorpusDir = "DIALLAK_CORPUS_DIR"
 	// EnvSupportChannel names the optional variable naming where a person helps.
 	EnvSupportChannel = "DIALLAK_SUPPORT_CHANNEL"
+	// EnvTicketsChannel names the optional variable naming the tickets channel.
+	EnvTicketsChannel = "DIALLAK_TICKETS_CHANNEL"
 	// EnvTopPassages names the optional variable setting the maximum passages retrieved.
 	EnvTopPassages = "DIALLAK_TOP_PASSAGES" // #nosec G101 -- the name of an environment variable, not a credential.
 	// EnvMinScore names the optional variable setting the minimum score threshold.
@@ -165,6 +167,8 @@ type Config struct {
 	// SupportChannel names where a person helps, as replies word it. It is empty when the
 	// variable is not set; replies then use their built-in wording.
 	SupportChannel string
+	// TicketsChannel names where a person helps with a ticket. Empty uses the default wording.
+	TicketsChannel string
 	// TopPassages is the maximum number of retrieved passages offered to the model or returned as excerpts.
 	// It is 0 when the variable is not set; retrieval then uses its built-in default.
 	TopPassages int
@@ -255,10 +259,10 @@ func (c Config) HasSupporterRoles() bool {
 // String returns a redacted representation of Config. Token, ModelKey, EmbedKey and NewsGitHubToken are
 // never printed.
 func (c Config) String() string {
-	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelGuardrail:%q, ModelKey:%q, EmbedBaseURL:%q, EmbedAlias:%q, EmbedKey:%q, EmbedTimeout:%v, EmbedMinSimilarity:%g, CorpusDir:%q, SupportChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d, NewsStateFile:%q, NewsGitHubToken:%q, DiscussionsAppClientID:%q, DiscussionsAppKey:%q, SupporterRoles:%t, SupporterGrace:%v}",
+	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelGuardrail:%q, ModelKey:%q, EmbedBaseURL:%q, EmbedAlias:%q, EmbedKey:%q, EmbedTimeout:%v, EmbedMinSimilarity:%g, CorpusDir:%q, SupportChannel:%q, TicketsChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d, NewsStateFile:%q, NewsGitHubToken:%q, DiscussionsAppClientID:%q, DiscussionsAppKey:%q, SupporterRoles:%t, SupporterGrace:%v}",
 		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, c.ModelPolicy, c.ModelGuardrail, redactSecret(c.ModelKey),
 		c.EmbedBaseURL, c.EmbedAlias, redactSecret(c.EmbedKey), c.EmbedTimeout, c.EmbedMinSimilarity,
-		c.CorpusDir, c.SupportChannel,
+		c.CorpusDir, c.SupportChannel, c.TicketsChannel,
 		c.TopPassages, c.MinScore, c.QuestionMaxChars, c.ExcerptChars, c.ReplyMaxChars, c.MaxConcurrentAsks,
 		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate, c.HealthAddr, c.TrailRetention,
 		c.ForumChannelID, c.ForumOptInTagID, c.NewsStateFile, redactSecret(c.NewsGitHubToken),
@@ -287,6 +291,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Float64("EmbedMinSimilarity", c.EmbedMinSimilarity),
 		slog.String("CorpusDir", c.CorpusDir),
 		slog.String("SupportChannel", c.SupportChannel),
+		slog.String("TicketsChannel", c.TicketsChannel),
 		slog.Int("TopPassages", c.TopPassages),
 		slog.Float64("MinScore", c.MinScore),
 		slog.Int("QuestionMaxChars", c.QuestionMaxChars),
@@ -344,6 +349,10 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	ticketsChannel, err := parseChannelText(getenv(EnvTicketsChannel), EnvTicketsChannel)
+	if err != nil {
+		return Config{}, err
+	}
 	lim, err := parseLimits(opt, getenv(EnvSourceLinkTemplate), m.baseURL != "")
 	if err != nil {
 		return Config{}, err
@@ -361,6 +370,7 @@ func Load(getenv func(string) string) (Config, error) {
 		GuildID:        guild,
 		CorpusDir:      corpusDir,
 		SupportChannel: supportChannel,
+		TicketsChannel: ticketsChannel,
 		HealthAddr:     healthAddr,
 		TrailRetention: retention,
 	}
@@ -777,23 +787,27 @@ func readSecretFileLimit(path, envVar, description string, limit int64) (secret 
 // character would move or hide the notice it is part of. An "@" is refused so that the text can
 // never read as a mention. Errors name the variable and never the value.
 func parseSupportChannel(raw string) (string, error) {
+	return parseChannelText(raw, EnvSupportChannel)
+}
+
+func parseChannelText(raw, variable string) (string, error) {
 	if raw == "" {
 		return "", nil
 	}
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return "", fmt.Errorf("%s is whitespace-only", EnvSupportChannel)
+		return "", fmt.Errorf("%s is whitespace-only", variable)
 	}
 	for _, r := range raw {
 		if !unicode.IsPrint(r) {
-			return "", fmt.Errorf("%s holds a character that is not printable", EnvSupportChannel)
+			return "", fmt.Errorf("%s holds a character that is not printable", variable)
 		}
 	}
 	if strings.Contains(raw, "@") {
-		return "", fmt.Errorf("%s contains '@'", EnvSupportChannel)
+		return "", fmt.Errorf("%s contains '@'", variable)
 	}
 	if utf8.RuneCountInString(trimmed) > MaxSupportChannelRunes {
-		return "", fmt.Errorf("%s exceeds %d runes", EnvSupportChannel, MaxSupportChannelRunes)
+		return "", fmt.Errorf("%s exceeds %d runes", variable, MaxSupportChannelRunes)
 	}
 	return trimmed, nil
 }

@@ -419,6 +419,7 @@ func newForum(cfg config.Config, assembly *app.Assembly) (*discord.ForumHandler,
 		Timeout:          cfg.AskTimeout,
 		QuestionMaxChars: cfg.QuestionMaxChars,
 		Logger:           slog.Default(),
+		TicketsChannel:   cfg.TicketsChannel,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create forum handler: %w", err)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/tekmora/diallak/internal/answer"
 	"github.com/tekmora/diallak/internal/config"
+	"github.com/tekmora/diallak/internal/ruleanswer"
 )
 
 type fakeInteraction struct {
@@ -107,6 +108,8 @@ func (f *fakeAsker) Ask(ctx context.Context, question string) (answer.Answer, er
 		Text: "Answer to: " + question,
 	}, nil
 }
+
+func (f *fakeAsker) Rule(ruleanswer.Query) (answer.Answer, bool) { return answer.Answer{}, false }
 
 func (f *fakeAsker) Calls() int {
 	f.mu.Lock()

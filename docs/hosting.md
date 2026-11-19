@@ -149,6 +149,7 @@ this contract synchronized with the codebase
 | `DIALLAK_SUPPORTER_GRACE` | environment | supporter function |
 | `DIALLAK_SUPPORTER_ROLES` | environment | supporter function |
 | `DIALLAK_SUPPORT_CHANNEL` | environment | optional: custom support channel wording |
+| `DIALLAK_TICKETS_CHANNEL` | environment | optional: custom tickets channel wording |
 | `DIALLAK_TOKEN_FILE` | secret file | always |
 | `DIALLAK_TOP_PASSAGES` | environment | optional: tuning retrieved passages limit |
 | `DIALLAK_TRAIL_RETENTION` | environment | optional: tuning moderation trail retention |

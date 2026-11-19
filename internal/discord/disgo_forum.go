@@ -36,13 +36,48 @@ func forumPostOf(e *events.ThreadCreate) ForumPost {
 	for i, t := range e.Thread.AppliedTags {
 		tags[i] = uint64(t)
 	}
+	parentID := uint64(0)
+	if parent := e.Thread.ParentID(); parent != nil {
+		parentID = uint64(*parent)
+	}
 	return ForumPost{
 		ThreadID:     uint64(e.ThreadID),
-		ParentID:     uint64(*e.Thread.ParentID()),
+		ParentID:     parentID,
 		PublicThread: e.Thread.Type() == discord.ChannelTypeGuildPublicThread,
 		NewlyCreated: e.NewlyCreated,
 		TagIDs:       tags,
+		TagNames:     forumTagNames(e, parentID, tags),
 	}
+}
+
+func forumTagNames(e *events.ThreadCreate, parentID uint64, ids []uint64) []string {
+	channel, ok := e.Client().Caches.Channel(snowflake.ID(parentID))
+	if !ok {
+		return nil
+	}
+	return forumTagNamesFrom(channel, ids)
+}
+
+func forumTagNamesFrom(channel discord.GuildChannel, ids []uint64) []string {
+	forum, ok := channel.(*discord.GuildForumChannel)
+	if !ok {
+		return nil
+	}
+	names := make([]string, len(ids))
+	for i, id := range ids {
+		found := false
+		for _, tag := range forum.AvailableTags {
+			if uint64(tag.ID) == id {
+				names[i] = tag.Name
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil
+		}
+	}
+	return names
 }
 
 // restForumCalls are the forum calls over the platform's HTTP API. The first message of a forum

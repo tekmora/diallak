@@ -1,0 +1,1263 @@
+{
+  "version": 1,
+  "triggers": [
+    {
+      "id": "diallak-verify-release",
+      "repository": "tekmora/diallak",
+      "keywords": {
+        "all": [
+          "release"
+        ],
+        "any": [
+          "verify",
+          "signature",
+          "image"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Diallak"
+      ],
+      "forum_tags": [
+        "Diallak"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Verifying a release"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "How do I verify a Diallak release image?"
+      ],
+      "must_not_match": [
+        "Where is the Diallak roadmap?"
+      ]
+    },
+    {
+      "id": "diallak-start",
+      "repository": "tekmora/diallak",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start",
+          "install",
+          "run"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Diallak"
+      ],
+      "forum_tags": [
+        "Diallak"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Starting the bot"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "How do I start Diallak?"
+      ],
+      "must_not_match": [
+        "Where is the Diallak roadmap?"
+      ]
+    },
+    {
+      "id": "diallak-licence",
+      "repository": "tekmora/diallak",
+      "keywords": {
+        "all": [],
+        "any": [
+          "licence",
+          "license"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Diallak"
+      ],
+      "forum_tags": [
+        "Diallak"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Diallak licence?"
+      ],
+      "must_not_match": [
+        "Where is the Diallak roadmap?"
+      ]
+    },
+    {
+      "id": "epitrop-start",
+      "repository": "tekmora/epitrop",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start",
+          "install",
+          "run"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Epitrop"
+      ],
+      "forum_tags": [
+        "Epitrop"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Get started"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I start Epitrop?"
+      ],
+      "must_not_match": [
+        "Where is the Epitrop roadmap?"
+      ]
+    },
+    {
+      "id": "epitrop-licence",
+      "repository": "tekmora/epitrop",
+      "keywords": {
+        "all": [],
+        "any": [
+          "licence",
+          "license"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Epitrop"
+      ],
+      "forum_tags": [
+        "Epitrop"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Upstream and licence"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "What is the Epitrop licence?"
+      ],
+      "must_not_match": [
+        "Where is the Epitrop roadmap?"
+      ]
+    },
+    {
+      "id": "epitrop-support",
+      "repository": "tekmora/epitrop",
+      "keywords": {
+        "all": [
+          "support"
+        ],
+        "any": [],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Epitrop"
+      ],
+      "forum_tags": [
+        "Epitrop"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Support"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "Where is Epitrop support?"
+      ],
+      "must_not_match": [
+        "Where is the Epitrop roadmap?"
+      ]
+    },
+    {
+      "id": "epitrop-contribute",
+      "repository": "tekmora/epitrop",
+      "keywords": {
+        "all": [
+          "contribute"
+        ],
+        "any": [],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Epitrop"
+      ],
+      "forum_tags": [
+        "Epitrop"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Contribute"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I contribute to Epitrop?"
+      ],
+      "must_not_match": [
+        "Where is the Epitrop roadmap?"
+      ]
+    },
+    {
+      "id": "amussis-start",
+      "repository": "plurano/amussis",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start",
+          "install",
+          "run"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Amussis"
+      ],
+      "forum_tags": [
+        "Amussis"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Get started"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I start Amussis?"
+      ],
+      "must_not_match": [
+        "Where is the Amussis roadmap?"
+      ]
+    },
+    {
+      "id": "amussis-licence",
+      "repository": "plurano/amussis",
+      "keywords": {
+        "all": [],
+        "any": [
+          "licence",
+          "license"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Amussis"
+      ],
+      "forum_tags": [
+        "Amussis"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "What is the Amussis licence?"
+      ],
+      "must_not_match": [
+        "Where is the Amussis roadmap?"
+      ]
+    },
+    {
+      "id": "amussis-support",
+      "repository": "plurano/amussis",
+      "keywords": {
+        "all": [
+          "support"
+        ],
+        "any": [],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Amussis"
+      ],
+      "forum_tags": [
+        "Amussis"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Support"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "Where is Amussis support?"
+      ],
+      "must_not_match": [
+        "Where is the Amussis roadmap?"
+      ]
+    },
+    {
+      "id": "amussis-contribute",
+      "repository": "plurano/amussis",
+      "keywords": {
+        "all": [
+          "contribute"
+        ],
+        "any": [],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Amussis"
+      ],
+      "forum_tags": [
+        "Amussis"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Contribute"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I contribute to Amussis?"
+      ],
+      "must_not_match": [
+        "Where is the Amussis roadmap?"
+      ]
+    },
+    {
+      "id": "horistes-licence",
+      "repository": "plurano/horistes",
+      "keywords": {
+        "all": [],
+        "any": [
+          "licence",
+          "license"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Horistes"
+      ],
+      "forum_tags": [
+        "Horistes"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Horistes licence?"
+      ],
+      "must_not_match": [
+        "Where is the Horistes roadmap?"
+      ]
+    },
+    {
+      "id": "saeptum-licence",
+      "repository": "plurano/saeptum",
+      "keywords": {
+        "all": [],
+        "any": [
+          "licence",
+          "license"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Saeptum"
+      ],
+      "forum_tags": [
+        "Saeptum"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Saeptum licence?"
+      ],
+      "must_not_match": [
+        "Where is the Saeptum roadmap?"
+      ]
+    },
+    {
+      "id": "tornus-licence",
+      "repository": "plurano/tornus",
+      "keywords": {
+        "all": [],
+        "any": [
+          "licence",
+          "license"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Tornus"
+      ],
+      "forum_tags": [
+        "Tornus"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Tornus licence?"
+      ],
+      "must_not_match": [
+        "Where is the Tornus roadmap?"
+      ]
+    },
+    {
+      "id": "cistula-start",
+      "repository": "plurano/cistula",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start",
+          "install",
+          "run"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Cistula"
+      ],
+      "forum_tags": [
+        "Cistula"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Installing"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "How do I start Cistula?"
+      ],
+      "must_not_match": [
+        "Where is the Cistula roadmap?"
+      ]
+    },
+    {
+      "id": "cistula-licence",
+      "repository": "plurano/cistula",
+      "keywords": {
+        "all": [],
+        "any": [
+          "licence",
+          "license"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Cistula"
+      ],
+      "forum_tags": [
+        "Cistula"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Cistula licence?"
+      ],
+      "must_not_match": [
+        "Where is the Cistula roadmap?"
+      ]
+    },
+    {
+      "id": "peritia-start",
+      "repository": "plurano/peritia",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start",
+          "install",
+          "run"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Peritia"
+      ],
+      "forum_tags": [
+        "Peritia"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Using it"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "How do I start Peritia?"
+      ],
+      "must_not_match": [
+        "Where is the Peritia roadmap?"
+      ]
+    },
+    {
+      "id": "peritia-licence",
+      "repository": "plurano/peritia",
+      "keywords": {
+        "all": [],
+        "any": [
+          "licence",
+          "license"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Peritia"
+      ],
+      "forum_tags": [
+        "Peritia"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Peritia licence?"
+      ],
+      "must_not_match": [
+        "Where is the Peritia roadmap?"
+      ]
+    },
+    {
+      "id": "vmafx-start",
+      "repository": "VMAFx/vmafx",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start",
+          "install",
+          "run"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "VMAFx"
+      ],
+      "forum_tags": [
+        "VMAFx"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "🚀 Get started"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I start VMAFx?"
+      ],
+      "must_not_match": [
+        "Where is the VMAFx roadmap?"
+      ]
+    },
+    {
+      "id": "vmafx-licence",
+      "repository": "VMAFx/vmafx",
+      "keywords": {
+        "all": [],
+        "any": [
+          "licence",
+          "license"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "VMAFx"
+      ],
+      "forum_tags": [
+        "VMAFx"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Upstream and license"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "What is the VMAFx licence?"
+      ],
+      "must_not_match": [
+        "Where is the VMAFx roadmap?"
+      ]
+    },
+    {
+      "id": "vmafx-support",
+      "repository": "VMAFx/vmafx",
+      "keywords": {
+        "all": [
+          "support"
+        ],
+        "any": [],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "VMAFx"
+      ],
+      "forum_tags": [
+        "VMAFx"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "💖 Support VMAFx"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "Where is VMAFx support?"
+      ],
+      "must_not_match": [
+        "Where is the VMAFx roadmap?"
+      ]
+    },
+    {
+      "id": "vmafx-contribute",
+      "repository": "VMAFx/vmafx",
+      "keywords": {
+        "all": [
+          "contribute"
+        ],
+        "any": [],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "VMAFx"
+      ],
+      "forum_tags": [
+        "VMAFx"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "🤝 Contribute"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I contribute to VMAFx?"
+      ],
+      "must_not_match": [
+        "Where is the VMAFx roadmap?"
+      ]
+    },
+    {
+      "id": "pelorus-start",
+      "repository": "VMAFx/pelorus",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start",
+          "install",
+          "run"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Pelorus"
+      ],
+      "forum_tags": [
+        "Pelorus"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Quick start"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "How do I start Pelorus?"
+      ],
+      "must_not_match": [
+        "Where is the Pelorus roadmap?"
+      ]
+    },
+    {
+      "id": "pelorus-licence",
+      "repository": "VMAFx/pelorus",
+      "keywords": {
+        "all": [],
+        "any": [
+          "licence",
+          "license"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Pelorus"
+      ],
+      "forum_tags": [
+        "Pelorus"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "License"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Pelorus licence?"
+      ],
+      "must_not_match": [
+        "Where is the Pelorus roadmap?"
+      ]
+    },
+    {
+      "id": "pelorus-support",
+      "repository": "VMAFx/pelorus",
+      "keywords": {
+        "all": [
+          "support"
+        ],
+        "any": [],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Pelorus"
+      ],
+      "forum_tags": [
+        "Pelorus"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Support"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "Where is Pelorus support?"
+      ],
+      "must_not_match": [
+        "Where is the Pelorus roadmap?"
+      ]
+    },
+    {
+      "id": "snatcharr-start",
+      "repository": "lusoris/SnatchArr",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start",
+          "install",
+          "run"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "SnatchArr"
+      ],
+      "forum_tags": [
+        "SnatchArr"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "🚀 Get started"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I start SnatchArr?"
+      ],
+      "must_not_match": [
+        "Where is the SnatchArr roadmap?"
+      ]
+    },
+    {
+      "id": "snatcharr-licence",
+      "repository": "lusoris/SnatchArr",
+      "keywords": {
+        "all": [],
+        "any": [
+          "licence",
+          "license"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "SnatchArr"
+      ],
+      "forum_tags": [
+        "SnatchArr"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "⚖️ Upstream and licence"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "What is the SnatchArr licence?"
+      ],
+      "must_not_match": [
+        "Where is the SnatchArr roadmap?"
+      ]
+    },
+    {
+      "id": "snatcharr-support",
+      "repository": "lusoris/SnatchArr",
+      "keywords": {
+        "all": [
+          "support"
+        ],
+        "any": [],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "SnatchArr"
+      ],
+      "forum_tags": [
+        "SnatchArr"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "💬 Support"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "Where is SnatchArr support?"
+      ],
+      "must_not_match": [
+        "Where is the SnatchArr roadmap?"
+      ]
+    },
+    {
+      "id": "snatcharr-contribute",
+      "repository": "lusoris/SnatchArr",
+      "keywords": {
+        "all": [
+          "contribute"
+        ],
+        "any": [],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "SnatchArr"
+      ],
+      "forum_tags": [
+        "SnatchArr"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "🤝 Contribute"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I contribute to SnatchArr?"
+      ],
+      "must_not_match": [
+        "Where is the SnatchArr roadmap?"
+      ]
+    },
+    {
+      "id": "rhizomorph-start",
+      "repository": "lusoris/rhizomorph",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start",
+          "install",
+          "run"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Rhizomorph"
+      ],
+      "forum_tags": [
+        "Rhizomorph"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Get started"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I start Rhizomorph?"
+      ],
+      "must_not_match": [
+        "Where is the Rhizomorph roadmap?"
+      ]
+    },
+    {
+      "id": "rhizomorph-licence",
+      "repository": "lusoris/rhizomorph",
+      "keywords": {
+        "all": [],
+        "any": [
+          "licence",
+          "license"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Rhizomorph"
+      ],
+      "forum_tags": [
+        "Rhizomorph"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Upstream and licence"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "What is the Rhizomorph licence?"
+      ],
+      "must_not_match": [
+        "Where is the Rhizomorph roadmap?"
+      ]
+    },
+    {
+      "id": "rhizomorph-support",
+      "repository": "lusoris/rhizomorph",
+      "keywords": {
+        "all": [
+          "support"
+        ],
+        "any": [],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Rhizomorph"
+      ],
+      "forum_tags": [
+        "Rhizomorph"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Support"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "Where is Rhizomorph support?"
+      ],
+      "must_not_match": [
+        "Where is the Rhizomorph roadmap?"
+      ]
+    },
+    {
+      "id": "rhizomorph-contribute",
+      "repository": "lusoris/rhizomorph",
+      "keywords": {
+        "all": [
+          "contribute"
+        ],
+        "any": [],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Rhizomorph"
+      ],
+      "forum_tags": [
+        "Rhizomorph"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Contribute"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I contribute to Rhizomorph?"
+      ],
+      "must_not_match": [
+        "Where is the Rhizomorph roadmap?"
+      ]
+    },
+    {
+      "id": "embodied-start",
+      "repository": "lusoris/embodied",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start",
+          "install",
+          "run"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Embodied"
+      ],
+      "forum_tags": [
+        "Embodied"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Get started"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I start Embodied?"
+      ],
+      "must_not_match": [
+        "Where is the Embodied roadmap?"
+      ]
+    },
+    {
+      "id": "embodied-licence",
+      "repository": "lusoris/embodied",
+      "keywords": {
+        "all": [],
+        "any": [
+          "licence",
+          "license"
+        ],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Embodied"
+      ],
+      "forum_tags": [
+        "Embodied"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Upstream and licence"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "What is the Embodied licence?"
+      ],
+      "must_not_match": [
+        "Where is the Embodied roadmap?"
+      ]
+    },
+    {
+      "id": "embodied-support",
+      "repository": "lusoris/embodied",
+      "keywords": {
+        "all": [
+          "support"
+        ],
+        "any": [],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Embodied"
+      ],
+      "forum_tags": [
+        "Embodied"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Support"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "Where is Embodied support?"
+      ],
+      "must_not_match": [
+        "Where is the Embodied roadmap?"
+      ]
+    },
+    {
+      "id": "embodied-contribute",
+      "repository": "lusoris/embodied",
+      "keywords": {
+        "all": [
+          "contribute"
+        ],
+        "any": [],
+        "none": []
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Embodied"
+      ],
+      "forum_tags": [
+        "Embodied"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Contribute"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I contribute to Embodied?"
+      ],
+      "must_not_match": [
+        "Where is the Embodied roadmap?"
+      ]
+    }
+  ]
+}

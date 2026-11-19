@@ -10,12 +10,13 @@ import (
 	"time"
 
 	"github.com/tekmora/diallak/internal/answer"
+	"github.com/tekmora/diallak/internal/ruleanswer"
 )
 
-// ExcerptAsker answers a question with documentation excerpts only. It never calls a model endpoint
-// (ADR-0009, "Where the text goes").
+// ExcerptAsker tries fixed rules and otherwise answers with excerpts, without a model endpoint.
 type ExcerptAsker interface {
 	Excerpts(ctx context.Context, question string) (answer.Answer, error)
+	Rule(q ruleanswer.Query) (answer.Answer, bool)
 }
 
 // ForumPost describes a thread the platform reports as created. It holds no title and no text.
@@ -26,6 +27,7 @@ type ForumPost struct {
 	// NewlyCreated is false for a thread the platform reports again, for example after a reconnect.
 	NewlyCreated bool
 	TagIDs       []uint64
+	TagNames     []string
 }
 
 // ForumMessage is the first message of a forum post.
@@ -60,9 +62,10 @@ type ForumConfig struct {
 	// answer.MaxQuestionRunes.
 	QuestionMaxChars int
 	Logger           *slog.Logger
+	TicketsChannel   string
 }
 
-// ForumHandler answers opted-in posts of the support forum with excerpts.
+// ForumHandler answers opted-in support posts with fixed rules or excerpts.
 type ForumHandler struct {
 	asker            ExcerptAsker
 	channelID        uint64
@@ -70,6 +73,7 @@ type ForumHandler struct {
 	timeout          time.Duration
 	questionMaxChars int
 	logger           *slog.Logger
+	ticketsChannel   string
 	slots            slots
 }
 
@@ -103,7 +107,8 @@ func NewForumHandler(cfg ForumConfig) (*ForumHandler, error) {
 	return &ForumHandler{
 		asker: cfg.Asker, channelID: cfg.ChannelID, optInTagID: cfg.OptInTagID,
 		timeout: timeout, questionMaxChars: questionMaxChars, logger: logger,
-		slots: slots{max: maxConcurrent},
+		ticketsChannel: cfg.TicketsChannel,
+		slots:          slots{max: maxConcurrent},
 	}, nil
 }
 
@@ -135,7 +140,7 @@ func (h *ForumHandler) Dispatch(ctx context.Context, post ForumPost, title strin
 		}()
 		postCtx, cancel := context.WithTimeout(ctx, h.timeout)
 		defer cancel()
-		h.answerPost(postCtx, post.ThreadID, title, calls)
+		h.answerPost(postCtx, post, title, calls)
 	}()
 }
 
@@ -154,7 +159,8 @@ func (h *ForumHandler) skipReason(post ForumPost) string {
 	}
 }
 
-func (h *ForumHandler) answerPost(ctx context.Context, threadID uint64, title string, calls ForumCalls) {
+func (h *ForumHandler) answerPost(ctx context.Context, post ForumPost, title string, calls ForumCalls) {
+	threadID := post.ThreadID
 	start := time.Now()
 	msg, err := calls.FirstMessage(ctx, threadID)
 	if err != nil {
@@ -170,21 +176,36 @@ func (h *ForumHandler) answerPost(ctx context.Context, threadID uint64, title st
 		h.logOutcome("no_reply", "empty_message", start)
 		return
 	}
-	ans, err := h.asker.Excerpts(ctx, h.question(title, text))
-	if err != nil {
-		h.logFailure("forum answer failed", err, start)
-		return
+	question := h.question(title, text)
+	ans, matched := h.asker.Rule(ruleanswer.Query{Text: question, Forum: true, Tags: post.TagNames})
+	reason := ""
+	if post.TagNames == nil {
+		reason = "tags_unresolved"
 	}
-	reply := answer.RenderForum(ans, 0)
+	if !matched {
+		ans, err = h.asker.Excerpts(ctx, question)
+		if err != nil {
+			h.logFailure("forum answer failed", err, start)
+			return
+		}
+	}
+	reply := answer.RenderForum(ans, 0, h.ticketsChannel)
 	if reply == "" {
-		h.logOutcome(string(ans.Kind), string(ans.Reason), start)
+		h.logOutcome(string(ans.Kind), reasonOr(reason, string(ans.Reason)), start)
 		return
 	}
 	if err := calls.Reply(ctx, threadID, reply); err != nil {
 		h.logFailure("forum reply failed", err, start)
 		return
 	}
-	h.logOutcome(string(ans.Kind), string(ans.Reason), start)
+	h.logOutcome(string(ans.Kind), reasonOr(reason, string(ans.Reason)), start)
+}
+
+func reasonOr(reason, fallback string) string {
+	if reason != "" {
+		return reason
+	}
+	return fallback
 }
 
 // question joins title and text and cuts the result to the question limit (ADR-0009 case 14).
