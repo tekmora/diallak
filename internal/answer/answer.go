@@ -28,7 +28,8 @@ const (
 	KindExcerpts Kind = "excerpts"
 	// KindRefusal indicates a refusal to answer due to missing sources or invalid citations.
 	KindRefusal Kind = "refusal"
-	KindRule    Kind = "rule"
+	// KindRule indicates a fixed answer from project documentation.
+	KindRule Kind = "rule"
 )
 
 // Reason specifies the underlying cause for an answer outcome.
@@ -576,13 +577,14 @@ func Footer(place string) string {
 
 // Refusal returns the reply to a question the documentation does not answer. It names the place
 // where a person helps. An empty place means DefaultPlace.
-func Refusal(place string, ticketsChannel ...string) string {
-	tickets := ""
-	if len(ticketsChannel) > 0 {
-		tickets = ticketsChannel[0]
-	}
+func Refusal(place string) string {
+	return RefusalTo(place, "")
+}
+
+// RefusalTo returns a refusal naming the place and tickets channel for help.
+func RefusalTo(place, ticketsChannel string) string {
 	return "I found no documented answer to that. Please ask in " + placeOrDefault(place) +
-		" so a person can help.\n\n" + TicketsSentence(tickets)
+		" so a person can help.\n\n" + TicketsSentence(ticketsChannel)
 }
 
 // TicketsSentence holds the one sentence that names the tickets route.
@@ -626,13 +628,14 @@ func Render(a Answer, opts RenderOptions) string {
 	case KindExcerpts:
 		body = renderExcerpts(a, Footer(place), maxRunes)
 	case KindRefusal:
-		body = Refusal(place, opts.TicketsChannel)
+		body = RefusalTo(place, opts.TicketsChannel)
 	default:
-		body = Refusal(place, opts.TicketsChannel)
+		body = RefusalTo(place, opts.TicketsChannel)
 	}
 	return AppendFooter(body, place)
 }
 
+// LabelRule identifies a fixed documentation answer.
 const LabelRule = "Automated answer from the project documentation. No AI model wrote this reply."
 
 func renderRule(a Answer, tickets, footer string, maxRunes int) string {

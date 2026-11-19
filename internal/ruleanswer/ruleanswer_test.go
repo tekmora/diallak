@@ -14,7 +14,7 @@ func fixtureTrigger() Trigger {
 		Commands: []string{"ask"}, Aliases: []string{"Diallak"}, ForumTags: []string{"Diallak"},
 		Answer: Location{Path: "README.md", Heading: "Release"}, Links: []string{},
 		MustMatch:    []string{"How do I verify the Diallak release image?"},
-		MustNotMatch: []string{"How do I start the bot?"},
+		MustNotMatch: []string{"Why does the Diallak release fail?"},
 	}
 }
 
@@ -218,5 +218,26 @@ func TestValidate_RequiresCommandAlias(t *testing.T) {
 	trigger.Aliases = nil
 	if !hasFinding(Validate(fixtureTable(trigger), knownNames()), "aliases") {
 		t.Fatal("missing alias finding")
+	}
+}
+
+func TestValidateNearMiss(t *testing.T) {
+	for _, tc := range []struct {
+		name, negative string
+		want           bool
+	}{
+		{"near miss", "Why does Diallak release fail?", false},
+		{"far miss", "Where is the roadmap?", true},
+		{"alias only", "Where is Diallak?", true},
+		{"keyword only", "Why does the release fail?", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			trigger := fixtureTrigger()
+			trigger.MustNotMatch = []string{tc.negative}
+			got := hasFinding(Validate(fixtureTable(trigger), knownNames()), "near_miss")
+			if got != tc.want {
+				t.Errorf("near_miss = %t, want %t", got, tc.want)
+			}
+		})
 	}
 }

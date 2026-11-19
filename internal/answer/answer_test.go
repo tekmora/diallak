@@ -1464,3 +1464,12 @@ func TestExcerpts_Boundary_KeywordDefaultsToRetriever(t *testing.T) {
 		t.Errorf("calls = %d, want 1", ret.calls.Load())
 	}
 }
+
+func TestRefusalToTicketsChannel(t *testing.T) {
+	if got, want := RefusalTo("#help", "#private"), "I found no documented answer to that. Please ask in #help so a person can help.\n\n"+TicketsSentence("#private"); got != want {
+		t.Errorf("RefusalTo = %q, want %q", got, want)
+	}
+	if RefusalTo("", "") != Refusal("") {
+		t.Error("empty tickets channel changed default refusal")
+	}
+}

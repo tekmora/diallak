@@ -17,15 +17,21 @@ import (
 	"github.com/tekmora/diallak/internal/retrieval"
 )
 
+// MaxTriggers limits the number of triggers in a table.
 const MaxTriggers = 128
+
+// MaxFindings limits the findings returned by Validate.
+const MaxFindings = MaxTriggers * 8
 
 var idPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
+// Table contains the versioned trigger collection.
 type Table struct {
 	Version  int       `json:"version"`
 	Triggers []Trigger `json:"triggers"`
 }
 
+// Trigger describes one fixed answer and its matching conditions.
 type Trigger struct {
 	ID           string   `json:"id"`
 	Repository   string   `json:"repository"`
@@ -39,17 +45,20 @@ type Trigger struct {
 	MustNotMatch []string `json:"must_not_match"`
 }
 
+// Keywords holds required, alternative, and excluded phrases.
 type Keywords struct {
 	All  []string `json:"all"`
 	Any  []string `json:"any"`
 	None []string `json:"none"`
 }
 
+// Location identifies a documentation section.
 type Location struct {
 	Path    string `json:"path"`
 	Heading string `json:"heading"`
 }
 
+// Query identifies a question and its entry point.
 type Query struct {
 	Text    string
 	Command string
@@ -57,12 +66,14 @@ type Query struct {
 	Tags    []string
 }
 
+// Finding describes a validation failure.
 type Finding struct {
 	Code    string
 	Path    string
 	Message string
 }
 
+// Known lists allowed command and forum tag names.
 type Known struct {
 	Commands  []string
 	ForumTags []string
@@ -166,8 +177,8 @@ func Validate(t *Table, known Known) []Finding {
 	for i := range t.Triggers {
 		v.checkTrigger(i, &t.Triggers[i])
 	}
-	if len(v.findings) > MaxTriggers*8 {
-		v.findings = v.findings[:MaxTriggers*8]
+	if len(v.findings) > MaxFindings {
+		v.findings = v.findings[:MaxFindings]
 	}
 	return v.findings
 }
@@ -275,6 +286,9 @@ func (v *validator) checkExamples(p string, t *Trigger) {
 	if len(t.MustMatch) == 0 || len(t.MustNotMatch) == 0 {
 		v.add("examples", p, "must_match and must_not_match each need an example")
 	}
+	if !hasNearMiss(t) {
+		v.add("near_miss", p+".must_not_match", "needs a negative example containing an alias and a keyword phrase")
+	}
 	for i, text := range t.MustMatch {
 		v.replayMatch(p, t, i, text)
 	}
@@ -286,6 +300,19 @@ func (v *validator) checkExamples(p string, t *Trigger) {
 			}
 		}
 	}
+}
+
+func hasNearMiss(t *Trigger) bool {
+	for _, example := range t.MustNotMatch {
+		tokens := retrieval.Tokenize(example)
+		if len(t.Commands) > 0 && !matchesAny(tokens, t.Aliases) {
+			continue
+		}
+		if matchesAny(tokens, t.Keywords.All) || matchesAny(tokens, t.Keywords.Any) {
+			return true
+		}
+	}
+	return false
 }
 
 func triggerQueries(t Trigger, text string) []Query {
@@ -317,6 +344,7 @@ func (v *validator) replayMatch(p string, target *Trigger, i int, text string) {
 	}
 }
 
+// ResolvedAnswer contains a trigger and its resolved documentation.
 type ResolvedAnswer struct {
 	Trigger Trigger
 	Text    string
@@ -324,6 +352,7 @@ type ResolvedAnswer struct {
 	Links   []string
 }
 
+// Resolved holds answers resolved against the corpus.
 type Resolved struct {
 	Table         *Table
 	Answers       map[string]ResolvedAnswer

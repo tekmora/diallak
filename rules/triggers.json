@@ -5,15 +5,27 @@
       "id": "diallak-verify-release",
       "repository": "tekmora/diallak",
       "keywords": {
-        "all": [
-          "release"
-        ],
+        "all": [],
         "any": [
-          "verify",
-          "signature",
-          "image"
+          "verify Diallak release",
+          "Diallak release signature",
+          "Diallak release image"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -35,7 +47,8 @@
         "How do I verify a Diallak release image?"
       ],
       "must_not_match": [
-        "Where is the Diallak roadmap?"
+        "How do I verify a Diallak release image tests?",
+        "How do I verify a Diallak release image crashes?"
       ]
     },
     {
@@ -44,11 +57,27 @@
       "keywords": {
         "all": [],
         "any": [
-          "start",
-          "install",
-          "run"
+          "start Diallak",
+          "install Diallak",
+          "run Diallak",
+          "Diallak installation",
+          "Diallak setup"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -70,7 +99,11 @@
         "How do I start Diallak?"
       ],
       "must_not_match": [
-        "Where is the Diallak roadmap?"
+        "How do I start Diallak tests?",
+        "How do I start Diallak crashes?",
+        "How do I run the Diallak tests?",
+        "Diallak crashes when I run it",
+        "Why does Diallak not start after the update?"
       ]
     },
     {
@@ -79,10 +112,26 @@
       "keywords": {
         "all": [],
         "any": [
-          "licence",
-          "license"
+          "Diallak licence",
+          "Diallak license",
+          "licence Diallak",
+          "license Diallak"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -104,7 +153,8 @@
         "What is the Diallak licence?"
       ],
       "must_not_match": [
-        "Where is the Diallak roadmap?"
+        "What is the Diallak licence tests?",
+        "What is the Diallak licence crashes?"
       ]
     },
     {
@@ -113,11 +163,27 @@
       "keywords": {
         "all": [],
         "any": [
-          "start",
-          "install",
-          "run"
+          "start Epitrop",
+          "install Epitrop",
+          "run Epitrop",
+          "Epitrop installation",
+          "Epitrop setup"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -139,7 +205,9 @@
         "How do I start Epitrop?"
       ],
       "must_not_match": [
-        "Where is the Epitrop roadmap?"
+        "How do I start Epitrop tests?",
+        "How do I start Epitrop crashes?",
+        "How do I start contributing to Epitrop?"
       ]
     },
     {
@@ -148,10 +216,26 @@
       "keywords": {
         "all": [],
         "any": [
-          "licence",
-          "license"
+          "Epitrop licence",
+          "Epitrop license",
+          "licence Epitrop",
+          "license Epitrop"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -173,18 +257,34 @@
         "What is the Epitrop licence?"
       ],
       "must_not_match": [
-        "Where is the Epitrop roadmap?"
+        "What is the Epitrop licence tests?",
+        "What is the Epitrop licence crashes?"
       ]
     },
     {
       "id": "epitrop-support",
       "repository": "tekmora/epitrop",
       "keywords": {
-        "all": [
-          "support"
+        "all": [],
+        "any": [
+          "Epitrop support",
+          "support Epitrop"
         ],
-        "any": [],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -206,18 +306,33 @@
         "Where is Epitrop support?"
       ],
       "must_not_match": [
-        "Where is the Epitrop roadmap?"
+        "Where is Epitrop support tests?",
+        "Where is Epitrop support crashes?"
       ]
     },
     {
       "id": "epitrop-contribute",
       "repository": "tekmora/epitrop",
       "keywords": {
-        "all": [
-          "contribute"
+        "all": [],
+        "any": [
+          "contribute Epitrop",
+          "Epitrop contribution",
+          "Epitrop contributing"
         ],
-        "any": [],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -239,7 +354,8 @@
         "How do I contribute to Epitrop?"
       ],
       "must_not_match": [
-        "Where is the Epitrop roadmap?"
+        "How do I contribute to Epitrop tests?",
+        "How do I contribute to Epitrop crashes?"
       ]
     },
     {
@@ -248,11 +364,27 @@
       "keywords": {
         "all": [],
         "any": [
-          "start",
-          "install",
-          "run"
+          "start Amussis",
+          "install Amussis",
+          "run Amussis",
+          "Amussis installation",
+          "Amussis setup"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -274,7 +406,8 @@
         "How do I start Amussis?"
       ],
       "must_not_match": [
-        "Where is the Amussis roadmap?"
+        "How do I start Amussis tests?",
+        "How do I start Amussis crashes?"
       ]
     },
     {
@@ -283,10 +416,26 @@
       "keywords": {
         "all": [],
         "any": [
-          "licence",
-          "license"
+          "Amussis licence",
+          "Amussis license",
+          "licence Amussis",
+          "license Amussis"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -308,18 +457,34 @@
         "What is the Amussis licence?"
       ],
       "must_not_match": [
-        "Where is the Amussis roadmap?"
+        "What is the Amussis licence tests?",
+        "What is the Amussis licence crashes?"
       ]
     },
     {
       "id": "amussis-support",
       "repository": "plurano/amussis",
       "keywords": {
-        "all": [
-          "support"
+        "all": [],
+        "any": [
+          "Amussis support",
+          "support Amussis"
         ],
-        "any": [],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -341,18 +506,33 @@
         "Where is Amussis support?"
       ],
       "must_not_match": [
-        "Where is the Amussis roadmap?"
+        "Where is Amussis support tests?",
+        "Where is Amussis support crashes?"
       ]
     },
     {
       "id": "amussis-contribute",
       "repository": "plurano/amussis",
       "keywords": {
-        "all": [
-          "contribute"
+        "all": [],
+        "any": [
+          "contribute Amussis",
+          "Amussis contribution",
+          "Amussis contributing"
         ],
-        "any": [],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -374,7 +554,8 @@
         "How do I contribute to Amussis?"
       ],
       "must_not_match": [
-        "Where is the Amussis roadmap?"
+        "How do I contribute to Amussis tests?",
+        "How do I contribute to Amussis crashes?"
       ]
     },
     {
@@ -383,10 +564,26 @@
       "keywords": {
         "all": [],
         "any": [
-          "licence",
-          "license"
+          "Horistes licence",
+          "Horistes license",
+          "licence Horistes",
+          "license Horistes"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -408,7 +605,8 @@
         "What is the Horistes licence?"
       ],
       "must_not_match": [
-        "Where is the Horistes roadmap?"
+        "What is the Horistes licence tests?",
+        "What is the Horistes licence crashes?"
       ]
     },
     {
@@ -417,10 +615,26 @@
       "keywords": {
         "all": [],
         "any": [
-          "licence",
-          "license"
+          "Saeptum licence",
+          "Saeptum license",
+          "licence Saeptum",
+          "license Saeptum"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -442,7 +656,8 @@
         "What is the Saeptum licence?"
       ],
       "must_not_match": [
-        "Where is the Saeptum roadmap?"
+        "What is the Saeptum licence tests?",
+        "What is the Saeptum licence crashes?"
       ]
     },
     {
@@ -451,10 +666,26 @@
       "keywords": {
         "all": [],
         "any": [
-          "licence",
-          "license"
+          "Tornus licence",
+          "Tornus license",
+          "licence Tornus",
+          "license Tornus"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -476,7 +707,8 @@
         "What is the Tornus licence?"
       ],
       "must_not_match": [
-        "Where is the Tornus roadmap?"
+        "What is the Tornus licence tests?",
+        "What is the Tornus licence crashes?"
       ]
     },
     {
@@ -485,11 +717,27 @@
       "keywords": {
         "all": [],
         "any": [
-          "start",
-          "install",
-          "run"
+          "start Cistula",
+          "install Cistula",
+          "run Cistula",
+          "Cistula installation",
+          "Cistula setup"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -511,7 +759,8 @@
         "How do I start Cistula?"
       ],
       "must_not_match": [
-        "Where is the Cistula roadmap?"
+        "How do I start Cistula tests?",
+        "How do I start Cistula crashes?"
       ]
     },
     {
@@ -520,10 +769,26 @@
       "keywords": {
         "all": [],
         "any": [
-          "licence",
-          "license"
+          "Cistula licence",
+          "Cistula license",
+          "licence Cistula",
+          "license Cistula"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -545,7 +810,8 @@
         "What is the Cistula licence?"
       ],
       "must_not_match": [
-        "Where is the Cistula roadmap?"
+        "What is the Cistula licence tests?",
+        "What is the Cistula licence crashes?"
       ]
     },
     {
@@ -554,11 +820,27 @@
       "keywords": {
         "all": [],
         "any": [
-          "start",
-          "install",
-          "run"
+          "start Peritia",
+          "install Peritia",
+          "run Peritia",
+          "Peritia installation",
+          "Peritia setup"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -580,7 +862,8 @@
         "How do I start Peritia?"
       ],
       "must_not_match": [
-        "Where is the Peritia roadmap?"
+        "How do I start Peritia tests?",
+        "How do I start Peritia crashes?"
       ]
     },
     {
@@ -589,10 +872,26 @@
       "keywords": {
         "all": [],
         "any": [
-          "licence",
-          "license"
+          "Peritia licence",
+          "Peritia license",
+          "licence Peritia",
+          "license Peritia"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -614,7 +913,8 @@
         "What is the Peritia licence?"
       ],
       "must_not_match": [
-        "Where is the Peritia roadmap?"
+        "What is the Peritia licence tests?",
+        "What is the Peritia licence crashes?"
       ]
     },
     {
@@ -623,11 +923,27 @@
       "keywords": {
         "all": [],
         "any": [
-          "start",
-          "install",
-          "run"
+          "start VMAFx",
+          "install VMAFx",
+          "run VMAFx",
+          "VMAFx installation",
+          "VMAFx setup"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -649,7 +965,8 @@
         "How do I start VMAFx?"
       ],
       "must_not_match": [
-        "Where is the VMAFx roadmap?"
+        "How do I start VMAFx tests?",
+        "How do I start VMAFx crashes?"
       ]
     },
     {
@@ -658,10 +975,26 @@
       "keywords": {
         "all": [],
         "any": [
-          "licence",
-          "license"
+          "VMAFx licence",
+          "VMAFx license",
+          "licence VMAFx",
+          "license VMAFx"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -683,18 +1016,34 @@
         "What is the VMAFx licence?"
       ],
       "must_not_match": [
-        "Where is the VMAFx roadmap?"
+        "What is the VMAFx licence tests?",
+        "What is the VMAFx licence crashes?"
       ]
     },
     {
       "id": "vmafx-support",
       "repository": "VMAFx/vmafx",
       "keywords": {
-        "all": [
-          "support"
+        "all": [],
+        "any": [
+          "VMAFx support",
+          "support VMAFx"
         ],
-        "any": [],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -716,18 +1065,33 @@
         "Where is VMAFx support?"
       ],
       "must_not_match": [
-        "Where is the VMAFx roadmap?"
+        "Where is VMAFx support tests?",
+        "Where is VMAFx support crashes?"
       ]
     },
     {
       "id": "vmafx-contribute",
       "repository": "VMAFx/vmafx",
       "keywords": {
-        "all": [
-          "contribute"
+        "all": [],
+        "any": [
+          "contribute VMAFx",
+          "VMAFx contribution",
+          "VMAFx contributing"
         ],
-        "any": [],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -749,7 +1113,8 @@
         "How do I contribute to VMAFx?"
       ],
       "must_not_match": [
-        "Where is the VMAFx roadmap?"
+        "How do I contribute to VMAFx tests?",
+        "How do I contribute to VMAFx crashes?"
       ]
     },
     {
@@ -758,11 +1123,27 @@
       "keywords": {
         "all": [],
         "any": [
-          "start",
-          "install",
-          "run"
+          "start Pelorus",
+          "install Pelorus",
+          "run Pelorus",
+          "Pelorus installation",
+          "Pelorus setup"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -784,7 +1165,8 @@
         "How do I start Pelorus?"
       ],
       "must_not_match": [
-        "Where is the Pelorus roadmap?"
+        "How do I start Pelorus tests?",
+        "How do I start Pelorus crashes?"
       ]
     },
     {
@@ -793,10 +1175,26 @@
       "keywords": {
         "all": [],
         "any": [
-          "licence",
-          "license"
+          "Pelorus licence",
+          "Pelorus license",
+          "licence Pelorus",
+          "license Pelorus"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -818,18 +1216,34 @@
         "What is the Pelorus licence?"
       ],
       "must_not_match": [
-        "Where is the Pelorus roadmap?"
+        "What is the Pelorus licence tests?",
+        "What is the Pelorus licence crashes?"
       ]
     },
     {
       "id": "pelorus-support",
       "repository": "VMAFx/pelorus",
       "keywords": {
-        "all": [
-          "support"
+        "all": [],
+        "any": [
+          "Pelorus support",
+          "support Pelorus"
         ],
-        "any": [],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -851,7 +1265,8 @@
         "Where is Pelorus support?"
       ],
       "must_not_match": [
-        "Where is the Pelorus roadmap?"
+        "Where is Pelorus support tests?",
+        "Where is Pelorus support crashes?"
       ]
     },
     {
@@ -860,11 +1275,27 @@
       "keywords": {
         "all": [],
         "any": [
-          "start",
-          "install",
-          "run"
+          "start SnatchArr",
+          "install SnatchArr",
+          "run SnatchArr",
+          "SnatchArr installation",
+          "SnatchArr setup"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -886,7 +1317,8 @@
         "How do I start SnatchArr?"
       ],
       "must_not_match": [
-        "Where is the SnatchArr roadmap?"
+        "How do I start SnatchArr tests?",
+        "How do I start SnatchArr crashes?"
       ]
     },
     {
@@ -895,10 +1327,26 @@
       "keywords": {
         "all": [],
         "any": [
-          "licence",
-          "license"
+          "SnatchArr licence",
+          "SnatchArr license",
+          "licence SnatchArr",
+          "license SnatchArr"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -920,18 +1368,34 @@
         "What is the SnatchArr licence?"
       ],
       "must_not_match": [
-        "Where is the SnatchArr roadmap?"
+        "What is the SnatchArr licence tests?",
+        "What is the SnatchArr licence crashes?"
       ]
     },
     {
       "id": "snatcharr-support",
       "repository": "lusoris/SnatchArr",
       "keywords": {
-        "all": [
-          "support"
+        "all": [],
+        "any": [
+          "SnatchArr support",
+          "support SnatchArr"
         ],
-        "any": [],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -953,18 +1417,33 @@
         "Where is SnatchArr support?"
       ],
       "must_not_match": [
-        "Where is the SnatchArr roadmap?"
+        "Where is SnatchArr support tests?",
+        "Where is SnatchArr support crashes?"
       ]
     },
     {
       "id": "snatcharr-contribute",
       "repository": "lusoris/SnatchArr",
       "keywords": {
-        "all": [
-          "contribute"
+        "all": [],
+        "any": [
+          "contribute SnatchArr",
+          "SnatchArr contribution",
+          "SnatchArr contributing"
         ],
-        "any": [],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -986,7 +1465,8 @@
         "How do I contribute to SnatchArr?"
       ],
       "must_not_match": [
-        "Where is the SnatchArr roadmap?"
+        "How do I contribute to SnatchArr tests?",
+        "How do I contribute to SnatchArr crashes?"
       ]
     },
     {
@@ -995,11 +1475,27 @@
       "keywords": {
         "all": [],
         "any": [
-          "start",
-          "install",
-          "run"
+          "start Rhizomorph",
+          "install Rhizomorph",
+          "run Rhizomorph",
+          "Rhizomorph installation",
+          "Rhizomorph setup"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -1021,7 +1517,8 @@
         "How do I start Rhizomorph?"
       ],
       "must_not_match": [
-        "Where is the Rhizomorph roadmap?"
+        "How do I start Rhizomorph tests?",
+        "How do I start Rhizomorph crashes?"
       ]
     },
     {
@@ -1030,10 +1527,26 @@
       "keywords": {
         "all": [],
         "any": [
-          "licence",
-          "license"
+          "Rhizomorph licence",
+          "Rhizomorph license",
+          "licence Rhizomorph",
+          "license Rhizomorph"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -1055,18 +1568,34 @@
         "What is the Rhizomorph licence?"
       ],
       "must_not_match": [
-        "Where is the Rhizomorph roadmap?"
+        "What is the Rhizomorph licence tests?",
+        "What is the Rhizomorph licence crashes?"
       ]
     },
     {
       "id": "rhizomorph-support",
       "repository": "lusoris/rhizomorph",
       "keywords": {
-        "all": [
-          "support"
+        "all": [],
+        "any": [
+          "Rhizomorph support",
+          "support Rhizomorph"
         ],
-        "any": [],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -1088,18 +1617,33 @@
         "Where is Rhizomorph support?"
       ],
       "must_not_match": [
-        "Where is the Rhizomorph roadmap?"
+        "Where is Rhizomorph support tests?",
+        "Where is Rhizomorph support crashes?"
       ]
     },
     {
       "id": "rhizomorph-contribute",
       "repository": "lusoris/rhizomorph",
       "keywords": {
-        "all": [
-          "contribute"
+        "all": [],
+        "any": [
+          "contribute Rhizomorph",
+          "Rhizomorph contribution",
+          "Rhizomorph contributing"
         ],
-        "any": [],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -1121,7 +1665,8 @@
         "How do I contribute to Rhizomorph?"
       ],
       "must_not_match": [
-        "Where is the Rhizomorph roadmap?"
+        "How do I contribute to Rhizomorph tests?",
+        "How do I contribute to Rhizomorph crashes?"
       ]
     },
     {
@@ -1130,11 +1675,27 @@
       "keywords": {
         "all": [],
         "any": [
-          "start",
-          "install",
-          "run"
+          "start Embodied",
+          "install Embodied",
+          "run Embodied",
+          "Embodied installation",
+          "Embodied setup"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -1156,7 +1717,8 @@
         "How do I start Embodied?"
       ],
       "must_not_match": [
-        "Where is the Embodied roadmap?"
+        "How do I start Embodied tests?",
+        "How do I start Embodied crashes?"
       ]
     },
     {
@@ -1165,10 +1727,26 @@
       "keywords": {
         "all": [],
         "any": [
-          "licence",
-          "license"
+          "Embodied licence",
+          "Embodied license",
+          "licence Embodied",
+          "license Embodied"
         ],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -1190,18 +1768,34 @@
         "What is the Embodied licence?"
       ],
       "must_not_match": [
-        "Where is the Embodied roadmap?"
+        "What is the Embodied licence tests?",
+        "What is the Embodied licence crashes?"
       ]
     },
     {
       "id": "embodied-support",
       "repository": "lusoris/embodied",
       "keywords": {
-        "all": [
-          "support"
+        "all": [],
+        "any": [
+          "Embodied support",
+          "support Embodied"
         ],
-        "any": [],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -1223,18 +1817,33 @@
         "Where is Embodied support?"
       ],
       "must_not_match": [
-        "Where is the Embodied roadmap?"
+        "Where is Embodied support tests?",
+        "Where is Embodied support crashes?"
       ]
     },
     {
       "id": "embodied-contribute",
       "repository": "lusoris/embodied",
       "keywords": {
-        "all": [
-          "contribute"
+        "all": [],
+        "any": [
+          "contribute Embodied",
+          "Embodied contribution",
+          "Embodied contributing"
         ],
-        "any": [],
-        "none": []
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "update",
+          "upgrade",
+          "bug"
+        ]
       },
       "commands": [
         "ask"
@@ -1256,7 +1865,8 @@
         "How do I contribute to Embodied?"
       ],
       "must_not_match": [
-        "Where is the Embodied roadmap?"
+        "How do I contribute to Embodied tests?",
+        "How do I contribute to Embodied crashes?"
       ]
     }
   ]
