@@ -98,7 +98,9 @@ The target state of the server itself, its roles, channels and permissions, is
 data with a validator: [docs/server-definition.md](docs/server-definition.md).
 It has not been applied to a server. The commands that read the server,
 compare it, plan the changes and apply one plan are built and were never run
-against Discord: [docs/server-apply.md](docs/server-apply.md).
+against Discord: [docs/server-apply.md](docs/server-apply.md). The plan for
+the hub's channels and categories, from a read of the hub, is
+[docs/channel-plan.md](docs/channel-plan.md); none of it is applied.
 
 ## The name
 
@@ -232,9 +234,10 @@ and channels and its own user, connects to Discord and answers `/ask`,
 signal. With the two forum variables set it also replies to each new post in
 that forum that carries the opt-in tag, with excerpts and never with the model.
 The forum answer needs the right to read message content, switched on in
-Discord's developer portal; without it the start stops. A reply is visible only to the member who asked and can never mention
-anyone. A failed read stops the start. Once a day it deletes its own lines of
-the moderation trail that are older than `DIALLAK_TRAIL_RETENTION`.
+Discord's developer portal; without it the start stops. A reply is visible
+only to the member who asked and can never mention anyone. A failed read
+stops the start. Once a day it deletes its own lines of the moderation trail
+that are older than `DIALLAK_TRAIL_RETENTION`.
 
 ### Health checks
 
