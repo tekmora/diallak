@@ -87,8 +87,9 @@ operator's decision and no milestone carries it yet.
 
 The operator redirected the project on 2026-11-19 (paraphrased): keep AI out of
 the bot for now, redesign the channels, answer common questions by rules, then
-rename the bot and publish an invite. The work runs in this order; each step is
-one pull request or more.
+rename the bot and publish an invite. The steps are numbered in this order,
+each step is one pull request or more, and the end of this section says which
+steps wait for others.
 
 1. **No model in version 1.** This page and
    [ADR-0028](adr/0028-version-1-answers-without-a-model.md).
@@ -103,17 +104,17 @@ one pull request or more.
 3. **Rule-based answers.** The trigger table, its validator and the matcher,
    with a question that must match and one that must not for every trigger
    ([#251](https://github.com/tekmora/diallak/issues/251)).
-4. **The name.** Three or four candidates go to the operator, each with its
-   meaning, origin and pronunciation. Nothing is renamed before the pick
-   ([#253](https://github.com/tekmora/diallak/issues/253)).
+4. **The name.** The naming step is set aside for now. Nothing is renamed, and
+   [#253](https://github.com/tekmora/diallak/issues/253) stays open.
 5. **The invite.** The creation code is built
-   ([ADR-0029](adr/0029-the-bot-creates-the-hub-invite.md)). After the rename,
-   the bot creates one permanent invite, and
+   ([ADR-0029](adr/0029-the-bot-creates-the-hub-invite.md)). The bot creates
+   one permanent invite, and
    the organisation profile and every project README link it, one batch per
-   organisation ([#254](https://github.com/tekmora/diallak/issues/254)).
+   organisation ([#254](https://github.com/tekmora/diallak/issues/254),
+   [ADR-0030](adr/0030-the-hub-invite-does-not-wait-for-a-name.md)).
 
-Steps 2 and 3 do not wait for each other. Only creation of the invite and
-the links wait for step 4.
+Steps 2 and 3 do not wait for each other. Steps 2, 3 and 5 do not wait for
+step 4.
 
 ## After 0.10
 
