@@ -143,6 +143,28 @@ func TestInvitePlan(t *testing.T) {
 	}
 }
 
+func TestInvitePlan_Positive_NewChannelAndEmptyRead(t *testing.T) {
+	def := loadDef(t)
+	s := raisedFirstSetupSnapshot()
+	s.Invites = nil
+	result, err := Plan(def, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	channel, invite := 0, 0
+	for _, change := range result.Changes {
+		if change.Action == ActionCreateChannel && change.Object == "channels[rules]" {
+			channel = change.Step
+		}
+		if change.Action == ActionCreateInvite && change.Object == "invites[hub]" {
+			invite = change.Step
+		}
+	}
+	if channel == 0 || invite <= channel || len(result.Refused) != 0 {
+		t.Fatalf("expected channel then invite without refusals: %+v", result)
+	}
+}
+
 func TestCheckInviteRight_Positive_PlannedGrantBeforeInvite(t *testing.T) {
 	def := loadDef(t)
 	s := snapshotOf(t, def)
