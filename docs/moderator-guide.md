@@ -30,6 +30,9 @@ way, and none is needed.
 <!-- markdownlint-enable MD013 -->
 
 - Every act needs a reason. Without one the bot does nothing.
+- A reason form works once, for the moderator who opened it, for 15 minutes.
+  The bot keeps at most 256 open forms and drops the oldest when a new one opens,
+  so a form can stop working sooner.
 - A timeout lasts from 1 minute to 28 days. The bot refuses a longer one.
 - Discord does not let anyone time out the server's owner or a member who
   holds Administrator. Such a case goes to the operator.

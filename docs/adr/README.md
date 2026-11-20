@@ -36,4 +36,5 @@ record that supersedes it.
 | [0025](0025-wishes-and-polls-adapter.md) | 2026-10-18 | The bot as adapter for wishes and polls | Proposed |
 | [0026](0026-member-to-forge-account-link.md) | 2026-10-18 | The link between a member and a forge account | Accepted |
 | [0027](0027-members-intent-for-supporter-roles.md) | 2026-10-18 | The members intent for the supporter function | Accepted |
+| [0028](0028-version-1-answers-without-a-model.md) | 2026-11-19 | Version 1 answers without a model | Accepted |
 <!-- markdownlint-enable MD013 -->
