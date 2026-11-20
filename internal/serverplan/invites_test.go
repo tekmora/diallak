@@ -309,7 +309,7 @@ func TestCheckInviteRight_Positive_ObservedGrant(t *testing.T) {
 	t.Fatalf("create missing: %+v", result)
 }
 
-func TestCheckInviteRight_Negative_NoGrant(t *testing.T) {
+func TestCheckInviteRight_Negative_NoGrantPlan(t *testing.T) {
 	def := loadDef(t)
 	s := snapshotOf(t, def)
 	s.InvitesRead = true
@@ -418,6 +418,19 @@ func TestCheckInviteRight_Positive_PlannedAccess(t *testing.T) {
 	ctx.changes = []Change{{Action: ActionSetAccess, Object: "channels[rules].access[bot]"}}
 	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" {
 		t.Fatalf("refused: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Positive_ObservedBotRoleAllow(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.snap.Channels[0].Access = []Access{{Role: ctx.snap.Caller.Role, Allow: []string{"CREATE_INSTANT_INVITE"}}}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" || detail != "" {
+		t.Fatalf("refused: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Negative_NoGrant(t *testing.T) {
+	ctx := inviteRightContext(t)
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != ReasonLacksRight || detail != "CREATE_INSTANT_INVITE" {
+		t.Fatalf("refusal: %s %s", reason, detail)
 	}
 }
 func inviteRightContext(t *testing.T) *planContext {
