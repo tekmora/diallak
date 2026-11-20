@@ -15,6 +15,7 @@ MIN_DESCRIPTION_WORDS = 3
 DEFAULT_TEMPLATE = Path('.github/pull_request_template.md')
 COMMENTS = re.compile(r'<!--.*?-->', re.DOTALL)
 TASK_LINE = re.compile(r'^ *[-*+] \[[ xX]\][ \t]+\S', re.MULTILINE)
+FENCE = re.compile(r'^ {0,3}(`{3,}|~{3,})')
 
 
 def read_input(path):
@@ -27,7 +28,18 @@ def read_input(path):
 
 def sections(text):
     result = []
+    fence = ''
     for line in text.splitlines():
+        marker = FENCE.match(line)
+        if fence:
+            if (marker and marker.group(1)[0] == fence[0]
+                    and len(marker.group(1)) >= len(fence)
+                    and not line[marker.end():].strip(' ')):
+                fence = ''
+            continue
+        if marker:
+            fence = marker.group(1)
+            continue
         if line.startswith('## '):
             result.append((line[3:].strip(), []))
         elif result:
@@ -73,7 +85,11 @@ def cases(template):
     table = '| Package | From | To |\n| --- | --- | --- |\n| example | 1 | 2 |\n'
     renovate = ('This PR contains the following updates:\n' + table +
                 '### Release Notes\n<details>Notes</details>\n')
-    filled = description + 'This explains the change. It provides context.\n' + checklist
+    template_lines = template.splitlines(keepends=True)
+    first_heading = next(i for i, line in enumerate(template_lines)
+                         if line.rstrip('\r\n') == description.rstrip('\n'))
+    template_lines.insert(first_heading + 1, 'This explains the change.\n')
+    filled = ''.join(template_lines)
     missing = ['section-missing'] * len(template_sections)
     return [
         ('renovate-style', renovate, missing),
@@ -113,9 +129,39 @@ def self_test(template):
     if actual != expected:
         print(f'PR body self-test: two checklists failed: expected {expected}, got {actual}')
         failures += 1
+    fence_template = '## Description\n## Checks\n- [ ] Verify\n'
+    valid_body = '## Description\nThree useful words\n## Checks\n- [ ] Done\n'
+    fence_cases = [
+        ('fenced headings', '```markdown\n' + valid_body + '```\n', fence_template,
+         ['section-missing', 'section-missing']),
+        ('fenced task', '## Description\nThree useful words\n## Checks\n```\n- [ ] Done\n```\n',
+         fence_template, ['checklist-empty']),
+        ('tilde fence', '~~~\n' + valid_body + '~~~\n', fence_template,
+         ['section-missing', 'section-missing']),
+        ('unclosed fence', '```\n' + valid_body, fence_template,
+         ['section-missing', 'section-missing']),
+        ('short close', '````\n```\n' + valid_body, fence_template,
+         ['section-missing', 'section-missing']),
+        ('other close', '```\n~~~\n' + valid_body, fence_template,
+         ['section-missing', 'section-missing']),
+        ('after close', '   ```\nignored\n   ````  \n' + valid_body, fence_template, []),
+        ('close with text', '```\n``` text\n' + valid_body, fence_template,
+         ['section-missing', 'section-missing']),
+        ('fenced description', '## Description\n```\nThree useful words\n```\n'
+         '## Checks\n- [ ] Done\n', fence_template, ['description-empty']),
+        ('template fenced task', '## Description\nThree useful words\n## Checks\n',
+         '## Description\n## Checks\n```\n- [ ] Example\n```\n', []),
+        ('template fenced heading', '## Description\nThree useful words\n',
+         '## Description\n```\n## Example\n```\n', []),
+    ]
+    for name, fence_body, fence_source, expected_rules in fence_cases:
+        actual_rules = [rule for rule, _ in findings(fence_body, fence_source)]
+        if sorted(actual_rules) != sorted(expected_rules):
+            print(f'PR body self-test: {name} failed: expected {expected_rules}, got {actual_rules}')
+            failures += 1
     if failures:
         return 1
-    print(f'PR body self-test: {len(planted) + 1} cases behaved as required')
+    print(f'PR body self-test: {len(planted) + len(fence_cases) + 1} cases behaved as required')
     return 0
 
 

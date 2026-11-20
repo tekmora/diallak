@@ -12,9 +12,12 @@ All changes must pass local verification before submitting:
 make verify-all
 ```
 
-Pull requests must fill the [description template](.github/pull_request_template.md):
-keep its headings in order, describe the change in at least three words, and
-include a task-list item in the verification checklist. CI checks these sections.
+The required check `description (template sections)` applies to every pull
+request author, including Renovate. The headings in the
+[description template](.github/pull_request_template.md) must be present and in
+order, with at least three words under the description heading. Each template
+section containing a task-list item must contain a task-list item in the pull
+request. Text inside HTML comments and fenced code blocks is ignored.
 
 ### Modernized NASA JPL Power-of-10 Rules
 
