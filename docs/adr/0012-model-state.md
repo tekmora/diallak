@@ -3,6 +3,8 @@
 - **Status**: Accepted
 - **Date**: 2026-10-11
 - **Authors**: Maintainers
+- **Superseded for version 1 by**:
+  [ADR-0028](0028-version-1-answers-without-a-model.md)
 
 ## Context
 

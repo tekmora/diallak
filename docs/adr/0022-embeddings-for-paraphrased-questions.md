@@ -8,6 +8,8 @@
   [ADR-0002](0002-data-and-compliance.md), "It is sent to one place only";
   [ADR-0013](0013-guardrail-policy-and-receipt.md), "the bot's key reaches the
   chat route only" and "The member can ask for a receipt"
+- **Superseded for version 1 by**:
+  [ADR-0028](0028-version-1-answers-without-a-model.md)
 
 ## Context
 
