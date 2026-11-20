@@ -12,6 +12,16 @@ All changes must pass local verification before submitting:
 make verify-all
 ```
 
+The required check `description (template sections)` applies to every pull
+request author, including Renovate. The headings in the
+[description template](.github/pull_request_template.md) must be present and in
+order, with at least three words under the description heading. Each template
+section containing a task-list item must contain a task-list item in the pull
+request. Text inside HTML comments and fenced code blocks is ignored. An
+unclosed HTML comment hides the rest of the text. Comment markers inside inline
+code are literal only when the code span opens and closes on one line. A code
+span running onto the next line does not protect them.
+
 ### Modernized NASA JPL Power-of-10 Rules
 
 1. **Simple Control Flow (HISS-01)**: Recursion is strictly banned; call graph
