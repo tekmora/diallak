@@ -16,10 +16,11 @@ RUN set -eu; \
     fi
 RUN go mod download
 COPY . .
-# The main package the image runs. Left empty, the build takes the module's only main
-# package, wherever it lives, and stops naming what it found when there is none or more than
-# one. Choose one with: docker build --build-arg MAIN_PACKAGE=./cmd/<name> .
-ARG MAIN_PACKAGE=
+# The main package the image runs. The module holds a second main package, the secrets gate
+# (tools/secrets/gate), so the default names the bot. Set empty, the build takes the module's
+# only main package and stops naming what it found when there is none or more than one.
+# Choose another with: docker build --build-arg MAIN_PACKAGE=./cmd/<name> .
+ARG MAIN_PACKAGE=./cmd/diallak
 ARG TARGETOS=linux
 ARG TARGETARCH
 RUN set -eu; \
