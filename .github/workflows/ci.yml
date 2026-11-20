@@ -228,3 +228,74 @@ jobs:
           --image diallak-smoke:ci --arch "$ARCH"
           --max-image-bytes "$MAX_IMAGE_BYTES"
           --max-binary-bytes "$MAX_BINARY_BYTES"
+
+  # Runs the repository gate, make verify-all, the same target that
+  # contributors run before a pull request and that the pre-push hook runs
+  # (Makefile). The Makefile resolves the engine from the PRAETOR_REF pin in
+  # this file through .config/lefthook/engine.sh, so the job declares no pin of
+  # its own; verify-lints reads the pinned linter from GOLANGCI_LINT. The step
+  # summary names the tested commit, the pull request head, the exit code and
+  # the SHA-256 of the full log, and shows the last lines of the log. The full
+  # log is the output of the step.
+  verify-all:
+    name: verify-all (make verify-all)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Stop on a draft pull request
+        if: github.event.pull_request.draft == true
+        shell: bash
+        env:
+          TITLE: Gate not run on a draft
+          MESSAGE: >-
+            The gate did not run because the pull request is a draft.
+            It runs when the pull request is marked ready for review.
+        run: |
+          echo "::error title=$TITLE::$MESSAGE"
+          echo "$MESSAGE" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+      # yamllint disable-line rule:line-length
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        if: github.event.pull_request.draft != true
+        with:
+          persist-credentials: false
+      # yamllint disable-line rule:line-length
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        if: github.event.pull_request.draft != true
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install golangci-lint
+        if: github.event.pull_request.draft != true
+        shell: bash
+        run: >-
+          make --silent golangci-lint-install
+          GOLANGCI_LINT_DIR="$RUNNER_TEMP/golangci-lint"
+          | tee "$RUNNER_TEMP/golangci-lint.out"
+      - name: make verify-all
+        if: github.event.pull_request.draft != true
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        # The shell starts with -e; it is off here so that a failing gate
+        # still writes the summary before the step exits with its code.
+        run: |
+          set +e -uo pipefail
+          log="$RUNNER_TEMP/verify-all.log"
+          linter="$(tail -n 1 "$RUNNER_TEMP/golangci-lint.out")"
+          make verify-all GOLANGCI_LINT="$linter" 2>&1 | tee "$log"
+          rc="${PIPESTATUS[0]}"
+          sum="$(sha256sum "$log" | cut -d ' ' -f 1)"
+          {
+            echo '## make verify-all'
+            echo
+            echo "- tested commit: \`$GITHUB_SHA\`"
+            echo "- pull request head: \`$HEAD_SHA\`"
+            echo "- exit code: $rc"
+            echo "- log: $(wc -l < "$log") lines, sha256 \`$sum\`"
+            echo
+            echo '```text'
+            tail -n 40 "$log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
