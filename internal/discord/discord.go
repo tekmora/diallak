@@ -88,7 +88,7 @@ func TextBadQuestion(maxChars int) string {
 // Asker executes an inquiry against the documentation answer pipeline.
 type Asker interface {
 	Ask(ctx context.Context, question string) (answer.Answer, error)
-	Rule(q ruleanswer.Query) (answer.Answer, bool)
+	Rule(q ruleanswer.Query, opts answer.RenderOptions) (answer.Answer, bool)
 }
 
 // Interaction represents an incoming slash command interaction.
@@ -283,9 +283,9 @@ func (h *Handler) performDefer(ctx context.Context, in Interaction) bool {
 
 func (h *Handler) executeAskAndReply(ctx context.Context, in Interaction, q string) {
 	start := time.Now()
-	ans, matched := h.asker.Rule(ruleanswer.Query{Text: q, Command: "ask"})
+	ans, matched := h.asker.Rule(ruleanswer.Query{Text: q, Command: "ask"}, h.renderOptions)
 	var err error
-	if !matched || !answer.RuleFits(ans, h.renderOptions, false) {
+	if !matched {
 		askCtx, cancel := context.WithTimeout(ctx, h.askTimeout)
 		ans, err = h.asker.Ask(askCtx, q)
 		cancel()

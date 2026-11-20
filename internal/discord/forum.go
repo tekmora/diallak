@@ -16,7 +16,7 @@ import (
 // ExcerptAsker tries fixed rules and otherwise answers with excerpts, without a model endpoint.
 type ExcerptAsker interface {
 	Excerpts(ctx context.Context, question string) (answer.Answer, error)
-	Rule(q ruleanswer.Query) (answer.Answer, bool)
+	Rule(q ruleanswer.Query, opts answer.RenderOptions) (answer.Answer, bool)
 }
 
 // ForumPost describes a thread the platform reports as created. It holds no title and no text.
@@ -177,12 +177,12 @@ func (h *ForumHandler) answerPost(ctx context.Context, post ForumPost, title str
 		return
 	}
 	question := h.question(title, text)
-	ans, matched := h.asker.Rule(ruleanswer.Query{Text: question, Forum: true, Tags: post.TagNames})
+	ans, matched := h.asker.Rule(ruleanswer.Query{Text: question, Forum: true, Tags: post.TagNames}, answer.RenderOptions{TicketsChannel: h.ticketsChannel})
 	reason := ""
 	if post.TagNames == nil {
 		reason = "tags_unresolved"
 	}
-	if !matched || !answer.RuleFits(ans, answer.RenderOptions{TicketsChannel: h.ticketsChannel}, true) {
+	if !matched {
 		ans, err = h.asker.Excerpts(ctx, question)
 		if err != nil {
 			h.logFailure("forum answer failed", err, start)

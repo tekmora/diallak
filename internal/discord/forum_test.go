@@ -43,7 +43,9 @@ func (f *fakeExcerpts) Excerpts(ctx context.Context, q string) (answer.Answer, e
 	}}, nil
 }
 
-func (f *fakeExcerpts) Rule(ruleanswer.Query) (answer.Answer, bool) { return f.rule, f.ruleMatched }
+func (f *fakeExcerpts) Rule(q ruleanswer.Query, opts answer.RenderOptions) (answer.Answer, bool) {
+	return f.rule, f.ruleMatched && answer.RuleFits(f.rule, opts, q.Forum)
+}
 
 func (f *fakeExcerpts) asked() []string {
 	f.mu.Lock()

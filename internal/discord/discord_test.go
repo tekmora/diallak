@@ -112,7 +112,9 @@ func (f *fakeAsker) Ask(ctx context.Context, question string) (answer.Answer, er
 	}, nil
 }
 
-func (f *fakeAsker) Rule(ruleanswer.Query) (answer.Answer, bool) { return f.rule, f.ruleMatched }
+func (f *fakeAsker) Rule(q ruleanswer.Query, opts answer.RenderOptions) (answer.Answer, bool) {
+	return f.rule, f.ruleMatched && answer.RuleFits(f.rule, opts, q.Forum)
+}
 
 func (f *fakeAsker) Calls() int {
 	f.mu.Lock()

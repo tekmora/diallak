@@ -280,8 +280,9 @@ func (p *Pipeline) Stats() Stats {
 	}
 }
 
-// Rule returns the fixed answer for q when a resolved trigger matches.
-func (p *Pipeline) Rule(q ruleanswer.Query) (Answer, bool) {
+// Rule returns and counts a matching rule only when it renders with at least one
+// complete citation under opts.
+func (p *Pipeline) Rule(q ruleanswer.Query, opts RenderOptions) (Answer, bool) {
 	if p.rules == nil || p.rules.Table == nil {
 		return Answer{}, false
 	}
@@ -294,9 +295,13 @@ func (p *Pipeline) Rule(q ruleanswer.Query) (Answer, bool) {
 		sources[i] = Source{N: i + 1, Title: chunk.Title, Heading: chunk.Heading,
 			Path: chunk.Path, URL: chunk.FormatURL(p.sourceLinkTemplate), Revision: chunk.Revision}
 	}
+	ans := Answer{Kind: KindRule, Reason: ReasonNone, Text: resolved.Text, Sources: sources}
+	if !RuleFits(ans, opts, q.Forum) {
+		return Answer{}, false
+	}
 	p.asked.Add(1)
 	p.ruleAnswers.Add(1)
-	return Answer{Kind: KindRule, Reason: ReasonNone, Text: resolved.Text, Sources: sources}, true
+	return ans, true
 }
 
 // Ask processes a user inquiry through retrieval, generation, citation verification, and assembly.

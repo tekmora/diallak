@@ -765,7 +765,7 @@ func TestRule_Positive_MatchReturnsResolvedDocumentation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, ok := p.Rule(ruleanswer.Query{Text: "How to verify the Diallak release?", Command: "ask"})
+	got, ok := p.Rule(ruleanswer.Query{Text: "How to verify the Diallak release?", Command: "ask"}, RenderOptions{})
 	if !ok || got.Kind != KindRule || got.Text != "Verify the signed release." {
 		t.Fatalf("Rule = (%+v, %t)", got, ok)
 	}
@@ -785,7 +785,7 @@ func TestRule_Negative_NonMatchFallsThrough(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := p.Rule(ruleanswer.Query{Text: "How to start the bot?", Command: "ask"}); ok {
+	if _, ok := p.Rule(ruleanswer.Query{Text: "How to start the bot?", Command: "ask"}, RenderOptions{}); ok {
 		t.Fatal("Rule unexpectedly matched")
 	}
 }
@@ -795,8 +795,69 @@ func TestRule_Boundary_NilResolvedTableDoesNotMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := p.Rule(ruleanswer.Query{Text: "release", Command: "ask"}); ok {
+	if _, ok := p.Rule(ruleanswer.Query{Text: "release", Command: "ask"}, RenderOptions{}); ok {
 		t.Fatal("nil rules matched")
+	}
+}
+
+func ruleTestPipeline(t *testing.T) *Pipeline {
+	t.Helper()
+	trigger := ruleanswer.Trigger{ID: "release", Keywords: ruleanswer.Keywords{All: []string{"release"}}, Commands: []string{"ask"}, Aliases: []string{"Diallak"}}
+	resolved := &ruleanswer.Resolved{Table: &ruleanswer.Table{Version: 1, Triggers: []ruleanswer.Trigger{trigger}},
+		Answers: map[string]ruleanswer.ResolvedAnswer{"release": {
+			Trigger: trigger, Text: "x",
+			Sources: []corpus.Chunk{{Repository: "tekmora/diallak", Revision: "abcdef0123456789", Path: strings.Repeat("a", 400), Title: "Diallak"}},
+		}}}
+	p, err := New(Config{Retriever: &stubRetriever{hits: []retrieval.Hit{sampleHit("install", "Install", "Setup", "Install it.", "revision")}},
+		Rules: resolved, SourceLinkTemplate: "https://example.test/{repository}/{revision}/{path}"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestRule_Negative_UnfitRuleCountsNothing(t *testing.T) {
+	p := ruleTestPipeline(t)
+	_, ok := p.Rule(ruleanswer.Query{Text: "Diallak release", Command: "ask"}, RenderOptions{MaxRunes: 300})
+	stats := p.Stats()
+	if ok || stats.Asked != 0 || stats.RuleAnswers != 0 {
+		t.Errorf("Rule matched = %t, stats = %+v; want no match or counts", ok, stats)
+	}
+}
+
+func TestRule_Boundary_FitLimitDecidesCount(t *testing.T) {
+	q := ruleanswer.Query{Text: "Diallak release", Command: "ask"}
+	ans, ok := ruleTestPipeline(t).Rule(q, RenderOptions{MaxRunes: 2000})
+	if !ok {
+		t.Fatal("rule does not fit at the large limit")
+	}
+	limit := utf8.RuneCountInString(Render(ans, RenderOptions{MaxRunes: 2000}))
+	for _, tc := range []struct {
+		limit int
+		want  bool
+		count uint64
+	}{{limit, true, 1}, {limit - 1, false, 0}} {
+		p := ruleTestPipeline(t)
+		_, matched := p.Rule(q, RenderOptions{MaxRunes: tc.limit})
+		stats := p.Stats()
+		if matched != tc.want || stats.Asked != tc.count || stats.RuleAnswers != tc.count {
+			t.Errorf("limit %d: matched = %t, stats = %+v", tc.limit, matched, stats)
+		}
+	}
+}
+
+func TestRule_Negative_UnfitThenExcerptsCountsOnce(t *testing.T) {
+	p := ruleTestPipeline(t)
+	if _, ok := p.Rule(ruleanswer.Query{Text: "Diallak release", Command: "ask"}, RenderOptions{MaxRunes: 300}); ok {
+		t.Fatal("unfit rule matched")
+	}
+	ans, err := p.Excerpts(context.Background(), "release")
+	if err != nil || ans.Kind != KindExcerpts {
+		t.Fatalf("Excerpts = (%+v, %v)", ans, err)
+	}
+	stats := p.Stats()
+	if stats.Asked != 1 || stats.RuleAnswers != 0 || stats.Excerpts != 1 {
+		t.Errorf("stats = %+v; want one question and one excerpt", stats)
 	}
 }
 
