@@ -240,9 +240,9 @@ func (t *Table) match(q Query, tokens []string, available map[string]ResolvedAns
 func hasNegation(text string) bool {
 	text = strings.ReplaceAll(strings.ToLower(text), "’", "'")
 	words := strings.FieldsFunc(text, func(r rune) bool { return !unicode.IsLetter(r) && r != '\'' })
-	negations := []string{"not", "no", "never", "cannot", "can't", "cant", "don't", "dont", "doesn't", "doesnt", "didn't", "didnt", "won't", "wont", "isn't", "isnt", "aren't", "arent", "shouldn't", "shouldnt"}
+	negations := []string{"not", "no", "never", "nothing", "none", "neither", "nor", "cannot", "can't", "cant", "don't", "dont", "doesn't", "doesnt", "didn't", "didnt", "won't", "wont", "isn't", "isnt", "aren't", "arent", "shouldn't", "shouldnt", "couldnt", "wouldnt", "wasnt", "werent", "havent", "hasnt", "hadnt", "mustnt", "neednt"}
 	for _, word := range words {
-		if slices.Contains(negations, word) {
+		if slices.Contains(negations, word) || strings.HasSuffix(word, "n't") {
 			return true
 		}
 	}
@@ -395,13 +395,20 @@ func sponsorshipLines(lines []string) []bool {
 
 // filterSponsorshipParagraph modifies lines owned by filterSponsorship. For a
 // multi-line non-list paragraph, it keeps filtered text in the first line and
-// marks the other lines as removed.
+// marks the other lines as removed. Indented code with a sponsorship link is
+// removed whole without changing its text.
 func filterSponsorshipParagraph(lines []string, removed []bool, start, end int) {
 	if start == end {
 		return
 	}
 	paragraph := strings.Join(lines[start:end], "\n")
 	if !sponsorshipLink.MatchString(paragraph) {
+		return
+	}
+	if corpus.IndentColumn(lines[start]) >= 4 {
+		for i := start; i < end; i++ {
+			removed[i] = true
+		}
 		return
 	}
 	if !listItem.MatchString(lines[start]) {
@@ -413,6 +420,8 @@ func filterSponsorshipParagraph(lines []string, removed []bool, start, end int) 
 	}
 }
 
+// filterSponsorshipSentences treats a line without end punctuation as part of
+// the sentence continuing on the next line, removing it with a sponsorship sentence.
 func filterSponsorshipSentences(paragraph string) string {
 	var kept strings.Builder
 	start := 0
@@ -424,6 +433,10 @@ func filterSponsorshipSentences(paragraph string) string {
 		if next < len(paragraph) {
 			following, _ := utf8.DecodeRuneInString(paragraph[next:])
 			if !unicode.IsSpace(following) {
+				continue
+			}
+			following, _ = utf8.DecodeRuneInString(strings.TrimLeftFunc(paragraph[next:], unicode.IsSpace))
+			if unicode.IsLower(following) {
 				continue
 			}
 		}

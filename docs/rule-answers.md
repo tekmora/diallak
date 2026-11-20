@@ -47,9 +47,11 @@ also cover matching, non-matching, ambiguity, stale examples, malformed input,
 unknown entry points, path resolution, and rendering length limits.
 
 Support triggers use help-seeking phrases only. A sponsorship sentence is removed
-from its paragraph, and sponsorship list items and their nested content are removed.
+from its paragraph, sponsorship list items and their nested content are removed,
+and an indented code block carrying a sponsorship link is removed whole.
 A section containing only sponsorship disables its trigger and is logged as
 `sponsorship_only`.
 
 A heading shared by two sections of one file disables the trigger as
-`answer_ambiguous`. A question with a negation word gets no rule answer.
+`answer_ambiguous`. A question with a negation word gets no rule answer; a word
+ending in `n't` counts as a negation word.

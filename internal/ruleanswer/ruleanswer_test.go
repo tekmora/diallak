@@ -589,12 +589,33 @@ func TestResolve_Positive_SponsorshipSentences(t *testing.T) {
 		"Ask in Discussions for help. You can also [sponsor us](https://github.com/sponsors/example).",
 		"You can also [sponsor us](https://github.com/sponsors/example). Ask in Discussions for help.",
 		"Ask in Discussions for help. You can also\n[sponsor us](https://github.com/sponsors/example).",
+		"Ask in Discussions for help. Sponsor at https://ko-fi.com/example e.g. monthly.",
 	} {
 		chunks := []corpus.Chunk{{Repository: trigger.Repository, Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Text: text}}
 		resolved, issues, err := Resolve(fixtureTable(trigger), chunks, "")
 		if err != nil || len(issues) != 0 || resolved.Answers[trigger.ID].Text != "Ask in Discussions for help." {
 			t.Errorf("Resolve(%q) = (%v, %v, %v)", text, resolved, issues, err)
 		}
+	}
+}
+
+func TestFilterSponsorship_Negative_IndentedCodeUnchanged(t *testing.T) {
+	text := "Keep this paragraph.\n\n    example. Sponsor https://ko-fi.com/example\n    more code\n\n    safe code\n    more safe code"
+	want := "Keep this paragraph.\n\n    safe code\n    more safe code"
+	if got := filterSponsorship(text); got != want {
+		t.Errorf("filterSponsorship() = %q; want %q", got, want)
+	}
+}
+
+func TestFilterSponsorshipSentences_Boundary_NextRune(t *testing.T) {
+	for _, suffix := range []string{"Next", "1 next", "[next]", "(next)", "\"Next\"", "'Next'"} {
+		text := "Sponsor https://ko-fi.com/example. " + suffix
+		if got := filterSponsorshipSentences(text); got != suffix {
+			t.Errorf("filterSponsorshipSentences(%q) = %q; want %q", text, got, suffix)
+		}
+	}
+	if got := filterSponsorshipSentences("Sponsor https://ko-fi.com/example."); got != "" {
+		t.Errorf("sponsorship at end = %q", got)
 	}
 }
 
@@ -611,7 +632,7 @@ func TestResolve_Negative_AmbiguousSection(t *testing.T) {
 }
 
 func TestHasNegation_Positive_Words(t *testing.T) {
-	for _, word := range []string{"not", "no", "never", "cannot", "can't", "cant", "don't", "dont", "doesn't", "doesnt", "didn't", "didnt", "won't", "wont", "isn't", "isnt", "aren't", "arent", "shouldn't", "shouldnt"} {
+	for _, word := range []string{"not", "no", "never", "cannot", "can't", "cant", "don't", "dont", "doesn't", "doesnt", "didn't", "didnt", "won't", "wont", "isn't", "isnt", "aren't", "arent", "shouldn't", "shouldnt", "couldn't", "wouldn’t", "wasnt", "werent", "havent", "hasnt", "hadnt", "mustnt", "neednt", "couldnt", "wouldnt", "nothing", "none", "neither", "nor"} {
 		if !hasNegation("Question " + strings.ToUpper(word) + " start?") {
 			t.Errorf("missed %q", word)
 		}
@@ -630,7 +651,7 @@ func TestHasNegation_Boundary_Text(t *testing.T) {
 	for _, tc := range []struct {
 		text string
 		want bool
-	}{{"don’t", true}, {"No. start", true}, {"", false}, {"notice know", false}} {
+	}{{"don’t", true}, {"No. start", true}, {"", false}, {"notice know", false}, {"want", false}, {"front", false}, {"client", false}} {
 		if got := hasNegation(tc.text); got != tc.want {
 			t.Errorf("hasNegation(%q) = %t", tc.text, got)
 		}
