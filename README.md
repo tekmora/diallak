@@ -36,7 +36,7 @@ Community bot for the Lusoris Discord hub.
   projects' documentation, visible to the asker only and labelled as automated
   ([ADR-0003](docs/adr/0003-answer-pipeline.md)). In the support forum the bot
   can reply first to a new post that carries the tag "Automated answer", with
-  excerpts only
+  a fixed rule answer or cited excerpts; it posts nothing when no source matches
   ([ADR-0009](docs/adr/0009-support-forum-first-answer.md),
   [ADR-0020](docs/adr/0020-forum-answers-only-opted-in-posts.md)); it is off
   until a deployment sets the two forum variables. Version 1 carries no AI
@@ -237,7 +237,8 @@ It loads the documentation and the server definition, reads the server's roles
 and channels and its own user, connects to Discord and answers `/ask`,
 `/areas`, `/bug`, `Remove message` and `/timeout` until it receives a termination
 signal. With the two forum variables set it also replies to each new post in
-that forum that carries the opt-in tag, with excerpts and never with the model.
+that forum that carries the opt-in tag, with a fixed rule answer or cited
+excerpts and never with the model. It posts nothing when no source matches.
 The forum answer needs the right to read message content, switched on in
 Discord's developer portal; without it the start stops. A reply is visible only to the member who asked and can never mention
 anyone. A failed read stops the start. Once a day it deletes its own lines of
