@@ -1220,23 +1220,36 @@ func modelVariableConstants(t *testing.T) map[string]bool {
 		if !ok || group.Tok != token.CONST {
 			continue
 		}
-		for _, spec := range group.Specs {
-			for _, value := range spec.(*ast.ValueSpec).Values {
-				literal, ok := value.(*ast.BasicLit)
-				if !ok || literal.Kind != token.STRING {
-					continue
-				}
-				text, err := strconv.Unquote(literal.Value)
-				if err != nil {
-					t.Fatalf("unquote constant: %v", err)
-				}
-				if strings.HasPrefix(text, "DIALLAK_MODEL_") || strings.HasPrefix(text, "DIALLAK_EMBED_") {
-					found[text] = true
-				}
-			}
+		for _, value := range modelConstantValues(t, group) {
+			found[value] = true
 		}
 	}
 	return found
+}
+
+func modelConstantValues(t *testing.T, group *ast.GenDecl) []string {
+	t.Helper()
+	var values []string
+	for _, spec := range group.Specs {
+		valueSpec, ok := spec.(*ast.ValueSpec)
+		if !ok {
+			continue
+		}
+		for _, value := range valueSpec.Values {
+			literal, ok := value.(*ast.BasicLit)
+			if !ok || literal.Kind != token.STRING {
+				continue
+			}
+			text, err := strconv.Unquote(literal.Value)
+			if err != nil {
+				t.Fatalf("unquote constant: %v", err)
+			}
+			if strings.HasPrefix(text, "DIALLAK_MODEL_") || strings.HasPrefix(text, "DIALLAK_EMBED_") {
+				values = append(values, text)
+			}
+		}
+	}
+	return values
 }
 
 func TestModelVariables_Positive_MatchesConstants(t *testing.T) {
