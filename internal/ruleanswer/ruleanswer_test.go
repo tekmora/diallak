@@ -519,6 +519,19 @@ func TestLoad_Negative_DuplicateObjectKeys(t *testing.T) {
 	}
 }
 
+func TestLoad_Negative_NonCanonicalObjectKeys(t *testing.T) {
+	for _, tc := range []struct{ raw, key string }{
+		{`{"version":2,"VERSION":1,"triggers":[]}`, "VERSION"},
+		{`{"Version":1,"triggers":[]}`, "Version"},
+		{`{"version":1,"triggers":[{"Keywords":{}}]}`, "Keywords"},
+	} {
+		_, err := Load([]byte(tc.raw))
+		if err == nil || !strings.Contains(err.Error(), tc.key) {
+			t.Errorf("key %q: %v", tc.key, err)
+		}
+	}
+}
+
 func TestValidate_Boundary_ListSize(t *testing.T) {
 	trigger := fixtureTrigger()
 	trigger.Links = make([]string, MaxListItems)

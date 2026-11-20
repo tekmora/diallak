@@ -28,6 +28,7 @@ const maxJSONDepth = 16
 const MaxFindings = MaxTriggers * 8
 
 var idPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+var jsonKeyPattern = regexp.MustCompile(`^[a-z][a-z_]*$`)
 var sponsorshipLink = regexp.MustCompile(`(?i)https?://(?:www\.)?(?:github\.com/sponsors/|ko-fi\.com/|opencollective\.com/|liberapay\.com/|patreon\.com/|buymeacoffee\.com/)`)
 var listItem = regexp.MustCompile(`^[ \t]*(?:[-+*] |[0-9]+[.)] )`)
 
@@ -170,6 +171,9 @@ func checkJSONTokenKey(stack []jsonFrame, tok json.Token) (bool, error) {
 	key, ok := tok.(string)
 	if !ok {
 		return false, errors.New("expected object key")
+	}
+	if !jsonKeyPattern.MatchString(key) {
+		return false, fmt.Errorf("invalid object key %q", key)
 	}
 	if frame.keys[key] {
 		return false, fmt.Errorf("duplicate key %q", key)
