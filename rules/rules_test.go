@@ -16,6 +16,16 @@ func TestTablePrecision(t *testing.T) {
 		{"Diallak crashes when I run it", ""},
 		{"Why does Diallak not start after the update?", ""},
 		{"How do I start contributing to Epitrop?", "epitrop-contribute"},
+		{"Does Amussis support ARM64?", ""},
+		{"Does Pelorus support Windows?", ""},
+		{"Is VMAFx support for HDR planned?", ""},
+		{"How do I get help with Amussis?", "amussis-support"},
+		{"How do I set up Snatcharr?", "snatcharr-start"},
+		{"How do I verify the Diallak image signature?", "diallak-verify-release"},
+		{"Where can I get support for Pelorus?", "pelorus-support"},
+		{"How can I install Diallak?", "diallak-start"},
+		{"Can I contribute to VMAFx?", "vmafx-contribute"},
+		{"Diallak install fails with an error", ""},
 	} {
 		got, ok := table.Match(ruleanswer.Query{Text: tc.question, Command: "ask"})
 		if (tc.want == "" && ok) || (tc.want != "" && (!ok || got.ID != tc.want)) {

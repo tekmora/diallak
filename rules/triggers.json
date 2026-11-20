@@ -9,7 +9,8 @@
         "any": [
           "verify Diallak release",
           "Diallak release signature",
-          "Diallak release image"
+          "Diallak release image",
+          "Diallak image signature"
         ],
         "none": [
           "test",
@@ -44,11 +45,12 @@
         "README.md"
       ],
       "must_match": [
-        "How do I verify a Diallak release image?"
+        "How do I verify a Diallak release image?",
+        "How do I verify the Diallak image signature?"
       ],
       "must_not_match": [
-        "How do I verify a Diallak release image tests?",
-        "How do I verify a Diallak release image crashes?"
+        "Why does the Diallak release signature check show an error?",
+        "Why do Diallak release image tests fail?"
       ]
     },
     {
@@ -61,7 +63,9 @@
           "install Diallak",
           "run Diallak",
           "Diallak installation",
-          "Diallak setup"
+          "Diallak setup",
+          "set up Diallak",
+          "Diallak set up"
         ],
         "none": [
           "test",
@@ -96,11 +100,12 @@
         "README.md"
       ],
       "must_match": [
-        "How do I start Diallak?"
+        "How do I start Diallak?",
+        "How do I set up Diallak?"
       ],
       "must_not_match": [
-        "How do I start Diallak tests?",
-        "How do I start Diallak crashes?",
+        "Why does Diallak crash when I run Diallak?",
+        "Why does install Diallak fail with an error?",
         "How do I run the Diallak tests?",
         "Diallak crashes when I run it",
         "Why does Diallak not start after the update?"
@@ -153,8 +158,8 @@
         "What is the Diallak licence?"
       ],
       "must_not_match": [
-        "What is the Diallak licence tests?",
-        "What is the Diallak licence crashes?"
+        "Why does the Diallak licence check show an error?",
+        "Why do the Diallak licence tests fail?"
       ]
     },
     {
@@ -167,7 +172,9 @@
           "install Epitrop",
           "run Epitrop",
           "Epitrop installation",
-          "Epitrop setup"
+          "Epitrop setup",
+          "set up Epitrop",
+          "Epitrop set up"
         ],
         "none": [
           "test",
@@ -202,11 +209,12 @@
         "docs/index.md"
       ],
       "must_match": [
-        "How do I start Epitrop?"
+        "How do I start Epitrop?",
+        "How do I set up Epitrop?"
       ],
       "must_not_match": [
-        "How do I start Epitrop tests?",
-        "How do I start Epitrop crashes?",
+        "Why does Epitrop crash when I run Epitrop?",
+        "Why does install Epitrop fail with an error?",
         "How do I start contributing to Epitrop?"
       ]
     },
@@ -257,8 +265,8 @@
         "What is the Epitrop licence?"
       ],
       "must_not_match": [
-        "What is the Epitrop licence tests?",
-        "What is the Epitrop licence crashes?"
+        "Why does the Epitrop licence check show an error?",
+        "Why do the Epitrop licence tests fail?"
       ]
     },
     {
@@ -306,8 +314,8 @@
         "Where is Epitrop support?"
       ],
       "must_not_match": [
-        "Where is Epitrop support tests?",
-        "Where is Epitrop support crashes?"
+        "Why does Epitrop support show an error?",
+        "Why do Epitrop support tests fail?"
       ]
     },
     {
@@ -354,8 +362,8 @@
         "How do I contribute to Epitrop?"
       ],
       "must_not_match": [
-        "How do I contribute to Epitrop tests?",
-        "How do I contribute to Epitrop crashes?"
+        "Why do tests fail when I contribute to Epitrop?",
+        "Why is the Epitrop contribution guide broken?"
       ]
     },
     {
@@ -368,7 +376,9 @@
           "install Amussis",
           "run Amussis",
           "Amussis installation",
-          "Amussis setup"
+          "Amussis setup",
+          "set up Amussis",
+          "Amussis set up"
         ],
         "none": [
           "test",
@@ -403,11 +413,12 @@
         "docs/index.md"
       ],
       "must_match": [
-        "How do I start Amussis?"
+        "How do I start Amussis?",
+        "How do I set up Amussis?"
       ],
       "must_not_match": [
-        "How do I start Amussis tests?",
-        "How do I start Amussis crashes?"
+        "Why does Amussis crash when I run Amussis?",
+        "Why does install Amussis fail with an error?"
       ]
     },
     {
@@ -457,8 +468,8 @@
         "What is the Amussis licence?"
       ],
       "must_not_match": [
-        "What is the Amussis licence tests?",
-        "What is the Amussis licence crashes?"
+        "Why does the Amussis licence check show an error?",
+        "Why do the Amussis licence tests fail?"
       ]
     },
     {
@@ -506,8 +517,8 @@
         "Where is Amussis support?"
       ],
       "must_not_match": [
-        "Where is Amussis support tests?",
-        "Where is Amussis support crashes?"
+        "Why does Amussis support show an error?",
+        "Why do Amussis support tests fail?"
       ]
     },
     {
@@ -554,8 +565,8 @@
         "How do I contribute to Amussis?"
       ],
       "must_not_match": [
-        "How do I contribute to Amussis tests?",
-        "How do I contribute to Amussis crashes?"
+        "Why do tests fail when I contribute to Amussis?",
+        "Why is the Amussis contribution guide broken?"
       ]
     },
     {
@@ -605,8 +616,8 @@
         "What is the Horistes licence?"
       ],
       "must_not_match": [
-        "What is the Horistes licence tests?",
-        "What is the Horistes licence crashes?"
+        "Why does the Horistes licence check show an error?",
+        "Why do the Horistes licence tests fail?"
       ]
     },
     {
@@ -656,8 +667,8 @@
         "What is the Saeptum licence?"
       ],
       "must_not_match": [
-        "What is the Saeptum licence tests?",
-        "What is the Saeptum licence crashes?"
+        "Why does the Saeptum licence check show an error?",
+        "Why do the Saeptum licence tests fail?"
       ]
     },
     {
@@ -707,8 +718,8 @@
         "What is the Tornus licence?"
       ],
       "must_not_match": [
-        "What is the Tornus licence tests?",
-        "What is the Tornus licence crashes?"
+        "Why does the Tornus licence check show an error?",
+        "Why do the Tornus licence tests fail?"
       ]
     },
     {
@@ -721,7 +732,9 @@
           "install Cistula",
           "run Cistula",
           "Cistula installation",
-          "Cistula setup"
+          "Cistula setup",
+          "set up Cistula",
+          "Cistula set up"
         ],
         "none": [
           "test",
@@ -756,11 +769,12 @@
         "README.md"
       ],
       "must_match": [
-        "How do I start Cistula?"
+        "How do I start Cistula?",
+        "How do I set up Cistula?"
       ],
       "must_not_match": [
-        "How do I start Cistula tests?",
-        "How do I start Cistula crashes?"
+        "Why does Cistula crash when I run Cistula?",
+        "Why does install Cistula fail with an error?"
       ]
     },
     {
@@ -810,8 +824,8 @@
         "What is the Cistula licence?"
       ],
       "must_not_match": [
-        "What is the Cistula licence tests?",
-        "What is the Cistula licence crashes?"
+        "Why does the Cistula licence check show an error?",
+        "Why do the Cistula licence tests fail?"
       ]
     },
     {
@@ -824,7 +838,9 @@
           "install Peritia",
           "run Peritia",
           "Peritia installation",
-          "Peritia setup"
+          "Peritia setup",
+          "set up Peritia",
+          "Peritia set up"
         ],
         "none": [
           "test",
@@ -859,11 +875,12 @@
         "README.md"
       ],
       "must_match": [
-        "How do I start Peritia?"
+        "How do I start Peritia?",
+        "How do I set up Peritia?"
       ],
       "must_not_match": [
-        "How do I start Peritia tests?",
-        "How do I start Peritia crashes?"
+        "Why does Peritia crash when I run Peritia?",
+        "Why does install Peritia fail with an error?"
       ]
     },
     {
@@ -913,8 +930,8 @@
         "What is the Peritia licence?"
       ],
       "must_not_match": [
-        "What is the Peritia licence tests?",
-        "What is the Peritia licence crashes?"
+        "Why does the Peritia licence check show an error?",
+        "Why do the Peritia licence tests fail?"
       ]
     },
     {
@@ -927,7 +944,9 @@
           "install VMAFx",
           "run VMAFx",
           "VMAFx installation",
-          "VMAFx setup"
+          "VMAFx setup",
+          "set up VMAFx",
+          "VMAFx set up"
         ],
         "none": [
           "test",
@@ -962,11 +981,12 @@
         "docs/index.md"
       ],
       "must_match": [
-        "How do I start VMAFx?"
+        "How do I start VMAFx?",
+        "How do I set up VMAFx?"
       ],
       "must_not_match": [
-        "How do I start VMAFx tests?",
-        "How do I start VMAFx crashes?"
+        "Why does VMAFx crash when I run VMAFx?",
+        "Why does install VMAFx fail with an error?"
       ]
     },
     {
@@ -1016,8 +1036,8 @@
         "What is the VMAFx licence?"
       ],
       "must_not_match": [
-        "What is the VMAFx licence tests?",
-        "What is the VMAFx licence crashes?"
+        "Why does the VMAFx licence check show an error?",
+        "Why do the VMAFx licence tests fail?"
       ]
     },
     {
@@ -1065,8 +1085,8 @@
         "Where is VMAFx support?"
       ],
       "must_not_match": [
-        "Where is VMAFx support tests?",
-        "Where is VMAFx support crashes?"
+        "Why does VMAFx support show an error?",
+        "Why do VMAFx support tests fail?"
       ]
     },
     {
@@ -1113,8 +1133,8 @@
         "How do I contribute to VMAFx?"
       ],
       "must_not_match": [
-        "How do I contribute to VMAFx tests?",
-        "How do I contribute to VMAFx crashes?"
+        "Why do tests fail when I contribute to VMAFx?",
+        "Why is the VMAFx contribution guide broken?"
       ]
     },
     {
@@ -1127,7 +1147,9 @@
           "install Pelorus",
           "run Pelorus",
           "Pelorus installation",
-          "Pelorus setup"
+          "Pelorus setup",
+          "set up Pelorus",
+          "Pelorus set up"
         ],
         "none": [
           "test",
@@ -1162,11 +1184,12 @@
         "README.md"
       ],
       "must_match": [
-        "How do I start Pelorus?"
+        "How do I start Pelorus?",
+        "How do I set up Pelorus?"
       ],
       "must_not_match": [
-        "How do I start Pelorus tests?",
-        "How do I start Pelorus crashes?"
+        "Why does Pelorus crash when I run Pelorus?",
+        "Why does install Pelorus fail with an error?"
       ]
     },
     {
@@ -1216,8 +1239,8 @@
         "What is the Pelorus licence?"
       ],
       "must_not_match": [
-        "What is the Pelorus licence tests?",
-        "What is the Pelorus licence crashes?"
+        "Why does the Pelorus licence check show an error?",
+        "Why do the Pelorus licence tests fail?"
       ]
     },
     {
@@ -1265,8 +1288,8 @@
         "Where is Pelorus support?"
       ],
       "must_not_match": [
-        "Where is Pelorus support tests?",
-        "Where is Pelorus support crashes?"
+        "Why does Pelorus support show an error?",
+        "Why do Pelorus support tests fail?"
       ]
     },
     {
@@ -1279,7 +1302,9 @@
           "install SnatchArr",
           "run SnatchArr",
           "SnatchArr installation",
-          "SnatchArr setup"
+          "SnatchArr setup",
+          "set up SnatchArr",
+          "SnatchArr set up"
         ],
         "none": [
           "test",
@@ -1314,11 +1339,12 @@
         "docs/index.md"
       ],
       "must_match": [
-        "How do I start SnatchArr?"
+        "How do I start SnatchArr?",
+        "How do I set up SnatchArr?"
       ],
       "must_not_match": [
-        "How do I start SnatchArr tests?",
-        "How do I start SnatchArr crashes?"
+        "Why does SnatchArr crash when I run SnatchArr?",
+        "Why does install SnatchArr fail with an error?"
       ]
     },
     {
@@ -1368,8 +1394,8 @@
         "What is the SnatchArr licence?"
       ],
       "must_not_match": [
-        "What is the SnatchArr licence tests?",
-        "What is the SnatchArr licence crashes?"
+        "Why does the SnatchArr licence check show an error?",
+        "Why do the SnatchArr licence tests fail?"
       ]
     },
     {
@@ -1417,8 +1443,8 @@
         "Where is SnatchArr support?"
       ],
       "must_not_match": [
-        "Where is SnatchArr support tests?",
-        "Where is SnatchArr support crashes?"
+        "Why does SnatchArr support show an error?",
+        "Why do SnatchArr support tests fail?"
       ]
     },
     {
@@ -1465,8 +1491,8 @@
         "How do I contribute to SnatchArr?"
       ],
       "must_not_match": [
-        "How do I contribute to SnatchArr tests?",
-        "How do I contribute to SnatchArr crashes?"
+        "Why do tests fail when I contribute to SnatchArr?",
+        "Why is the SnatchArr contribution guide broken?"
       ]
     },
     {
@@ -1479,7 +1505,9 @@
           "install Rhizomorph",
           "run Rhizomorph",
           "Rhizomorph installation",
-          "Rhizomorph setup"
+          "Rhizomorph setup",
+          "set up Rhizomorph",
+          "Rhizomorph set up"
         ],
         "none": [
           "test",
@@ -1514,11 +1542,12 @@
         "docs/index.md"
       ],
       "must_match": [
-        "How do I start Rhizomorph?"
+        "How do I start Rhizomorph?",
+        "How do I set up Rhizomorph?"
       ],
       "must_not_match": [
-        "How do I start Rhizomorph tests?",
-        "How do I start Rhizomorph crashes?"
+        "Why does Rhizomorph crash when I run Rhizomorph?",
+        "Why does install Rhizomorph fail with an error?"
       ]
     },
     {
@@ -1568,8 +1597,8 @@
         "What is the Rhizomorph licence?"
       ],
       "must_not_match": [
-        "What is the Rhizomorph licence tests?",
-        "What is the Rhizomorph licence crashes?"
+        "Why does the Rhizomorph licence check show an error?",
+        "Why do the Rhizomorph licence tests fail?"
       ]
     },
     {
@@ -1617,8 +1646,8 @@
         "Where is Rhizomorph support?"
       ],
       "must_not_match": [
-        "Where is Rhizomorph support tests?",
-        "Where is Rhizomorph support crashes?"
+        "Why does Rhizomorph support show an error?",
+        "Why do Rhizomorph support tests fail?"
       ]
     },
     {
@@ -1665,8 +1694,8 @@
         "How do I contribute to Rhizomorph?"
       ],
       "must_not_match": [
-        "How do I contribute to Rhizomorph tests?",
-        "How do I contribute to Rhizomorph crashes?"
+        "Why do tests fail when I contribute to Rhizomorph?",
+        "Why is the Rhizomorph contribution guide broken?"
       ]
     },
     {
@@ -1679,7 +1708,9 @@
           "install Embodied",
           "run Embodied",
           "Embodied installation",
-          "Embodied setup"
+          "Embodied setup",
+          "set up Embodied",
+          "Embodied set up"
         ],
         "none": [
           "test",
@@ -1714,11 +1745,12 @@
         "docs/index.md"
       ],
       "must_match": [
-        "How do I start Embodied?"
+        "How do I start Embodied?",
+        "How do I set up Embodied?"
       ],
       "must_not_match": [
-        "How do I start Embodied tests?",
-        "How do I start Embodied crashes?"
+        "Why does Embodied crash when I run Embodied?",
+        "Why does install Embodied fail with an error?"
       ]
     },
     {
@@ -1768,8 +1800,8 @@
         "What is the Embodied licence?"
       ],
       "must_not_match": [
-        "What is the Embodied licence tests?",
-        "What is the Embodied licence crashes?"
+        "Why does the Embodied licence check show an error?",
+        "Why do the Embodied licence tests fail?"
       ]
     },
     {
@@ -1817,8 +1849,8 @@
         "Where is Embodied support?"
       ],
       "must_not_match": [
-        "Where is Embodied support tests?",
-        "Where is Embodied support crashes?"
+        "Why does Embodied support show an error?",
+        "Why do Embodied support tests fail?"
       ]
     },
     {
@@ -1865,8 +1897,8 @@
         "How do I contribute to Embodied?"
       ],
       "must_not_match": [
-        "How do I contribute to Embodied tests?",
-        "How do I contribute to Embodied crashes?"
+        "Why do tests fail when I contribute to Embodied?",
+        "Why is the Embodied contribution guide broken?"
       ]
     }
   ]
