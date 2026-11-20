@@ -150,3 +150,10 @@ func TestParseFileChunks_Boundary_SplitPartsTrimmed(t *testing.T) {
 		}
 	}
 }
+
+func TestParseFileChunks_Boundary_OversizedIndentedCode(t *testing.T) {
+	chunks := parseFileChunks("o/r", "v1", "a.md", "# H\n\n    long code line that exceeds the limit", 12)
+	if len(chunks) < 2 || !strings.HasPrefix(chunks[0].Text, "    ") {
+		t.Fatalf("chunks = %+v, want multiple chunks with first code indent preserved", chunks)
+	}
+}

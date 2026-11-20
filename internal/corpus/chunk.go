@@ -86,11 +86,11 @@ func cutOversized(paras []string, maxBytes int) []string {
 			for cut > 0 && !utf8.RuneStart(p[cut]) {
 				cut--
 			}
-			bounded = append(bounded, strings.TrimSpace(p[:cut]))
-			p = strings.TrimSpace(p[cut:])
+			bounded = append(bounded, strings.TrimRightFunc(p[:cut], unicode.IsSpace))
+			p = strings.TrimLeft(p[cut:], "\r\n")
 		}
-		if len(p) > 0 {
-			bounded = append(bounded, p)
+		if strings.TrimSpace(p) != "" {
+			bounded = append(bounded, strings.TrimRightFunc(p, unicode.IsSpace))
 		}
 	}
 	return bounded

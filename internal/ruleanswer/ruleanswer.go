@@ -29,7 +29,7 @@ const MaxFindings = MaxTriggers * 8
 
 var idPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 var sponsorshipLink = regexp.MustCompile(`(?i)https?://(?:www\.)?(?:github\.com/sponsors/|ko-fi\.com/|opencollective\.com/|liberapay\.com/|patreon\.com/|buymeacoffee\.com/)`)
-var listItem = regexp.MustCompile(`^(?:[-+*] |[0-9]+[.)] )`)
+var listItem = regexp.MustCompile(`^[ \t]*(?:[-+*] |[0-9]+[.)] )`)
 
 // Table contains the versioned trigger collection.
 type Table struct {

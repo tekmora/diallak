@@ -397,6 +397,30 @@ func TestFilterSponsorship_Positive_RemoveMiddleItem(t *testing.T) {
 	}
 }
 
+func TestFilterSponsorship_Negative_NestedSponsorPreservesParent(t *testing.T) {
+	input := "- parent\n  - ordinary\n  - [Sponsor](https://ko-fi.com/example)"
+	want := "- parent\n  - ordinary"
+	if got := filterSponsorship(input); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestFilterSponsorship_Negative_NestedSponsorBetweenItems(t *testing.T) {
+	input := "- parent\n\t1. first\n\t2. [Sponsor](https://ko-fi.com/example)\n\t3. last"
+	want := "- parent\n\t1. first\n\t3. last"
+	if got := filterSponsorship(input); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestFilterSponsorship_Negative_NestedSponsorContinuation(t *testing.T) {
+	input := "- parent\n  - [Sponsor](https://ko-fi.com/example)\n    continuation\n  - ordinary"
+	want := "- parent\n  - ordinary"
+	if got := filterSponsorship(input); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func TestResolve_Boundary_LoadedIndentedCode(t *testing.T) {
 	trigger := fixtureTrigger()
 	fsys := fstest.MapFS{"README.md": &fstest.MapFile{Data: []byte("# Release\n\n    first line\n    second line\n")}}
