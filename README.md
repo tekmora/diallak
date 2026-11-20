@@ -142,9 +142,9 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 | `DIALLAK_SUPPORTER_GRACE` | no, with the supporter switch | How long a member keeps "Supporter" after holding neither platform role, as a Go duration from `24h` to `2160h`; default 72 hours |
 <!-- markdownlint-enable MD013 -->
 
-Version 1 deployments leave model and embedding variables unset. Common questions use fixed documentation rules, then cited excerpts, then a refusal. Rule answers and slash refusals name the tickets channel. See [rule answers](docs/rule-answers.md).
+Version 1 refuses model and embedding variables (ADR-0028); deployments leave them unset. Common questions use fixed documentation rules, then cited excerpts, then a refusal. Rule answers and slash refusals name the tickets channel. See [rule answers](docs/rule-answers.md).
 
-With the model variables set the bot sends the endpoint one small request at start
+In a later version, with the model variables set the bot sends the endpoint one small request at start
 ([ADR-0012](docs/adr/0012-model-state.md)):
 
 - **The endpoint refuses it**, for example with status 401 or 404 for a wrong

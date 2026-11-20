@@ -592,8 +592,12 @@ func buildClient(
 }
 
 func cacheForumChannel(channel discord.GuildChannel) bool {
-	_, ok := channel.(*discord.GuildForumChannel)
-	return ok
+	switch channel.(type) {
+	case discord.GuildForumChannel, *discord.GuildForumChannel:
+		return true
+	default:
+		return false
+	}
 }
 
 // dispatcher hands each interaction the bot serves to a worker. The worker pool bound is

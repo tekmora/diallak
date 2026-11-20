@@ -1,7 +1,6 @@
 package ruleanswer
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/tekmora/diallak/internal/corpus"
@@ -35,7 +34,7 @@ func hasFinding(findings []Finding, code string) bool {
 
 func TestLoad_Positive_StrictValidTable(t *testing.T) {
 	raw := `{"version":1,"triggers":[]}`
-	table, err := Load(strings.NewReader(raw))
+	table, err := Load([]byte(raw))
 	if err != nil || table.Version != 1 {
 		t.Fatalf("Load = (%v, %v), want version 1", table, err)
 	}
@@ -43,14 +42,14 @@ func TestLoad_Positive_StrictValidTable(t *testing.T) {
 
 func TestLoad_Negative_UnknownFieldAndTrailingData(t *testing.T) {
 	for _, raw := range []string{`{"version":1,"triggers":[],"extra":true}`, `{"version":1,"triggers":[]} {}`} {
-		if _, err := Load(strings.NewReader(raw)); err == nil {
+		if _, err := Load([]byte(raw)); err == nil {
 			t.Errorf("Load(%s) error = nil", raw)
 		}
 	}
 }
 
 func TestLoad_Boundary_WhitespaceAfterDocument(t *testing.T) {
-	if _, err := Load(strings.NewReader("{\"version\":1,\"triggers\":[]}  \n")); err != nil {
+	if _, err := Load([]byte("{\"version\":1,\"triggers\":[]}  \n")); err != nil {
 		t.Fatalf("Load whitespace suffix: %v", err)
 	}
 }
@@ -154,6 +153,7 @@ func TestValidate_Negative_BareSupportKeyword(t *testing.T) {
 	for _, tc := range []struct {
 		name, keyword, group string
 	}{
+		{"support alone", "support", "any"},
 		{"alias then support", "Where is Diallak support", "any"},
 		{"support then alias", "support for Diallak", "all"},
 		{"multi-token alias", "support for Diallak Tools", "any"},
@@ -267,10 +267,13 @@ func TestResolve_Boundary_SponsorshipListItem(t *testing.T) {
 func TestResolve_Negative_MissingLinkIsDropped(t *testing.T) {
 	trigger := fixtureTrigger()
 	trigger.Links = []string{"docs/guide.md"}
-	chunks := []corpus.Chunk{{Repository: trigger.Repository, Path: trigger.Answer.Path, Heading: trigger.Answer.Heading}}
+	chunks := []corpus.Chunk{{Repository: trigger.Repository, Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Text: "kept text"}}
 	resolved, disabled, err := Resolve(fixtureTable(trigger), chunks, "")
 	if err != nil || len(disabled) != 1 || disabled[0].Reason != "link_missing" || len(resolved.Answers[trigger.ID].Links) != 0 || resolved.DisabledCount != 0 {
 		t.Fatalf("Resolve = (%v, %v, %v)", resolved, disabled, err)
+	}
+	if resolved.Answers[trigger.ID].Text != "kept text" {
+		t.Error("answer text lost")
 	}
 }
 
@@ -330,5 +333,48 @@ func TestValidateNearMiss(t *testing.T) {
 				t.Errorf("near_miss = %t, want %t", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestMatch_Negative_MultipleForumProducts(t *testing.T) {
+	a := fixtureTrigger()
+	b := fixtureTrigger()
+	b.ID = "other"
+	b.Repository = "other/product"
+	b.ForumTags = []string{"Other"}
+	q := Query{Text: "verify release", Forum: true, Tags: []string{"Diallak", "Other"}}
+	table := fixtureTable(a, b)
+	if _, ok := table.Match(q); ok {
+		t.Error("ambiguous forum post matched")
+	}
+	resolved := &Resolved{Table: table, Answers: map[string]ResolvedAnswer{a.ID: {Trigger: a}, b.ID: {Trigger: b}}}
+	if _, ok := resolved.Match(q); ok {
+		t.Error("ambiguous resolved forum post matched")
+	}
+}
+
+func TestValidate_Boundary_TriggerAndFindingCaps(t *testing.T) {
+	table := fixtureTable(make([]Trigger, MaxTriggers)...)
+	if !hasFinding(Validate(table, knownNames()), "id") {
+		t.Error("limit must still validate")
+	}
+	table.Triggers = append(table.Triggers, Trigger{})
+	got := Validate(table, knownNames())
+	if len(got) != 1 || got[0].Code != "trigger_count" {
+		t.Errorf("above limit findings = %+v", got)
+	}
+	v := validator{}
+	for i := 0; i < MaxFindings+1; i++ {
+		v.add("x", "p", "m")
+	}
+	if len(v.findings) != MaxFindings {
+		t.Errorf("finding count = %d", len(v.findings))
+	}
+}
+
+func TestResolve_Positive_IndentedCodePreserved(t *testing.T) {
+	input := "    code line\n    second line"
+	if got := filterSponsorship(input); got != input {
+		t.Errorf("got %q", got)
 	}
 }

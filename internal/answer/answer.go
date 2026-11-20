@@ -623,12 +623,18 @@ func Render(a Answer, opts RenderOptions) string {
 	switch a.Kind {
 	case KindRule:
 		body = renderRule(a, TicketsSentence(opts.TicketsChannel), Footer(place), maxRunes)
+		if body == "" {
+			body = renderExcerptReply(a, Footer(place), opts.TicketsChannel, maxRunes)
+		}
 	case KindAnswer:
 		body = renderAnswer(a, place, maxRunes)
 	case KindExcerpts:
-		body = renderExcerpts(a, Footer(place), maxRunes)
+		body = renderExcerptReply(a, Footer(place), opts.TicketsChannel, maxRunes)
 	case KindRefusal:
 		body = RefusalTo(place, opts.TicketsChannel)
+		if a.Reason == ReasonNoSource {
+			body += "\n\nNo AI model wrote this reply."
+		}
 	default:
 		body = RefusalTo(place, opts.TicketsChannel)
 	}
@@ -648,6 +654,9 @@ func renderRule(a Answer, tickets, footer string, maxRunes int) string {
 	}
 	for len(lines) > 0 && utf8.RuneCountInString(prefix)+utf8.RuneCountInString(suffix)+utf8.RuneCountInString(sourcesBlock(lines)) > bodyMax {
 		lines = lines[:len(lines)-1]
+	}
+	if len(lines) == 0 {
+		return ""
 	}
 	budget := bodyMax - utf8.RuneCountInString(prefix) - utf8.RuneCountInString(suffix) - utf8.RuneCountInString(sourcesBlock(lines))
 	body := prefix + cutToRunes(a.Text, budget) + sourcesBlock(lines) + suffix
@@ -794,6 +803,14 @@ func renderExcerptsCandidate(header string, blocks []excerptBlock) string {
 	return sb.String()
 }
 
+func renderExcerptReply(a Answer, footer, tickets string, maxRunes int) string {
+	if strings.TrimSpace(tickets) == "" {
+		return renderExcerpts(a, footer, maxRunes)
+	}
+	sentence := TicketsSentence(tickets)
+	return renderExcerpts(a, footer, maxRunes-2-utf8.RuneCountInString(sentence)) + "\n\n" + sentence
+}
+
 // RenderForum formats rule and excerpt replies for the support forum. FooterForum ends
 // each rendered reply, within maxRunes (DefaultMaxRenderRunes when zero).
 func RenderForum(a Answer, maxRunes int, ticketsChannels ...string) string {
@@ -806,9 +823,12 @@ func RenderForum(a Answer, maxRunes int, ticketsChannels ...string) string {
 	}
 	switch a.Kind {
 	case KindExcerpts:
-		return renderExcerpts(a, FooterForum, maxRunes) + "\n\n" + FooterForum
+		return renderExcerptReply(a, FooterForum, tickets, maxRunes) + "\n\n" + FooterForum
 	case KindRule:
 		body := renderRule(a, TicketsSentence(tickets), FooterForum, maxRunes)
+		if body == "" {
+			body = renderExcerptReply(a, FooterForum, tickets, maxRunes)
+		}
 		return body + "\n\n" + FooterForum
 	default:
 		return ""

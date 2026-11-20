@@ -408,7 +408,7 @@
       "name": "support",
       "category": "community",
       "type": "forum",
-      "purpose": "Questions, one post each. The bot answers a new post first with excerpts from the documentation; people answer after it.",
+      "purpose": "Questions, one post each. The bot answers an opted-in post first with a fixed documentation answer when one exists, otherwise with documentation excerpts; people answer after it.",
       "owner": "moderator",
       "opens": "start",
       "first_answer": true,

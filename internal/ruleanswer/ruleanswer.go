@@ -2,6 +2,7 @@
 package ruleanswer
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -82,8 +83,8 @@ type Known struct {
 }
 
 // Load reads a strict JSON table and rejects unknown fields and trailing data.
-func Load(r io.Reader) (*Table, error) {
-	dec := json.NewDecoder(r)
+func Load(data []byte) (*Table, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	var table Table
 	if err := dec.Decode(&table); err != nil {
@@ -99,7 +100,7 @@ func Load(r io.Reader) (*Table, error) {
 	return &table, nil
 }
 
-func (t Trigger) entryPoints(q Query) bool {
+func (t Trigger) entryPoints(q Query, tokens []string) bool {
 	if q.Forum {
 		for _, tag := range t.ForumTags {
 			if slices.Contains(q.Tags, tag) {
@@ -108,7 +109,7 @@ func (t Trigger) entryPoints(q Query) bool {
 		}
 		return false
 	}
-	return slices.Contains(t.Commands, q.Command) && matchesAny(retrieval.Tokenize(q.Text), t.Aliases)
+	return slices.Contains(t.Commands, q.Command) && matchesAny(tokens, t.Aliases)
 }
 
 func matchesAny(question, phrases []string) bool {
@@ -125,13 +126,34 @@ func (t *Table) Match(q Query) (Trigger, bool) {
 	if t == nil {
 		return Trigger{}, false
 	}
-	tokens := retrieval.Tokenize(q.Text)
+	return t.match(q, retrieval.Tokenize(q.Text), nil)
+}
+
+func (t *Table) match(q Query, tokens []string, available map[string]ResolvedAnswer) (Trigger, bool) {
+	var first Trigger
+	var repository string
+	found := false
 	for _, trigger := range t.Triggers {
-		if trigger.entryPoints(q) && trigger.matches(tokens) {
-			return trigger, true
+		if !trigger.matchesQuery(q, tokens) {
+			continue
+		}
+		if repository != "" && q.Forum && repository != trigger.Repository {
+			return Trigger{}, false
+		}
+		repository = trigger.Repository
+		if !found {
+			if available == nil {
+				first, found = trigger, true
+			} else if _, ok := available[trigger.ID]; ok {
+				first, found = trigger, true
+			}
 		}
 	}
-	return Trigger{}, false
+	return first, found
+}
+
+func (t Trigger) matchesQuery(q Query, tokens []string) bool {
+	return t.entryPoints(q, tokens) && t.matches(tokens)
 }
 
 func (t Trigger) matches(question []string) bool {
@@ -176,11 +198,10 @@ func Validate(t *Table, known Known) []Finding {
 	}
 	v := validator{table: t, known: known, seen: make(map[string]bool)}
 	v.checkVersion()
-	for i := range t.Triggers {
-		v.checkTrigger(i, &t.Triggers[i])
-	}
-	if len(v.findings) > MaxFindings {
-		v.findings = v.findings[:MaxFindings]
+	if len(t.Triggers) <= MaxTriggers {
+		for i := range t.Triggers {
+			v.checkTrigger(i, &t.Triggers[i])
+		}
 	}
 	return v.findings
 }
@@ -193,7 +214,9 @@ type validator struct {
 }
 
 func (v *validator) add(code, p, message string) {
-	v.findings = append(v.findings, Finding{Code: code, Path: p, Message: message})
+	if len(v.findings) < MaxFindings {
+		v.findings = append(v.findings, Finding{Code: code, Path: p, Message: message})
+	}
 }
 
 func (v *validator) checkVersion() {
@@ -261,6 +284,9 @@ func (v *validator) checkBareSupportKeywords(p string, t *Trigger) {
 }
 
 func bareSupportKeyword(tokens, aliases []string) bool {
+	if len(tokens) == 1 && tokens[0] == "support" {
+		return true
+	}
 	for _, alias := range aliases {
 		aliasTokens := retrieval.Tokenize(alias)
 		if len(aliasTokens) == 0 || len(tokens) != len(aliasTokens)+1 {
@@ -327,7 +353,7 @@ func (v *validator) checkExamples(p string, t *Trigger) {
 	}
 	for i, text := range t.MustNotMatch {
 		for _, q := range triggerQueries(*t, text) {
-			if t.entryPoints(q) && t.matches(retrieval.Tokenize(q.Text)) {
+			if t.matchesQuery(q, retrieval.Tokenize(q.Text)) {
 				v.add("must_not_match", fmt.Sprintf("%s.must_not_match[%d]", p, i), "example matches this trigger")
 				break
 			}
@@ -362,9 +388,10 @@ func triggerQueries(t Trigger, text string) []Query {
 func (v *validator) replayMatch(p string, target *Trigger, i int, text string) {
 	for _, q := range triggerQueries(*target, text) {
 		matches := 0
+		tokens := retrieval.Tokenize(q.Text)
 		for j := range v.table.Triggers {
 			candidate := &v.table.Triggers[j]
-			if candidate.entryPoints(q) && candidate.matches(retrieval.Tokenize(q.Text)) {
+			if candidate.matchesQuery(q, tokens) {
 				matches++
 				if candidate.ID != target.ID {
 					v.add("ambiguous_match", fmt.Sprintf("%s.must_match[%d]", p, i), "example also matches trigger "+candidate.ID)
@@ -397,16 +424,12 @@ func (r *Resolved) Match(q Query) (ResolvedAnswer, bool) {
 	if r == nil || r.Table == nil {
 		return ResolvedAnswer{}, false
 	}
-	tokens := retrieval.Tokenize(q.Text)
-	for _, trigger := range r.Table.Triggers {
-		if trigger.entryPoints(q) && trigger.matches(tokens) {
-			answer, ok := r.Answers[trigger.ID]
-			if ok {
-				return answer, true
-			}
-		}
+	trigger, ok := r.Table.match(q, retrieval.Tokenize(q.Text), r.Answers)
+	if !ok {
+		return ResolvedAnswer{}, false
 	}
-	return ResolvedAnswer{}, false
+	answer, ok := r.Answers[trigger.ID]
+	return answer, ok
 }
 
 // Issue records a trigger or link unavailable in the loaded corpus.
@@ -455,8 +478,9 @@ func Resolve(t *Table, chunks []corpus.Chunk, linkTemplate string) (*Resolved, [
 func filterSponsorship(text string) string {
 	var blocks, lines []string
 	flush := func() {
-		block := strings.TrimSpace(strings.Join(lines, "\n"))
-		if block != "" && !sponsorshipLink.MatchString(block) {
+		block := strings.Join(lines, "\n")
+		trimmed := strings.TrimSpace(block)
+		if trimmed != "" && !sponsorshipLink.MatchString(trimmed) {
 			blocks = append(blocks, block)
 		}
 		lines = nil
@@ -477,7 +501,7 @@ func filterSponsorship(text string) string {
 
 func resolveAnswer(trigger Trigger, chunks []corpus.Chunk) (ResolvedAnswer, bool) {
 	answer := ResolvedAnswer{Trigger: trigger}
-	var text strings.Builder
+	var texts []string
 	foundRepo := false
 	for _, chunk := range chunks {
 		if chunk.Repository != trigger.Repository {
@@ -487,15 +511,12 @@ func resolveAnswer(trigger Trigger, chunks []corpus.Chunk) (ResolvedAnswer, bool
 		if chunk.Path != trigger.Answer.Path || chunk.Heading != trigger.Answer.Heading {
 			continue
 		}
-		if text.Len() > 0 {
-			text.WriteString("\n\n")
-		}
-		text.WriteString(chunk.Text)
+		texts = append(texts, chunk.Text)
 		if len(answer.Sources) == 0 {
 			answer.Sources = append(answer.Sources, chunk)
 		}
 	}
-	answer.Text = text.String()
+	answer.Text = strings.Join(texts, "\n\n")
 	return answer, foundRepo
 }
 

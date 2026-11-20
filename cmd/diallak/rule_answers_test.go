@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tekmora/diallak/internal/corpus"
 	"github.com/tekmora/diallak/internal/discord"
@@ -28,7 +29,9 @@ func TestRuleTable_Positive_CrossChecksServerCommandsTagsAndCorpus(t *testing.T)
 	if findings := ruleanswer.Validate(table, ruleanswer.Known{Commands: commandNames, ForumTags: supportTags}); len(findings) != 0 {
 		t.Fatalf("trigger validation findings = %+v", findings)
 	}
-	chunks, err := corpus.Load(context.Background(), os.DirFS("../.."), corpus.Source{
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	chunks, err := corpus.Load(ctx, os.DirFS("../.."), corpus.Source{
 		Repository: "tekmora/diallak", Revision: "fixture",
 		Patterns: []string{"README.md", "docs/**/*.md"},
 	}, corpus.DefaultLimits())

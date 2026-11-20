@@ -375,7 +375,6 @@
         "all": [],
         "any": [
           "get help",
-          "help with",
           "get support",
           "ask for help",
           "support channel"
@@ -417,7 +416,8 @@
       ],
       "must_not_match": [
         "Why does getting help with Amussis show an error?",
-        "Why do Amussis support channel tests fail?"
+        "Why do Amussis support channel tests fail?",
+        "Can Amussis help with HDR playback?"
       ]
     },
     {
@@ -946,7 +946,6 @@
         "all": [],
         "any": [
           "get help",
-          "help with",
           "get support",
           "ask for help",
           "support channel"
@@ -988,7 +987,8 @@
       ],
       "must_not_match": [
         "Why does getting help with VMAFx show an error?",
-        "Why do VMAFx support channel tests fail?"
+        "Why do VMAFx support channel tests fail?",
+        "Can VMAFx help with HDR playback?"
       ]
     },
     {
@@ -1258,7 +1258,6 @@
         "all": [],
         "any": [
           "get help",
-          "help with",
           "get support",
           "ask for help",
           "support channel"
@@ -1300,7 +1299,8 @@
       ],
       "must_not_match": [
         "Why does getting help with SnatchArr show an error?",
-        "Why do SnatchArr support channel tests fail?"
+        "Why do SnatchArr support channel tests fail?",
+        "Can SnatchArr help with HDR playback?"
       ]
     },
     {

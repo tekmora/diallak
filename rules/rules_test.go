@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/tekmora/diallak/internal/ruleanswer"
@@ -19,6 +20,7 @@ func TestTablePrecision(t *testing.T) {
 		{"Does Amussis support ARM64?", ""},
 		{"Does Pelorus support Windows?", ""},
 		{"Is VMAFx support for HDR planned?", ""},
+		{"Can VMAFx help with HDR playback?", ""},
 		{"How do I get help with Amussis?", "amussis-support"},
 		{"How do I set up Snatcharr?", "snatcharr-start"},
 		{"How do I verify the Diallak image signature?", "diallak-verify-release"},
@@ -63,5 +65,15 @@ func checkExampleEntryPoints(t *testing.T, table *ruleanswer.Table, trigger rule
 		if !ok || got.ID != trigger.ID {
 			t.Errorf("%s tag %s: got %s, %t", trigger.ID, tag, got.ID, ok)
 		}
+	}
+}
+
+func TestTable_Negative_ReportsFirstFinding(t *testing.T) {
+	old := triggerJSON
+	t.Cleanup(func() { triggerJSON = old })
+	triggerJSON = `{"version":2,"triggers":[]}`
+	_, err := Table()
+	if err == nil || !strings.Contains(err.Error(), "1 findings") || !strings.Contains(err.Error(), "version: must be 1") {
+		t.Fatalf("Table error = %v", err)
 	}
 }

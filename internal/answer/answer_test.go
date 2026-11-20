@@ -748,7 +748,7 @@ func verifyRenderPositiveKindRefusal(t *testing.T) {
 		Kind:   KindRefusal,
 		Reason: ReasonNoSource,
 	}
-	wantRefusal := Refusal("") + "\n\n" + Footer("")
+	wantRefusal := Refusal("") + "\n\nNo AI model wrote this reply.\n\n" + Footer("")
 	if Render(ref, RenderOptions{}) != wantRefusal {
 		t.Errorf("Render(KindRefusal) = %q, want %q", Render(ref, RenderOptions{}), wantRefusal)
 	}
@@ -1471,5 +1471,37 @@ func TestRefusalToTicketsChannel(t *testing.T) {
 	}
 	if RefusalTo("", "") != Refusal("") {
 		t.Error("empty tickets channel changed default refusal")
+	}
+}
+
+func TestRender_Negative_RefusalDisclosesNoModel(t *testing.T) {
+	for _, place := range []string{"", "#help"} {
+		got := Render(Answer{Kind: KindRefusal, Reason: ReasonNoSource}, RenderOptions{Place: place})
+		if !strings.Contains(got, "No AI model wrote this reply.") {
+			t.Errorf("refusal %q", got)
+		}
+	}
+}
+
+func TestRender_Boundary_RuleCitationMustFit(t *testing.T) {
+	a := Answer{Kind: KindRule, Text: "rule answer", Sources: []Source{{N: 1, Title: "T", URL: "https://example.test/" + strings.Repeat("x", 400)}}}
+	for _, got := range []string{Render(a, RenderOptions{MaxRunes: 500}), RenderForum(a, 500)} {
+		if strings.Contains(got, LabelRule) || strings.Contains(got, "rule answer") {
+			t.Errorf("uncited rule: %q", got)
+		}
+	}
+}
+
+func TestRender_Positive_ExcerptTickets(t *testing.T) {
+	a := Answer{Kind: KindExcerpts, Sources: []Source{{N: 1, Title: "T", Excerpt: strings.Repeat("x", 1000)}}}
+	for _, got := range []string{Render(a, RenderOptions{MaxRunes: 500, TicketsChannel: "#tickets"}), RenderForum(a, 500, "#tickets")} {
+		if !strings.Contains(got, TicketsSentence("#tickets")) || utf8.RuneCountInString(got) > 500 {
+			t.Errorf("reply = %q", got)
+		}
+	}
+	for _, got := range []string{Render(a, RenderOptions{}), RenderForum(a, 500)} {
+		if strings.Contains(got, TicketsSentence("")) {
+			t.Errorf("unexpected tickets: %q", got)
+		}
 	}
 }
