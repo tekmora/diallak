@@ -17,7 +17,8 @@ request author, including Renovate. The headings in the
 [description template](.github/pull_request_template.md) must be present and in
 order, with at least three words under the description heading. Each template
 section containing a task-list item must contain a task-list item in the pull
-request. Text inside HTML comments and fenced code blocks is ignored.
+request. Text inside HTML comments and fenced code blocks is ignored. An unclosed
+HTML comment hides the rest of the text; comment markers in inline code are literal.
 
 ### Modernized NASA JPL Power-of-10 Rules
 
