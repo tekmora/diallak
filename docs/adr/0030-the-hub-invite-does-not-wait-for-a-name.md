@@ -3,7 +3,9 @@
 - **Status**: Accepted
 - **Date**: 2026-11-20
 - **Authors**: Maintainers
-- **Supersedes in part**: [ADR-0029](0029-the-bot-creates-the-hub-invite.md), when the live apply runs and when the links are made
+- **Supersedes in part**:
+  [ADR-0029](0029-the-bot-creates-the-hub-invite.md), when the live apply runs
+  and when the links are made
 
 ## Context
 
@@ -17,7 +19,11 @@ invite object identifies its inviter as a user object
 
 The live apply, recording the code, and adding the profile and README links go
 ahead without step 4. The cluster session builds the bot from source at a main
-commit and follows steps 4–7 of [a first set-up](../server-apply.md#a-first-set-up).
+commit and follows the
+[existing-server path](../server-apply.md#a-server-the-bot-is-already-on) for
+a server the bot is already on.
+A person switches on by hand the rights the plan lists under `rights needed:`
+and switches Create Invite off after the run, as described in that section.
 The links are made in one batch per organisation
 ([#254](https://github.com/tekmora/diallak/issues/254)).
 
@@ -34,7 +40,8 @@ This record replaces two statements in ADR-0029. The record stands otherwise.
 
 The invite and links can be published while the naming step remains set aside.
 The recorded code and subsequent comparison follow the existing
-[first set-up](../server-apply.md#a-first-set-up) and
+[existing-server path](../server-apply.md#a-server-the-bot-is-already-on)
+and the
 [invite definition](../server-definition.md#invites).
 
 ## Alternatives considered
@@ -56,6 +63,7 @@ the naming step.
 - [ADR-0029](0029-the-bot-creates-the-hub-invite.md), the hub invite.
 - [Discord invite API](https://github.com/discord/discord-api-docs/blob/main/developers/resources/invite.mdx),
   as referenced by ADR-0029.
-- [Product plan](../product.md), [first set-up](../server-apply.md#a-first-set-up),
+- [Product plan](../product.md),
+  [existing-server path](../server-apply.md#a-server-the-bot-is-already-on),
   [invite definition](../server-definition.md#invites), and
   [#254](https://github.com/tekmora/diallak/issues/254).

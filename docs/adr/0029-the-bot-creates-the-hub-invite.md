@@ -3,7 +3,8 @@
 - **Status**: Accepted
 - **Date**: 2026-11-20
 - **Authors**: Maintainers
-- **Superseded in part by**: [ADR-0030](0030-the-hub-invite-does-not-wait-for-a-name.md)
+- **Superseded in part by**:
+  [ADR-0030](0030-the-hub-invite-does-not-wait-for-a-name.md)
 
 ## Context
 
