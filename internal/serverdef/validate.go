@@ -53,6 +53,7 @@ func Validate(def *Definition) []Finding {
 	v.checkAreaConditions()
 	v.checkAutomationRecords()
 	v.checkSettings()
+	v.checkInvites()
 	v.checkNews()
 	v.checkBugReports()
 

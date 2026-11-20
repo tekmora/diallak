@@ -361,6 +361,19 @@ func standardHandler(guildID, botUserID uint64, appJSON, guildJSON, memberJSON, 
 			writeTestResponse(w, http.StatusOK, memberJSON)
 		case fmt.Sprintf("/guilds/%d/channels", guildID):
 			writeTestResponse(w, http.StatusOK, channelsJSON)
+		case fmt.Sprintf("/guilds/%d/invites", guildID):
+			var channels []fixtureAPIChannel
+			if err := json.Unmarshal([]byte(channelsJSON), &channels); err != nil {
+				writeTestResponse(w, http.StatusOK, `[]`)
+				return
+			}
+			for _, ch := range channels {
+				if ch.Name == "rules" {
+					writeTestResponse(w, http.StatusOK, fmt.Sprintf(`[{"code":"fixture-code","channel":{"id":%q},"inviter":{"id":%q,"username":"bot"},"max_age":0,"max_uses":0,"temporary":false}]`, ch.ID, strconv.FormatUint(botUserID, 10)))
+					return
+				}
+			}
+			writeTestResponse(w, http.StatusOK, `[]`)
 		case fmt.Sprintf("/guilds/%d/auto-moderation/rules", guildID):
 			writeTestResponse(w, http.StatusOK, rulesJSON)
 		default:
@@ -444,8 +457,8 @@ func TestReadServer_Positive_FiveRequestsInOrderAndNothingElse(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if len(recorded) != 5 {
-		t.Fatalf("recorded %d requests, want exactly 5: %+v", len(recorded), recorded)
+	if len(recorded) != 6 {
+		t.Fatalf("recorded %d requests, want exactly 6: %+v", len(recorded), recorded)
 	}
 	wantPaths := []string{
 		"/applications/@me",
@@ -453,6 +466,7 @@ func TestReadServer_Positive_FiveRequestsInOrderAndNothingElse(t *testing.T) {
 		fmt.Sprintf("/guilds/%d/members/%d", guildID, botUserID),
 		fmt.Sprintf("/guilds/%d/channels", guildID),
 		fmt.Sprintf("/guilds/%d/auto-moderation/rules", guildID),
+		fmt.Sprintf("/guilds/%d/invites", guildID),
 	}
 	for i, want := range wantPaths {
 		if recorded[i].method != http.MethodGet {
@@ -607,7 +621,7 @@ func TestReadServer_Positive_CallerPermissionsUnion(t *testing.T) {
 			{"id": "5002", "name": "ExtraRole", "position": 3, "permissions": "16384"}
 		]
 	}`, guildID, guildID, botUserID)
-	memberJSON := fmt.Sprintf(`{"user":{"id":"%d"},"roles":["5001","5002"]}`, botUserID)
+	memberJSON := fmt.Sprintf(`{"user":{"id":"%d"},"roles":["5001","%d","5002"]}`, botUserID, guildID)
 	channelsJSON := `[]`
 
 	srv := newStandardServer(guildID, botUserID, appJSON, guildJSON, memberJSON, channelsJSON)
@@ -623,6 +637,9 @@ func TestReadServer_Positive_CallerPermissionsUnion(t *testing.T) {
 		t.Fatalf("readServerWithOptions: %v", err)
 	}
 
+	if want := []string{"BotRole", "ExtraRole"}; !reflect.DeepEqual(snap.Caller.Roles, want) {
+		t.Errorf("Caller.Roles = %v, want %v", snap.Caller.Roles, want)
+	}
 	wantPerms := []string{"VIEW_CHANNEL", "SEND_MESSAGES", "EMBED_LINKS"}
 	if len(snap.Caller.Permissions) != len(wantPerms) {
 		t.Fatalf("Caller.Permissions = %v, want %v", snap.Caller.Permissions, wantPerms)

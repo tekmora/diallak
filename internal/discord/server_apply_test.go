@@ -143,6 +143,7 @@ type fakePlatform struct {
 	delay              time.Duration
 	verificationLevel  int
 	filterRules        []discord.AutoModerationRule
+	invites            []json.RawMessage
 }
 
 func newFakePlatform(t *testing.T, guildID, botUserID, botRoleID uint64) *fakePlatform {
@@ -302,6 +303,16 @@ func (f *fakePlatform) routeGetRequest(w http.ResponseWriter, r *http.Request) {
 		f.handleGetChannels(w)
 	case fmt.Sprintf("/guilds/%d/roles", f.guildID):
 		f.handleGetRoles(w)
+	case fmt.Sprintf("/guilds/%d/invites", f.guildID):
+		f.mu.Lock()
+		invites := append([]json.RawMessage{}, f.invites...)
+		f.mu.Unlock()
+		data, err := json.Marshal(invites)
+		if err != nil {
+			f.t.Errorf("marshal invites: %v", err)
+			return
+		}
+		writeTestResponse(w, http.StatusOK, string(data))
 	case fmt.Sprintf("/guilds/%d/auto-moderation/rules", f.guildID):
 		f.handleGetFilterRules(w)
 	default:
@@ -312,6 +323,25 @@ func (f *fakePlatform) routeGetRequest(w http.ResponseWriter, r *http.Request) {
 // routePostRequest handles POST requests for creating roles and channels.
 func (f *fakePlatform) routePostRequest(w http.ResponseWriter, r *http.Request, body []byte) {
 	path := r.URL.Path
+	if strings.HasPrefix(path, "/channels/") && strings.HasSuffix(path, "/invites") {
+		f.mu.Lock()
+		parts := strings.Split(path, "/")
+		payload := map[string]any{}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			f.t.Errorf("decode invite: %v", err)
+		}
+		payload["code"] = "new-code"
+		payload["channel"] = map[string]any{"id": parts[2]}
+		payload["inviter"] = map[string]any{"id": strconv.FormatUint(f.botUserID, 10), "username": "bot"}
+		data, err := json.Marshal(payload)
+		if err != nil {
+			f.t.Errorf("marshal invite: %v", err)
+		}
+		f.invites = append(f.invites, data)
+		f.mu.Unlock()
+		writeTestResponse(w, http.StatusOK, string(data))
+		return
+	}
 	switch path {
 	case fmt.Sprintf("/guilds/%d/roles", f.guildID):
 		f.handleCreateRole(w, body)
@@ -918,7 +948,7 @@ func runGateWrongPlanDigestTest(t *testing.T, def *serverdef.Definition, defDige
 	if !strings.Contains(err.Error(), expectedDigest) {
 		t.Errorf("error %q does not contain new digest %q", err.Error(), expectedDigest)
 	}
-	assertRequestCounts(t, fake.recorded, 5, 0)
+	assertRequestCounts(t, fake.recorded, 6, 0)
 }
 
 // runGateOtherDefinitionDigestTest tests apply rejection when the definition digest does not match.
@@ -949,7 +979,7 @@ func runGateOtherDefinitionDigestTest(t *testing.T, def *serverdef.Definition, d
 	if !strings.Contains(err.Error(), otherExpectedDigest) {
 		t.Errorf("error %q does not contain new digest %q", err.Error(), otherExpectedDigest)
 	}
-	assertRequestCounts(t, fake.recorded, 5, 0)
+	assertRequestCounts(t, fake.recorded, 6, 0)
 }
 
 // runGateRefusedPlanTest tests that a plan holding refusals is never applied.
@@ -989,7 +1019,7 @@ func runGateRefusedPlanTest(t *testing.T, def *serverdef.Definition, defDigest, 
 	if err.Error() != wantRefusalErr {
 		t.Errorf("error = %q, want %q", err.Error(), wantRefusalErr)
 	}
-	assertRequestCounts(t, fake.recorded, 5, 0)
+	assertRequestCounts(t, fake.recorded, 6, 0)
 }
 
 // runGateExactDefinitionTest tests that applying when server matches definition succeeds with 0 changes.
@@ -1321,6 +1351,7 @@ func runSetRolePermissionsFixtureTest(t *testing.T, def *serverdef.Definition, d
 	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
 	fake.roles = roles
 	fake.channels = chs
+	fake.seedFixtureInvite()
 	fake.holdFixtureSettings(t, pf)
 	fakeSrv := fake.server()
 	defer fakeSrv.Close()
@@ -1365,6 +1396,7 @@ func runMoveChannelFixtureTest(t *testing.T, def *serverdef.Definition, defDiges
 	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
 	fake.roles = roles
 	fake.channels = chs
+	fake.seedFixtureInvite()
 	fake.holdFixtureSettings(t, pf)
 	fakeSrv := fake.server()
 	defer fakeSrv.Close()
@@ -1408,6 +1440,7 @@ func runSetAccessFixtureTest(t *testing.T, def *serverdef.Definition, defDigest,
 	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
 	fake.roles = roles
 	fake.channels = chs
+	fake.seedFixtureInvite()
 	fake.holdFixtureSettings(t, pf)
 	fakeSrv := fake.server()
 	defer fakeSrv.Close()
@@ -1486,6 +1519,7 @@ func runRoleOrderPositionsMatchSubtest(t *testing.T, def *serverdef.Definition, 
 	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
 	fake.roles = roles
 	fake.channels = chs
+	fake.seedFixtureInvite()
 	fake.holdFixtureSettings(t, pf)
 	fake.getRolesOverride = wantedRoles
 	fakeSrv := fake.server()
@@ -1651,6 +1685,7 @@ func runRoleOrderSwappedBelowSubtest(t *testing.T, def *serverdef.Definition, de
 	fake := setupFreshServerFake(t, guildID, botUserID, botRoleID, true)
 	fake.roles = roles
 	fake.channels = chs
+	fake.seedFixtureInvite()
 	fake.holdFixtureSettings(t, pf)
 	fakeSrv := fake.server()
 	defer fakeSrv.Close()
@@ -1973,4 +2008,19 @@ func TestApplyServer_Boundary_Unit(t *testing.T) {
 			t.Errorf("server_apply.go contains 'MethodDelete'")
 		}
 	})
+}
+
+func (f *fakePlatform) seedFixtureInvite() {
+	for _, ch := range f.channels {
+		if ch.name != "rules" {
+			continue
+		}
+		data, err := json.Marshal(map[string]any{"code": "fixture-code", "channel": map[string]any{"id": ch.id.String()}, "inviter": map[string]any{"id": strconv.FormatUint(f.botUserID, 10), "username": "bot"}, "max_age": 0, "max_uses": 0, "temporary": false})
+		if err != nil {
+			f.t.Errorf("marshal fixture invite: %v", err)
+			return
+		}
+		f.invites = append(f.invites, data)
+		return
+	}
 }

@@ -106,11 +106,14 @@ one pull request or more.
 4. **The name.** Three or four candidates go to the operator, each with its
    meaning, origin and pronunciation. Nothing is renamed before the pick
    ([#253](https://github.com/tekmora/diallak/issues/253)).
-5. **The invite.** After the rename, the bot creates one permanent invite, and
+5. **The invite.** The creation code is built
+   ([ADR-0029](adr/0029-the-bot-creates-the-hub-invite.md)). After the rename,
+   the bot creates one permanent invite, and
    the organisation profile and every project README link it, one batch per
    organisation ([#254](https://github.com/tekmora/diallak/issues/254)).
 
-Steps 2 and 3 do not wait for each other. Step 5 waits for step 4.
+Steps 2 and 3 do not wait for each other. Only creation of the invite and
+the links wait for step 4.
 
 ## After 0.10
 

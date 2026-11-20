@@ -215,6 +215,7 @@ func setupUnknownBitChannelFixture(t *testing.T, fake *fakePlatform, guildID, bo
 		}
 	}
 	fake.channels = chs
+	fake.seedFixtureInvite()
 
 	targetOw := findChannelOverwrite(fake.channels, "home-lab", snowflake.ID(guildID))
 	if targetOw == nil {

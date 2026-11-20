@@ -57,6 +57,9 @@ func fetchSnapshotAndIndex(
 	if err := fetchFilterRules(ctx, client, token, guildID, opts, data); err != nil {
 		return nil, nil, err
 	}
+	if err := fetchInvites(ctx, client, token, guildID, opts, data); err != nil {
+		return nil, nil, err
+	}
 	return buildSnapshotAndIndex(data, guildID, opts.getNow())
 }
 
@@ -93,6 +96,8 @@ func buildSnapshotAndIndex(data *serverData, guildID uint64, now time.Time) (*se
 		return nil, nil, err
 	}
 
+	readInvites(snap, data)
+
 	if err := serverplan.Check(snap); err != nil {
 		return nil, nil, fmt.Errorf("check snapshot: %w", err)
 	}
@@ -121,8 +126,10 @@ type serverData struct {
 	member   *discord.Member
 	channels []discord.GuildChannel
 	// rules holds the filter rules; rulesRead is false when the bot may not read them.
-	rules     []discord.AutoModerationRule
-	rulesRead bool
+	rules       []discord.AutoModerationRule
+	rulesRead   bool
+	invites     []discord.ExtendedInvite
+	invitesRead bool
 }
 
 func fetchServerData(ctx context.Context, client *bot.Client, token string, guildID uint64, opts clientOptions) (*serverData, error) {
@@ -254,12 +261,16 @@ func resolveCaller(
 	}
 
 	callerMask := permissionsToMask(everyoneRole.Permissions)
+	var callerRoles []string
 	for _, rID := range memberRoleIDs {
 		r, ok := roleByID[rID]
 		if !ok {
 			return serverplan.Caller{}, 0, errors.New("the bot holds a role that the server's role list does not have; the server changed during the read")
 		}
 		callerMask |= permissionsToMask(r.Permissions)
+		if rID != everyoneRole.ID {
+			callerRoles = append(callerRoles, r.Name)
+		}
 	}
 	// A bit the table does not name gives the caller no right the plan knows;
 	// the snapshot reports such bits per role.
@@ -267,18 +278,20 @@ func resolveCaller(
 
 	return serverplan.Caller{
 		Role:        botRole.Name,
+		Roles:       callerRoles,
 		Position:    botRole.Position,
 		Permissions: callerPerms,
 	}, botRole.ID, nil
 }
 
 type serverIndex struct {
-	everyoneRoleID snowflake.ID
-	botRoleID      snowflake.ID
-	roles          map[string][]snowflake.ID
-	categories     map[string][]snowflake.ID
-	channels       map[string][]snowflake.ID
-	filterRules    map[string][]snowflake.ID
+	createdInviteCode string
+	everyoneRoleID    snowflake.ID
+	botRoleID         snowflake.ID
+	roles             map[string][]snowflake.ID
+	categories        map[string][]snowflake.ID
+	channels          map[string][]snowflake.ID
+	filterRules       map[string][]snowflake.ID
 }
 
 func newServerIndex(guildID uint64, botRoleID snowflake.ID) *serverIndex {

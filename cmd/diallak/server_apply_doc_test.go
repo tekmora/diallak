@@ -150,6 +150,27 @@ func verifySetUpRightsPlan(t *testing.T, def *serverdef.Definition, setUp, every
 	}
 }
 
+func TestServerApplyDoc_Positive_NewServerInviteRead(t *testing.T) {
+	def := loadDefinitionForDoc(t)
+	for _, tc := range []struct {
+		name          string
+		bot, everyone []string
+		want          bool
+	}{
+		{"bot manages guild", []string{"MANAGE_GUILD"}, nil, true},
+		{"everyone manages guild", nil, []string{"MANAGE_GUILD"}, true},
+		{"administrator", []string{"ADMINISTRATOR"}, nil, true},
+		{"no read right", nil, nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newServerSnapshot(def, tc.bot, tc.everyone)
+			if s.InvitesRead != tc.want || len(s.Invites) != 0 {
+				t.Fatalf("invites read = %t, invites = %v; want %t and empty", s.InvitesRead, s.Invites, tc.want)
+			}
+		})
+	}
+}
+
 // verifyDocInvitationNumber verifies the documentation contains the correct permission mask in the URL.
 func verifyDocInvitationNumber(t *testing.T, doc []byte, setUp []string) {
 	t.Helper()
@@ -305,15 +326,18 @@ func newServerSnapshot(def *serverdef.Definition, botRights, everyone []string) 
 		}
 	}
 	roles = append(roles, serverplan.Role{Name: "@everyone", Everyone: true, Permissions: everyone})
+	permissions := slices.Concat(botRights, everyone)
+	canReadGuild := slices.Contains(permissions, "MANAGE_GUILD") || slices.Contains(permissions, "ADMINISTRATOR")
 	return &serverplan.Snapshot{
 		Features:         []string{"COMMUNITY", "NEWS"},
-		Caller:           serverplan.Caller{Role: callerRole, Position: 1, Permissions: slices.Concat(botRights, everyone)},
+		Caller:           serverplan.Caller{Role: callerRole, Position: 1, Permissions: permissions},
 		Roles:            roles,
 		Categories:       []serverplan.Category{},
 		Channels:         []serverplan.Channel{},
 		ChannelsComplete: true,
 		// A new server checks no member, holds no filter rule, and lets the bot read its rules with MANAGE_GUILD.
 		VerificationLevel: "none",
-		FilterRulesRead:   slices.Contains(botRights, "MANAGE_GUILD"),
+		FilterRulesRead:   canReadGuild,
+		InvitesRead:       canReadGuild,
 	}
 }

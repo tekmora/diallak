@@ -107,6 +107,8 @@ func validateChangeObject(def *serverdef.Definition, c serverplan.Change) error 
 		return validateChannelChange(def, c)
 	case "set-access":
 		return validateAccessChange(def, c)
+	case serverplan.ActionCreateInvite:
+		return validateInviteChange(def, c)
 	case serverplan.ActionSetVerificationLevel:
 		return validateVerificationChange(def, c)
 	case serverplan.ActionCreateFilterRule, serverplan.ActionSetFilterRule:
@@ -281,12 +283,24 @@ func executePlan(
 		}
 
 		applied++
-		if _, err := fmt.Fprintf(out, "  %d. %s %s: done\n", c.Step, c.Action, c.Object); err != nil {
-			return fmt.Errorf("write output: %w", err)
+		if err := writeAppliedChange(out, c, idx); err != nil {
+			return err
 		}
 	}
 
 	if _, err := fmt.Fprintf(out, "applied: %d of %d\n", applied, len(changes)); err != nil {
+		return fmt.Errorf("write output: %w", err)
+	}
+	return nil
+}
+
+func writeAppliedChange(out io.Writer, c serverplan.Change, idx *serverIndex) error {
+	if c.Action == serverplan.ActionCreateInvite {
+		if _, err := fmt.Fprintf(out, "  invite code: %s\n", idx.createdInviteCode); err != nil {
+			return fmt.Errorf("write output: %w", err)
+		}
+	}
+	if _, err := fmt.Fprintf(out, "  %d. %s %s: done\n", c.Step, c.Action, c.Object); err != nil {
 		return fmt.Errorf("write output: %w", err)
 	}
 	return nil
@@ -325,14 +339,12 @@ func executeSingleChange(
 		return applyMoveChannel(callCtx, client, in.Definition, c.Object, idx, auditReason)
 	case "set-access":
 		return applySetAccess(callCtx, client, in.Definition, c.Object, idx, auditReason)
+	case serverplan.ActionCreateInvite:
+		return applyCreateInvite(callCtx, client, in.Definition, c, idx, auditReason)
 	case serverplan.ActionSetVerificationLevel:
 		return applySetVerificationLevel(callCtx, client, guildID, in.Definition, auditReason)
-	case serverplan.ActionCreateFilterRule:
-		return applyCreateFilterRule(callCtx, client, guildID, in.Definition, c.Object, idx, auditReason)
-	case serverplan.ActionSetFilterRule:
-		return applySetFilterRule(callCtx, client, guildID, in.Definition, c.Object, idx, auditReason)
 	default:
-		return fmt.Errorf("unsupported action %q", c.Action)
+		return executeFilterRuleChange(callCtx, client, guildID, in.Definition, c, idx, auditReason)
 	}
 }
 
@@ -960,4 +972,15 @@ func rolesAlreadyOrdered(below []discord.Role, newBelow []discord.Role, n int) b
 // maskToPermissions converts an unsigned uint64 bitmask into Disgo's signed int64 Permissions.
 func maskToPermissions(mask uint64) discord.Permissions {
 	return discord.Permissions(mask) // #nosec G115 -- Discord permission bits are bitmasks represented as int64 in disgo.
+}
+
+func executeFilterRuleChange(ctx context.Context, client *bot.Client, guildID uint64, def *serverdef.Definition, c serverplan.Change, idx *serverIndex, reason string) error {
+	switch c.Action {
+	case serverplan.ActionCreateFilterRule:
+		return applyCreateFilterRule(ctx, client, guildID, def, c.Object, idx, reason)
+	case serverplan.ActionSetFilterRule:
+		return applySetFilterRule(ctx, client, guildID, def, c.Object, idx, reason)
+	default:
+		return fmt.Errorf("unsupported action %q", c.Action)
+	}
 }

@@ -105,11 +105,13 @@ rate limit.
 `discord.ReadServer`
 ([`server_read.go`](../internal/discord/server_read.go)) asks for the
 application, the server with its roles, the bot's own membership, the list
-of channels and the filter rules, in that order, and stops at the first
+of channels, the filter rules and invites, in that order, and stops at the first
 failure.
 
 - **The caller** is the role Discord manages for this bot, and its rights are
-  the union of the rights of every role the bot holds.
+  the union of the rights of every role the bot holds. The caller snapshot
+  records `role`, `roles`, `position` and `permissions`; `roles` names every
+  held role except everyone, in the order returned for the member.
 - **Roles** are sorted from the highest to the lowest; two roles on the same
   position are sorted as Discord ranks them, the lower id first.
 - **Channels** of a type the definition does not know are kept with the type
@@ -135,6 +137,10 @@ failure.
   fifth request (`TestReadServer_Negative_RulesNotReadWithoutManageGuild` in
   [`server_read_settings_test.go`](../internal/discord/server_read_settings_test.go)).
   The verification level comes with the server.
+- **Invites** are listed when the caller holds `MANAGE_GUILD` or
+  `ADMINISTRATOR`; otherwise they are marked as not read. When a channel is
+  absent from the channel list, its name comes from the invite
+  ([reader](../internal/discord/server_read_invites.go)).
 - **Numbers become names.** The level, a rule's trigger, its presets and its
   actions are read by name from Discord's developer documentation. A trigger,
   preset or action the table does not name is kept as `other`; a level it
@@ -165,6 +171,12 @@ such a bit holds none of the three keys.
 A role also carries how it is shown: `shown_apart` when its members form a
 group of their own in the member list, `mentionable` when members can mention
 it. A snapshot leaves out a key that is false.
+
+The snapshot holds `invites_read` and, for each invite, its code, channel,
+`max_age`, `max_uses`, `temporary` and `by_bot`. `channel_unlisted` is true
+when the channel was absent from the channel list; its name is the one reported
+by the invite. A channel name is required only for bot invites
+([snapshot](../internal/serverplan/snapshot_invites.go)).
 
 Objects are matched by name. The bot's role in the definition is matched to
 the caller's role, whatever it is called on the server. Two roles, categories
@@ -204,6 +216,9 @@ administrator rights cannot tell a missing channel from a hidden one.
 | `filter-rule-trigger` | A rule has another trigger on the server |
 | `filter-rule-differs` | A rule differs in a field that can change: enabled, keywords, patterns, allow list, presets, mention limit, raid protection, actions or exemptions |
 | `filter-rule-extra` | The server has a rule the definition does not |
+| `invites-not-read` | Invites are defined but could not be listed |
+| `invite-create`, `invite-missing` | An unrecorded invite needs creation, or a recorded invite is missing |
+| `invite-differs`, `invite-extra` | A recorded bot invite differs in channel or limits, or an unmatched bot invite exists. Each entry takes at most one invite, with recorded entries matched first; unmatched bot invites are reported even when the definition holds no invites, if invites were read |
 <!-- markdownlint-enable MD013 -->
 
 A raised bot role shows up here: while the operator has given it more rights or
@@ -227,8 +242,22 @@ The list of actions is closed (`serverplan.Actions`), and none of them deletes.
 | `set-verification-level` | A server with another verification level | `MANAGE_GUILD` |
 | `create-filter-rule` | A missing filter rule, created with its actions and exemptions | `MANAGE_GUILD`, and `MODERATE_MEMBERS` for a rule that times a member out |
 | `set-filter-rule` | A filter rule that differs. The change sends every field except the trigger | The same as `create-filter-rule` |
+| `create-invite` | An unrecorded invite needs creation; unread invites produce a refused candidate | `ADMINISTRATOR` or effective `VIEW_CHANNEL` and `CREATE_INSTANT_INVITE`: the check applies the channel entries after earlier plan steps, the everyone entry first, then all held-role entries together in Discord order (denies before allows at each stage); a deny on the definition’s everyone or bot role entry refuses, including when the plan creates the channel or sets the bot access; channel entries for single members refuse unless the caller is an administrator or the channel is created in the plan. An invite whose channel neither exists nor is created by an accepted earlier step is refused as `channel-not-created`, also for an administrator; a caller without `CREATE_INSTANT_INVITE` gets `lacks-right` first |
 | `convert-channel`, `convert-filter-rule`, `resolve-name` | A channel of another type; a filter rule with another trigger; an ambiguous name | Always refused: a person has to settle these |
 <!-- markdownlint-enable MD013 -->
+
+For invite creation, the check reads the channel's entries after the plan's earlier
+steps. A channel created by the plan uses the definition's entries; a planned
+entry replaces the server's entry. The base is the server-wide rights after the
+plan's @everyone step. The check reads the everyone entry and
+the entries of every role the bot holds in Discord order: everyone denies then
+allows, followed by all held-role denies then all held-role allows. Both
+`VIEW_CHANNEL` and `CREATE_INSTANT_INVITE` must be granted. The check refuses
+when a held role name names several observed roles, or when the snapshot names
+no held roles and the channel has an entry for a role other than everyone or
+the bot role. An invite whose channel neither exists nor is created by an accepted
+earlier step is refused as `channel-not-created`, also for an administrator; a
+caller without `CREATE_INSTANT_INVITE` gets `lacks-right` first.
 
 The plan never holds a change to the caller's own role. Its rights, its name
 and its place are the operator's to change by hand.
@@ -285,6 +314,7 @@ A refused change carries the first reason that holds, in this order.
 | `above-caller` | The role stands above the caller's role, or the new order would move or pass a role that does; Discord lets a bot edit and sort only roles below its own |
 | `too-few-positions` | The order step would need more positions below the caller's role than the server has; the detail names the roles to place by hand |
 | `lacks-right` | The caller does not hold a right the change needs at its step; the detail names an earlier step that takes the right away |
+| `channel-not-created` | The invite's channel is neither on the server nor created by an accepted earlier step; the detail names the channel |
 <!-- markdownlint-enable MD013 -->
 
 A bit without a name is handled in two ways, by where it sits.
@@ -338,11 +368,15 @@ definition or one of the two digests ends before the first request
    applied in part (`TestVerifyApplyGates_Boundary_OneRefusalIsEnough`). The
    refusal has to be settled first: by the operator on the server, or by a
    change of the definition.
-3. **Every change is one it knows.** An action outside the ten that change
+3. **Every change is one it knows.** An action outside those that change
    something, or an object the definition does not hold, ends the run
    (`TestVerifyApplyGates_Negative_ChangeOutsideTheDefinition`).
 
-Then it makes the changes in the order of the plan, one at a time.
+Then it makes the changes in the order of the plan, one at a time. A
+`create-invite` sends the definition limits, refuses a recorded code and
+prints `invite code:` on success
+([apply](../internal/discord/server_apply_invites.go),
+[output](../internal/discord/server_apply.go)).
 
 - **Names and rights come from the definition, ids from the server.** The run
   keeps the ids of the roles, categories and channels it read, and of those it
@@ -440,14 +474,14 @@ by hand.
    application's id in it, choose the server and accept:
 
    ```text
-   https://discord.com/oauth2/authorize?client_id=<application id>&scope=bot&permissions=1168500596784
+   https://discord.com/oauth2/authorize?client_id=<application id>&scope=bot&permissions=1168500596785
    ```
 
-   The number stands for seven rights. It holds no `ADMINISTRATOR`.
+   The number stands for eight rights. It holds no `ADMINISTRATOR`.
 
-   - Four are for the run: `MANAGE_ROLES`, `MANAGE_CHANNELS`, `CONNECT` and
-     `CREATE_PRIVATE_THREADS`. The run needs six more, and the bot has those
-     as a member through `@everyone`.
+   - Five are for the run: `MANAGE_ROLES`, `MANAGE_CHANNELS`, `CONNECT`,
+     `CREATE_PRIVATE_THREADS` and `CREATE_INSTANT_INVITE`. The run needs six
+     more, and the bot has those as a member through `@everyone`.
    - Three more are rights the definition gives the bot's role for good:
      `MANAGE_MESSAGES`, `MODERATE_MEMBERS` and `MANAGE_GUILD`. The address
      carries them because the plan never holds a change to the bot's own
@@ -456,8 +490,8 @@ by hand.
    `MANAGE_GUILD` sets the server settings: the verification level and the
    filter rules
    ([ADR-0015](adr/0015-moderator-without-rights-and-server-settings-as-data.md)).
-   Of what the right opens, the tool reads and writes the filter rules and
-   sets the level, and makes no other call
+   Of what the right opens, the tool reads and writes the filter rules,
+   sets the level and reads invites
    (`TestServerApplyCalls_Positive_FullRunDisplayAndEntryChange`). Discord
    describes the address in its
    [page on authorisation](https://discord.com/developers/docs/topics/oauth2),
@@ -479,14 +513,24 @@ by hand.
 4. `-server=plan`. The plan holds changes and, when all is well, no refusal.
    A person reads it and keeps the digest. A right the bot lacks shows by its
    programming name on a change refused as `lacks-right`.
-5. `-server=apply=<digest>`.
-6. **Tidy up.** On the bot's role switch off **Manage Channels**, **Connect**
-   and **Create Private Threads**, so that Manage Roles, Manage Messages,
-   Time Out Members and Manage Server stay, and drag the role to the place the
+5. `-server=apply=<digest>`. Keep the invite code printed by apply, write it
+   into the entry’s `code` field in `server/definition.json` (see
+   [Invites](server-definition.md#invites)), and commit it. The commands read
+   the definition built into the binary, so run the steps after this one with
+   a binary built from that commit or an image built from it
+   ([README, "Release"](../README.md#release)). A binary built before that
+   commit still reads an empty code. Until a binary built from that commit
+   runs, a missing invite is treated as unrecorded and can be offered for
+   creation again.
+6. **Tidy up.** On the bot's role switch off **Manage Channels**, **Connect**,
+   **Create Private Threads** and **Create Invite**, so that Manage Roles,
+   Manage Messages, Time Out Members and Manage Server stay, and drag the role
+   to the place the
    definition gives it. The bot can do neither: a bot edits and sorts only roles below its own
    highest role, and its own role is that role (Discord's
    [permissions page](https://discord.com/developers/docs/topics/permissions),
-   "Permission Hierarchy").
+   "Permission Hierarchy"). The bot keeps Create Invite on `rules` through
+   its channel entry ([definition](../server/definition.json)).
 7. `-server=compare` prints `mode: own`. Three kinds of difference can
    remain, and no plan holds a change for any of them:
 
@@ -519,7 +563,9 @@ do not say what a second authorisation does to the role of a bot that is
 already a member, and they do not say what becomes of the role and of its
 entries on channels when the bot is removed and added again (both read
 2026-10-12; [Not built, not tried](#not-built-not-tried)). Switch the missing
-rights on by hand:
+rights on by hand. The run that writes the bot entry on `rules` needs
+**Create Invite** on the bot role in `rights needed:`; switch it off after
+the run ([planner](../internal/serverplan/plan.go)).
 
 1. `-server=plan` with the rights the bot's role has. A change the role's
    rights do not cover is refused as `outside-own-changes` or `lacks-right`;
@@ -632,6 +678,7 @@ one of the two labels.
 | `MANAGE_ROLES` | Manage Roles, under "General Server Permissions" | Rollen verwalten, under "Allgemeine Serverberechtigungen" | the same page |
 | `MANAGE_CHANNELS` | Manage Channels | Kanäle verwalten | [Permissions on Discord](https://discord.com/community/permissions-on-discord-discord); German: [Sprachkanäle FAQ](https://support.discord.com/hc/de/articles/19583625604887) |
 | `MANAGE_GUILD` | Manage Server | Server verwalten | [Pause Invites FAQ](https://support.discord.com/hc/en-us/articles/8458903738647) |
+| `CREATE_INSTANT_INVITE` | Create Invite | Einladung erstellen | [Channel Permissions Settings 101](https://support.discord.com/hc/en-us/articles/10543994968087) |
 | `MANAGE_MESSAGES` | Manage Messages | Nachrichten verwalten | [Channel Permissions Settings 101](https://support.discord.com/hc/en-us/articles/10543994968087) |
 | `MODERATE_MEMBERS` | **Time Out Members** | **Mitglieder in Timeout versetzen** | [Time Out FAQ](https://support.discord.com/hc/en-us/articles/4413305239191) |
 | `VIEW_CHANNEL` | View Channel | Kanal anzeigen | Channel Permissions Settings 101 |
