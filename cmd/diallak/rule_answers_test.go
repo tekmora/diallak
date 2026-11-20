@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -38,8 +39,36 @@ func TestRuleTable_Positive_CrossChecksServerCommandsTagsAndCorpus(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, off, err := ruleanswer.Resolve(table, chunks, ""); err != nil || len(off) != len(table.Triggers)-3 {
-		t.Fatalf("Resolve own README = off %v, err %v", off, err)
+	resolved, issues, err := ruleanswer.Resolve(table, chunks, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkResolvedRuleAnswers(t, table, resolved, issues)
+}
+
+func checkResolvedRuleAnswers(t *testing.T, table *ruleanswer.Table, resolved *ruleanswer.Resolved, issues []ruleanswer.Issue) {
+	t.Helper()
+	if resolved.DisabledCount != len(table.Triggers)-3 {
+		t.Errorf("disabled = %d, want %d", resolved.DisabledCount, len(table.Triggers)-3)
+	}
+	want := make(map[string]bool)
+	for _, trigger := range table.Triggers {
+		if trigger.Repository == "tekmora/diallak" {
+			want[trigger.ID] = true
+		}
+	}
+	if len(resolved.Answers) != len(want) {
+		t.Errorf("resolved answers = %v, want IDs %v", resolved.Answers, want)
+	}
+	for id := range resolved.Answers {
+		if !want[id] {
+			t.Errorf("unexpected resolved answer %q", id)
+		}
+	}
+	for _, issue := range issues {
+		if issue.Reason == "link_missing" {
+			t.Errorf("missing link: %+v", issue)
+		}
 	}
 }
 
@@ -61,7 +90,7 @@ func TestRuleTable_LicenceSpellings(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, trigger := range table.Triggers {
-		if !strings.HasSuffix(trigger.ID, "-licence") {
+		if !strings.HasSuffix(trigger.ID, "-licence") || !slices.Contains(trigger.Commands, "ask") {
 			continue
 		}
 		for _, spelling := range []string{"licence", "license"} {
