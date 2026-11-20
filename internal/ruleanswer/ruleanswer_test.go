@@ -523,8 +523,9 @@ func TestLoad_Negative_NonCanonicalObjectKeys(t *testing.T) {
 	for _, tc := range []struct{ raw, key string }{
 		{`{"version":2,"VERSION":1,"triggers":[]}`, "VERSION"},
 		{`{"Version":1,"triggers":[]}`, "Version"},
-		{`{"version":1,"triggers":[{"Keywords":{}}]}`, "Keywords"},
-		{"{\"version\":1,\"triggers\":[{\"Keywords\":{}}]}", "Keywords"},
+		{`{"version":1,"triggers":[{"Keywords":{}}]}`, "Keywords"},
+		// encoding/json folds the Kelvin sign to k when matching field names.
+		{"{\"version\":1,\"triggers\":[{\"\u212aeywords\":{}}]}", "\u212aeywords"},
 	} {
 		_, err := Load([]byte(tc.raw))
 		if err == nil || !strings.Contains(err.Error(), tc.key) {
