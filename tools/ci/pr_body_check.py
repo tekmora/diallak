@@ -199,6 +199,10 @@ def fence_cases():
          fence_template, ['section-missing']),
         ('inline code comment opener', ('## Description\n`<!--` useful words\n'
          '## Checks\n- [ ] Done\n<!-- note -->\n'), fence_template, []),
+        ('multiline code span comment opener', ('## Description\nThree useful words `open\n'
+         'text <!-- `\n## Checks\n- [ ] Done\n'), fence_template, ['section-missing']),
+        ('line-start comment after open span', ('## Description\nThree useful words `open\n'
+         '<!-- `\n## Checks\n- [ ] Done\n'), fence_template, ['section-missing']),
         ('fence inside comment', '<!--\n```\n-->\n' + valid_body, fence_template, []),
         ('template fenced comment opener', valid_body,
          '```\n<!--\n```\n' + fence_template + '<!-- note -->\n', []),
