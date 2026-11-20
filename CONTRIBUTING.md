@@ -12,6 +12,10 @@ All changes must pass local verification before submitting:
 make verify-all
 ```
 
+Pull requests must fill the [description template](.github/pull_request_template.md):
+keep its headings in order, describe the change in at least three words, and
+include a task-list item in the verification checklist. CI checks these sections.
+
 ### Modernized NASA JPL Power-of-10 Rules
 
 1. **Simple Control Flow (HISS-01)**: Recursion is strictly banned; call graph
