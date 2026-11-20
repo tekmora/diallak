@@ -890,7 +890,7 @@
     },
     {
       "id": "support-first-answer",
-      "what": "Reads the first message of a new post in the support forum and replies first with excerpts, only when the member set the opt-in tag at its creation (ADR-0020).",
+      "what": "Reads the first message of a new post in the support forum and replies first with a fixed documentation answer when one exists, otherwise with excerpts, only when the member set the opt-in tag at its creation (ADR-0020).",
       "by": "bot",
       "state": "built",
       "record": "docs/adr/0009-support-forum-first-answer.md"
