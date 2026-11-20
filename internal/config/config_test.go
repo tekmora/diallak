@@ -3,9 +3,13 @@ package config
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -401,6 +405,39 @@ func TestLoad_Boundary_SupportChannelLength(t *testing.T) {
 			t.Errorf("error %q leaks the refused value", err.Error())
 		}
 	})
+}
+
+func TestLoad_Positive_TicketsChannelUsesSharedParser(t *testing.T) {
+	base := validBaseEnv(t)
+	base[EnvTicketsChannel] = "  #tickets  "
+	cfg, err := Load(env(base))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TicketsChannel != "#tickets" {
+		t.Fatalf("TicketsChannel = %q", cfg.TicketsChannel)
+	}
+	if !strings.Contains(cfg.String(), `TicketsChannel:"#tickets"`) {
+		t.Fatalf("String = %q", cfg.String())
+	}
+}
+
+func TestLoad_Negative_TicketsChannelUsesSupportRules(t *testing.T) {
+	base := validBaseEnv(t)
+	base[EnvTicketsChannel] = "#ticket\ndesk"
+	_, err := Load(env(base))
+	if err == nil || !strings.Contains(err.Error(), EnvTicketsChannel) {
+		t.Fatalf("Load error = %v", err)
+	}
+}
+
+func TestLoad_Boundary_TicketsChannelLength(t *testing.T) {
+	base := validBaseEnv(t)
+	base[EnvTicketsChannel] = strings.Repeat("t", MaxSupportChannelRunes)
+	cfg, err := Load(env(base))
+	if err != nil || len([]rune(cfg.TicketsChannel)) != MaxSupportChannelRunes {
+		t.Fatalf("Load = (%+v, %v)", cfg, err)
+	}
 }
 
 // testLoadAnswerPathDefaultsUnset tests zero-value defaults when answer path variables are unset.
@@ -1168,5 +1205,85 @@ func TestLoad_Boundary_TrailRetentionBounds(t *testing.T) {
 		if _, err := Load(env(base)); err != nil {
 			t.Errorf("Load with %q: %v, want accepted", raw, err)
 		}
+	}
+}
+
+func modelVariableConstants(t *testing.T) map[string]bool {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "config.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse config.go: %v", err)
+	}
+	found := make(map[string]bool)
+	for _, decl := range file.Decls {
+		group, ok := decl.(*ast.GenDecl)
+		if !ok || group.Tok != token.CONST {
+			continue
+		}
+		for _, value := range modelConstantValues(t, group) {
+			found[value] = true
+		}
+	}
+	return found
+}
+
+func modelConstantValues(t *testing.T, group *ast.GenDecl) []string {
+	t.Helper()
+	var values []string
+	for _, spec := range group.Specs {
+		valueSpec, ok := spec.(*ast.ValueSpec)
+		if !ok {
+			continue
+		}
+		for _, value := range valueSpec.Values {
+			if text, ok := modelConstantValue(t, value); ok {
+				values = append(values, text)
+			}
+		}
+	}
+	return values
+}
+
+func modelConstantValue(t *testing.T, value ast.Expr) (string, bool) {
+	t.Helper()
+	literal, ok := value.(*ast.BasicLit)
+	if !ok || literal.Kind != token.STRING {
+		return "", false
+	}
+	text, err := strconv.Unquote(literal.Value)
+	if err != nil {
+		t.Fatalf("unquote constant: %v", err)
+	}
+	return text, strings.HasPrefix(text, "DIALLAK_MODEL_") || strings.HasPrefix(text, "DIALLAK_EMBED_")
+}
+
+func TestModelVariables_Positive_MatchesConstants(t *testing.T) {
+	constants := modelVariableConstants(t)
+	seen := make(map[string]bool)
+	for _, name := range ModelVariables() {
+		if seen[name] {
+			t.Errorf("duplicate variable %s", name)
+		}
+		seen[name] = true
+		if !constants[name] {
+			t.Errorf("listed variable %s has no constant", name)
+		}
+	}
+	for name := range constants {
+		if !seen[name] {
+			t.Errorf("constant %s missing from list", name)
+		}
+	}
+}
+
+func TestModelVariables_Boundary_ReturnsFreshSlice(t *testing.T) {
+	first := ModelVariables()
+	if len(first) == 0 {
+		t.Fatal("ModelVariables returned an empty list")
+	}
+	original := first[0]
+	first[0] = "changed"
+	if next := ModelVariables(); next[0] != original {
+		t.Errorf("next call begins with %q, want %q", next[0], original)
 	}
 }

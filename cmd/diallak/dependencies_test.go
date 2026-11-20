@@ -39,6 +39,9 @@ func TestDefaultDependencies_Negative_AnotherFunctionIsNotTheEntryPoint(t *testi
 func TestDefaultDependencies_Boundary_EveryCallIsSet(t *testing.T) {
 	deps := reflect.ValueOf(defaultDependencies())
 	for i := range deps.NumField() {
+		if deps.Field(i).Kind() != reflect.Func {
+			continue
+		}
 		if deps.Field(i).IsNil() {
 			t.Errorf("defaultDependencies().%s is nil", deps.Type().Field(i).Name)
 		}

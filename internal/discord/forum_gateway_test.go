@@ -462,3 +462,51 @@ func (b *syncBuffer) String() string {
 	defer b.mu.Unlock()
 	return b.buf.String()
 }
+
+func TestForumTagNames_Positive_MapsAppliedIdsThroughParentForum(t *testing.T) {
+	forum := discord.GuildForumChannel{AvailableTags: []discord.ChannelTag{
+		{ID: snowflake.ID(1), Name: "Diallak"}, {ID: snowflake.ID(2), Name: "Epitrop"},
+	}}
+	got := forumTagNamesFrom(forum, []uint64{2, 1})
+	if len(got) != 2 || got[0] != "Epitrop" || got[1] != "Diallak" {
+		t.Fatalf("names = %v", got)
+	}
+}
+
+func TestForumTagNames_Negative_UnknownIdLeavesNamesUnresolved(t *testing.T) {
+	forum := discord.GuildForumChannel{AvailableTags: []discord.ChannelTag{{ID: snowflake.ID(1), Name: "Diallak"}}}
+	if got := forumTagNamesFrom(forum, []uint64{9}); got != nil {
+		t.Fatalf("names = %v, want nil", got)
+	}
+}
+
+func TestForumTagNames_Boundary_EmptyTagsResolveToEmptyNames(t *testing.T) {
+	forum := discord.GuildForumChannel{}
+	got := forumTagNamesFrom(forum, nil)
+	if got == nil || len(got) != 0 {
+		t.Fatalf("names = %#v", got)
+	}
+}
+
+func TestForumTagNames_Positive_DecodedForum(t *testing.T) {
+	var decoded discord.UnmarshalChannel
+	if err := json.Unmarshal([]byte(`{"type":15,"id":"1","guild_id":"2","available_tags":[{"id":"3","name":"Amussis"}]}`), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	channel, ok := decoded.Channel.(discord.GuildChannel)
+	if !ok || !cacheForumChannel(channel) {
+		t.Fatal("decoded forum not cached")
+	}
+	names := forumTagNamesFrom(channel, []uint64{3})
+	if len(names) != 1 || names[0] != "Amussis" {
+		t.Fatalf("names = %v", names)
+	}
+}
+
+func TestForumTagNames_Positive_PointerForum(t *testing.T) {
+	forum := &discord.GuildForumChannel{AvailableTags: []discord.ChannelTag{{ID: 1, Name: "Amussis"}}}
+	names := forumTagNamesFrom(forum, []uint64{1})
+	if len(names) != 1 || names[0] != "Amussis" {
+		t.Fatalf("names = %v", names)
+	}
+}

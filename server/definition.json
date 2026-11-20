@@ -409,7 +409,7 @@
       "name": "support",
       "category": "community",
       "type": "forum",
-      "purpose": "Questions, one post each. The bot answers a new post first with excerpts from the documentation; people answer after it.",
+      "purpose": "Questions, one post each. The bot answers an opted-in post first with a fixed documentation answer when one exists, otherwise with documentation excerpts; people answer after it.",
       "owner": "moderator",
       "opens": "start",
       "first_answer": true,
@@ -422,8 +422,16 @@
         {"name": "Diallak", "opt_in": false, "moderated": false},
         {"name": "Epitrop", "opt_in": false, "moderated": false},
         {"name": "Amussis", "opt_in": false, "moderated": false},
+        {"name": "Horistes", "opt_in": false, "moderated": false},
+        {"name": "Saeptum", "opt_in": false, "moderated": false},
+        {"name": "Tornus", "opt_in": false, "moderated": false},
+        {"name": "Cistula", "opt_in": false, "moderated": false},
+        {"name": "Peritia", "opt_in": false, "moderated": false},
         {"name": "VMAFx", "opt_in": false, "moderated": false},
-        {"name": "Pelorus", "opt_in": false, "moderated": false}
+        {"name": "Pelorus", "opt_in": false, "moderated": false},
+        {"name": "SnatchArr", "opt_in": false, "moderated": false},
+        {"name": "Rhizomorph", "opt_in": false, "moderated": false},
+        {"name": "Embodied", "opt_in": false, "moderated": false}
       ],
       "access": [
         {
@@ -883,7 +891,7 @@
     },
     {
       "id": "support-first-answer",
-      "what": "Reads the first message of a new post in the support forum and replies first with excerpts, only when the member set the opt-in tag at its creation (ADR-0020).",
+      "what": "Reads the first message of a new post in the support forum and replies first with a fixed documentation answer when one exists, otherwise with excerpts, only when the member set the opt-in tag at its creation (ADR-0020).",
       "by": "bot",
       "state": "built",
       "record": "docs/adr/0009-support-forum-first-answer.md"

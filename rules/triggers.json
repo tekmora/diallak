@@ -1,0 +1,1664 @@
+{
+  "version": 1,
+  "triggers": [
+    {
+      "id": "diallak-verify-release",
+      "repository": "tekmora/diallak",
+      "keywords": {
+        "all": [],
+        "any": [
+          "verify Diallak release",
+          "Diallak release signature",
+          "Diallak release image",
+          "Diallak image signature"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Diallak"
+      ],
+      "forum_tags": [
+        "Diallak"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Verifying a release"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "How do I verify a Diallak release image?",
+        "How do I verify the Diallak image signature?"
+      ],
+      "must_not_match": [
+        "Why does the Diallak release signature check show an error?",
+        "Why do Diallak release image tests fail?"
+      ]
+    },
+    {
+      "id": "diallak-start",
+      "repository": "tekmora/diallak",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start Diallak",
+          "install Diallak",
+          "run Diallak",
+          "Diallak installation",
+          "Diallak setup",
+          "set up Diallak",
+          "Diallak set up"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Diallak"
+      ],
+      "forum_tags": [
+        "Diallak"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Starting the bot"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "How do I start Diallak?",
+        "How do I set up Diallak?"
+      ],
+      "must_not_match": [
+        "How do I not start Diallak?",
+        "Why does Diallak crash when I run Diallak?",
+        "Why does install Diallak fail with an error?",
+        "How do I run the Diallak tests?",
+        "Diallak crashes when I run it",
+        "Why does Diallak not start after the update?"
+      ]
+    },
+    {
+      "id": "diallak-licence",
+      "repository": "tekmora/diallak",
+      "keywords": {
+        "all": [],
+        "any": [
+          "Diallak licence",
+          "Diallak license",
+          "licence Diallak",
+          "license Diallak"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Diallak"
+      ],
+      "forum_tags": [
+        "Diallak"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Diallak licence?"
+      ],
+      "must_not_match": [
+        "Why does the Diallak licence check show an error?",
+        "Why do the Diallak licence tests fail?"
+      ]
+    },
+    {
+      "id": "epitrop-start",
+      "repository": "tekmora/epitrop",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start Epitrop",
+          "install Epitrop",
+          "run Epitrop",
+          "Epitrop installation",
+          "Epitrop setup",
+          "set up Epitrop",
+          "Epitrop set up"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Epitrop"
+      ],
+      "forum_tags": [
+        "Epitrop"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Get started"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I start Epitrop?",
+        "How do I set up Epitrop?"
+      ],
+      "must_not_match": [
+        "Why does Epitrop crash when I run Epitrop?",
+        "Why does install Epitrop fail with an error?",
+        "How do I start contributing to Epitrop?"
+      ]
+    },
+    {
+      "id": "epitrop-licence",
+      "repository": "tekmora/epitrop",
+      "keywords": {
+        "all": [],
+        "any": [
+          "Epitrop licence",
+          "Epitrop license",
+          "licence Epitrop",
+          "license Epitrop"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Epitrop"
+      ],
+      "forum_tags": [
+        "Epitrop"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Upstream and licence"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "What is the Epitrop licence?"
+      ],
+      "must_not_match": [
+        "Why does the Epitrop licence check show an error?",
+        "Why do the Epitrop licence tests fail?"
+      ]
+    },
+    {
+      "id": "epitrop-contribute",
+      "repository": "tekmora/epitrop",
+      "keywords": {
+        "all": [],
+        "any": [
+          "contribute Epitrop",
+          "Epitrop contribution",
+          "Epitrop contributing"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Epitrop"
+      ],
+      "forum_tags": [
+        "Epitrop"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Contribute"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I contribute to Epitrop?"
+      ],
+      "must_not_match": [
+        "Why do tests fail when I contribute to Epitrop?",
+        "Why is the Epitrop contribution guide broken?"
+      ]
+    },
+    {
+      "id": "amussis-licence",
+      "repository": "plurano/amussis",
+      "keywords": {
+        "all": [],
+        "any": [
+          "Amussis licence",
+          "Amussis license",
+          "licence Amussis",
+          "license Amussis"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Amussis"
+      ],
+      "forum_tags": [
+        "Amussis"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "What is the Amussis licence?"
+      ],
+      "must_not_match": [
+        "Why does the Amussis licence check show an error?",
+        "Why do the Amussis licence tests fail?"
+      ]
+    },
+    {
+      "id": "amussis-support",
+      "repository": "plurano/amussis",
+      "keywords": {
+        "all": [],
+        "any": [
+          "get help",
+          "get support",
+          "ask for help",
+          "support channel"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Amussis"
+      ],
+      "forum_tags": [
+        "Amussis"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Support"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "Where is the Amussis support channel?"
+      ],
+      "must_not_match": [
+        "Why does getting help with Amussis show an error?",
+        "Why do Amussis support channel tests fail?",
+        "Can Amussis help with HDR playback?"
+      ]
+    },
+    {
+      "id": "amussis-contribute",
+      "repository": "plurano/amussis",
+      "keywords": {
+        "all": [],
+        "any": [
+          "contribute Amussis",
+          "Amussis contribution",
+          "Amussis contributing"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Amussis"
+      ],
+      "forum_tags": [
+        "Amussis"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Contribute"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I contribute to Amussis?"
+      ],
+      "must_not_match": [
+        "Why do tests fail when I contribute to Amussis?",
+        "Why is the Amussis contribution guide broken?"
+      ]
+    },
+    {
+      "id": "horistes-licence",
+      "repository": "plurano/horistes",
+      "keywords": {
+        "all": [],
+        "any": [
+          "Horistes licence",
+          "Horistes license",
+          "licence Horistes",
+          "license Horistes"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Horistes"
+      ],
+      "forum_tags": [
+        "Horistes"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Horistes licence?"
+      ],
+      "must_not_match": [
+        "Why does the Horistes licence check show an error?",
+        "Why do the Horistes licence tests fail?"
+      ]
+    },
+    {
+      "id": "saeptum-licence",
+      "repository": "plurano/saeptum",
+      "keywords": {
+        "all": [],
+        "any": [
+          "Saeptum licence",
+          "Saeptum license",
+          "licence Saeptum",
+          "license Saeptum"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Saeptum"
+      ],
+      "forum_tags": [
+        "Saeptum"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Saeptum licence?"
+      ],
+      "must_not_match": [
+        "Why does the Saeptum licence check show an error?",
+        "Why do the Saeptum licence tests fail?"
+      ]
+    },
+    {
+      "id": "tornus-licence",
+      "repository": "plurano/tornus",
+      "keywords": {
+        "all": [],
+        "any": [
+          "Tornus licence",
+          "Tornus license",
+          "licence Tornus",
+          "license Tornus"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Tornus"
+      ],
+      "forum_tags": [
+        "Tornus"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Tornus licence?"
+      ],
+      "must_not_match": [
+        "Why does the Tornus licence check show an error?",
+        "Why do the Tornus licence tests fail?"
+      ]
+    },
+    {
+      "id": "cistula-start",
+      "repository": "plurano/cistula",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start Cistula",
+          "install Cistula",
+          "run Cistula",
+          "Cistula installation",
+          "Cistula setup",
+          "set up Cistula",
+          "Cistula set up"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Cistula"
+      ],
+      "forum_tags": [
+        "Cistula"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Installing"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "How do I start Cistula?",
+        "How do I set up Cistula?"
+      ],
+      "must_not_match": [
+        "Why does Cistula crash when I run Cistula?",
+        "Why does install Cistula fail with an error?"
+      ]
+    },
+    {
+      "id": "cistula-licence",
+      "repository": "plurano/cistula",
+      "keywords": {
+        "all": [],
+        "any": [
+          "Cistula licence",
+          "Cistula license",
+          "licence Cistula",
+          "license Cistula"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Cistula"
+      ],
+      "forum_tags": [
+        "Cistula"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Cistula licence?"
+      ],
+      "must_not_match": [
+        "Why does the Cistula licence check show an error?",
+        "Why do the Cistula licence tests fail?"
+      ]
+    },
+    {
+      "id": "peritia-start",
+      "repository": "plurano/peritia",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start Peritia",
+          "install Peritia",
+          "run Peritia",
+          "Peritia installation",
+          "Peritia setup",
+          "set up Peritia",
+          "Peritia set up"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Peritia"
+      ],
+      "forum_tags": [
+        "Peritia"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Using it"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "How do I start Peritia?",
+        "How do I set up Peritia?"
+      ],
+      "must_not_match": [
+        "Why does Peritia crash when I run Peritia?",
+        "Why does install Peritia fail with an error?"
+      ]
+    },
+    {
+      "id": "peritia-licence",
+      "repository": "plurano/peritia",
+      "keywords": {
+        "all": [],
+        "any": [
+          "Peritia licence",
+          "Peritia license",
+          "licence Peritia",
+          "license Peritia"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Peritia"
+      ],
+      "forum_tags": [
+        "Peritia"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Licence"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Peritia licence?"
+      ],
+      "must_not_match": [
+        "Why does the Peritia licence check show an error?",
+        "Why do the Peritia licence tests fail?"
+      ]
+    },
+    {
+      "id": "vmafx-start",
+      "repository": "VMAFx/vmafx",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start VMAFx",
+          "install VMAFx",
+          "run VMAFx",
+          "VMAFx installation",
+          "VMAFx setup",
+          "set up VMAFx",
+          "VMAFx set up"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "VMAFx"
+      ],
+      "forum_tags": [
+        "VMAFx"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "🚀 Get started"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I start VMAFx?",
+        "How do I set up VMAFx?"
+      ],
+      "must_not_match": [
+        "Why does VMAFx crash when I run VMAFx?",
+        "Why does install VMAFx fail with an error?"
+      ]
+    },
+    {
+      "id": "vmafx-licence",
+      "repository": "VMAFx/vmafx",
+      "keywords": {
+        "all": [],
+        "any": [
+          "VMAFx licence",
+          "VMAFx license",
+          "licence VMAFx",
+          "license VMAFx"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "VMAFx"
+      ],
+      "forum_tags": [
+        "VMAFx"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Upstream and license"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "What is the VMAFx licence?"
+      ],
+      "must_not_match": [
+        "Why does the VMAFx licence check show an error?",
+        "Why do the VMAFx licence tests fail?"
+      ]
+    },
+    {
+      "id": "vmafx-support",
+      "repository": "VMAFx/vmafx",
+      "keywords": {
+        "all": [],
+        "any": [
+          "get help",
+          "get support",
+          "ask for help",
+          "support channel"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "VMAFx"
+      ],
+      "forum_tags": [
+        "VMAFx"
+      ],
+      "answer": {
+        "path": "SUPPORT.md",
+        "heading": "Is it about this fork specifically?"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "Where is the VMAFx support channel?"
+      ],
+      "must_not_match": [
+        "Why does getting help with VMAFx show an error?",
+        "Why do VMAFx support channel tests fail?",
+        "Can VMAFx help with HDR playback?"
+      ]
+    },
+    {
+      "id": "vmafx-contribute",
+      "repository": "VMAFx/vmafx",
+      "keywords": {
+        "all": [],
+        "any": [
+          "contribute VMAFx",
+          "VMAFx contribution",
+          "VMAFx contributing"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "VMAFx"
+      ],
+      "forum_tags": [
+        "VMAFx"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "🤝 Contribute"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I contribute to VMAFx?"
+      ],
+      "must_not_match": [
+        "Why do tests fail when I contribute to VMAFx?",
+        "Why is the VMAFx contribution guide broken?"
+      ]
+    },
+    {
+      "id": "pelorus-start",
+      "repository": "VMAFx/pelorus",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start Pelorus",
+          "install Pelorus",
+          "run Pelorus",
+          "Pelorus installation",
+          "Pelorus setup",
+          "set up Pelorus",
+          "Pelorus set up"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Pelorus"
+      ],
+      "forum_tags": [
+        "Pelorus"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Quick start"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "How do I start Pelorus?",
+        "How do I set up Pelorus?"
+      ],
+      "must_not_match": [
+        "Why does Pelorus crash when I run Pelorus?",
+        "Why does install Pelorus fail with an error?"
+      ]
+    },
+    {
+      "id": "pelorus-licence",
+      "repository": "VMAFx/pelorus",
+      "keywords": {
+        "all": [],
+        "any": [
+          "Pelorus licence",
+          "Pelorus license",
+          "licence Pelorus",
+          "license Pelorus"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Pelorus"
+      ],
+      "forum_tags": [
+        "Pelorus"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "License"
+      },
+      "links": [
+        "README.md"
+      ],
+      "must_match": [
+        "What is the Pelorus licence?"
+      ],
+      "must_not_match": [
+        "Why does the Pelorus licence check show an error?",
+        "Why do the Pelorus licence tests fail?"
+      ]
+    },
+    {
+      "id": "snatcharr-start",
+      "repository": "lusoris/SnatchArr",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start SnatchArr",
+          "install SnatchArr",
+          "run SnatchArr",
+          "SnatchArr installation",
+          "SnatchArr setup",
+          "set up SnatchArr",
+          "SnatchArr set up"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "SnatchArr"
+      ],
+      "forum_tags": [
+        "SnatchArr"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "🚀 Get started"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I start SnatchArr?",
+        "How do I set up SnatchArr?"
+      ],
+      "must_not_match": [
+        "Why does SnatchArr crash when I run SnatchArr?",
+        "Why does install SnatchArr fail with an error?"
+      ]
+    },
+    {
+      "id": "snatcharr-licence",
+      "repository": "lusoris/SnatchArr",
+      "keywords": {
+        "all": [],
+        "any": [
+          "SnatchArr licence",
+          "SnatchArr license",
+          "licence SnatchArr",
+          "license SnatchArr"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "SnatchArr"
+      ],
+      "forum_tags": [
+        "SnatchArr"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "⚖️ Upstream and licence"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "What is the SnatchArr licence?"
+      ],
+      "must_not_match": [
+        "Why does the SnatchArr licence check show an error?",
+        "Why do the SnatchArr licence tests fail?"
+      ]
+    },
+    {
+      "id": "snatcharr-support",
+      "repository": "lusoris/SnatchArr",
+      "keywords": {
+        "all": [],
+        "any": [
+          "get help",
+          "get support",
+          "ask for help",
+          "support channel"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "SnatchArr"
+      ],
+      "forum_tags": [
+        "SnatchArr"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "💬 Support"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "Where is the SnatchArr support channel?"
+      ],
+      "must_not_match": [
+        "Why does getting help with SnatchArr show an error?",
+        "Why do SnatchArr support channel tests fail?",
+        "Can SnatchArr help with HDR playback?"
+      ]
+    },
+    {
+      "id": "snatcharr-contribute",
+      "repository": "lusoris/SnatchArr",
+      "keywords": {
+        "all": [],
+        "any": [
+          "contribute SnatchArr",
+          "SnatchArr contribution",
+          "SnatchArr contributing"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "SnatchArr"
+      ],
+      "forum_tags": [
+        "SnatchArr"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "🤝 Contribute"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I contribute to SnatchArr?"
+      ],
+      "must_not_match": [
+        "Why do tests fail when I contribute to SnatchArr?",
+        "Why is the SnatchArr contribution guide broken?"
+      ]
+    },
+    {
+      "id": "rhizomorph-start",
+      "repository": "lusoris/rhizomorph",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start Rhizomorph",
+          "install Rhizomorph",
+          "run Rhizomorph",
+          "Rhizomorph installation",
+          "Rhizomorph setup",
+          "set up Rhizomorph",
+          "Rhizomorph set up"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Rhizomorph"
+      ],
+      "forum_tags": [
+        "Rhizomorph"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Get started"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I start Rhizomorph?",
+        "How do I set up Rhizomorph?"
+      ],
+      "must_not_match": [
+        "Why does Rhizomorph crash when I run Rhizomorph?",
+        "Why does install Rhizomorph fail with an error?"
+      ]
+    },
+    {
+      "id": "rhizomorph-licence",
+      "repository": "lusoris/rhizomorph",
+      "keywords": {
+        "all": [],
+        "any": [
+          "Rhizomorph licence",
+          "Rhizomorph license",
+          "licence Rhizomorph",
+          "license Rhizomorph"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Rhizomorph"
+      ],
+      "forum_tags": [
+        "Rhizomorph"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Upstream and licence"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "What is the Rhizomorph licence?"
+      ],
+      "must_not_match": [
+        "Why does the Rhizomorph licence check show an error?",
+        "Why do the Rhizomorph licence tests fail?"
+      ]
+    },
+    {
+      "id": "rhizomorph-contribute",
+      "repository": "lusoris/rhizomorph",
+      "keywords": {
+        "all": [],
+        "any": [
+          "contribute Rhizomorph",
+          "Rhizomorph contribution",
+          "Rhizomorph contributing"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Rhizomorph"
+      ],
+      "forum_tags": [
+        "Rhizomorph"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Contribute"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I contribute to Rhizomorph?"
+      ],
+      "must_not_match": [
+        "Why do tests fail when I contribute to Rhizomorph?",
+        "Why is the Rhizomorph contribution guide broken?"
+      ]
+    },
+    {
+      "id": "embodied-start",
+      "repository": "lusoris/embodied",
+      "keywords": {
+        "all": [],
+        "any": [
+          "start Embodied",
+          "install Embodied",
+          "run Embodied",
+          "Embodied installation",
+          "Embodied setup",
+          "set up Embodied",
+          "Embodied set up"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Embodied"
+      ],
+      "forum_tags": [
+        "Embodied"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Get started"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I start Embodied?",
+        "How do I set up Embodied?"
+      ],
+      "must_not_match": [
+        "Why does Embodied crash when I run Embodied?",
+        "Why does install Embodied fail with an error?"
+      ]
+    },
+    {
+      "id": "embodied-licence",
+      "repository": "lusoris/embodied",
+      "keywords": {
+        "all": [],
+        "any": [
+          "Embodied licence",
+          "Embodied license",
+          "licence Embodied",
+          "license Embodied"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "contribute",
+          "contributing",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Embodied"
+      ],
+      "forum_tags": [
+        "Embodied"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Upstream and licence"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "What is the Embodied licence?"
+      ],
+      "must_not_match": [
+        "Why does the Embodied licence check show an error?",
+        "Why do the Embodied licence tests fail?"
+      ]
+    },
+    {
+      "id": "embodied-contribute",
+      "repository": "lusoris/embodied",
+      "keywords": {
+        "all": [],
+        "any": [
+          "contribute Embodied",
+          "Embodied contribution",
+          "Embodied contributing"
+        ],
+        "none": [
+          "test",
+          "tests",
+          "crash",
+          "crashes",
+          "error",
+          "fails",
+          "failing",
+          "broken",
+          "update",
+          "upgrade",
+          "bug"
+        ]
+      },
+      "commands": [
+        "ask"
+      ],
+      "aliases": [
+        "Embodied"
+      ],
+      "forum_tags": [
+        "Embodied"
+      ],
+      "answer": {
+        "path": "README.md",
+        "heading": "Contribute"
+      },
+      "links": [
+        "docs/index.md"
+      ],
+      "must_match": [
+        "How do I contribute to Embodied?"
+      ],
+      "must_not_match": [
+        "Why do tests fail when I contribute to Embodied?",
+        "Why is the Embodied contribution guide broken?"
+      ]
+    }
+  ]
+}

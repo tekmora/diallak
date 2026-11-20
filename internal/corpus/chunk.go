@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/yuin/goldmark/v2/ast"
@@ -79,17 +80,20 @@ func splitBody(body string, maxBytes int) []string {
 func cutOversized(paras []string, maxBytes int) []string {
 	var bounded []string
 	for _, p := range paras {
-		limit := len(p)/maxBytes + 2
+		limit := len(p)
 		for i := 0; i < limit && len(p) > maxBytes; i++ {
 			cut := maxBytes
 			for cut > 0 && !utf8.RuneStart(p[cut]) {
 				cut--
 			}
-			bounded = append(bounded, strings.TrimSpace(p[:cut]))
-			p = strings.TrimSpace(p[cut:])
+			if cut == 0 {
+				_, cut = utf8.DecodeRuneInString(p)
+			}
+			bounded = append(bounded, strings.TrimRightFunc(p[:cut], unicode.IsSpace))
+			p = strings.TrimLeft(p[cut:], "\r\n")
 		}
-		if len(p) > 0 {
-			bounded = append(bounded, p)
+		if strings.TrimSpace(p) != "" {
+			bounded = append(bounded, strings.TrimRightFunc(p, unicode.IsSpace))
 		}
 	}
 	return bounded
@@ -302,8 +306,12 @@ func buildKeptChunks(repo, rev, filePath, firstTitle string, rawChunks []rawChun
 	}
 	var chunks []Chunk
 	n := 0
-	for _, rc := range rawChunks {
-		body := strings.TrimSpace(strings.Join(rc.lines, "\n"))
+	section := 0
+	for i, rc := range rawChunks {
+		body := trimBodyLines(rc.lines)
+		if i > 0 || body != "" {
+			section++
+		}
 		if body == "" {
 			continue
 		}
@@ -312,7 +320,7 @@ func buildKeptChunks(repo, rev, filePath, firstTitle string, rawChunks []rawChun
 			parts = splitBody(body, maxBytes)
 		}
 		for _, part := range parts {
-			trimmed := strings.TrimSpace(part)
+			trimmed := trimBodyLines(strings.Split(part, "\n"))
 			if trimmed == "" {
 				continue
 			}
@@ -325,9 +333,45 @@ func buildKeptChunks(repo, rev, filePath, firstTitle string, rawChunks []rawChun
 				Path:       filePath,
 				Title:      title,
 				Heading:    rc.heading,
+				Section:    section,
 				Text:       trimmed,
 			})
 		}
 	}
 	return chunks
+}
+
+func trimBodyLines(lines []string) string {
+	for i, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			body := strings.Join(lines[i:], "\n")
+			if !isIndentedCodeLine(line) {
+				body = strings.TrimLeft(body, " \t")
+			}
+			return strings.TrimRightFunc(body, unicode.IsSpace)
+		}
+	}
+	return ""
+}
+
+func isIndentedCodeLine(line string) bool {
+	return IndentColumn(line) >= 4
+}
+
+// IndentColumn returns the column of the first character that is neither a
+// space nor a tab, counting tabs to the next multiple of 4. For a line of only
+// spaces and tabs, it returns the column after them.
+func IndentColumn(line string) int {
+	column := 0
+	for i := 0; i < len(line); i++ {
+		switch line[i] {
+		case ' ':
+			column++
+		case '\t':
+			column += 4 - column%4
+		default:
+			return column
+		}
+	}
+	return column
 }

@@ -36,16 +36,17 @@ Community bot for the Lusoris Discord hub.
   projects' documentation, visible to the asker only and labelled as automated
   ([ADR-0003](docs/adr/0003-answer-pipeline.md)). In the support forum the bot
   can reply first to a new post that carries the tag "Automated answer", with
-  excerpts only
+  a fixed rule answer or cited excerpts; it posts nothing when no source matches
   ([ADR-0009](docs/adr/0009-support-forum-first-answer.md),
   [ADR-0020](docs/adr/0020-forum-answers-only-opted-in-posts.md)); it is off
   until a deployment sets the two forum variables. Version 1 carries no AI
-  model: today a question gets cited excerpts, or the refusal when no
-  source matches (in the forum the bot then stays silent)
-  ([ADR-0003](docs/adr/0003-answer-pipeline.md)). A trigger table that
-  answers common questions by rules is decided and not built yet
-  ([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md),
-  [#251](https://github.com/tekmora/diallak/issues/251)).
+  model: a question first meets the trigger table, kept as data under `rules/`,
+  which answers common questions with fixed documentation text. If no trigger
+  matches, the bot uses cited excerpts, then a refusal when no source matches
+  (in the forum the bot then stays silent)
+  ([ADR-0003](docs/adr/0003-answer-pipeline.md),
+  [ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md),
+  [rule answers](docs/rule-answers.md)).
 - **Bug reports:** `/bug` answers with a link that opens a filled-in new issue
   of the repository the server definition names, and the member submits it
   under their own GitHub account; the bot calls no GitHub interface for it
@@ -91,7 +92,7 @@ Community bot for the Lusoris Discord hub.
 | :--- | :--- |
 | Language and library | Go with disgo |
 | Server | One hub server; the guild is configuration, not code |
-| Auto-answers, version 1 | No AI model: a trigger table answers common questions from the projects' documentation, cited excerpts answer the rest, and every answer names the ticket channel. The trigger table and naming the ticket channel in answers are planned ([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md), [#251](https://github.com/tekmora/diallak/issues/251)) |
+| Auto-answers, version 1 | No AI model: a trigger table answers common questions from the projects' documentation, cited excerpts answer the rest, and every answer names the ticket channel ([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md)). |
 | Model path | Built and off: the guardrail policy, the receipt and the embeddings ([ADR-0013](docs/adr/0013-guardrail-policy-and-receipt.md), [ADR-0022](docs/adr/0022-embeddings-for-paraphrased-questions.md)) stay in the code, unused in version 1 |
 | Discord application | The existing bot application and its token are reused |
 | Community questions | GitHub Discussions for searchable answers, the hub for live chat; the bot links them |
@@ -103,7 +104,9 @@ The target state of the server itself, its roles, channels and permissions, is
 data with a validator: [docs/server-definition.md](docs/server-definition.md).
 It has not been applied to a server. The commands that read the server,
 compare it, plan the changes and apply one plan are built and were never run
-against Discord: [docs/server-apply.md](docs/server-apply.md).
+against Discord: [docs/server-apply.md](docs/server-apply.md). The plan for
+the hub's channels and categories, from a read of the hub, is
+[docs/channel-plan.md](docs/channel-plan.md); none of it is applied.
 
 ## The name
 
@@ -134,6 +137,7 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 | `DIALLAK_EMBED_ALIAS` | with the base URL | Name the embedding endpoint routes on, never a model name |
 | `DIALLAK_EMBED_KEY_FILE` | no | Path of the file that holds the embedding endpoint's credential |
 | `DIALLAK_SUPPORT_CHANNEL` | no | Wording for where a person helps, put into every reply; default "the support channel" |
+| `DIALLAK_TICKETS_CHANNEL` | no | Wording for where a person can open a ticket; default "the tickets channel" |
 | `DIALLAK_HEALTH_ADDR` | no | Listen address "host:port" for health probes; off by default |
 | `DIALLAK_FORUM_CHANNEL_ID` | with the tag | Id of the support forum whose new opted-in posts get a first reply; the forum answer is off without it |
 | `DIALLAK_FORUM_OPT_IN_TAG_ID` | with the forum | Id of the forum's tag "Automated answer"; only a post that carries it from its creation is read |
@@ -146,16 +150,16 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 | `DIALLAK_SUPPORTER_GRACE` | no, with the supporter switch | How long a member keeps "Supporter" after holding neither platform role, as a Go duration from `24h` to `2160h`; default 72 hours |
 <!-- markdownlint-enable MD013 -->
 
-Without the model variables the bot replies with cited excerpts and says
-that no model wrote them. When no passage matches, it refuses as
-ADR-0003 says ([ADR-0003](docs/adr/0003-answer-pipeline.md)). That is
-the only mode of version 1: no deployment of
-version 1 sets a `DIALLAK_MODEL_*` or `DIALLAK_EMBED_*` variable
-([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md)). The model
-path below stays built and tested for a later record.
+Version 1 refuses model and embedding variables
+([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md)); deployments
+leave them unset. Common questions use fixed documentation rules, then cited
+excerpts that say no model wrote them, then a refusal as ADR-0003 says
+([ADR-0003](docs/adr/0003-answer-pipeline.md)). Rule answers, excerpt answers
+and refusals name the tickets channel. See [rule answers](docs/rule-answers.md).
+The model path below stays built and tested for a later record.
 
-With the model variables set the bot sends the endpoint one small request at start
-([ADR-0012](docs/adr/0012-model-state.md)):
+In a later version, with the model variables set the bot sends the endpoint one
+small request at start ([ADR-0012](docs/adr/0012-model-state.md)):
 
 - **The endpoint refuses it**, for example with status 401 or 404 for a wrong
   key or an unknown alias: the bot ends with exit code 1 and names the four
@@ -235,11 +239,13 @@ It loads the documentation and the server definition, reads the server's roles
 and channels and its own user, connects to Discord and answers `/ask`,
 `/areas`, `/bug`, `Remove message` and `/timeout` until it receives a termination
 signal. With the two forum variables set it also replies to each new post in
-that forum that carries the opt-in tag, with excerpts and never with the model.
+that forum that carries the opt-in tag, with a fixed rule answer or cited
+excerpts and never with the model. It posts nothing when no source matches.
 The forum answer needs the right to read message content, switched on in
-Discord's developer portal; without it the start stops. A reply is visible only to the member who asked and can never mention
-anyone. A failed read stops the start. Once a day it deletes its own lines of
-the moderation trail that are older than `DIALLAK_TRAIL_RETENTION`.
+Discord's developer portal; without it the start stops. A reply is visible
+only to the member who asked and can never mention anyone. A failed read
+stops the start. Once a day it deletes its own lines of the moderation trail
+that are older than `DIALLAK_TRAIL_RETENTION`.
 
 ### Health checks
 

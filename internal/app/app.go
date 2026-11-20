@@ -17,6 +17,8 @@ import (
 	"github.com/tekmora/diallak/internal/embed"
 	"github.com/tekmora/diallak/internal/model"
 	"github.com/tekmora/diallak/internal/retrieval"
+	"github.com/tekmora/diallak/internal/ruleanswer"
+	"github.com/tekmora/diallak/rules"
 )
 
 // HybridStartTimeout bounds the startup indexing phase for computing chunk embeddings.
@@ -62,13 +64,17 @@ func Build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Assemb
 	if err != nil {
 		return nil, nil, closeOnError(cleanup, err)
 	}
+	resolved, err := loadRules(chunks, cfg.SourceLinkTemplate, logger)
+	if err != nil {
+		return nil, nil, closeOnError(cleanup, err)
+	}
 
 	index, err := retrieval.Build(chunks)
 	if err != nil {
 		return nil, nil, closeOnError(cleanup, fmt.Errorf("build retrieval index: %w", err))
 	}
 
-	pipeline, gate, err := buildPipeline(ctx, cfg, index, chunks, logger)
+	pipeline, gate, err := buildPipeline(ctx, cfg, index, chunks, resolved, logger)
 	if err != nil {
 		return nil, nil, closeOnError(cleanup, err)
 	}
@@ -82,8 +88,9 @@ func Build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Assemb
 		HasModel: gate != nil,
 		Model:    gate,
 		RenderOptions: answer.RenderOptions{
-			Place:    cfg.SupportChannel,
-			MaxRunes: cfg.ReplyMaxChars,
+			Place:          cfg.SupportChannel,
+			TicketsChannel: cfg.TicketsChannel,
+			MaxRunes:       cfg.ReplyMaxChars,
 		},
 	}
 	return assembly, cleanup, nil
@@ -178,7 +185,22 @@ func buildRetriever(ctx context.Context, cfg config.Config, index *retrieval.Ind
 	return hybrid, embClient.Host(), nil
 }
 
-func buildPipeline(ctx context.Context, cfg config.Config, index *retrieval.Index, chunks []corpus.Chunk, logger *slog.Logger) (*answer.Pipeline, *model.Gate, error) {
+func loadRules(chunks []corpus.Chunk, template string, logger *slog.Logger) (*ruleanswer.Resolved, error) {
+	table, err := rules.Table()
+	if err != nil {
+		return nil, fmt.Errorf("load rule table: %w", err)
+	}
+	resolved, issues, err := ruleanswer.Resolve(table, chunks, template)
+	if err != nil {
+		return nil, fmt.Errorf("resolve rule table: %w", err)
+	}
+	for _, issue := range issues {
+		logger.Warn("rule documentation unavailable", slog.String("trigger_id", issue.TriggerID), slog.String("reason", issue.Reason))
+	}
+	return resolved, nil
+}
+
+func buildPipeline(ctx context.Context, cfg config.Config, index *retrieval.Index, chunks []corpus.Chunk, resolved *ruleanswer.Resolved, logger *slog.Logger) (*answer.Pipeline, *model.Gate, error) {
 	generator, masker, gate, err := buildModelGate(cfg, logger)
 	if err != nil {
 		return nil, nil, err
@@ -208,6 +230,7 @@ func buildPipeline(ctx context.Context, cfg config.Config, index *retrieval.Inde
 		MaxQuestionRunes:   cfg.QuestionMaxChars,
 		MaxExcerptRunes:    cfg.ExcerptChars,
 		SourceLinkTemplate: cfg.SourceLinkTemplate,
+		Rules:              resolved,
 	}
 	pipeline, err := answer.New(ansCfg)
 	if err != nil {

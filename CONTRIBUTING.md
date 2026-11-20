@@ -12,6 +12,11 @@ All changes must pass local verification before submitting:
 make verify-all
 ```
 
+CI runs the same target on every pull request in the job
+`verify-all (make verify-all)` of [`ci.yml`](.github/workflows/ci.yml). Its
+step summary names the tested commit, the pull request head, the exit code and
+the SHA-256 of the full log, and shows the last 40 lines of the log.
+
 The required check `description (template sections)` applies to every pull
 request author, including Renovate. The headings in the
 [description template](.github/pull_request_template.md) must be present and in

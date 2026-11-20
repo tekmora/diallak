@@ -22,10 +22,20 @@ and applying one plan. None of it was run against Discord
   [Diallak](https://github.com/tekmora/diallak),
   [Epitrop](https://github.com/tekmora/epitrop),
   [Amussis](https://github.com/plurano/amussis),
-  [VMAFx](https://github.com/VMAFx/vmafx) and
-  [Pelorus](https://github.com/VMAFx/pelorus). Each repository explains its
-  name. A product gets a channel of its own only as an area, once it passes a
-  threshold (`TestDefinition_Positive_SupportForumHasAProductTagPerRepository`).
+  [Horistes](https://github.com/plurano/horistes),
+  [Saeptum](https://github.com/plurano/saeptum),
+  [Tornus](https://github.com/plurano/tornus),
+  [Cistula](https://github.com/plurano/cistula),
+  [Peritia](https://github.com/plurano/peritia),
+  [VMAFx](https://github.com/VMAFx/vmafx),
+  [Pelorus](https://github.com/VMAFx/pelorus),
+  [SnatchArr](https://github.com/lusoris/SnatchArr),
+  [Rhizomorph](https://github.com/lusoris/rhizomorph) and
+  [Embodied](https://github.com/lusoris/embodied). Each repository explains
+  its name. Forks and supporting repositories give no tag of their own; they
+  fold into the tag of the product they serve. A product gets a channel of its
+  own only as an area, once it passes a threshold
+  (`TestDefinition_Positive_SupportForumHasAProductTagPerRepository`).
 - **Later, at a threshold:** four topic areas (home lab and self-hosting, media
   and video, games, AI news and tools) and social rooms for languages. Each
   opens when enough members asked for it and closes when it stays empty. A

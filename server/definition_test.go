@@ -592,13 +592,23 @@ func TestDefinition_Negative_OptInTagOutsideSupportReported(t *testing.T) {
 
 // productRepositories names each product that gets a tag in the support forum, with its own
 // repository. A product without a repository gets no tag. Products get a tag, not a channel of
-// their own (decision diallak-product-channels).
+// their own (decision diallak-product-channels). The set is every public, active product
+// repository of the fleet's organisations; forks and supporting repositories fold into their
+// parent's tag (decision diallak-hub-projects-20261119).
 var productRepositories = map[string]string{
-	"Diallak": "tekmora/diallak",
-	"Epitrop": "tekmora/epitrop",
-	"Amussis": "plurano/amussis",
-	"VMAFx":   "VMAFx/vmafx",
-	"Pelorus": "VMAFx/pelorus",
+	"Diallak":    "tekmora/diallak",
+	"Epitrop":    "tekmora/epitrop",
+	"Amussis":    "plurano/amussis",
+	"Horistes":   "plurano/horistes",
+	"Saeptum":    "plurano/saeptum",
+	"Tornus":     "plurano/tornus",
+	"Cistula":    "plurano/cistula",
+	"Peritia":    "plurano/peritia",
+	"VMAFx":      "VMAFx/vmafx",
+	"Pelorus":    "VMAFx/pelorus",
+	"SnatchArr":  "lusoris/SnatchArr",
+	"Rhizomorph": "lusoris/rhizomorph",
+	"Embodied":   "lusoris/embodied",
 }
 
 // productTagFindings reports each product of productRepositories without a tag in the support
@@ -648,10 +658,18 @@ func TestDefinition_Positive_SupportForumHasAProductTagPerRepository(t *testing.
 // The check above reports a missing product tag, a product tag behind the opt-in and a channel
 // of its own for a product.
 func TestDefinition_Negative_ProductTagMissingOrChannelReported(t *testing.T) {
-	support := serverdef.Channel{ID: "support", Tags: []serverdef.Tag{
-		{Name: "Epitrop", OptIn: true},
-		{Name: "Amussis"}, {Name: "VMAFx"}, {Name: "Pelorus"},
-	}}
+	// Every product carries a plain tag except the two planted defects: Diallak has none and
+	// Epitrop's tag sits behind the opt-in.
+	support := serverdef.Channel{ID: "support"}
+	for product := range productRepositories {
+		switch product {
+		case "Diallak":
+		case "Epitrop":
+			support.Tags = append(support.Tags, serverdef.Tag{Name: product, OptIn: true})
+		default:
+			support.Tags = append(support.Tags, serverdef.Tag{Name: product})
+		}
+	}
 	channels := []serverdef.Channel{support, {ID: "diallak", Name: "diallak"}}
 	got := productTagFindings(support, channels)
 	want := []string{

@@ -45,6 +45,9 @@ through a temporary file in the same directory
 
 ## Configuration
 
+Rule answers, excerpt answers and refusals name the tickets channel;
+`DIALLAK_TICKETS_CHANNEL` sets its wording.
+
 The [README](../README.md) lists every variable with its default and range:
 "Run" for the required ones, "Optional settings" for the rest. A variable that
 is missing or out of range stops the start with a message that names it.
@@ -52,34 +55,40 @@ is missing or out of range stops the start with a message that names it.
 - **Credentials are files.** `DIALLAK_TOKEN_FILE` and, when the model endpoint
   needs one, `DIALLAK_MODEL_KEY_FILE` name files of at most 4096 bytes that the
   user `65532` can read ([`internal/config`](../internal/config/config.go)).
-  They are read once at start.
+  They are read once at start. The model key describes later model mode; a
+  version 1 build refuses `DIALLAK_MODEL_KEY_FILE`.
 - **The guild id is configuration.** It never appears in this repository.
-- **Model mode is off unless the model variables are set.**
+- **A version 1 build has no model mode.** It refuses every
+  `DIALLAK_MODEL_*` and `DIALLAK_EMBED_*` variable: the start stops with a
+  message that names each one set (ADR-0028). The model mode code stays:
   `DIALLAK_MODEL_BASE_URL`, `DIALLAK_MODEL_ALIAS` and `DIALLAK_MODEL_POLICY`
   (for example `example-policy`) configure the endpoint, the routing alias and
-  the gateway policy. Version 1 sets none of them
-  ([ADR-0028](adr/0028-version-1-answers-without-a-model.md)).
-- **The bot's own masking is off unless `DIALLAK_MODEL_GUARDRAIL` is set.** It
-  names a guardrail of the gateway, for example `presidio-pii`. The bot then
+  the gateway policy, and a later version sets them only after the gates of
+  [ADR-0013](adr/0013-guardrail-policy-and-receipt.md) are passed
+  ([compliance](compliance/README.md), "Gates for model-written answers").
+- **Later model mode masks only when `DIALLAK_MODEL_GUARDRAIL` is set.** A
+  version 1 build refuses this variable. In later model mode it names a
+  guardrail of the gateway, for example `presidio-pii`. The bot then
   calls the gateway's route `/guardrails/apply_guardrail` at the root of the
   base URL, without `/v1`, so the deployment must let that route through as
   well as the chat route. At start it sends a fixed sentence with an invented
   address there: an address that comes back unmasked, or a refusal, ends the
   start with exit code 1.
-- **Embedding mode is off unless the embedding variables are set.**
+- **Later model mode uses embeddings only when configured.** A version 1
+  build refuses every `DIALLAK_EMBED_*` variable. In later model mode,
   `DIALLAK_EMBED_BASE_URL` and `DIALLAK_EMBED_ALIAS` configure the endpoint
-  and the routing alias ([ADR-0022](adr/0022-embeddings-for-paraphrased-questions.md)).
-  Version 1 sets neither
-  ([ADR-0028](adr/0028-version-1-answers-without-a-model.md)).
+  and the routing alias
+  ([ADR-0022](adr/0022-embeddings-for-paraphrased-questions.md)).
   The start verifies that the base URL points to an on-premises destination
-  (loopback or RFC 1918 / fc00::/7 private IP literal, `localhost`, a single-label
-  host name, or a host ending in `.svc`, `.cluster.local`, `.internal`,
-  `.home.arpa`, or `.lan`) and refuses any other host. When embeddings are not
-  configured or when the embedding call fails, retrieval is keyword only and
-  the reply carries a notice saying so. Support forum posts are always searched
-  by keyword only and never reach the embedding endpoint. At start the bot
-  computes embedding vectors for all documentation chunks in memory; if the
-  endpoint fails at start, the start stops with an exit code of 1.
+  (loopback or RFC 1918 / fc00::/7 private IP literal, `localhost`, a
+  single-label host name, or a host ending in `.svc`, `.cluster.local`,
+  `.internal`, `.home.arpa`, or `.lan`) and refuses any other host. When
+  embeddings are not configured or when the embedding call fails, retrieval is
+  keyword only and the reply carries a notice saying so. Support forum posts are
+  always searched by keyword only and never reach the embedding endpoint. At
+  start the bot computes embedding vectors for all documentation chunks in
+  memory; if the endpoint fails at start, the start stops with an exit
+  code of 1.
 - **The news function is off unless `DIALLAK_NEWS_STATE_FILE` is set**
   ([ADR-0019](adr/0019-news-posts.md), issue #180). It names an absolute path
   on the writable volume. A damaged state file stops the start, because an
@@ -150,6 +159,7 @@ this contract synchronized with the codebase
 | `DIALLAK_SUPPORTER_GRACE` | environment | supporter function |
 | `DIALLAK_SUPPORTER_ROLES` | environment | supporter function |
 | `DIALLAK_SUPPORT_CHANNEL` | environment | optional: custom support channel wording |
+| `DIALLAK_TICKETS_CHANNEL` | environment | optional: custom tickets channel wording |
 | `DIALLAK_TOKEN_FILE` | secret file | always |
 | `DIALLAK_TOP_PASSAGES` | environment | optional: tuning retrieved passages limit |
 | `DIALLAK_TRAIL_RETENTION` | environment | optional: tuning moderation trail retention |
