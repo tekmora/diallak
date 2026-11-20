@@ -30,20 +30,20 @@ func imageMainPackage(argDefault string, mains []string) (string, error) {
 
 func moduleMainDirs(root string) ([]string, error) {
 	dirs := make(map[string]bool)
-	files := 0
+	entries := 0
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return fmt.Errorf("walk %s: %w", path, walkErr)
+		}
+		entries++
+		if entries > 50000 {
+			return fmt.Errorf("walk %s: exceeds 50000 entries", root)
 		}
 		if entry.IsDir() {
 			if skipWalkDir(path, root, entry.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
-		}
-		files++
-		if files > 50000 {
-			return fmt.Errorf("walk %s: exceeds 50000 files", root)
 		}
 		dir, ok, err := mainPackageDir(root, path)
 		if err != nil {
