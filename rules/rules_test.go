@@ -14,6 +14,8 @@ func TestTablePrecision(t *testing.T) {
 	}
 	for _, tc := range []struct{ question, want string }{
 		{"How do I run the Diallak tests?", ""},
+		{"How do I not start Diallak?", ""},
+		{"How do I start Diallak?", "diallak-start"},
 		{"Diallak crashes when I run it", ""},
 		{"Why does Diallak not start after the update?", ""},
 		{"How do I start contributing to Epitrop?", "epitrop-contribute"},

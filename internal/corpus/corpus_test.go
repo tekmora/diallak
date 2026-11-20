@@ -249,3 +249,14 @@ func TestIndentColumn_Boundary_TabStopsAndWhitespace(t *testing.T) {
 		}
 	}
 }
+
+func TestParseFileChunks_SectionIdentity(t *testing.T) {
+	content := "## Development\n### Setup\nFirst paragraph.\n\nSecond paragraph.\n## Production\n### Setup\nProduction setup."
+	chunks := parseFileChunks("owner/repo", "rev", "guide.md", content, 20)
+	if len(chunks) != 3 {
+		t.Fatalf("chunks = %+v", chunks)
+	}
+	if chunks[0].Section == 0 || chunks[0].Section != chunks[1].Section || chunks[1].Section == chunks[2].Section {
+		t.Fatalf("section identities = %+v", chunks)
+	}
+}

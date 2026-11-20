@@ -306,8 +306,12 @@ func buildKeptChunks(repo, rev, filePath, firstTitle string, rawChunks []rawChun
 	}
 	var chunks []Chunk
 	n := 0
-	for _, rc := range rawChunks {
+	section := 0
+	for i, rc := range rawChunks {
 		body := trimBodyLines(rc.lines)
+		if i > 0 || body != "" {
+			section++
+		}
 		if body == "" {
 			continue
 		}
@@ -329,6 +333,7 @@ func buildKeptChunks(repo, rev, filePath, firstTitle string, rawChunks []rawChun
 				Path:       filePath,
 				Title:      title,
 				Heading:    rc.heading,
+				Section:    section,
 				Text:       trimmed,
 			})
 		}

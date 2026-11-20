@@ -46,6 +46,10 @@ Examples for each trigger are in `must_match` and `must_not_match`. Unit tests
 also cover matching, non-matching, ambiguity, stale examples, malformed input,
 unknown entry points, path resolution, and rendering length limits.
 
-Support triggers use help-seeking phrases only. Sponsorship blocks are removed
-from answers; a section containing only sponsorship disables its trigger and is
-logged as `sponsorship_only`.
+Support triggers use help-seeking phrases only. A sponsorship sentence is removed
+from its paragraph, and sponsorship list items and their nested content are removed.
+A section containing only sponsorship disables its trigger and is logged as
+`sponsorship_only`.
+
+A heading shared by two sections of one file disables the trigger as
+`answer_ambiguous`. A question with a negation word gets no rule answer.

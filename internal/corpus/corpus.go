@@ -44,6 +44,7 @@ type Chunk struct {
 	Path       string
 	Title      string
 	Heading    string
+	Section    int
 	Text       string
 }
 

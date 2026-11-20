@@ -104,6 +104,7 @@
         "How do I set up Diallak?"
       ],
       "must_not_match": [
+        "How do I not start Diallak?",
         "Why does Diallak crash when I run Diallak?",
         "Why does install Diallak fail with an error?",
         "How do I run the Diallak tests?",

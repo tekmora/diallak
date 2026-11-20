@@ -210,10 +210,10 @@ func TestResolve_Positive_ConcatenatesCorpusOrderAndLinks(t *testing.T) {
 	trigger := fixtureTrigger()
 	trigger.Links = []string{"docs/guide.md"}
 	chunks := []corpus.Chunk{
-		{Repository: trigger.Repository, Revision: "abcdef0123456789", Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Text: "first"},
+		{Repository: trigger.Repository, Revision: "abcdef0123456789", Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Section: 1, Text: "first"},
 		{Repository: trigger.Repository, Revision: "abcdef0123456789", Path: "docs/guide.md", Heading: "Guide", Text: "link"},
 		{Repository: trigger.Repository, Revision: "abcdef0123456789", Path: "docs/guide.md", Heading: "More", Text: "link two"},
-		{Repository: trigger.Repository, Revision: "abcdef0123456789", Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Text: "second"},
+		{Repository: trigger.Repository, Revision: "abcdef0123456789", Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Section: 1, Text: "second"},
 	}
 	resolved, off, err := Resolve(fixtureTable(trigger), chunks, "https://example.test/{repository}/{revision}/{path}")
 	if err != nil || len(off) != 0 {
@@ -579,5 +579,66 @@ func TestValidate_Negative_AllListSizes(t *testing.T) {
 				t.Fatalf("findings = %+v", findings)
 			}
 		})
+	}
+}
+
+func TestResolve_Positive_SponsorshipSentences(t *testing.T) {
+	trigger := fixtureTrigger()
+	for _, text := range []string{
+		"Ask in Discussions for help. You can also [sponsor us](https://github.com/sponsors/example).",
+		"You can also [sponsor us](https://github.com/sponsors/example). Ask in Discussions for help.",
+		"Ask in Discussions for help. You can also\n[sponsor us](https://github.com/sponsors/example).",
+	} {
+		chunks := []corpus.Chunk{{Repository: trigger.Repository, Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Text: text}}
+		resolved, issues, err := Resolve(fixtureTable(trigger), chunks, "")
+		if err != nil || len(issues) != 0 || resolved.Answers[trigger.ID].Text != "Ask in Discussions for help." {
+			t.Errorf("Resolve(%q) = (%v, %v, %v)", text, resolved, issues, err)
+		}
+	}
+}
+
+func TestResolve_Negative_AmbiguousSection(t *testing.T) {
+	trigger := fixtureTrigger()
+	chunks := []corpus.Chunk{
+		{Repository: trigger.Repository, Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Section: 1, Text: "development"},
+		{Repository: trigger.Repository, Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Section: 2, Text: "production"},
+	}
+	resolved, issues, err := Resolve(fixtureTable(trigger), chunks, "")
+	if err != nil || len(issues) != 1 || issues[0].Reason != "answer_ambiguous" || resolved.DisabledCount != 1 || len(resolved.Answers) != 0 {
+		t.Fatalf("Resolve = (%v, %v, %v)", resolved, issues, err)
+	}
+}
+
+func TestHasNegation_Positive_Words(t *testing.T) {
+	for _, word := range []string{"not", "no", "never", "cannot", "can't", "cant", "don't", "dont", "doesn't", "doesnt", "didn't", "didnt", "won't", "wont", "isn't", "isnt", "aren't", "arent", "shouldn't", "shouldnt"} {
+		if !hasNegation("Question " + strings.ToUpper(word) + " start?") {
+			t.Errorf("missed %q", word)
+		}
+	}
+}
+
+func TestHasNegation_Negative_Words(t *testing.T) {
+	for _, text := range []string{"notice", "know", "start Diallak"} {
+		if hasNegation(text) {
+			t.Errorf("unexpected negation in %q", text)
+		}
+	}
+}
+
+func TestHasNegation_Boundary_Text(t *testing.T) {
+	for _, tc := range []struct {
+		text string
+		want bool
+	}{{"don’t", true}, {"No. start", true}, {"", false}, {"notice know", false}} {
+		if got := hasNegation(tc.text); got != tc.want {
+			t.Errorf("hasNegation(%q) = %t", tc.text, got)
+		}
+	}
+}
+
+func TestMatch_Negative_ForumNegation(t *testing.T) {
+	trigger := fixtureTrigger()
+	if _, ok := fixtureTable(trigger).Match(Query{Text: "Do not verify the Diallak release image", Forum: true, Tags: trigger.ForumTags}); ok {
+		t.Fatal("negated forum question matched")
 	}
 }

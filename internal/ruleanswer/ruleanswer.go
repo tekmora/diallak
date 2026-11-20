@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/tekmora/diallak/internal/corpus"
 	"github.com/tekmora/diallak/internal/retrieval"
@@ -235,8 +237,20 @@ func (t *Table) match(q Query, tokens []string, available map[string]ResolvedAns
 	return first, found
 }
 
+func hasNegation(text string) bool {
+	text = strings.ReplaceAll(strings.ToLower(text), "’", "'")
+	words := strings.FieldsFunc(text, func(r rune) bool { return !unicode.IsLetter(r) && r != '\'' })
+	negations := []string{"not", "no", "never", "cannot", "can't", "cant", "don't", "dont", "doesn't", "doesnt", "didn't", "didnt", "won't", "wont", "isn't", "isnt", "aren't", "arent", "shouldn't", "shouldnt"}
+	for _, word := range words {
+		if slices.Contains(negations, word) {
+			return true
+		}
+	}
+	return false
+}
+
 func (t Trigger) matchesQuery(q Query, tokens []string) bool {
-	return t.entryPoints(q, tokens) && t.matches(tokens)
+	return !hasNegation(q.Text) && t.entryPoints(q, tokens) && t.matches(tokens)
 }
 
 func (t Trigger) matches(question []string) bool {
@@ -316,9 +330,14 @@ func Resolve(t *Table, chunks []corpus.Chunk, linkTemplate string) (*Resolved, [
 	r := &Resolved{Table: t, Answers: make(map[string]ResolvedAnswer)}
 	var issues []Issue
 	for _, trigger := range t.Triggers {
-		answer, foundRepo := resolveAnswer(trigger, chunks)
+		answer, foundRepo, ambiguous := resolveAnswer(trigger, chunks)
 		if !foundRepo {
 			issues = append(issues, Issue{trigger.ID, "repository_absent"})
+			r.DisabledCount++
+			continue
+		}
+		if ambiguous {
+			issues = append(issues, Issue{trigger.ID, "answer_ambiguous"})
 			r.DisabledCount++
 			continue
 		}
@@ -356,25 +375,62 @@ func filterSponsorship(text string) string {
 func sponsorshipLines(lines []string) []bool {
 	removed := make([]bool, len(lines))
 	start := 0
-	flush := func(end int) {
-		if sponsorshipLink.MatchString(strings.Join(lines[start:end], "\n")) {
-			for i := start; i < end; i++ {
-				removed[i] = true
-			}
-		}
-	}
+
 	for i, line := range lines {
 		if strings.TrimSpace(line) == "" || listItem.MatchString(line) {
-			flush(i)
+			filterSponsorshipParagraph(lines, removed, start, i)
 			start = i
 			if strings.TrimSpace(line) == "" {
 				start = i + 1
 			}
 		}
 	}
-	flush(len(lines))
+	filterSponsorshipParagraph(lines, removed, start, len(lines))
 	removeSponsorshipSubtrees(lines, removed)
 	return removed
+}
+
+func filterSponsorshipParagraph(lines []string, removed []bool, start, end int) {
+	if start == end {
+		return
+	}
+	paragraph := strings.Join(lines[start:end], "\n")
+	if !sponsorshipLink.MatchString(paragraph) {
+		return
+	}
+	if !listItem.MatchString(lines[start]) {
+		lines[start] = filterSponsorshipSentences(paragraph)
+	}
+	removed[start] = listItem.MatchString(lines[start]) || strings.TrimSpace(lines[start]) == ""
+	for i := start + 1; i < end; i++ {
+		removed[i] = true
+	}
+}
+
+func filterSponsorshipSentences(paragraph string) string {
+	var kept strings.Builder
+	start := 0
+	for i, r := range paragraph {
+		if r != '.' && r != '!' && r != '?' {
+			continue
+		}
+		next := i + 1
+		if next < len(paragraph) {
+			following, _ := utf8.DecodeRuneInString(paragraph[next:])
+			if !unicode.IsSpace(following) {
+				continue
+			}
+		}
+		sentence := paragraph[start:next]
+		if !sponsorshipLink.MatchString(sentence) {
+			kept.WriteString(sentence)
+		}
+		start = next
+	}
+	if tail := paragraph[start:]; !sponsorshipLink.MatchString(tail) {
+		kept.WriteString(tail)
+	}
+	return strings.TrimSpace(kept.String())
 }
 
 func removeSponsorshipSubtrees(lines []string, removed []bool) {
@@ -421,7 +477,7 @@ func joinWithoutSponsorship(lines []string, removed []bool) string {
 	return strings.Join(kept, "\n")
 }
 
-func resolveAnswer(trigger Trigger, chunks []corpus.Chunk) (ResolvedAnswer, bool) {
+func resolveAnswer(trigger Trigger, chunks []corpus.Chunk) (ResolvedAnswer, bool, bool) {
 	answer := ResolvedAnswer{Trigger: trigger}
 	var texts []string
 	foundRepo := false
@@ -433,13 +489,16 @@ func resolveAnswer(trigger Trigger, chunks []corpus.Chunk) (ResolvedAnswer, bool
 		if chunk.Path != trigger.Answer.Path || chunk.Heading != trigger.Answer.Heading {
 			continue
 		}
+		if len(answer.Sources) > 0 && answer.Sources[0].Section != chunk.Section {
+			return ResolvedAnswer{}, true, true
+		}
 		texts = append(texts, chunk.Text)
 		if len(answer.Sources) == 0 {
 			answer.Sources = append(answer.Sources, chunk)
 		}
 	}
 	answer.Text = strings.Join(texts, "\n\n")
-	return answer, foundRepo
+	return answer, foundRepo, false
 }
 
 func resolveLinks(trigger Trigger, chunks []corpus.Chunk, template string) ([]string, []corpus.Chunk, []Issue) {
