@@ -632,6 +632,7 @@ one of the two labels.
 | `MANAGE_ROLES` | Manage Roles, under "General Server Permissions" | Rollen verwalten, under "Allgemeine Serverberechtigungen" | the same page |
 | `MANAGE_CHANNELS` | Manage Channels | Kanäle verwalten | [Permissions on Discord](https://discord.com/community/permissions-on-discord-discord); German: [Sprachkanäle FAQ](https://support.discord.com/hc/de/articles/19583625604887) |
 | `MANAGE_GUILD` | Manage Server | Server verwalten | [Pause Invites FAQ](https://support.discord.com/hc/en-us/articles/8458903738647) |
+| `CREATE_INSTANT_INVITE` | Create Invite | Einladung erstellen | [Channel Permissions Settings 101](https://support.discord.com/hc/en-us/articles/10543994968087) |
 | `MANAGE_MESSAGES` | Manage Messages | Nachrichten verwalten | [Channel Permissions Settings 101](https://support.discord.com/hc/en-us/articles/10543994968087) |
 | `MODERATE_MEMBERS` | **Time Out Members** | **Mitglieder in Timeout versetzen** | [Time Out FAQ](https://support.discord.com/hc/en-us/articles/4413305239191) |
 | `VIEW_CHANNEL` | View Channel | Kanal anzeigen | Channel Permissions Settings 101 |

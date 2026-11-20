@@ -25,8 +25,10 @@ type Snapshot struct {
 	// them needs MANAGE_GUILD; FilterRules is empty when they were not.
 	FilterRulesRead bool         `json:"filter_rules_read,omitempty"`
 	FilterRules     []FilterRule `json:"filter_rules,omitempty"`
-	InvitesRead     bool         `json:"invites_read,omitempty"`
-	Invites         []Invite     `json:"invites,omitempty"`
+	// InvitesRead reports whether the server invites were read.
+	InvitesRead bool `json:"invites_read,omitempty"`
+	// Invites holds the observed server invites.
+	Invites []Invite `json:"invites,omitempty"`
 }
 
 // FilterRule is one of the server's filter rules, its roles and channels by

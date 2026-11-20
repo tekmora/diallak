@@ -2,6 +2,7 @@ package serverplan
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 )
 
@@ -61,6 +62,7 @@ func TestInviteCompareMissing(t *testing.T) {
 	def := loadDef(t)
 	snap := snapshotOf(t, def)
 	snap.InvitesRead = true
+	snap.Invites = nil
 	diffs, err := Compare(def, snap)
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +89,7 @@ func TestInviteComparisonCases(t *testing.T) {
 		invites  []Invite
 		wantKind string
 	}{
-		{"unread", false, "", nil, ""},
+		{"unread", false, "", nil, KindInvitesNotRead},
 		{"match", true, "", []Invite{good}, ""},
 		{"other ignored", true, "", []Invite{{Code: "other", Channel: "rules"}}, KindInviteCreate},
 		{"missing recorded", true, "published", nil, KindInviteMissing},
@@ -104,16 +106,8 @@ func TestInviteComparisonCases(t *testing.T) {
 			if tc.wantKind == "" && len(diffs) != 0 {
 				t.Fatalf("unexpected differences: %+v", diffs)
 			}
-			if tc.wantKind != "" {
-				found := false
-				for _, d := range diffs {
-					if d.Kind == tc.wantKind {
-						found = true
-					}
-				}
-				if !found {
-					t.Fatalf("missing %s: %+v", tc.wantKind, diffs)
-				}
+			if tc.wantKind != "" && !slices.ContainsFunc(diffs, func(d Difference) bool { return d.Kind == tc.wantKind }) {
+				t.Fatalf("missing %s: %+v", tc.wantKind, diffs)
 			}
 		})
 	}
@@ -123,6 +117,7 @@ func TestInvitePlan(t *testing.T) {
 	def := loadDef(t)
 	s := snapshotOf(t, def)
 	s.InvitesRead = true
+	s.Invites = nil
 	res, err := Plan(def, s)
 	if err != nil {
 		t.Fatal(err)
@@ -148,10 +143,11 @@ func TestInvitePlan(t *testing.T) {
 	}
 }
 
-func TestInvitePlanOrderAndRecordedDifference(t *testing.T) {
+func TestCheckInviteRight_Positive_PlannedGrantBeforeInvite(t *testing.T) {
 	def := loadDef(t)
 	s := snapshotOf(t, def)
 	s.InvitesRead = true
+	s.Invites = nil
 	raiseBotRole(t, s, "ADMINISTRATOR")
 	removeChannelRoleAccess(s, "rules", s.Caller.Role)
 	res, err := Plan(def, s)
@@ -170,28 +166,116 @@ func TestInvitePlanOrderAndRecordedDifference(t *testing.T) {
 	if access == 0 || create <= access {
 		t.Fatalf("invite must follow bot entry: %+v", res)
 	}
+}
+
+func TestInvitePlan_Negative_RecordedDifference(t *testing.T) {
+	def := loadDef(t)
+	s := snapshotOf(t, def)
+	s.InvitesRead = true
 	def.Invites[0].Code = "published"
 	s.Invites = []Invite{{Code: "published", Channel: "rules", MaxAge: 1, ByBot: true}}
 	diffs, err := Compare(def, s)
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
-	for _, d := range diffs {
-		if d.Kind == KindInviteDiffers && d.Detail == "max_age" {
-			found = true
-		}
-	}
-	if !found {
+	if !slices.ContainsFunc(diffs, func(d Difference) bool { return d.Kind == KindInviteDiffers && d.Detail == "max_age" }) {
 		t.Fatalf("missing age difference: %+v", diffs)
 	}
-	res, err = Plan(def, s)
+	res, err := Plan(def, s)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, c := range res.Changes {
+	if slices.ContainsFunc(res.Changes, func(c Change) bool { return c.Action == ActionCreateInvite }) {
+		t.Fatalf("recorded invite planned: %+v", res.Changes)
+	}
+}
+
+func TestCompareInvites_Positive_Unread(t *testing.T) {
+	def := loadDef(t)
+	got := compareInvites(def, &Snapshot{})
+	if len(got) != 1 || got[0].Kind != KindInvitesNotRead || got[0].Object != "invites" {
+		t.Fatalf("differences = %+v", got)
+	}
+}
+
+func TestCompareInvites_Boundary_UnreadWithoutEntries(t *testing.T) {
+	def := loadDef(t)
+	def.Invites = nil
+	if got := compareInvites(def, &Snapshot{}); len(got) != 0 {
+		t.Fatalf("differences = %+v", got)
+	}
+}
+
+func TestPlanInvites_Negative_UnreadRecordedCode(t *testing.T) {
+	def := loadDef(t)
+	def.Invites[0].Code = "published"
+	s := snapshotOf(t, def)
+	s.InvitesRead = false
+	s.Invites = nil
+	result, err := Plan(def, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range result.Changes {
 		if c.Action == ActionCreateInvite {
-			t.Fatalf("recorded invite planned: %+v", c)
+			t.Fatalf("unexpected change: %+v", c)
 		}
 	}
+	for _, c := range result.Refused {
+		if c.Action == ActionCreateInvite {
+			t.Fatalf("unexpected candidate: %+v", c)
+		}
+	}
+}
+
+func TestPlanInvites_Positive_UnreadCandidate(t *testing.T) {
+	def := loadDef(t)
+	s := snapshotOf(t, def)
+	s.InvitesRead = false
+	s.Invites = nil
+	result, err := Plan(def, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range result.Refused {
+		if c.Action == ActionCreateInvite && c.Object == "invites[hub]" {
+			return
+		}
+	}
+	t.Fatalf("unread candidate missing: %+v", result)
+}
+
+func TestCheckInviteRight_Positive_ObservedGrant(t *testing.T) {
+	def := loadDef(t)
+	s := snapshotOf(t, def)
+	s.InvitesRead = true
+	s.Invites = nil
+	result, err := Plan(def, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range result.Changes {
+		if c.Action == ActionCreateInvite {
+			return
+		}
+	}
+	t.Fatalf("create missing: %+v", result)
+}
+
+func TestCheckInviteRight_Negative_NoGrant(t *testing.T) {
+	def := loadDef(t)
+	s := snapshotOf(t, def)
+	s.InvitesRead = true
+	s.Invites = nil
+	removeChannelRoleAccess(s, "rules", s.Caller.Role)
+	result, err := Plan(def, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range result.Refused {
+		if c.Action == ActionCreateInvite && c.Reason == ReasonLacksRight && c.Detail == "CREATE_INSTANT_INVITE" {
+			return
+		}
+	}
+	t.Fatalf("missing right refusal: %+v", result)
 }

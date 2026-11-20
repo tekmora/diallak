@@ -44,6 +44,8 @@ func raisedFirstSetupSnapshot() *Snapshot {
 		ChannelsComplete:  true,
 		VerificationLevel: "none",
 		FilterRulesRead:   true,
+		InvitesRead:       true,
+		Invites:           []Invite{{Code: "fixture-code", Channel: "rules", ByBot: true}},
 	}
 }
 

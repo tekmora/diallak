@@ -8,12 +8,18 @@ import (
 
 // Invite holds only the fields used to compare an invite.
 type Invite struct {
-	Code      string `json:"code"`
-	Channel   string `json:"channel"`
-	MaxAge    int    `json:"max_age"`
-	MaxUses   int    `json:"max_uses"`
-	Temporary bool   `json:"temporary"`
-	ByBot     bool   `json:"by_bot"`
+	// Code is the invite code.
+	Code string `json:"code"`
+	// Channel is the channel name.
+	Channel string `json:"channel"`
+	// MaxAge is the lifetime in seconds.
+	MaxAge int `json:"max_age"`
+	// MaxUses is the use limit.
+	MaxUses int `json:"max_uses"`
+	// Temporary reports whether membership is temporary.
+	Temporary bool `json:"temporary"`
+	// ByBot reports whether the bot created the invite.
+	ByBot bool `json:"by_bot"`
 }
 
 func checkInvites(s *Snapshot) []error {

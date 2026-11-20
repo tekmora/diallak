@@ -100,16 +100,27 @@ func (fx setupFixture) ownPlanRights(t *testing.T) (rights []string, refused []s
 			t.Errorf("plan with the bot's own rights holds %s %s, want settings changes only", c.Action, c.Object)
 		}
 	}
-	for _, r := range own.Refused {
-		if r.Reason != serverplan.ReasonOutsideOwnChanges {
-			t.Errorf("%s %s refused as %q, want %q", r.Action, r.Object, r.Reason, serverplan.ReasonOutsideOwnChanges)
-		}
-	}
+	assertOwnRefusals(t, own.Refused)
 	rights = own.Rights()
 	if len(rights) == 0 || slices.Contains(rights, "ADMINISTRATOR") {
 		t.Fatalf("rights needed = %v, want a list without ADMINISTRATOR", rights)
 	}
 	return rights, own.Refused
+}
+
+func assertOwnRefusals(t *testing.T, refused []serverplan.Refusal) {
+	t.Helper()
+	for _, r := range refused {
+		if r.Action == serverplan.ActionCreateInvite {
+			if r.Reason != serverplan.ReasonLacksRight || r.Detail != "CREATE_INSTANT_INVITE" {
+				t.Errorf("invite refusal = %+v", r)
+			}
+			continue
+		}
+		if r.Reason != serverplan.ReasonOutsideOwnChanges {
+			t.Errorf("%s %s refused as %q, want %q", r.Action, r.Object, r.Reason, serverplan.ReasonOutsideOwnChanges)
+		}
+	}
 }
 
 // roleAboveBot is the name of the role the definition puts directly above the
@@ -364,16 +375,7 @@ func assertPlanRefusedWithoutRight(t *testing.T, fx setupFixture, rights []strin
 	if len(result.Refused) == 0 {
 		t.Fatalf("no refusal without %s: the list names a right the set-up does not need", without)
 	}
-	for _, r := range result.Refused {
-		// Without MANAGE_GUILD the read cannot see the filter rules.
-		if without == "MANAGE_GUILD" && r.Reason == serverplan.ReasonNotVisible && slices.Contains(settingsActions, r.Action) {
-			continue
-		}
-		if r.Reason != serverplan.ReasonLacksRight || !slices.Contains(strings.Split(r.Detail, ", "), without) {
-			t.Errorf("%s %s refused as %q (%q), want %q naming %s",
-				r.Action, r.Object, r.Reason, r.Detail, serverplan.ReasonLacksRight, without)
-		}
-	}
+	assertMissingRightRefusals(t, result.Refused, without)
 
 	fx.fake.resetRecorded()
 	out, err := fx.apply(t, setupDay, in)
@@ -385,11 +387,38 @@ func assertPlanRefusedWithoutRight(t *testing.T, fx setupFixture, rights []strin
 		t.Errorf("output = %q, want none", out)
 	}
 	// Without MANAGE_GUILD the read leaves the filter rules out.
-	reads := 5
+	reads := 6
 	if without == "MANAGE_GUILD" {
 		reads = 4
 	}
 	assertRequestCounts(t, fx.fake.getRecorded(), reads, 0)
+}
+
+func assertMissingRightRefusals(t *testing.T, refused []serverplan.Refusal, without string) {
+	t.Helper()
+	matched := false
+	for _, r := range refused {
+		if unreadSettingRefusal(r, without) {
+			matched = true
+			continue
+		}
+		if r.Action == serverplan.ActionCreateInvite && r.Reason == serverplan.ReasonLacksRight && r.Detail == "CREATE_INSTANT_INVITE" {
+			matched = matched || without == "CREATE_INSTANT_INVITE"
+			continue
+		}
+		if r.Reason != serverplan.ReasonLacksRight || !slices.Contains(strings.Split(r.Detail, ", "), without) {
+			t.Errorf("%s %s refused as %q (%q), want %q naming %s", r.Action, r.Object, r.Reason, r.Detail, serverplan.ReasonLacksRight, without)
+		} else {
+			matched = true
+		}
+	}
+	if !matched {
+		t.Errorf("no refusal reflects missing %s", without)
+	}
+}
+
+func unreadSettingRefusal(r serverplan.Refusal, without string) bool {
+	return without == "MANAGE_GUILD" && r.Reason == serverplan.ReasonNotVisible && (slices.Contains(settingsActions, r.Action) || r.Action == serverplan.ActionCreateInvite)
 }
 
 func TestApplyServer_Boundary_EveryNamedRightIsNeeded(t *testing.T) {
@@ -409,21 +438,35 @@ func assertChannelListPlanResult(t *testing.T, fx setupFixture, result serverpla
 	if got := len(result.Refused) > 0; got != wantRefused {
 		t.Fatalf("refused = %+v, want refusals: %t", result.Refused, wantRefused)
 	}
-	for _, r := range result.Refused {
-		if r.Action != serverplan.ActionCreateChannel || r.Reason != serverplan.ReasonNotVisible {
-			t.Errorf("%s %s refused as %q, want only %s refused as %q",
-				r.Action, r.Object, r.Reason, serverplan.ActionCreateChannel, serverplan.ReasonNotVisible)
-		}
-	}
+	channelRefusals := countChannelRefusals(t, result.Refused)
 	for _, c := range result.Changes {
 		if wantRefused && c.Action == serverplan.ActionCreateChannel {
 			t.Errorf("%s is planned from a list of channels that is not the whole list", c.Object)
 		}
 	}
-	if want := visibleChannels(fx.def); wantRefused && (len(result.Refused) != want || want == len(fx.def.Channels)) {
+	if want := visibleChannels(fx.def); wantRefused && (channelRefusals != want || want == len(fx.def.Channels)) {
 		t.Errorf("%d channels refused, want the %d of %d the definition lets the bot see",
-			len(result.Refused), want, len(fx.def.Channels))
+			channelRefusals, want, len(fx.def.Channels))
 	}
+}
+
+func countChannelRefusals(t *testing.T, refused []serverplan.Refusal) int {
+	t.Helper()
+	channelRefusals := 0
+	for _, r := range refused {
+		if r.Action == serverplan.ActionCreateInvite {
+			if r.Reason != serverplan.ReasonLacksRight || r.Detail != "CREATE_INSTANT_INVITE" {
+				t.Errorf("invite refusal = %+v", r)
+			}
+			continue
+		}
+		channelRefusals++
+		if r.Action != serverplan.ActionCreateChannel || r.Reason != serverplan.ReasonNotVisible {
+			t.Errorf("%s %s refused as %q, want only %s refused as %q",
+				r.Action, r.Object, r.Reason, serverplan.ActionCreateChannel, serverplan.ReasonNotVisible)
+		}
+	}
+	return channelRefusals
 }
 
 // runChannelListDateSubtest sets up bot rights, computes the plan at day, and checks channel visibility behavior.

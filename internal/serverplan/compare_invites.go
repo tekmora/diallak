@@ -8,10 +8,16 @@ import (
 )
 
 const (
+	// KindInvitesNotRead reports invites that could not be listed.
+	KindInvitesNotRead = "invites-not-read"
+	// KindInviteMissing reports a missing recorded invite.
 	KindInviteMissing = "invite-missing"
-	KindInviteCreate  = "invite-create"
+	// KindInviteCreate reports an invite that needs creation.
+	KindInviteCreate = "invite-create"
+	// KindInviteDiffers reports a recorded invite with different fields.
 	KindInviteDiffers = "invite-differs"
-	KindInviteExtra   = "invite-extra"
+	// KindInviteExtra reports an unmatched bot invite.
+	KindInviteExtra = "invite-extra"
 )
 
 func inviteFields(def *serverdef.Definition, want serverdef.Invite, got Invite) []string {
@@ -42,32 +48,17 @@ func inviteMatches(def *serverdef.Definition, want serverdef.Invite, got Invite)
 }
 
 func compareInvites(def *serverdef.Definition, snap *Snapshot) []Difference {
-	if !snap.InvitesRead || len(def.Invites) == 0 {
+	if len(def.Invites) == 0 {
 		return nil
+	}
+	if !snap.InvitesRead {
+		return []Difference{{Kind: KindInvitesNotRead, Object: "invites"}}
 	}
 	var diffs []Difference
 	matched := make([]bool, len(snap.Invites))
 	for _, want := range def.Invites {
-		index := -1
-		for i, got := range snap.Invites {
-			if inviteMatches(def, want, got) {
-				matched[i] = true
-				if index < 0 {
-					index = i
-				}
-			}
-		}
-		object := fmt.Sprintf("invites[%s]", want.ID)
-		if index < 0 {
-			kind := KindInviteCreate
-			if want.Code != "" {
-				kind = KindInviteMissing
-			}
-			diffs = append(diffs, Difference{Kind: kind, Object: object})
-			continue
-		}
-		if fields := inviteFields(def, want, snap.Invites[index]); len(fields) > 0 {
-			diffs = append(diffs, Difference{Kind: KindInviteDiffers, Object: object, Detail: strings.Join(fields, ", ")})
+		if diff := compareInvite(def, want, snap.Invites, matched); diff != nil {
+			diffs = append(diffs, *diff)
 		}
 	}
 	for i, invite := range snap.Invites {
@@ -76,4 +67,28 @@ func compareInvites(def *serverdef.Definition, snap *Snapshot) []Difference {
 		}
 	}
 	return diffs
+}
+
+func compareInvite(def *serverdef.Definition, want serverdef.Invite, invites []Invite, matched []bool) *Difference {
+	index := -1
+	for i, got := range invites {
+		if inviteMatches(def, want, got) {
+			matched[i] = true
+			if index < 0 {
+				index = i
+			}
+		}
+	}
+	object := fmt.Sprintf("invites[%s]", want.ID)
+	if index < 0 {
+		kind := KindInviteCreate
+		if want.Code != "" {
+			kind = KindInviteMissing
+		}
+		return &Difference{Kind: kind, Object: object}
+	}
+	if fields := inviteFields(def, want, invites[index]); len(fields) > 0 {
+		return &Difference{Kind: KindInviteDiffers, Object: object, Detail: strings.Join(fields, ", ")}
+	}
+	return nil
 }

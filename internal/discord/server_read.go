@@ -280,12 +280,13 @@ func resolveCaller(
 }
 
 type serverIndex struct {
-	everyoneRoleID snowflake.ID
-	botRoleID      snowflake.ID
-	roles          map[string][]snowflake.ID
-	categories     map[string][]snowflake.ID
-	channels       map[string][]snowflake.ID
-	filterRules    map[string][]snowflake.ID
+	createdInviteCode string
+	everyoneRoleID    snowflake.ID
+	botRoleID         snowflake.ID
+	roles             map[string][]snowflake.ID
+	categories        map[string][]snowflake.ID
+	channels          map[string][]snowflake.ID
+	filterRules       map[string][]snowflake.ID
 }
 
 func newServerIndex(guildID uint64, botRoleID snowflake.ID) *serverIndex {

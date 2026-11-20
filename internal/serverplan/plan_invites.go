@@ -1,10 +1,16 @@
 package serverplan
 
+import "slices"
+
 // ActionCreateInvite creates an unrecorded invite.
 const ActionCreateInvite = "create-invite"
 
 func (ctx *planContext) addInviteCandidates() {
 	for _, diff := range ctx.diffs {
+		if diff.Kind == KindInvitesNotRead {
+			ctx.addUnreadInviteCandidates()
+			continue
+		}
 		if diff.Kind != KindInviteCreate {
 			continue
 		}
@@ -14,6 +20,14 @@ func (ctx *planContext) addInviteCandidates() {
 				ctx.evaluateCandidate(candidate{action: ActionCreateInvite, object: diff.Object, needs: []string{"CREATE_INSTANT_INVITE"}, channelID: invite.Channel})
 				break
 			}
+		}
+	}
+}
+
+func (ctx *planContext) addUnreadInviteCandidates() {
+	for _, invite := range ctx.def.Invites {
+		if invite.Code == "" {
+			ctx.evaluateCandidate(candidate{action: ActionCreateInvite, object: "invites[" + invite.ID + "]", needs: []string{"CREATE_INSTANT_INVITE"}, channelID: invite.Channel, isNotVisible: true})
 		}
 	}
 }
@@ -31,19 +45,22 @@ func (ctx *planContext) checkInviteRight(c candidate) (string, string) {
 			return "", ""
 		}
 	}
+	if ctx.hasObservedInviteRight(ch.Name) {
+		return "", ""
+	}
+	return ReasonLacksRight, "CREATE_INSTANT_INVITE"
+}
+
+func (ctx *planContext) hasObservedInviteRight(name string) bool {
 	for _, observed := range ctx.snap.Channels {
-		if observed.Name != ch.Name {
+		if observed.Name != name {
 			continue
 		}
 		for _, entry := range observed.Access {
-			if entry.Role == ctx.snap.Caller.Role {
-				for _, right := range entry.Allow {
-					if right == "CREATE_INSTANT_INVITE" {
-						return "", ""
-					}
-				}
+			if entry.Role == ctx.snap.Caller.Role && slices.Contains(entry.Allow, "CREATE_INSTANT_INVITE") {
+				return true
 			}
 		}
 	}
-	return ReasonLacksRight, "CREATE_INSTANT_INVITE"
+	return false
 }

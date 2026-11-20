@@ -166,7 +166,8 @@ type Definition struct {
 	// Settings holds the platform's filter rules and the verification level.
 	// Absent = nothing of it is compared or changed on the server.
 	Settings *Settings `json:"settings,omitempty"`
-	Invites  []Invite  `json:"invites,omitempty"`
+	// Invites lists the desired durable invites.
+	Invites []Invite `json:"invites,omitempty"`
 	// News lists what the news function reads and the area each feed serves (ADR-0019).
 	// Absent = the definition names no news.
 	News *News `json:"news,omitempty"`

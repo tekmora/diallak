@@ -132,7 +132,17 @@ func snapshotOf(t *testing.T, def *serverdef.Definition) *Snapshot {
 	cats, channels := buildSnapshotCategoriesAndChannels(def, rolesByID)
 
 	level, rules := serverSettingsOf(t, def)
+	invites := make([]Invite, 0, len(def.Invites))
+	for _, entry := range def.Invites {
+		code := entry.Code
+		if code == "" {
+			code = "fixture-code"
+		}
+		invites = append(invites, Invite{Code: code, Channel: defChannelName(def, entry.Channel), MaxAge: entry.MaxAge, MaxUses: entry.MaxUses, Temporary: entry.Temporary, ByBot: true})
+	}
 	return &Snapshot{
+		InvitesRead:       true,
+		Invites:           invites,
 		VerificationLevel: level,
 		FilterRulesRead:   true,
 		FilterRules:       rules,

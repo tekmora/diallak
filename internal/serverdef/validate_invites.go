@@ -16,22 +16,26 @@ func (v *validator) checkInvites() {
 			v.add(CodeInvite, p+".id", "invalid or duplicate invite id")
 		}
 		seen[invite.ID] = true
-		ch := findChannel(v.def.Channels, invite.Channel)
-		if ch == nil || (ch.Type != "text" && ch.Type != "announcement") {
-			v.add(CodeInvite, p+".channel", "invite channel must name a text or announcement channel")
-		}
-		if strings.TrimSpace(invite.Purpose) == "" {
-			v.add(CodeInvite, p+".purpose", "invite purpose must not be blank")
-		}
-		if invite.MaxAge < 0 || invite.MaxAge > 604800 {
-			v.add(CodeInvite, p+".max_age", "max_age must be between 0 and 604800")
-		}
-		if invite.MaxUses < 0 || invite.MaxUses > 100 {
-			v.add(CodeInvite, p+".max_uses", "max_uses must be between 0 and 100")
-		}
-		if invite.Code != "" && !inviteCodeRegexp.MatchString(invite.Code) {
-			v.add(CodeInvite, p+".code", "invalid invite code")
-		}
+		v.checkInviteFields(invite, p)
+	}
+}
+
+func (v *validator) checkInviteFields(invite Invite, p string) {
+	ch := findChannel(v.def.Channels, invite.Channel)
+	if ch == nil || (ch.Type != "text" && ch.Type != "announcement") {
+		v.add(CodeInvite, p+".channel", "invite channel must name a text or announcement channel")
+	}
+	if strings.TrimSpace(invite.Purpose) == "" {
+		v.add(CodeInvite, p+".purpose", "invite purpose must not be blank")
+	}
+	if invite.MaxAge < 0 || invite.MaxAge > 604800 {
+		v.add(CodeInvite, p+".max_age", "max_age must be between 0 and 604800")
+	}
+	if invite.MaxUses < 0 || invite.MaxUses > 100 {
+		v.add(CodeInvite, p+".max_uses", "max_uses must be between 0 and 100")
+	}
+	if invite.Code != "" && !inviteCodeRegexp.MatchString(invite.Code) {
+		v.add(CodeInvite, p+".code", "invalid invite code")
 	}
 }
 

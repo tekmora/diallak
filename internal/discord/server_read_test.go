@@ -362,6 +362,17 @@ func standardHandler(guildID, botUserID uint64, appJSON, guildJSON, memberJSON, 
 		case fmt.Sprintf("/guilds/%d/channels", guildID):
 			writeTestResponse(w, http.StatusOK, channelsJSON)
 		case fmt.Sprintf("/guilds/%d/invites", guildID):
+			var channels []fixtureAPIChannel
+			if err := json.Unmarshal([]byte(channelsJSON), &channels); err != nil {
+				writeTestResponse(w, http.StatusOK, `[]`)
+				return
+			}
+			for _, ch := range channels {
+				if ch.Name == "rules" {
+					writeTestResponse(w, http.StatusOK, fmt.Sprintf(`[{"code":"fixture-code","channel":{"id":%q},"inviter":{"id":%q,"username":"bot"},"max_age":0,"max_uses":0,"temporary":false}]`, ch.ID, strconv.FormatUint(botUserID, 10)))
+					return
+				}
+			}
 			writeTestResponse(w, http.StatusOK, `[]`)
 		case fmt.Sprintf("/guilds/%d/auto-moderation/rules", guildID):
 			writeTestResponse(w, http.StatusOK, rulesJSON)
