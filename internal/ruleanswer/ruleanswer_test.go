@@ -421,6 +421,28 @@ func TestFilterSponsorship_Negative_NestedSponsorContinuation(t *testing.T) {
 	}
 }
 
+func TestFilterSponsorship_Positive_RemovesSponsorSubtree(t *testing.T) {
+	input := "- [Sponsor](https://ko-fi.com/example)\n  - Gold tier\n    benefits"
+	if got := filterSponsorship(input); got != "" {
+		t.Errorf("got %q, want empty", got)
+	}
+}
+
+func TestFilterSponsorship_Positive_RemovesSubtreeBetweenItems(t *testing.T) {
+	input := "- ordinary\n- [Sponsor](https://ko-fi.com/example)\n  - Gold tier\n    benefits\n- last"
+	want := "- ordinary\n- last"
+	if got := filterSponsorship(input); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestFilterSponsorship_Boundary_SubtreeBeforeParagraph(t *testing.T) {
+	input := "- [Sponsor](https://ko-fi.com/example)\n  - Gold tier\n    benefits\n\nparagraph"
+	if got := filterSponsorship(input); got != "paragraph" {
+		t.Errorf("got %q, want paragraph", got)
+	}
+}
+
 func TestResolve_Boundary_LoadedIndentedCode(t *testing.T) {
 	trigger := fixtureTrigger()
 	fsys := fstest.MapFS{"README.md": &fstest.MapFile{Data: []byte("# Release\n\n    first line\n    second line\n")}}

@@ -369,7 +369,42 @@ func sponsorshipLines(lines []string) []bool {
 		}
 	}
 	flush(len(lines))
+	removeSponsorshipSubtrees(lines, removed)
 	return removed
+}
+
+func removeSponsorshipSubtrees(lines []string, removed []bool) {
+	active := false
+	indent := 0
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		column := indentationColumn(line)
+		if active && column > indent {
+			removed[i] = true
+			continue
+		}
+		active = removed[i] && listItem.MatchString(line)
+		if active {
+			indent = column
+		}
+	}
+}
+
+func indentationColumn(line string) int {
+	column := 0
+	for i := 0; i < len(line); i++ {
+		switch line[i] {
+		case ' ':
+			column++
+		case '\t':
+			column += 4 - column%4
+		default:
+			return column
+		}
+	}
+	return column
 }
 
 func joinWithoutSponsorship(lines []string, removed []bool) string {
