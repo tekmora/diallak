@@ -45,18 +45,23 @@ func TestTableExamplesEveryEntryPoint(t *testing.T) {
 	}
 	for _, trigger := range table.Triggers {
 		for _, example := range trigger.MustMatch {
-			for _, command := range trigger.Commands {
-				got, ok := table.Match(ruleanswer.Query{Text: example, Command: command})
-				if !ok || got.ID != trigger.ID {
-					t.Errorf("%s command %s: got %s, %t", trigger.ID, command, got.ID, ok)
-				}
-			}
-			for _, tag := range trigger.ForumTags {
-				got, ok := table.Match(ruleanswer.Query{Text: example, Forum: true, Tags: []string{tag}})
-				if !ok || got.ID != trigger.ID {
-					t.Errorf("%s tag %s: got %s, %t", trigger.ID, tag, got.ID, ok)
-				}
-			}
+			checkExampleEntryPoints(t, table, trigger, example)
+		}
+	}
+}
+
+func checkExampleEntryPoints(t *testing.T, table *ruleanswer.Table, trigger ruleanswer.Trigger, example string) {
+	t.Helper()
+	for _, command := range trigger.Commands {
+		got, ok := table.Match(ruleanswer.Query{Text: example, Command: command})
+		if !ok || got.ID != trigger.ID {
+			t.Errorf("%s command %s: got %s, %t", trigger.ID, command, got.ID, ok)
+		}
+	}
+	for _, tag := range trigger.ForumTags {
+		got, ok := table.Match(ruleanswer.Query{Text: example, Forum: true, Tags: []string{tag}})
+		if !ok || got.ID != trigger.ID {
+			t.Errorf("%s tag %s: got %s, %t", trigger.ID, tag, got.ID, ok)
 		}
 	}
 }

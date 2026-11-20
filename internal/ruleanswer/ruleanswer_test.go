@@ -159,29 +159,39 @@ func TestValidate_Negative_BareSupportKeyword(t *testing.T) {
 		{"multi-token alias", "support for Diallak Tools", "any"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			trigger := fixtureTrigger()
-			trigger.ID = "diallak-support"
-			if tc.name == "multi-token alias" {
-				trigger.Aliases = append(trigger.Aliases, "Diallak Tools")
-			}
-			if tc.group == "all" {
-				trigger.Keywords.All = []string{tc.keyword}
-			} else {
-				trigger.Keywords.Any = []string{tc.keyword}
-			}
-			count := 0
-			for _, finding := range Validate(fixtureTable(trigger), knownNames()) {
-				if finding.Code == "bare_support_keyword" {
-					count++
-					if want := "triggers[0].keywords." + tc.group + "[0]"; finding.Path != want {
-						t.Errorf("finding path = %q, want %q", finding.Path, want)
-					}
-				}
-			}
-			if count != 1 {
-				t.Errorf("bare_support_keyword findings = %d, want 1", count)
-			}
+			trigger := fixtureBareSupportTrigger(tc.name, tc.keyword, tc.group)
+			checkBareSupportFindings(t, Validate(fixtureTable(trigger), knownNames()), tc.group)
 		})
+	}
+}
+
+func fixtureBareSupportTrigger(name, keyword, group string) Trigger {
+	trigger := fixtureTrigger()
+	trigger.ID = "diallak-support"
+	if name == "multi-token alias" {
+		trigger.Aliases = append(trigger.Aliases, "Diallak Tools")
+	}
+	if group == "all" {
+		trigger.Keywords.All = []string{keyword}
+	} else {
+		trigger.Keywords.Any = []string{keyword}
+	}
+	return trigger
+}
+
+func checkBareSupportFindings(t *testing.T, findings []Finding, group string) {
+	t.Helper()
+	count := 0
+	for _, finding := range findings {
+		if finding.Code == "bare_support_keyword" {
+			count++
+			if want := "triggers[0].keywords." + group + "[0]"; finding.Path != want {
+				t.Errorf("finding path = %q, want %q", finding.Path, want)
+			}
+		}
+	}
+	if count != 1 {
+		t.Errorf("bare_support_keyword findings = %d, want 1", count)
 	}
 }
 
