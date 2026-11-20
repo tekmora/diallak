@@ -260,8 +260,8 @@ func (v *validator) replayMultiTag(p string, target *Trigger, i int, q Query) {
 		for _, tag := range other.ForumTags {
 			if !slices.Contains(tags, tag) {
 				tags = append(tags, tag)
+				v.checkMultiTag(p, target, i, q, []string{q.Tags[0], tag})
 			}
-			v.checkMultiTag(p, target, i, q, []string{q.Tags[0], tag})
 		}
 	}
 	v.checkMultiTag(p, target, i, q, tags)
