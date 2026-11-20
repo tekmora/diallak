@@ -515,8 +515,13 @@ by hand.
    programming name on a change refused as `lacks-right`.
 5. `-server=apply=<digest>`. Keep the invite code printed by apply, write it
    into the entry’s `code` field in `server/definition.json` (see
-   [Invites](server-definition.md#invites)), and commit it. Until then, a
-   missing invite is treated as unrecorded and can be offered for creation again.
+   [Invites](server-definition.md#invites)), and commit it. The commands read
+   the definition built into the binary, so run the steps after this one with
+   a binary built from that commit or an image built from it
+   ([README, "Release"](../README.md#release)). A binary built before that
+   commit still reads an empty code. Until a binary built from that commit
+   runs, a missing invite is treated as unrecorded and can be offered for
+   creation again.
 6. **Tidy up.** On the bot's role switch off **Manage Channels**, **Connect**,
    **Create Private Threads** and **Create Invite**, so that Manage Roles,
    Manage Messages, Time Out Members and Manage Server stay, and drag the role

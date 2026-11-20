@@ -318,6 +318,8 @@ The code is empty until the first apply creates the invite; a later pull
 request records the returned code in the definition
 ([apply](../internal/discord/server_apply_invites.go),
 [ADR-0029](adr/0029-the-bot-creates-the-hub-invite.md)).
+Plan and compare read the recorded code only from a binary built after the pull
+request that records it ([first set-up](server-apply.md#a-first-set-up)).
 
 ## Who does what
 
