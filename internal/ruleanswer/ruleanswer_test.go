@@ -524,6 +524,7 @@ func TestLoad_Negative_NonCanonicalObjectKeys(t *testing.T) {
 		{`{"version":2,"VERSION":1,"triggers":[]}`, "VERSION"},
 		{`{"Version":1,"triggers":[]}`, "Version"},
 		{`{"version":1,"triggers":[{"Keywords":{}}]}`, "Keywords"},
+		{"{\"version\":1,\"triggers\":[{\"Keywords\":{}}]}", "Keywords"},
 	} {
 		_, err := Load([]byte(tc.raw))
 		if err == nil || !strings.Contains(err.Error(), tc.key) {

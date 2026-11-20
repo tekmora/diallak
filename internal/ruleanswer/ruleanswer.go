@@ -372,6 +372,9 @@ func filterSponsorship(text string) string {
 	return joinWithoutSponsorship(lines, sponsorshipLines(lines))
 }
 
+// sponsorshipLines modifies lines owned by filterSponsorship. For a multi-line
+// non-list paragraph, it keeps filtered text in the first line and marks the
+// other lines as removed.
 func sponsorshipLines(lines []string) []bool {
 	removed := make([]bool, len(lines))
 	start := 0
@@ -390,6 +393,9 @@ func sponsorshipLines(lines []string) []bool {
 	return removed
 }
 
+// filterSponsorshipParagraph modifies lines owned by filterSponsorship. For a
+// multi-line non-list paragraph, it keeps filtered text in the first line and
+// marks the other lines as removed.
 func filterSponsorshipParagraph(lines []string, removed []bool, start, end int) {
 	if start == end {
 		return

@@ -48,14 +48,17 @@ func TestRuleTable_Positive_CrossChecksServerCommandsTagsAndCorpus(t *testing.T)
 
 func checkResolvedRuleAnswers(t *testing.T, table *ruleanswer.Table, resolved *ruleanswer.Resolved, issues []ruleanswer.Issue) {
 	t.Helper()
-	if resolved.DisabledCount != len(table.Triggers)-3 {
-		t.Errorf("disabled = %d, want %d", resolved.DisabledCount, len(table.Triggers)-3)
-	}
 	want := make(map[string]bool)
 	for _, trigger := range table.Triggers {
 		if trigger.Repository == "tekmora/diallak" {
 			want[trigger.ID] = true
 		}
+	}
+	if len(want) == 0 {
+		t.Error("no triggers for tekmora/diallak")
+	}
+	if resolved.DisabledCount != len(table.Triggers)-len(want) {
+		t.Errorf("disabled = %d, want %d", resolved.DisabledCount, len(table.Triggers)-len(want))
 	}
 	if len(resolved.Answers) != len(want) {
 		t.Errorf("resolved answers = %v, want IDs %v", resolved.Answers, want)
