@@ -87,8 +87,9 @@ operator's decision and no milestone carries it yet.
 
 The operator redirected the project on 2026-11-19 (paraphrased): keep AI out of
 the bot for now, redesign the channels, answer common questions by rules, then
-rename the bot and publish an invite. The work runs in this order; each step is
-one pull request or more.
+rename the bot and publish an invite. The steps are numbered in this order,
+each step is one pull request or more, and the end of this section says which
+steps wait for others.
 
 1. **No model in version 1.** This page and
    [ADR-0028](adr/0028-version-1-answers-without-a-model.md).
