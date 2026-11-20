@@ -608,8 +608,11 @@ func AppendFooter(text, place string) string {
 
 // Render formats an Answer into plain text for a chat message, appending the disclosure footer.
 //
-// The result never exceeds opts.MaxRunes (DefaultMaxRenderRunes when zero) including the footer. The footer is never cut and
-// never dropped. An answer text that is too long is cut and marked with "..."; its source
+// For excerpt replies with the default place and tickets channel, opts.MaxRunes
+// of at least MinRenderRunes bounds the result, including the no-AI disclosure,
+// tickets sentence, and footer. Smaller positive limits are outside this guarantee;
+// a nonpositive limit uses DefaultMaxRenderRunes. The footer is never cut or
+// dropped. An answer text that is too long is cut and marked with "..."; its source
 // lines stay, because the text refers to them. Source lines are dropped from the end only
 // when they would leave less than minAnswerRunes for the text. Excerpt replies drop trailing
 // excerpts whole. A single source line longer than the limit is cut as a last resort.
@@ -823,8 +826,11 @@ func renderExcerptReply(a Answer, footer, tickets string, maxRunes int) string {
 	return renderExcerpts(a, footer, maxRunes-2-utf8.RuneCountInString(sentence)) + "\n\n" + sentence
 }
 
-// RenderForum formats rule and excerpt replies for the support forum. FooterForum ends
-// each rendered reply, within maxRunes (DefaultMaxRenderRunes when zero).
+// RenderForum formats rule and excerpt replies for the support forum. For excerpt
+// replies with the default tickets channel, maxRunes of at least MinRenderRunes
+// bounds the result, including the no-AI disclosure, tickets sentence, and
+// FooterForum. Smaller positive limits are outside this guarantee; a nonpositive
+// limit uses DefaultMaxRenderRunes. FooterForum ends each rendered reply.
 func RenderForum(a Answer, maxRunes int, ticketsChannels ...string) string {
 	if maxRunes <= 0 {
 		maxRunes = DefaultMaxRenderRunes

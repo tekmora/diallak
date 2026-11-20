@@ -160,9 +160,9 @@ they are otherwise and apply again only through a later record.
 
 ## Open points
 
-- **A second defence.** Today only the deployment keeps the model variables
-  unset. A start check that refuses them in a version 1 build is not built
-  yet; it is tracked with the trigger table.
+- **A second defence.** A version 1 build refuses every model and embedding
+  variable at start. The [start check](../../cmd/diallak/main.go) and its
+  [tests](../../cmd/diallak/model_refusal_test.go) provide this defence.
 - **Which projects the first table covers.** That is a change to the table,
   like the corpus manifest of [ADR-0003](0003-answer-pipeline.md).
 

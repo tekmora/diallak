@@ -1506,6 +1506,39 @@ func TestRender_Positive_ExcerptTickets(t *testing.T) {
 	}
 }
 
+func TestRender_Boundary_ExcerptKeepsDisclosureAtMinimum(t *testing.T) {
+	a := minimumExcerptAnswer()
+	got := Render(a, RenderOptions{MaxRunes: MinRenderRunes})
+	checkMinimumExcerptReply(t, got, Footer(""))
+}
+
+func TestRenderForum_Boundary_ExcerptKeepsDisclosureAtMinimum(t *testing.T) {
+	a := minimumExcerptAnswer()
+	got := RenderForum(a, MinRenderRunes)
+	checkMinimumExcerptReply(t, got, FooterForum)
+}
+
+func minimumExcerptAnswer() Answer {
+	longExcerpt := strings.Repeat("é", MinRenderRunes+1)
+	return Answer{Kind: KindExcerpts, Sources: []Source{
+		{N: 1, Title: strings.Repeat("x", MinRenderRunes+1), URL: "https://example.test/one", Excerpt: longExcerpt},
+		{N: 2, Title: "Two", URL: "https://example.test/two", Excerpt: longExcerpt},
+		{N: 3, Title: "Three", URL: "https://example.test/three", Excerpt: longExcerpt},
+	}}
+}
+
+func checkMinimumExcerptReply(t *testing.T, got, footer string) {
+	t.Helper()
+	if n := utf8.RuneCountInString(got); n > MinRenderRunes {
+		t.Errorf("reply length = %d runes, want at most %d", n, MinRenderRunes)
+	}
+	for _, want := range []string{noAIModelDisclosure, TicketsSentence(""), footer} {
+		if !strings.Contains(got, want) {
+			t.Errorf("reply missing %q", want)
+		}
+	}
+}
+
 func TestRender_Boundary_ExcerptTicketsFit(t *testing.T) {
 	a := Answer{Kind: KindExcerpts, Sources: []Source{{N: 1, Title: "T", Excerpt: strings.Repeat("x", 1000)}}}
 	for _, got := range []string{Render(a, RenderOptions{MaxRunes: 180}), RenderForum(a, 180)} {
