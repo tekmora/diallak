@@ -36,8 +36,7 @@ func moduleMainDirs(root string) ([]string, error) {
 			return fmt.Errorf("walk %s: %w", path, walkErr)
 		}
 		if entry.IsDir() {
-			name := entry.Name()
-			if path != root && (name == "testdata" || name == "vendor" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")) {
+			if skipWalkDir(path, root, entry.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -46,19 +45,12 @@ func moduleMainDirs(root string) ([]string, error) {
 		if files > 50000 {
 			return fmt.Errorf("walk %s: exceeds 50000 files", root)
 		}
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.PackageClauseOnly)
+		dir, ok, err := mainPackageDir(root, path)
 		if err != nil {
-			return fmt.Errorf("parse %s: %w", path, err)
+			return err
 		}
-		if file.Name.Name == "main" {
-			rel, err := filepath.Rel(root, filepath.Dir(path))
-			if err != nil {
-				return fmt.Errorf("relative path for %s: %w", path, err)
-			}
-			dirs["./"+filepath.ToSlash(rel)] = true
+		if ok {
+			dirs[dir] = true
 		}
 		return nil
 	})
@@ -71,6 +63,28 @@ func moduleMainDirs(root string) ([]string, error) {
 	}
 	sort.Strings(mains)
 	return mains, nil
+}
+
+func skipWalkDir(path, root, name string) bool {
+	return path != root && (name == "testdata" || name == "vendor" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_"))
+}
+
+func mainPackageDir(root, path string) (string, bool, error) {
+	if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		return "", false, nil
+	}
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.PackageClauseOnly)
+	if err != nil {
+		return "", false, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if file.Name.Name != "main" {
+		return "", false, nil
+	}
+	rel, err := filepath.Rel(root, filepath.Dir(path))
+	if err != nil {
+		return "", false, fmt.Errorf("relative path for %s: %w", path, err)
+	}
+	return "./" + filepath.ToSlash(rel), true, nil
 }
 
 // An empty image build default becomes ambiguous when the module gains another main package.
