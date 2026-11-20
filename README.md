@@ -39,8 +39,13 @@ Community bot for the Lusoris Discord hub.
   excerpts only
   ([ADR-0009](docs/adr/0009-support-forum-first-answer.md),
   [ADR-0020](docs/adr/0020-forum-answers-only-opted-in-posts.md)); it is off
-  until a deployment sets the two forum variables. A locally run model can
-  write the answers; it stays off until its gates are passed.
+  until a deployment sets the two forum variables. Version 1 carries no AI
+  model: today a question gets cited excerpts, or the refusal when no
+  source matches (in the forum the bot then stays silent)
+  ([ADR-0003](docs/adr/0003-answer-pipeline.md)). A trigger table that
+  answers common questions by rules is decided and not built yet
+  ([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md),
+  [#251](https://github.com/tekmora/diallak/issues/251)).
 - **Bug reports:** `/bug` answers with a link that opens a filled-in new issue
   of the repository the server definition names, and the member submits it
   under their own GitHub account; the bot calls no GitHub interface for it
@@ -86,8 +91,8 @@ Community bot for the Lusoris Discord hub.
 | :--- | :--- |
 | Language and library | Go with disgo |
 | Server | One hub server; the guild is configuration, not code |
-| Auto-answers, first version | Local-model answers with citations and an AI label |
-| Gate for model answers | The bot refuses a model reply that does not name the deployment's guardrail policy, and a member can ask for a receipt of the guardrails that ran ([ADR-0013](docs/adr/0013-guardrail-policy-and-receipt.md)); both are built; model mode stays off in the live server until the operator switches it on |
+| Auto-answers, version 1 | No AI model: a trigger table answers common questions from the projects' documentation, cited excerpts answer the rest, and every answer names the ticket channel. The trigger table and naming the ticket channel in answers are planned ([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md), [#251](https://github.com/tekmora/diallak/issues/251)) |
+| Model path | Built and off: the guardrail policy, the receipt and the embeddings ([ADR-0013](docs/adr/0013-guardrail-policy-and-receipt.md), [ADR-0022](docs/adr/0022-embeddings-for-paraphrased-questions.md)) stay in the code, unused in version 1 |
 | Discord application | The existing bot application and its token are reused |
 | Community questions | GitHub Discussions for searchable answers, the hub for live chat; the bot links them |
 | Moderation | The bot filters spam and obvious abuse; people decide unclear cases |
@@ -142,12 +147,12 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 <!-- markdownlint-enable MD013 -->
 
 Without the model variables the bot replies with cited excerpts and says
-that no model wrote them. In the live server that is the only mode for now: no
-deployment sets the variables until the gates of
-[ADR-0013](docs/adr/0013-guardrail-policy-and-receipt.md) are passed: every
-reply of the model has to name the deployment's guardrail policy, and the
-member can ask for a receipt of the guardrails that ran. Both are built; the
-operator decides when the live server switches model mode on.
+that no model wrote them. When no passage matches, it refuses as
+ADR-0003 says ([ADR-0003](docs/adr/0003-answer-pipeline.md)). That is
+the only mode of version 1: no deployment of
+version 1 sets a `DIALLAK_MODEL_*` or `DIALLAK_EMBED_*` variable
+([ADR-0028](docs/adr/0028-version-1-answers-without-a-model.md)). The model
+path below stays built and tested for a later record.
 
 With the model variables set the bot sends the endpoint one small request at start
 ([ADR-0012](docs/adr/0012-model-state.md)):

@@ -5,6 +5,8 @@
 - **Authors**: Maintainers
 - **Amended by**: [ADR-0022](0022-embeddings-for-paraphrased-questions.md),
   "Data and compliance"
+- **Superseded for version 1 by**:
+  [ADR-0028](0028-version-1-answers-without-a-model.md)
 
 ## Context
 
