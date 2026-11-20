@@ -18,6 +18,12 @@ import (
 // MaxTriggers limits the number of triggers in a table.
 const MaxTriggers = 128
 
+// MaxListItems limits each list in a trigger.
+const MaxListItems = 32
+
+// maxJSONDepth limits nested objects and arrays in a trigger table.
+const maxJSONDepth = 16
+
 // MaxFindings limits the findings returned by Validate.
 const MaxFindings = MaxTriggers * 8
 
@@ -81,6 +87,9 @@ type Known struct {
 
 // Load reads a strict JSON table and rejects unknown fields and trailing data.
 func Load(data []byte) (*Table, error) {
+	if err := checkJSONKeys(data); err != nil {
+		return nil, fmt.Errorf("decode trigger table: %w", err)
+	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	var table Table
@@ -95,6 +104,79 @@ func Load(data []byte) (*Table, error) {
 		return nil, fmt.Errorf("decode trigger table trailing data: %w", err)
 	}
 	return &table, nil
+}
+
+// jsonFrame tracks keys only for the current object; arrays have a nil set.
+type jsonFrame struct {
+	keys    map[string]bool
+	keyNext bool
+}
+
+func checkJSONKeys(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	stack := make([]jsonFrame, 0, maxJSONDepth)
+	for i := 0; i <= len(data); i++ {
+		tok, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if d, ok := tok.(json.Delim); ok && (d == '}' || d == ']') {
+			stack = stack[:len(stack)-1]
+			continue
+		}
+		isKey, err := checkJSONTokenKey(stack, tok)
+		if err != nil {
+			return err
+		}
+		if isKey {
+			continue
+		}
+		stack, err = pushJSONContainer(stack, tok)
+		if err != nil {
+			return err
+		}
+	}
+	return errors.New("JSON token limit exceeded")
+}
+
+func pushJSONContainer(stack []jsonFrame, tok json.Token) ([]jsonFrame, error) {
+	d, ok := tok.(json.Delim)
+	if !ok || (d != '{' && d != '[') {
+		return stack, nil
+	}
+	if len(stack) == maxJSONDepth {
+		return nil, fmt.Errorf("JSON nesting exceeds %d", maxJSONDepth)
+	}
+	frame := jsonFrame{}
+	if d == '{' {
+		frame.keys = make(map[string]bool)
+		frame.keyNext = true
+	}
+	return append(stack, frame), nil
+}
+
+func checkJSONTokenKey(stack []jsonFrame, tok json.Token) (bool, error) {
+	if len(stack) == 0 || stack[len(stack)-1].keys == nil {
+		return false, nil
+	}
+	frame := &stack[len(stack)-1]
+	if !frame.keyNext {
+		frame.keyNext = true
+		return false, nil
+	}
+	key, ok := tok.(string)
+	if !ok {
+		return false, errors.New("expected object key")
+	}
+	if frame.keys[key] {
+		return false, fmt.Errorf("duplicate key %q", key)
+	}
+	frame.keys[key] = true
+	frame.keyNext = false
+	return true, nil
 }
 
 func (t Trigger) entryPoints(q Query, tokens []string) bool {

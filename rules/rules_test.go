@@ -77,3 +77,26 @@ func TestTable_Negative_ReportsFirstFinding(t *testing.T) {
 		t.Fatalf("Table error = %v", err)
 	}
 }
+
+func TestTable_Boundary_TriggerAndListSizes(t *testing.T) {
+	table, err := Table()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(table.Triggers) < 1 || len(table.Triggers) > ruleanswer.MaxTriggers {
+		t.Errorf("trigger count = %d", len(table.Triggers))
+	}
+	for _, trigger := range table.Triggers {
+		lists := map[string][]string{
+			"keywords.all": trigger.Keywords.All, "keywords.any": trigger.Keywords.Any,
+			"keywords.none": trigger.Keywords.None, "commands": trigger.Commands,
+			"aliases": trigger.Aliases, "forum_tags": trigger.ForumTags, "links": trigger.Links,
+			"must_match": trigger.MustMatch, "must_not_match": trigger.MustNotMatch,
+		}
+		for name, items := range lists {
+			if len(items) > ruleanswer.MaxListItems {
+				t.Errorf("%s %s: %d items", trigger.ID, name, len(items))
+			}
+		}
+	}
+}

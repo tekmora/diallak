@@ -1500,8 +1500,17 @@ func TestRender_Positive_ExcerptTickets(t *testing.T) {
 		}
 	}
 	for _, got := range []string{Render(a, RenderOptions{}), RenderForum(a, 500)} {
-		if strings.Contains(got, TicketsSentence("")) {
-			t.Errorf("unexpected tickets: %q", got)
+		if !strings.Contains(got, TicketsSentence("")) {
+			t.Errorf("missing tickets: %q", got)
+		}
+	}
+}
+
+func TestRender_Boundary_ExcerptTicketsFit(t *testing.T) {
+	a := Answer{Kind: KindExcerpts, Sources: []Source{{N: 1, Title: "T", Excerpt: strings.Repeat("x", 1000)}}}
+	for _, got := range []string{Render(a, RenderOptions{MaxRunes: 180}), RenderForum(a, 180)} {
+		if !strings.Contains(got, TicketsSentence("")) || utf8.RuneCountInString(got) > 180 {
+			t.Errorf("reply = %q", got)
 		}
 	}
 }

@@ -19,7 +19,7 @@ func Validate(t *Table, known Known) []Finding {
 	}
 	v := validator{table: t, known: known, seen: make(map[string]bool)}
 	v.checkVersion()
-	if len(t.Triggers) <= MaxTriggers {
+	if len(t.Triggers) <= MaxTriggers && v.checkListSizes() {
 		for i := range t.Triggers {
 			v.checkTrigger(i, &t.Triggers[i])
 		}
@@ -47,6 +47,28 @@ func (v *validator) checkVersion() {
 	if len(v.table.Triggers) > MaxTriggers {
 		v.add("trigger_count", "triggers", fmt.Sprintf("exceeds %d", MaxTriggers))
 	}
+}
+
+func (v *validator) checkListSizes() bool {
+	valid := true
+	for i, t := range v.table.Triggers {
+		lists := []struct {
+			name  string
+			items []string
+		}{
+			{"keywords.all", t.Keywords.All}, {"keywords.any", t.Keywords.Any},
+			{"keywords.none", t.Keywords.None}, {"commands", t.Commands},
+			{"aliases", t.Aliases}, {"forum_tags", t.ForumTags}, {"links", t.Links},
+			{"must_match", t.MustMatch}, {"must_not_match", t.MustNotMatch},
+		}
+		for _, list := range lists {
+			if len(list.items) > MaxListItems {
+				v.add("list_size", fmt.Sprintf("triggers[%d].%s", i, list.name), fmt.Sprintf("exceeds %d", MaxListItems))
+				valid = false
+			}
+		}
+	}
+	return valid
 }
 
 func (v *validator) checkTrigger(i int, t *Trigger) {

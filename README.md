@@ -144,8 +144,8 @@ documentation directory) is in [docs/hosting.md](docs/hosting.md).
 
 Version 1 refuses model and embedding variables (ADR-0028); deployments leave
 them unset. Common questions use fixed documentation rules, then cited excerpts,
-then a refusal. Rule answers and slash refusals name the tickets channel. See
-[rule answers](docs/rule-answers.md).
+then a refusal. Rule answers, excerpt answers and refusals name the tickets
+channel. See [rule answers](docs/rule-answers.md).
 
 In a later version, with the model variables set the bot sends the endpoint one
 small request at start ([ADR-0012](docs/adr/0012-model-state.md)):

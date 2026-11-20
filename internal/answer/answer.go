@@ -819,9 +819,6 @@ func renderExcerptsCandidate(header string, blocks []excerptBlock) string {
 }
 
 func renderExcerptReply(a Answer, footer, tickets string, maxRunes int) string {
-	if strings.TrimSpace(tickets) == "" {
-		return renderExcerpts(a, footer, maxRunes)
-	}
 	sentence := TicketsSentence(tickets)
 	return renderExcerpts(a, footer, maxRunes-2-utf8.RuneCountInString(sentence)) + "\n\n" + sentence
 }

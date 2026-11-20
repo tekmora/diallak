@@ -1,6 +1,7 @@
 package ruleanswer
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/tekmora/diallak/internal/corpus"
@@ -419,5 +420,71 @@ func TestReplayMultiTag_Negative_OtherProductWins(t *testing.T) {
 	v.replayMultiTag("triggers[0]", &a, 0, Query{Text: "verify release", Forum: true, Tags: []string{"Diallak"}})
 	if !hasFinding(v.findings, "ambiguous_match") {
 		t.Fatalf("findings = %+v", v.findings)
+	}
+}
+
+func TestLoad_Negative_DuplicateObjectKeys(t *testing.T) {
+	for _, tc := range []struct{ raw, key string }{
+		{`{"version":1,"version":1,"triggers":[]}`, "version"},
+		{`{"version":1,"triggers":[{"id":"a","id":"b"}]}`, "id"},
+		{`{"version":1,"triggers":[{"keywords":{"all":[],"all":[]}}]}`, "all"},
+	} {
+		_, err := Load([]byte(tc.raw))
+		if err == nil || !strings.Contains(err.Error(), tc.key) {
+			t.Errorf("duplicate %s: %v", tc.key, err)
+		}
+	}
+	if _, err := Load([]byte(`{"version":1,"triggers":[{"id":"a"},{"id":"b"}]}`)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidate_Boundary_ListSize(t *testing.T) {
+	trigger := fixtureTrigger()
+	trigger.Links = make([]string, MaxListItems)
+	for i := range trigger.Links {
+		trigger.Links[i] = "README.md"
+	}
+	if got := Validate(fixtureTable(trigger), knownNames()); hasFinding(got, "list_size") {
+		t.Fatalf("at cap: %+v", got)
+	}
+	trigger.Links = append(trigger.Links, "README.md")
+	if got := Validate(fixtureTable(trigger), knownNames()); !hasFinding(got, "list_size") {
+		t.Fatalf("above cap: %+v", got)
+	}
+}
+
+func TestCheckJSONKeys_Boundary_Depth(t *testing.T) {
+	for _, depth := range []int{maxJSONDepth, maxJSONDepth + 1} {
+		raw := strings.Repeat("[", depth) + "0" + strings.Repeat("]", depth)
+		err := checkJSONKeys([]byte(raw))
+		if (err != nil) != (depth > maxJSONDepth) {
+			t.Errorf("depth %d: %v", depth, err)
+		}
+	}
+}
+
+func TestValidate_Negative_AllListSizes(t *testing.T) {
+	trigger := fixtureTrigger()
+	lists := []struct {
+		name  string
+		items *[]string
+	}{
+		{"keywords.all", &trigger.Keywords.All}, {"keywords.any", &trigger.Keywords.Any},
+		{"keywords.none", &trigger.Keywords.None}, {"commands", &trigger.Commands},
+		{"aliases", &trigger.Aliases}, {"forum_tags", &trigger.ForumTags},
+		{"links", &trigger.Links}, {"must_match", &trigger.MustMatch},
+		{"must_not_match", &trigger.MustNotMatch},
+	}
+	for _, list := range lists {
+		t.Run(list.name, func(t *testing.T) {
+			old := *list.items
+			*list.items = make([]string, MaxListItems+1)
+			findings := Validate(fixtureTable(trigger), knownNames())
+			*list.items = old
+			if len(findings) != 1 || findings[0].Code != "list_size" || !strings.HasSuffix(findings[0].Path, "."+list.name) {
+				t.Fatalf("findings = %+v", findings)
+			}
+		})
 	}
 }
