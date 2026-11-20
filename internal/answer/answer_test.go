@@ -1465,7 +1465,7 @@ func TestExcerpts_Boundary_KeywordDefaultsToRetriever(t *testing.T) {
 	}
 }
 
-func TestRefusalToTicketsChannel(t *testing.T) {
+func TestRefusalTo_Boundary_TicketsChannel(t *testing.T) {
 	if got, want := RefusalTo("#help", "#private"), "I found no documented answer to that. Please ask in #help so a person can help.\n\n"+TicketsSentence("#private"); got != want {
 		t.Errorf("RefusalTo = %q, want %q", got, want)
 	}

@@ -7,7 +7,7 @@ import (
 	"github.com/tekmora/diallak/internal/ruleanswer"
 )
 
-func TestTablePrecision(t *testing.T) {
+func TestTable_Boundary_Precision(t *testing.T) {
 	table, err := Table()
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func TestTablePrecision(t *testing.T) {
 	}
 }
 
-func TestTableExamplesEveryEntryPoint(t *testing.T) {
+func TestTable_Positive_ExamplesEveryEntryPoint(t *testing.T) {
 	table, err := Table()
 	if err != nil {
 		t.Fatal(err)

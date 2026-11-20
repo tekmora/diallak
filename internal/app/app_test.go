@@ -607,7 +607,7 @@ func TestBuild_Negative_EmbedStartFailure(t *testing.T) {
 	}
 }
 
-func TestLoadRules_ReportsMissingDocumentation(t *testing.T) {
+func TestLoadRules_Negative_ReportsMissingDocumentation(t *testing.T) {
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&logs, nil))
 	chunks := []corpus.Chunk{{Repository: "tekmora/diallak", Path: "README.md", Heading: "Other"}}

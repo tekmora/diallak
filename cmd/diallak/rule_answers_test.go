@@ -87,7 +87,7 @@ func ruleSupportTags(channels []serverdef.Channel) []string {
 	return tags
 }
 
-func TestRuleTable_LicenceSpellings(t *testing.T) {
+func TestRuleTable_Positive_LicenceSpellings(t *testing.T) {
 	table, err := rules.Table()
 	if err != nil {
 		t.Fatal(err)

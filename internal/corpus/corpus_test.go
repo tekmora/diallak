@@ -250,7 +250,7 @@ func TestIndentColumn_Boundary_TabStopsAndWhitespace(t *testing.T) {
 	}
 }
 
-func TestParseFileChunks_SectionIdentity(t *testing.T) {
+func TestParseFileChunks_Positive_SectionIdentity(t *testing.T) {
 	content := "## Development\n### Setup\nFirst paragraph.\n\nSecond paragraph.\n## Production\n### Setup\nProduction setup."
 	chunks := parseFileChunks("owner/repo", "rev", "guide.md", content, 20)
 	if len(chunks) != 3 {

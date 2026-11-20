@@ -287,7 +287,7 @@ func TestResolve_Boundary_AbsentRepositoryIsOff(t *testing.T) {
 	}
 }
 
-func TestMatch_AliasScope(t *testing.T) {
+func TestMatch_Boundary_AliasScope(t *testing.T) {
 	table := fixtureTable(fixtureTrigger())
 	if _, ok := table.Match(Query{Text: "verify release", Command: "ask"}); ok {
 		t.Fatal("command without alias matched")
@@ -297,7 +297,7 @@ func TestMatch_AliasScope(t *testing.T) {
 	}
 }
 
-func TestValidate_CrossProductAmbiguity(t *testing.T) {
+func TestValidate_Negative_CrossProductAmbiguity(t *testing.T) {
 	first := fixtureTrigger()
 	second := fixtureTrigger()
 	second.ID = "other-release"
@@ -310,7 +310,7 @@ func TestValidate_CrossProductAmbiguity(t *testing.T) {
 	}
 }
 
-func TestValidate_RequiresCommandAlias(t *testing.T) {
+func TestValidate_Negative_RequiresCommandAlias(t *testing.T) {
 	trigger := fixtureTrigger()
 	trigger.Aliases = nil
 	if !hasFinding(Validate(fixtureTable(trigger), knownNames()), "aliases") {
@@ -318,7 +318,7 @@ func TestValidate_RequiresCommandAlias(t *testing.T) {
 	}
 }
 
-func TestValidateNearMiss(t *testing.T) {
+func TestValidate_Boundary_NearMiss(t *testing.T) {
 	for _, tc := range []struct {
 		name, negative string
 		want           bool
