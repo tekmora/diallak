@@ -374,13 +374,14 @@ func filterSponsorship(text string) string {
 
 // sponsorshipLines modifies lines owned by filterSponsorship. For a multi-line
 // non-list paragraph, it keeps filtered text in the first line and marks the
-// other lines as removed.
+// other lines as removed. Indented code retains indented list-like lines;
+// paragraphs starting with a list item still split at list items.
 func sponsorshipLines(lines []string) []bool {
 	removed := make([]bool, len(lines))
 	start := 0
 
 	for i, line := range lines {
-		if strings.TrimSpace(line) == "" || listItem.MatchString(line) {
+		if strings.TrimSpace(line) == "" || (listItem.MatchString(line) && !codeParagraphContinues(lines, start, i)) {
 			filterSponsorshipParagraph(lines, removed, start, i)
 			start = i
 			if strings.TrimSpace(line) == "" {
@@ -391,6 +392,11 @@ func sponsorshipLines(lines []string) []bool {
 	filterSponsorshipParagraph(lines, removed, start, len(lines))
 	removeSponsorshipSubtrees(lines, removed)
 	return removed
+}
+
+func codeParagraphContinues(lines []string, start, next int) bool {
+	return start < next && corpus.IndentColumn(lines[start]) >= 4 &&
+		!listItem.MatchString(lines[start]) && corpus.IndentColumn(lines[next]) >= 4
 }
 
 // filterSponsorshipParagraph modifies lines owned by filterSponsorship. For a
@@ -422,24 +428,15 @@ func filterSponsorshipParagraph(lines []string, removed []bool, start, end int) 
 
 // filterSponsorshipSentences treats a line without end punctuation as part of
 // the sentence continuing on the next line, removing it with a sponsorship sentence.
+// Letter-dot abbreviations with at least two pairs do not end a sentence.
 func filterSponsorshipSentences(paragraph string) string {
 	var kept strings.Builder
 	start := 0
 	for i, r := range paragraph {
-		if r != '.' && r != '!' && r != '?' {
+		if !sponsorshipSentenceBoundary(paragraph, start, i, r) {
 			continue
 		}
 		next := i + 1
-		if next < len(paragraph) {
-			following, _ := utf8.DecodeRuneInString(paragraph[next:])
-			if !unicode.IsSpace(following) {
-				continue
-			}
-			following, _ = utf8.DecodeRuneInString(strings.TrimLeftFunc(paragraph[next:], unicode.IsSpace))
-			if unicode.IsLower(following) {
-				continue
-			}
-		}
 		sentence := paragraph[start:next]
 		if !sponsorshipLink.MatchString(sentence) {
 			kept.WriteString(sentence)
@@ -450,6 +447,48 @@ func filterSponsorshipSentences(paragraph string) string {
 		kept.WriteString(tail)
 	}
 	return strings.TrimSpace(kept.String())
+}
+
+func sponsorshipSentenceBoundary(paragraph string, start, i int, r rune) bool {
+	if r != '.' && r != '!' && r != '?' {
+		return false
+	}
+	next := i + 1
+	if next == len(paragraph) {
+		return true
+	}
+	following, _ := utf8.DecodeRuneInString(paragraph[next:])
+	return unicode.IsSpace(following) && (r != '.' || !letterDotAbbreviation(paragraph[start:next]))
+}
+
+func letterDotAbbreviation(sentence string) bool {
+	start := len(sentence)
+	for start > 0 {
+		r, size := utf8.DecodeLastRuneInString(sentence[:start])
+		if unicode.IsSpace(r) {
+			break
+		}
+		start -= size
+	}
+	word := strings.TrimLeftFunc(sentence[start:], func(r rune) bool {
+		return r == '(' || r == '[' || unicode.Is(unicode.Quotation_Mark, r)
+	})
+	pairs := 0
+	expectLetter := true
+	for _, r := range word {
+		if expectLetter {
+			if !unicode.IsLetter(r) {
+				return false
+			}
+		} else {
+			if r != '.' {
+				return false
+			}
+			pairs++
+		}
+		expectLetter = !expectLetter
+	}
+	return expectLetter && pairs >= 2
 }
 
 func removeSponsorshipSubtrees(lines []string, removed []bool) {

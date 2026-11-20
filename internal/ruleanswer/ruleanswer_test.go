@@ -599,6 +599,16 @@ func TestResolve_Positive_SponsorshipSentences(t *testing.T) {
 	}
 }
 
+func TestResolve_Positive_SponsorshipLowercaseSentence(t *testing.T) {
+	trigger := fixtureTrigger()
+	text := "Sponsor https://ko-fi.com/example. iOS users can ask in Discussions."
+	chunks := []corpus.Chunk{{Repository: trigger.Repository, Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Text: text}}
+	resolved, issues, err := Resolve(fixtureTable(trigger), chunks, "")
+	if err != nil || len(issues) != 0 || resolved.Answers[trigger.ID].Text != "iOS users can ask in Discussions." {
+		t.Errorf("Resolve(%q) = (%v, %v, %v)", text, resolved, issues, err)
+	}
+}
+
 func TestFilterSponsorship_Negative_IndentedCodeUnchanged(t *testing.T) {
 	text := "Keep this paragraph.\n\n    example. Sponsor https://ko-fi.com/example\n    more code\n\n    safe code\n    more safe code"
 	want := "Keep this paragraph.\n\n    safe code\n    more safe code"
@@ -607,8 +617,16 @@ func TestFilterSponsorship_Negative_IndentedCodeUnchanged(t *testing.T) {
 	}
 }
 
+func TestFilterSponsorship_IndentedCodeListLikeLines(t *testing.T) {
+	text := "Keep this paragraph.\n\n    keep\n    - example\n    https://ko-fi.com/example\n\n    safe code\n    - safe list-like code\n    more safe code"
+	want := "Keep this paragraph.\n\n    safe code\n    - safe list-like code\n    more safe code"
+	if got := filterSponsorship(text); got != want {
+		t.Errorf("filterSponsorship() = %q; want %q", got, want)
+	}
+}
+
 func TestFilterSponsorshipSentences_Boundary_NextRune(t *testing.T) {
-	for _, suffix := range []string{"Next", "1 next", "[next]", "(next)", "\"Next\"", "'Next'"} {
+	for _, suffix := range []string{"Next", "iOS users can ask in Discussions.", "1 next", "[next]", "(next)", "\"Next\"", "'Next'"} {
 		text := "Sponsor https://ko-fi.com/example. " + suffix
 		if got := filterSponsorshipSentences(text); got != suffix {
 			t.Errorf("filterSponsorshipSentences(%q) = %q; want %q", text, got, suffix)
@@ -616,6 +634,26 @@ func TestFilterSponsorshipSentences_Boundary_NextRune(t *testing.T) {
 	}
 	if got := filterSponsorshipSentences("Sponsor https://ko-fi.com/example."); got != "" {
 		t.Errorf("sponsorship at end = %q", got)
+	}
+}
+
+func TestFilterSponsorshipSentences_Boundary_Abbreviations(t *testing.T) {
+	for _, tc := range []struct{ word, want string }{
+		{"i.e.", ""}, {"U.S.", ""}, {"(e.g.", ""},
+		{"a.", "keep"}, {"J.", "keep"}, {"example.", "keep"},
+	} {
+		text := "Sponsor https://ko-fi.com/example " + tc.word + " keep"
+		if got := filterSponsorshipSentences(text); got != tc.want {
+			t.Errorf("filterSponsorshipSentences(%q) = %q; want %q", text, got, tc.want)
+		}
+	}
+}
+
+func TestFilterSponsorship_Boundary_IndentedList(t *testing.T) {
+	text := "Keep.\n\n    - first\n    - Sponsor https://ko-fi.com/example\n    - last"
+	want := "Keep.\n\n    - first\n    - last"
+	if got := filterSponsorship(text); got != want {
+		t.Errorf("filterSponsorship() = %q; want %q", got, want)
 	}
 }
 
