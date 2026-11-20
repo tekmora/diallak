@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/tekmora/diallak/internal/answer"
+	"github.com/tekmora/diallak/internal/ruleanswer"
 )
 
 const (
@@ -87,6 +88,7 @@ func TextBadQuestion(maxChars int) string {
 // Asker executes an inquiry against the documentation answer pipeline.
 type Asker interface {
 	Ask(ctx context.Context, question string) (answer.Answer, error)
+	Rule(q ruleanswer.Query, opts answer.RenderOptions) (answer.Answer, bool)
 }
 
 // Interaction represents an incoming slash command interaction.
@@ -281,9 +283,13 @@ func (h *Handler) performDefer(ctx context.Context, in Interaction) bool {
 
 func (h *Handler) executeAskAndReply(ctx context.Context, in Interaction, q string) {
 	start := time.Now()
-	askCtx, cancel := context.WithTimeout(ctx, h.askTimeout)
-	ans, err := h.asker.Ask(askCtx, q)
-	cancel()
+	ans, matched := h.asker.Rule(ruleanswer.Query{Text: q, Command: "ask"}, h.renderOptions)
+	var err error
+	if !matched {
+		askCtx, cancel := context.WithTimeout(ctx, h.askTimeout)
+		ans, err = h.asker.Ask(askCtx, q)
+		cancel()
+	}
 
 	if err != nil {
 		h.logger.Warn("ask failed",

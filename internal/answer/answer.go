@@ -15,6 +15,7 @@ import (
 	"github.com/tekmora/diallak/internal/embed"
 	"github.com/tekmora/diallak/internal/model"
 	"github.com/tekmora/diallak/internal/retrieval"
+	"github.com/tekmora/diallak/internal/ruleanswer"
 )
 
 // Kind classifies the outcome type of the answer pipeline.
@@ -27,6 +28,8 @@ const (
 	KindExcerpts Kind = "excerpts"
 	// KindRefusal indicates a refusal to answer due to missing sources or invalid citations.
 	KindRefusal Kind = "refusal"
+	// KindRule indicates a fixed answer from project documentation.
+	KindRule Kind = "rule"
 )
 
 // Reason specifies the underlying cause for an answer outcome.
@@ -107,6 +110,7 @@ type Config struct {
 	MaxExcerptRunes    int
 	MaxAnswerRunes     int
 	SourceLinkTemplate string
+	Rules              *ruleanswer.Resolved
 }
 
 // Stats holds snapshot metrics of pipeline queries.
@@ -117,6 +121,8 @@ type Stats struct {
 	Refused       uint64
 	ModelFailures uint64
 	EmbedFailures uint64
+	RuleAnswers   uint64
+	DisabledRules int
 }
 
 const (
@@ -149,9 +155,10 @@ const (
 	// UserPromptMaxChunkRunes bounds chunk text embedded in the model prompt.
 	UserPromptMaxChunkRunes = 1500
 	// LabelAnswer is the mandatory disclosure label for AI-generated answers.
-	LabelAnswer = "AI-generated answer. It can be wrong: check the sources below."
+	LabelAnswer         = "AI-generated answer. It can be wrong: check the sources below."
+	noAIModelDisclosure = "No AI model wrote this reply."
 	// LabelExcerpts is the disclosure label for automated documentation excerpts.
-	LabelExcerpts = "Automated excerpts from the documentation. No AI model wrote this reply."
+	LabelExcerpts = "Automated excerpts from the documentation. " + noAIModelDisclosure
 	// LabelModelUnavailable is the secondary note when model generation fails.
 	LabelModelUnavailable = "The AI model is unavailable right now, so these are excerpts only."
 	// LabelKeywordOnly is the disclosure label when retrieval ran without an embedding endpoint.
@@ -184,6 +191,7 @@ type Pipeline struct {
 	maxExcerptRunes    int
 	maxAnswerRunes     int
 	sourceLinkTemplate string
+	rules              *ruleanswer.Resolved
 
 	asked         atomic.Uint64
 	answered      atomic.Uint64
@@ -191,6 +199,7 @@ type Pipeline struct {
 	refused       atomic.Uint64
 	modelFailures atomic.Uint64
 	embedFailures atomic.Uint64
+	ruleAnswers   atomic.Uint64
 }
 
 // New constructs and validates a new Pipeline instance.
@@ -249,19 +258,50 @@ func New(cfg Config) (*Pipeline, error) {
 		maxExcerptRunes:    maxExcerpt,
 		maxAnswerRunes:     maxAnswer,
 		sourceLinkTemplate: cfg.SourceLinkTemplate,
+		rules:              cfg.Rules,
 	}, nil
 }
 
 // Stats returns a point-in-time snapshot of pipeline metric counters.
 func (p *Pipeline) Stats() Stats {
+	disabled := 0
+	if p.rules != nil {
+		disabled = p.rules.DisabledCount
+	}
 	return Stats{
+		DisabledRules: disabled,
 		Asked:         p.asked.Load(),
 		Answered:      p.answered.Load(),
 		Excerpts:      p.excerpts.Load(),
 		Refused:       p.refused.Load(),
 		ModelFailures: p.modelFailures.Load(),
 		EmbedFailures: p.embedFailures.Load(),
+		RuleAnswers:   p.ruleAnswers.Load(),
 	}
+}
+
+// Rule returns and counts a matching rule only when it renders with at least one
+// complete citation under opts.
+func (p *Pipeline) Rule(q ruleanswer.Query, opts RenderOptions) (Answer, bool) {
+	if p.rules == nil || p.rules.Table == nil {
+		return Answer{}, false
+	}
+	resolved, ok := p.rules.Match(q)
+	if !ok {
+		return Answer{}, false
+	}
+	sources := make([]Source, len(resolved.Sources))
+	for i, chunk := range resolved.Sources {
+		sources[i] = Source{N: i + 1, Title: chunk.Title, Heading: chunk.Heading,
+			Path: chunk.Path, URL: chunk.FormatURL(p.sourceLinkTemplate), Revision: chunk.Revision}
+	}
+	ans := Answer{Kind: KindRule, Reason: ReasonNone, Text: resolved.Text, Sources: sources}
+	if !RuleFits(ans, opts, q.Forum) {
+		return Answer{}, false
+	}
+	p.asked.Add(1)
+	p.ruleAnswers.Add(1)
+	return ans, true
 }
 
 // Ask processes a user inquiry through retrieval, generation, citation verification, and assembly.
@@ -520,6 +560,8 @@ const minAnswerRunes = 200
 type RenderOptions struct {
 	// Place names where a person helps. An empty Place means DefaultPlace.
 	Place string
+	// TicketsChannel names where a person can open a ticket. Empty uses the default wording.
+	TicketsChannel string
 	// MaxRunes is the maximum allowed rendered message length in runes.
 	// 0 uses DefaultMaxRenderRunes.
 	MaxRunes int
@@ -542,7 +584,21 @@ func Footer(place string) string {
 // Refusal returns the reply to a question the documentation does not answer. It names the place
 // where a person helps. An empty place means DefaultPlace.
 func Refusal(place string) string {
-	return "I found no documented answer to that. Please ask in " + placeOrDefault(place) + " so a person can help."
+	return RefusalTo(place, "")
+}
+
+// RefusalTo returns a refusal naming the place and tickets channel for help.
+func RefusalTo(place, ticketsChannel string) string {
+	return "I found no documented answer to that. Please ask in " + placeOrDefault(place) +
+		" so a person can help.\n\n" + TicketsSentence(ticketsChannel)
+}
+
+// TicketsSentence holds the one sentence that names the tickets route.
+func TicketsSentence(channel string) string {
+	if strings.TrimSpace(channel) == "" {
+		channel = "the tickets channel"
+	}
+	return "For more help, contact a person through " + channel + "."
 }
 
 // AppendFooter appends the automated reply footer for place to text, separated by a blank line.
@@ -557,8 +613,11 @@ func AppendFooter(text, place string) string {
 
 // Render formats an Answer into plain text for a chat message, appending the disclosure footer.
 //
-// The result never exceeds opts.MaxRunes (DefaultMaxRenderRunes when zero) including the footer. The footer is never cut and
-// never dropped. An answer text that is too long is cut and marked with "..."; its source
+// For excerpt replies with the default place and tickets channel, opts.MaxRunes
+// of at least MinRenderRunes bounds the result, including the no-AI disclosure,
+// tickets sentence, and footer. Smaller positive limits are outside this guarantee;
+// a nonpositive limit uses DefaultMaxRenderRunes. The footer is never cut or
+// dropped. An answer text that is too long is cut and marked with "..."; its source
 // lines stay, because the text refers to them. Source lines are dropped from the end only
 // when they would leave less than minAnswerRunes for the text. Excerpt replies drop trailing
 // excerpts whole. A single source line longer than the limit is cut as a last resort.
@@ -571,16 +630,64 @@ func Render(a Answer, opts RenderOptions) string {
 
 	var body string
 	switch a.Kind {
+	case KindRule:
+		body = renderRule(a, TicketsSentence(opts.TicketsChannel), Footer(place), maxRunes)
+		if body == "" {
+			body = RefusalTo(place, opts.TicketsChannel)
+		}
 	case KindAnswer:
 		body = renderAnswer(a, place, maxRunes)
 	case KindExcerpts:
-		body = renderExcerpts(a, Footer(place), maxRunes)
+		body = renderExcerptReply(a, Footer(place), opts.TicketsChannel, maxRunes)
 	case KindRefusal:
-		body = Refusal(place)
+		body = RefusalTo(place, opts.TicketsChannel)
+		if a.Reason == ReasonNoSource {
+			body += "\n\n" + noAIModelDisclosure
+		}
 	default:
-		body = Refusal(place)
+		body = RefusalTo(place, opts.TicketsChannel)
 	}
 	return AppendFooter(body, place)
+}
+
+// LabelRule identifies a fixed documentation answer.
+const LabelRule = "Automated answer from the project documentation. " + noAIModelDisclosure
+
+// RuleFits reports whether a rule can be rendered with at least one complete citation.
+// Forum selects the forum footer; zero MaxRunes uses DefaultMaxRenderRunes.
+func RuleFits(a Answer, opts RenderOptions, forum bool) bool {
+	maxRunes := opts.MaxRunes
+	if maxRunes <= 0 {
+		maxRunes = DefaultMaxRenderRunes
+	}
+	footer := Footer(opts.Place)
+	if forum {
+		footer = FooterForum
+	}
+	return renderRule(a, TicketsSentence(opts.TicketsChannel), footer, maxRunes) != ""
+}
+
+func renderRule(a Answer, tickets, footer string, maxRunes int) string {
+	bodyMax := maxRunes - utf8.RuneCountInString(footer) - 2
+	prefix := LabelRule + "\n\n"
+	suffix := "\n\n" + tickets
+	lines := make([]string, len(a.Sources))
+	for i, source := range a.Sources {
+		lines[i] = formatSourceLine(source)
+	}
+	for len(lines) > 0 && utf8.RuneCountInString(prefix)+utf8.RuneCountInString(suffix)+utf8.RuneCountInString(sourcesBlock(lines)) > bodyMax {
+		lines = lines[:len(lines)-1]
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	budget := bodyMax - utf8.RuneCountInString(prefix) - utf8.RuneCountInString(suffix) - utf8.RuneCountInString(sourcesBlock(lines))
+	text := cutToRunes(a.Text, budget)
+	if strings.TrimSpace(a.Text) != "" && strings.TrimSpace(text) == "" {
+		return ""
+	}
+	body := prefix + text + sourcesBlock(lines) + suffix
+	return hardCutTo(body, bodyMax)
 }
 
 func answerHeader(mode retrieval.Mode) string {
@@ -723,15 +830,34 @@ func renderExcerptsCandidate(header string, blocks []excerptBlock) string {
 	return sb.String()
 }
 
-// RenderForum formats an excerpt reply for a post in the support forum (ADR-0009): the excerpt
-// label first and FooterForum last, within maxRunes (DefaultMaxRenderRunes when zero). Every other
-// kind renders as the empty string, because the forum gets no model answer and no refusal.
-func RenderForum(a Answer, maxRunes int) string {
-	if a.Kind != KindExcerpts {
-		return ""
-	}
+func renderExcerptReply(a Answer, footer, tickets string, maxRunes int) string {
+	sentence := TicketsSentence(tickets)
+	return renderExcerpts(a, footer, maxRunes-2-utf8.RuneCountInString(sentence)) + "\n\n" + sentence
+}
+
+// RenderForum formats rule and excerpt replies for the support forum. For excerpt
+// replies with the default tickets channel, maxRunes of at least MinRenderRunes
+// bounds the result, including the no-AI disclosure, tickets sentence, and
+// FooterForum. Smaller positive limits are outside this guarantee; a nonpositive
+// limit uses DefaultMaxRenderRunes. FooterForum ends each rendered reply.
+func RenderForum(a Answer, maxRunes int, ticketsChannels ...string) string {
 	if maxRunes <= 0 {
 		maxRunes = DefaultMaxRenderRunes
 	}
-	return renderExcerpts(a, FooterForum, maxRunes) + "\n\n" + FooterForum
+	tickets := ""
+	if len(ticketsChannels) > 0 {
+		tickets = ticketsChannels[0]
+	}
+	switch a.Kind {
+	case KindExcerpts:
+		return renderExcerptReply(a, FooterForum, tickets, maxRunes) + "\n\n" + FooterForum
+	case KindRule:
+		body := renderRule(a, TicketsSentence(tickets), FooterForum, maxRunes)
+		if body == "" {
+			return ""
+		}
+		return body + "\n\n" + FooterForum
+	default:
+		return ""
+	}
 }

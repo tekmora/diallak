@@ -16,6 +16,7 @@ import (
 	"github.com/tekmora/diallak/internal/embed"
 	"github.com/tekmora/diallak/internal/model"
 	"github.com/tekmora/diallak/internal/retrieval"
+	"github.com/tekmora/diallak/internal/ruleanswer"
 )
 
 type stubRetriever struct {
@@ -747,9 +748,180 @@ func verifyRenderPositiveKindRefusal(t *testing.T) {
 		Kind:   KindRefusal,
 		Reason: ReasonNoSource,
 	}
-	wantRefusal := Refusal("") + "\n\n" + Footer("")
+	wantRefusal := Refusal("") + "\n\nNo AI model wrote this reply.\n\n" + Footer("")
 	if Render(ref, RenderOptions{}) != wantRefusal {
 		t.Errorf("Render(KindRefusal) = %q, want %q", Render(ref, RenderOptions{}), wantRefusal)
+	}
+}
+
+func TestRule_Positive_MatchReturnsResolvedDocumentation(t *testing.T) {
+	trigger := ruleanswer.Trigger{ID: "release", Keywords: ruleanswer.Keywords{All: []string{"release"}}, Commands: []string{"ask"}, Aliases: []string{"Diallak"}}
+	resolved := &ruleanswer.Resolved{Table: &ruleanswer.Table{Version: 1, Triggers: []ruleanswer.Trigger{trigger}},
+		Answers: map[string]ruleanswer.ResolvedAnswer{"release": {
+			Trigger: trigger, Text: "Verify the signed release.",
+			Sources: []corpus.Chunk{{Repository: "tekmora/diallak", Revision: "abcdef0123456789", Path: "README.md", Heading: "Verifying a release", Title: "Diallak"}},
+		}}}
+	p, err := New(Config{Retriever: &stubRetriever{}, Rules: resolved, SourceLinkTemplate: "https://example.test/{repository}/{revision}/{path}"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := p.Rule(ruleanswer.Query{Text: "How to verify the Diallak release?", Command: "ask"}, RenderOptions{})
+	if !ok || got.Kind != KindRule || got.Text != "Verify the signed release." {
+		t.Fatalf("Rule = (%+v, %t)", got, ok)
+	}
+	if got.Sources[0].URL != "https://example.test/tekmora/diallak/abcdef0123456789/README.md" {
+		t.Errorf("source URL = %q", got.Sources[0].URL)
+	}
+	if p.Stats().RuleAnswers != 1 {
+		t.Errorf("RuleAnswers = %d", p.Stats().RuleAnswers)
+	}
+}
+
+func TestRule_Negative_NonMatchFallsThrough(t *testing.T) {
+	trigger := ruleanswer.Trigger{ID: "release", Keywords: ruleanswer.Keywords{All: []string{"release"}}, Commands: []string{"ask"}, Aliases: []string{"Diallak"}}
+	p, err := New(Config{Retriever: &stubRetriever{}, Rules: &ruleanswer.Resolved{
+		Table: &ruleanswer.Table{Version: 1, Triggers: []ruleanswer.Trigger{trigger}}, Answers: map[string]ruleanswer.ResolvedAnswer{},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := p.Rule(ruleanswer.Query{Text: "How to start the bot?", Command: "ask"}, RenderOptions{}); ok {
+		t.Fatal("Rule unexpectedly matched")
+	}
+}
+
+func TestRule_Boundary_NilResolvedTableDoesNotMatch(t *testing.T) {
+	p, err := New(Config{Retriever: &stubRetriever{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := p.Rule(ruleanswer.Query{Text: "release", Command: "ask"}, RenderOptions{}); ok {
+		t.Fatal("nil rules matched")
+	}
+}
+
+func ruleTestPipeline(t *testing.T) *Pipeline {
+	t.Helper()
+	trigger := ruleanswer.Trigger{ID: "release", Keywords: ruleanswer.Keywords{All: []string{"release"}}, Commands: []string{"ask"}, Aliases: []string{"Diallak"}}
+	resolved := &ruleanswer.Resolved{Table: &ruleanswer.Table{Version: 1, Triggers: []ruleanswer.Trigger{trigger}},
+		Answers: map[string]ruleanswer.ResolvedAnswer{"release": {
+			Trigger: trigger, Text: "x",
+			Sources: []corpus.Chunk{{Repository: "tekmora/diallak", Revision: "abcdef0123456789", Path: strings.Repeat("a", 400), Title: "Diallak"}},
+		}}}
+	p, err := New(Config{Retriever: &stubRetriever{hits: []retrieval.Hit{sampleHit("install", "Install", "Setup", "Install it.", "revision")}},
+		Rules: resolved, SourceLinkTemplate: "https://example.test/{repository}/{revision}/{path}"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestRule_Negative_UnfitRuleCountsNothing(t *testing.T) {
+	p := ruleTestPipeline(t)
+	_, ok := p.Rule(ruleanswer.Query{Text: "Diallak release", Command: "ask"}, RenderOptions{MaxRunes: 300})
+	stats := p.Stats()
+	if ok || stats.Asked != 0 || stats.RuleAnswers != 0 {
+		t.Errorf("Rule matched = %t, stats = %+v; want no match or counts", ok, stats)
+	}
+}
+
+func TestRule_Boundary_FitLimitDecidesCount(t *testing.T) {
+	q := ruleanswer.Query{Text: "Diallak release", Command: "ask"}
+	ans, ok := ruleTestPipeline(t).Rule(q, RenderOptions{MaxRunes: 2000})
+	if !ok {
+		t.Fatal("rule does not fit at the large limit")
+	}
+	limit := utf8.RuneCountInString(Render(ans, RenderOptions{MaxRunes: 2000}))
+	for _, tc := range []struct {
+		limit int
+		want  bool
+		count uint64
+	}{{limit, true, 1}, {limit - 1, false, 0}} {
+		p := ruleTestPipeline(t)
+		_, matched := p.Rule(q, RenderOptions{MaxRunes: tc.limit})
+		stats := p.Stats()
+		if matched != tc.want || stats.Asked != tc.count || stats.RuleAnswers != tc.count {
+			t.Errorf("limit %d: matched = %t, stats = %+v", tc.limit, matched, stats)
+		}
+	}
+}
+
+func TestRule_Negative_UnfitThenExcerptsCountsOnce(t *testing.T) {
+	p := ruleTestPipeline(t)
+	if _, ok := p.Rule(ruleanswer.Query{Text: "Diallak release", Command: "ask"}, RenderOptions{MaxRunes: 300}); ok {
+		t.Fatal("unfit rule matched")
+	}
+	ans, err := p.Excerpts(context.Background(), "release")
+	if err != nil || ans.Kind != KindExcerpts {
+		t.Fatalf("Excerpts = (%+v, %v)", ans, err)
+	}
+	stats := p.Stats()
+	if stats.Asked != 1 || stats.RuleAnswers != 0 || stats.Excerpts != 1 {
+		t.Errorf("stats = %+v; want one question and one excerpt", stats)
+	}
+}
+
+func TestAsk_Negative_RuleMissUsesExcerptsOrRefusal(t *testing.T) {
+	trigger := ruleanswer.Trigger{ID: "release", Keywords: ruleanswer.Keywords{All: []string{"release"}}, Commands: []string{"ask"}, Aliases: []string{"Diallak"}}
+	resolved := &ruleanswer.Resolved{Table: &ruleanswer.Table{Version: 1, Triggers: []ruleanswer.Trigger{trigger}},
+		Answers: map[string]ruleanswer.ResolvedAnswer{"release": {Trigger: trigger, Text: "fixed answer"}}}
+	for _, tc := range []struct {
+		name string
+		hits []retrieval.Hit
+		want Kind
+	}{
+		{name: "hits", hits: []retrieval.Hit{sampleHit("install", "Install", "Setup", "Install it.", "revision")}, want: KindExcerpts},
+		{name: "no hits", want: KindRefusal},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, err := New(Config{Retriever: &stubRetriever{hits: tc.hits}, Rules: resolved})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := p.Ask(context.Background(), "How do I start the bot?")
+			if err != nil || got.Kind != tc.want {
+				t.Fatalf("Ask = (%+v, %v), want %s", got, err, tc.want)
+			}
+			if got.Kind == KindRule {
+				t.Fatal("non-matching question got a rule answer")
+			}
+		})
+	}
+}
+
+func TestRender_Positive_RuleHasDisclosureTicketSourceAndFooter(t *testing.T) {
+	got := Render(Answer{Kind: KindRule, Text: "The signed image is verified with cosign.", Sources: []Source{{
+		N: 1, Title: "Diallak", Heading: "Verifying a release", URL: "https://example.test/revision/README.md", Revision: "abcdef0123456789",
+	}}}, RenderOptions{TicketsChannel: "#tickets"})
+	for _, want := range []string{LabelRule, "No AI model wrote", "#tickets", "Sources:", "revision abcdef012345", Footer("")} {
+		if !strings.Contains(got, want) {
+			t.Errorf("render lacks %q: %q", want, got)
+		}
+	}
+}
+
+func TestRender_Negative_RefusalNamesTickets(t *testing.T) {
+	got := Render(Answer{Kind: KindRefusal}, RenderOptions{TicketsChannel: "#tickets"})
+	if !strings.Contains(got, TicketsSentence("#tickets")) {
+		t.Errorf("refusal = %q", got)
+	}
+}
+
+func TestRender_Boundary_LongRuleKeepsFooterWithinLimit(t *testing.T) {
+	got := Render(Answer{Kind: KindRule, Text: strings.Repeat("documentation ", 1000)}, RenderOptions{MaxRunes: 500, TicketsChannel: "#tickets"})
+	if utf8.RuneCountInString(got) > 500 || !strings.HasSuffix(got, Footer("")) {
+		t.Fatalf("render length = %d or footer missing", utf8.RuneCountInString(got))
+	}
+}
+
+func TestRenderForum_Positive_RuleCarriesTicketSourceAndForumFooter(t *testing.T) {
+	got := RenderForum(Answer{Kind: KindRule, Text: "Run the signature check.", Sources: []Source{{
+		N: 1, Title: "Diallak", Heading: "Verifying a release", URL: "https://example.test/rev/README.md", Revision: "abcdef0123456789",
+	}}}, 500, "#tickets")
+	for _, want := range []string{LabelRule, "#tickets", "revision abcdef012345", FooterForum} {
+		if !strings.Contains(got, want) {
+			t.Errorf("forum reply lacks %q: %q", want, got)
+		}
 	}
 }
 
@@ -842,10 +1014,10 @@ func TestRender_Boundary_EmptyHeadingAndRevision(t *testing.T) {
 
 func TestTexts_Positive_ExactStringPins(t *testing.T) {
 	const (
-		wantLabelAnswer    = "AI-generated answer. It can be wrong: check the sources below."
-		wantDefaultFooter  = "Automated reply. A person can help in the support channel."
-		wantDefaultRefusal = "I found no documented answer to that. Please ask in the support channel so a person can help."
+		wantLabelAnswer   = "AI-generated answer. It can be wrong: check the sources below."
+		wantDefaultFooter = "Automated reply. A person can help in the support channel."
 	)
+	wantDefaultRefusal := "I found no documented answer to that. Please ask in the support channel so a person can help.\n\n" + TicketsSentence("")
 
 	if LabelAnswer != wantLabelAnswer {
 		t.Errorf("LabelAnswer = %q, want %q", LabelAnswer, wantLabelAnswer)
@@ -853,7 +1025,7 @@ func TestTexts_Positive_ExactStringPins(t *testing.T) {
 	if got := Footer("#help-desk"); got != "Automated reply. A person can help in #help-desk." {
 		t.Errorf("Footer(#help-desk) = %q", got)
 	}
-	if got := Refusal("#help-desk"); got != "I found no documented answer to that. Please ask in #help-desk so a person can help." {
+	if got := Refusal("#help-desk"); got != "I found no documented answer to that. Please ask in #help-desk so a person can help.\n\n"+TicketsSentence("") {
 		t.Errorf("Refusal(#help-desk) = %q", got)
 	}
 	if got := Footer(""); got != wantDefaultFooter {
@@ -1351,5 +1523,134 @@ func TestExcerpts_Boundary_KeywordDefaultsToRetriever(t *testing.T) {
 	}
 	if ret.calls.Load() != 1 {
 		t.Errorf("calls = %d, want 1", ret.calls.Load())
+	}
+}
+
+func TestRefusalTo_Boundary_TicketsChannel(t *testing.T) {
+	if got, want := RefusalTo("#help", "#private"), "I found no documented answer to that. Please ask in #help so a person can help.\n\n"+TicketsSentence("#private"); got != want {
+		t.Errorf("RefusalTo = %q, want %q", got, want)
+	}
+	if RefusalTo("", "") != Refusal("") {
+		t.Error("empty tickets channel changed default refusal")
+	}
+}
+
+func TestRender_Negative_RefusalDisclosesNoModel(t *testing.T) {
+	for _, place := range []string{"", "#help"} {
+		got := Render(Answer{Kind: KindRefusal, Reason: ReasonNoSource}, RenderOptions{Place: place})
+		if !strings.Contains(got, "No AI model wrote this reply.") {
+			t.Errorf("refusal %q", got)
+		}
+	}
+}
+
+func TestRender_Boundary_RuleCitationMustFit(t *testing.T) {
+	a := Answer{Kind: KindRule, Text: "rule answer", Sources: []Source{{N: 1, Title: "T", URL: "https://example.test/" + strings.Repeat("x", 400)}}}
+	for _, got := range []string{Render(a, RenderOptions{MaxRunes: 500}), RenderForum(a, 500)} {
+		if strings.Contains(got, LabelRule) || strings.Contains(got, "rule answer") {
+			t.Errorf("uncited rule: %q", got)
+		}
+	}
+}
+
+func TestRender_Positive_ExcerptTickets(t *testing.T) {
+	a := Answer{Kind: KindExcerpts, Sources: []Source{{N: 1, Title: "T", Excerpt: strings.Repeat("x", 1000)}}}
+	for _, got := range []string{Render(a, RenderOptions{MaxRunes: 500, TicketsChannel: "#tickets"}), RenderForum(a, 500, "#tickets")} {
+		if !strings.Contains(got, TicketsSentence("#tickets")) || utf8.RuneCountInString(got) > 500 {
+			t.Errorf("reply = %q", got)
+		}
+	}
+	for _, got := range []string{Render(a, RenderOptions{}), RenderForum(a, 500)} {
+		if !strings.Contains(got, TicketsSentence("")) {
+			t.Errorf("missing tickets: %q", got)
+		}
+	}
+}
+
+func TestRender_Boundary_ExcerptKeepsDisclosureAtMinimum(t *testing.T) {
+	a := minimumExcerptAnswer()
+	got := Render(a, RenderOptions{MaxRunes: MinRenderRunes})
+	checkMinimumExcerptReply(t, got, Footer(""))
+}
+
+func TestRenderForum_Boundary_ExcerptKeepsDisclosureAtMinimum(t *testing.T) {
+	a := minimumExcerptAnswer()
+	got := RenderForum(a, MinRenderRunes)
+	checkMinimumExcerptReply(t, got, FooterForum)
+}
+
+func minimumExcerptAnswer() Answer {
+	longExcerpt := strings.Repeat("é", MinRenderRunes+1)
+	return Answer{Kind: KindExcerpts, Sources: []Source{
+		{N: 1, Title: strings.Repeat("x", MinRenderRunes+1), URL: "https://example.test/one", Excerpt: longExcerpt},
+		{N: 2, Title: "Two", URL: "https://example.test/two", Excerpt: longExcerpt},
+		{N: 3, Title: "Three", URL: "https://example.test/three", Excerpt: longExcerpt},
+	}}
+}
+
+func checkMinimumExcerptReply(t *testing.T, got, footer string) {
+	t.Helper()
+	if n := utf8.RuneCountInString(got); n > MinRenderRunes {
+		t.Errorf("reply length = %d runes, want at most %d", n, MinRenderRunes)
+	}
+	for _, want := range []string{noAIModelDisclosure, TicketsSentence(""), footer} {
+		if !strings.Contains(got, want) {
+			t.Errorf("reply missing %q", want)
+		}
+	}
+}
+
+func TestRender_Boundary_ExcerptTicketsFit(t *testing.T) {
+	a := Answer{Kind: KindExcerpts, Sources: []Source{{N: 1, Title: "T", Excerpt: strings.Repeat("x", 1000)}}}
+	for _, got := range []string{Render(a, RenderOptions{MaxRunes: 180}), RenderForum(a, 180)} {
+		if !strings.Contains(got, TicketsSentence("")) || utf8.RuneCountInString(got) > 180 {
+			t.Errorf("reply = %q", got)
+		}
+	}
+}
+
+func TestRuleFits_Boundary_CitationLimit(t *testing.T) {
+	a := Answer{Kind: KindRule, Text: "", Sources: []Source{{N: 1, Title: "T", URL: "https://example.test/"}}}
+	for _, forum := range []bool{false, true} {
+		footer := Footer("")
+		if forum {
+			footer = FooterForum
+		}
+		limit := utf8.RuneCountInString(LabelRule + "\n\n" + sourcesBlock([]string{formatSourceLine(a.Sources[0])}) + "\n\n" + TicketsSentence("") + "\n\n" + footer)
+		if !RuleFits(a, RenderOptions{MaxRunes: limit}, forum) {
+			t.Errorf("forum %t: citation should fit exactly", forum)
+		}
+		if RuleFits(a, RenderOptions{MaxRunes: limit - 1}, forum) {
+			t.Errorf("forum %t: citation one rune too long", forum)
+		}
+	}
+}
+
+func TestRuleFits_Boundary_AnswerText(t *testing.T) {
+	a := Answer{Kind: KindRule, Text: "answer", Sources: []Source{{N: 1, Title: "T", URL: "https://example.test/"}}}
+	for _, forum := range []bool{false, true} {
+		footer := Footer("")
+		if forum {
+			footer = FooterForum
+		}
+		fixed := utf8.RuneCountInString(LabelRule + "\n\n" + sourcesBlock([]string{formatSourceLine(a.Sources[0])}) + "\n\n" + TicketsSentence("") + "\n\n" + footer)
+		if RuleFits(a, RenderOptions{MaxRunes: fixed}, forum) || renderRule(a, TicketsSentence(""), footer, fixed) != "" {
+			t.Errorf("forum %t: text must not disappear", forum)
+		}
+		limit := fixed + utf8.RuneCountInString(a.Text) + 1
+		got := renderRule(a, TicketsSentence(""), footer, limit)
+		if !RuleFits(a, RenderOptions{MaxRunes: limit}, forum) || !strings.Contains(got, a.Text) {
+			t.Errorf("forum %t: full text should fit: %q", forum, got)
+		}
+	}
+}
+
+func TestRender_Negative_UnfitRuleUsesRefusal(t *testing.T) {
+	a := Answer{Kind: KindRule, Text: "rule", Sources: []Source{{N: 1, URL: strings.Repeat("x", 400)}}}
+	if got := Render(a, RenderOptions{MaxRunes: 500}); got != AppendFooter(RefusalTo("", ""), "") {
+		t.Errorf("Render = %q", got)
+	}
+	if got := RenderForum(a, 500); got != "" {
+		t.Errorf("RenderForum = %q", got)
 	}
 }

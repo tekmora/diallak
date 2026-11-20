@@ -62,6 +62,21 @@ func TestLoad_Positive_LoadsAndChunksFiles(t *testing.T) {
 	}
 }
 
+func TestLoad_Boundary_IndentedFirstLineAndBlankLines(t *testing.T) {
+	fsys := fstest.MapFS{"test.md": &fstest.MapFile{Data: []byte("# Code\n\n  \n    first line\n    second line  \n\t\n")}}
+	src := Source{Repository: "owner/repo", Revision: "main", Patterns: []string{"test.md"}}
+	chunks, err := Load(context.Background(), fsys, src, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chunks) != 1 {
+		t.Fatalf("got %d chunks, want 1", len(chunks))
+	}
+	if got, want := chunks[0].Text, "    first line\n    second line"; got != want {
+		t.Errorf("text = %q, want %q", got, want)
+	}
+}
+
 func TestLoad_Positive_HTMLCommentsAndFences(t *testing.T) {
 	fsys := fstest.MapFS{
 		"test.md": &fstest.MapFile{
@@ -202,5 +217,46 @@ func TestLoad_Boundary_MaxChunkBytesHoldsOneRune(t *testing.T) {
 	}
 	if _, err := Load(context.Background(), fsys, src, Limits{MaxFiles: 1, MaxFileBytes: 100, MaxChunks: 10, MaxChunkBytes: 4}); err != nil {
 		t.Fatalf("Load with MaxChunkBytes 4 err = %v, want nil", err)
+	}
+}
+
+func TestIndentColumn_Positive_SpacesAndTabs(t *testing.T) {
+	for _, line := range []string{"    code", "\tcode"} {
+		if got := IndentColumn(line); got != 4 {
+			t.Errorf("IndentColumn(%q) = %d, want 4", line, got)
+		}
+	}
+}
+
+func TestIndentColumn_Negative_NoIndent(t *testing.T) {
+	if got := IndentColumn("code"); got != 0 {
+		t.Errorf("IndentColumn(code) = %d, want 0", got)
+	}
+}
+
+func TestIndentColumn_Boundary_TabStopsAndWhitespace(t *testing.T) {
+	for _, tc := range []struct {
+		line string
+		want int
+	}{
+		{"  \tx", 4},
+		{" \t \tx", 8},
+		{"", 0},
+		{"   ", 3},
+	} {
+		if got := IndentColumn(tc.line); got != tc.want {
+			t.Errorf("IndentColumn(%q) = %d, want %d", tc.line, got, tc.want)
+		}
+	}
+}
+
+func TestParseFileChunks_Positive_SectionIdentity(t *testing.T) {
+	content := "## Development\n### Setup\nFirst paragraph.\n\nSecond paragraph.\n## Production\n### Setup\nProduction setup."
+	chunks := parseFileChunks("owner/repo", "rev", "guide.md", content, 20)
+	if len(chunks) != 3 {
+		t.Fatalf("chunks = %+v", chunks)
+	}
+	if chunks[0].Section == 0 || chunks[0].Section != chunks[1].Section || chunks[1].Section == chunks[2].Section {
+		t.Fatalf("section identities = %+v", chunks)
 	}
 }

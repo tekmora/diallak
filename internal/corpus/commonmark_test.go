@@ -3,6 +3,7 @@ package corpus
 import (
 	"strings"
 	"testing"
+	"unicode"
 )
 
 func TestParseFileChunks_Negative_IndentedCodeBlockOpensNoFence(t *testing.T) {
@@ -119,5 +120,60 @@ func TestParseFileChunks_Boundary_MultiLineSetextHeadingDropsOnlyItsUnderline(t 
 	}
 	if chunks[0].Text != "- item" {
 		t.Errorf("chunks[0].Text = %q, want %q", chunks[0].Text, "- item")
+	}
+}
+
+func TestParseFileChunks_Boundary_ShallowFirstLineIndent(t *testing.T) {
+	for _, indent := range []string{" ", "  ", "   "} {
+		chunks := parseFileChunks("o/r", "v1", "a.md", "# H\n"+indent+"first\n  later", 4000)
+		if len(chunks) != 1 || chunks[0].Text != "first\n  later" {
+			t.Errorf("indent %q: chunks = %+v, want first line trimmed and later line preserved", indent, chunks)
+		}
+	}
+}
+
+func TestParseFileChunks_Positive_TabIndentedFirstLine(t *testing.T) {
+	chunks := parseFileChunks("o/r", "v1", "a.md", "# H\n\tcode", 4000)
+	if len(chunks) != 1 || chunks[0].Text != "\tcode" {
+		t.Fatalf("chunks = %+v, want tab-indented code preserved", chunks)
+	}
+}
+
+func TestParseFileChunks_Boundary_SplitPartsTrimmed(t *testing.T) {
+	chunks := parseFileChunks("o/r", "v1", "a.md", "# H\nfirst  \n\nsecond  \n\nthird", 8)
+	if len(chunks) < 2 {
+		t.Fatalf("chunks = %+v, want multiple parts", chunks)
+	}
+	for _, chunk := range chunks {
+		if strings.HasPrefix(chunk.Text, "\n") || strings.TrimRightFunc(chunk.Text, unicode.IsSpace) != chunk.Text {
+			t.Errorf("chunk text = %q, want no leading blank line or trailing whitespace", chunk.Text)
+		}
+	}
+}
+
+func TestParseFileChunks_Boundary_OversizedIndentedCode(t *testing.T) {
+	chunks := parseFileChunks("o/r", "v1", "a.md", "# H\n\n    long code line that exceeds the limit", 12)
+	if len(chunks) < 2 || !strings.HasPrefix(chunks[0].Text, "    ") {
+		t.Fatalf("chunks = %+v, want multiple chunks with first code indent preserved", chunks)
+	}
+}
+
+func TestCutOversized_Boundary_MultibyteRunes(t *testing.T) {
+	input := strings.Repeat("界", 20)
+	parts := cutOversized([]string{input}, 4)
+	for _, part := range parts {
+		if len(part) > 4 {
+			t.Errorf("part %q has %d bytes, want at most 4", part, len(part))
+		}
+	}
+	if got := strings.Join(parts, ""); got != input {
+		t.Errorf("joined parts = %q, want %q", got, input)
+	}
+}
+
+func TestCutOversized_Boundary_RuneExceedsLimit(t *testing.T) {
+	parts := cutOversized([]string{"界a"}, 2)
+	if len(parts) != 2 || parts[0] != "界" || parts[1] != "a" {
+		t.Errorf("parts = %q, want [界 a]", parts)
 	}
 }

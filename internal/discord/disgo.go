@@ -13,6 +13,7 @@ import (
 
 	"github.com/disgoorg/disgo"
 	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/cache"
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/gateway"
@@ -573,6 +574,10 @@ func buildClient(
 		}),
 	}
 	if cfg.Forum != nil {
+		botOpts = append(botOpts, bot.WithCacheConfigOpts(
+			cache.WithCaches(cache.FlagChannels),
+			cache.WithChannelCachePolicy(cacheForumChannel),
+		))
 		botOpts = append(botOpts, bot.WithEventListenerFunc(func(e *events.ThreadCreate) {
 			d.handleThreadCreate(ctx, e)
 		}))
@@ -584,6 +589,15 @@ func buildClient(
 		botOpts = append(botOpts, bot.WithRestClientConfigOpts(rest.WithURL(opts.restURL)))
 	}
 	return disgo.New(cfg.Token, botOpts...)
+}
+
+func cacheForumChannel(channel discord.GuildChannel) bool {
+	switch channel.(type) {
+	case discord.GuildForumChannel, *discord.GuildForumChannel:
+		return true
+	default:
+		return false
+	}
 }
 
 // dispatcher hands each interaction the bot serves to a worker. The worker pool bound is
@@ -810,6 +824,18 @@ func guildCommands(maxQuestionChars int) []discord.ApplicationCommandCreate {
 		buildRemoveMessageCommandCreate(), buildTimeoutCommandCreate(),
 		buildBugCommandCreate(),
 	}
+}
+
+// RegisteredCommandNames returns names sent by the guild command registration path.
+func RegisteredCommandNames() []string {
+	commands := guildCommands(0)
+	names := make([]string, 0, len(commands))
+	for _, command := range commands {
+		if name := command.CommandName(); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 func buildCommandCreate(maxChars int) discord.ApplicationCommandCreate {
