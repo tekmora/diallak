@@ -57,7 +57,7 @@ Adopted check = coverage state + catalog path; else audit scanner; else `unknown
 
 4. **SARIF diagnostic distillation.** Compiler/linter errors -> distill to $\le 1,500$ tokens ($< 60$ lines): top 3 root-cause failures with file/line pointers; full SARIF logs -> ephemeral storage.
 
-5. **No evasion.** Never attempt `--no-verify`, `LEFTHOOK=0`, or modifying `.git/hooks`. Adoption installed no hooks here (`lefthook.yml` not praetor-written, or `git-hooks` declined). Adoption scaffolds no CI workflow: `praetorctl` gates run local only.
+5. **No evasion.** Never attempt `--no-verify`, `LEFTHOOK=0`, or modifying `.git/hooks`. Adoption installed no hooks here (`lefthook.yml` not praetor-written, or `git-hooks` declined). Adoption adds no server-side `praetorctl` gate run: `praetorctl` gates run local only. Kept from an earlier adoption: `.github/workflows/reuse.yml` runs steps `Stop on a draft pull request` and `reuse lint` on the whole tree.
 
 6. **Anti-loop interception.** Same AST diff + error category repeats $\ge 3$ times -> halt immediately. Re-evaluate design; no micro-textual retries.
 
