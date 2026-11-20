@@ -11,6 +11,7 @@ func (v *validator) checkBotRights() {
 	v.checkBotChannelCeilings(botRole)
 	v.checkBotStaffChannels(botRole)
 	v.checkBotTicketChannels(botRole)
+	v.checkInviteBotRights(botRole)
 }
 
 func (v *validator) checkBotRolePermissions(botRole *Role) {
@@ -34,6 +35,9 @@ func (v *validator) checkBotChannelCeilings(botRole *Role) {
 			continue
 		}
 		allowed := botChannelCeiling(ch)
+		if v.invitesChannel(ch.ID) {
+			allowed["CREATE_INSTANT_INVITE"] = struct{}{}
+		}
 		p := fmt.Sprintf("channels[%s].access[%s]", ch.ID, botRole.ID)
 		for _, perm := range acc.Allow {
 			if _, ok := allowed[perm]; !ok {

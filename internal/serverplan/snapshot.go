@@ -25,6 +25,8 @@ type Snapshot struct {
 	// them needs MANAGE_GUILD; FilterRules is empty when they were not.
 	FilterRulesRead bool         `json:"filter_rules_read,omitempty"`
 	FilterRules     []FilterRule `json:"filter_rules,omitempty"`
+	InvitesRead     bool         `json:"invites_read,omitempty"`
+	Invites         []Invite     `json:"invites,omitempty"`
 }
 
 // FilterRule is one of the server's filter rules, its roles and channels by
@@ -139,6 +141,7 @@ func Check(s *Snapshot) error {
 	errs = append(errs, checkNamesAndTypes(s)...)
 	errs = append(errs, checkPermissions(s)...)
 	errs = append(errs, checkSettings(s)...)
+	errs = append(errs, checkInvites(s)...)
 	return errors.Join(errs...)
 }
 

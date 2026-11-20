@@ -129,6 +129,9 @@ const (
 	// CodeFilterRule flags a filter rule that breaks a limit of the platform or names a field its trigger or action does not read.
 	CodeFilterRule = "filter-rule"
 
+	// CodeInvite flags an invalid invite.
+	CodeInvite = "invite"
+
 	// CodeRoleOrder flags a role order definition that is incomplete, duplicated, or misordered.
 	CodeRoleOrder = "role-order"
 
@@ -163,6 +166,7 @@ type Definition struct {
 	// Settings holds the platform's filter rules and the verification level.
 	// Absent = nothing of it is compared or changed on the server.
 	Settings *Settings `json:"settings,omitempty"`
+	Invites  []Invite  `json:"invites,omitempty"`
 	// News lists what the news function reads and the area each feed serves (ADR-0019).
 	// Absent = the definition names no news.
 	News *News `json:"news,omitempty"`

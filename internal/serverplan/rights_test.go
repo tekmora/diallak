@@ -13,7 +13,7 @@ func everyoneHoldsVoiceAndPrivateThreads(botHoldsThem bool) *Snapshot {
 	s := raisedFirstSetupSnapshot()
 	for i := range s.Roles {
 		if s.Roles[i].Name == "Diallak" && !botHoldsThem {
-			s.Roles[i].Permissions = []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_CHANNELS"}
+			s.Roles[i].Permissions = []string{"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_CHANNELS", "CREATE_INSTANT_INVITE"}
 		}
 		if s.Roles[i].Everyone {
 			s.Roles[i].Permissions = append(s.Roles[i].Permissions, "CONNECT", "CREATE_PRIVATE_THREADS")

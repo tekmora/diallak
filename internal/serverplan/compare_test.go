@@ -391,7 +391,7 @@ func compareNegativeKindAccessCases() []compareNegativeKindCase {
 			mutate: func(s *Snapshot) {
 				for i := range s.Channels {
 					if s.Channels[i].Name == "rules" {
-						s.Channels[i].Access = []Access{} // removes @everyone access
+						s.Channels[i].Access = slices.DeleteFunc(s.Channels[i].Access, func(a Access) bool { return a.Role == "@everyone" })
 					}
 				}
 			},

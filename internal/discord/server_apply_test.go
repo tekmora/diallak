@@ -302,6 +302,8 @@ func (f *fakePlatform) routeGetRequest(w http.ResponseWriter, r *http.Request) {
 		f.handleGetChannels(w)
 	case fmt.Sprintf("/guilds/%d/roles", f.guildID):
 		f.handleGetRoles(w)
+	case fmt.Sprintf("/guilds/%d/invites", f.guildID):
+		writeTestResponse(w, http.StatusOK, `[]`)
 	case fmt.Sprintf("/guilds/%d/auto-moderation/rules", f.guildID):
 		f.handleGetFilterRules(w)
 	default:

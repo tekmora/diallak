@@ -57,6 +57,9 @@ func fetchSnapshotAndIndex(
 	if err := fetchFilterRules(ctx, client, token, guildID, opts, data); err != nil {
 		return nil, nil, err
 	}
+	if err := fetchInvites(ctx, client, token, guildID, opts, data); err != nil {
+		return nil, nil, err
+	}
 	return buildSnapshotAndIndex(data, guildID, opts.getNow())
 }
 
@@ -93,6 +96,8 @@ func buildSnapshotAndIndex(data *serverData, guildID uint64, now time.Time) (*se
 		return nil, nil, err
 	}
 
+	readInvites(snap, data)
+
 	if err := serverplan.Check(snap); err != nil {
 		return nil, nil, fmt.Errorf("check snapshot: %w", err)
 	}
@@ -121,8 +126,10 @@ type serverData struct {
 	member   *discord.Member
 	channels []discord.GuildChannel
 	// rules holds the filter rules; rulesRead is false when the bot may not read them.
-	rules     []discord.AutoModerationRule
-	rulesRead bool
+	rules       []discord.AutoModerationRule
+	rulesRead   bool
+	invites     []discord.ExtendedInvite
+	invitesRead bool
 }
 
 func fetchServerData(ctx context.Context, client *bot.Client, token string, guildID uint64, opts clientOptions) (*serverData, error) {

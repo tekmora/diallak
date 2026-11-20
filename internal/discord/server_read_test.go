@@ -361,6 +361,8 @@ func standardHandler(guildID, botUserID uint64, appJSON, guildJSON, memberJSON, 
 			writeTestResponse(w, http.StatusOK, memberJSON)
 		case fmt.Sprintf("/guilds/%d/channels", guildID):
 			writeTestResponse(w, http.StatusOK, channelsJSON)
+		case fmt.Sprintf("/guilds/%d/invites", guildID):
+			writeTestResponse(w, http.StatusOK, `[]`)
 		case fmt.Sprintf("/guilds/%d/auto-moderation/rules", guildID):
 			writeTestResponse(w, http.StatusOK, rulesJSON)
 		default:
@@ -444,8 +446,8 @@ func TestReadServer_Positive_FiveRequestsInOrderAndNothingElse(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if len(recorded) != 5 {
-		t.Fatalf("recorded %d requests, want exactly 5: %+v", len(recorded), recorded)
+	if len(recorded) != 6 {
+		t.Fatalf("recorded %d requests, want exactly 6: %+v", len(recorded), recorded)
 	}
 	wantPaths := []string{
 		"/applications/@me",
@@ -453,6 +455,7 @@ func TestReadServer_Positive_FiveRequestsInOrderAndNothingElse(t *testing.T) {
 		fmt.Sprintf("/guilds/%d/members/%d", guildID, botUserID),
 		fmt.Sprintf("/guilds/%d/channels", guildID),
 		fmt.Sprintf("/guilds/%d/auto-moderation/rules", guildID),
+		fmt.Sprintf("/guilds/%d/invites", guildID),
 	}
 	for i, want := range wantPaths {
 		if recorded[i].method != http.MethodGet {

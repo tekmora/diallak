@@ -20,7 +20,7 @@ func raiseBotRole(t *testing.T, s *Snapshot, extraPerm string) {
 func raisedFirstSetupSnapshot() *Snapshot {
 	botPerms := []string{
 		"MANAGE_ROLES", "MANAGE_MESSAGES", "MODERATE_MEMBERS", "MANAGE_GUILD",
-		"MANAGE_CHANNELS", "CREATE_PRIVATE_THREADS", "CONNECT",
+		"MANAGE_CHANNELS", "CREATE_PRIVATE_THREADS", "CREATE_INSTANT_INVITE", "CONNECT",
 	}
 	everyonePerms := []string{
 		"VIEW_CHANNEL", "SEND_MESSAGES", "SEND_MESSAGES_IN_THREADS", "CREATE_PUBLIC_THREADS",
@@ -361,6 +361,7 @@ func verifyRaisedFirstSetupRights(t *testing.T, rights []string) {
 	wantRights := []string{
 		"ADD_REACTIONS",
 		"CONNECT",
+		"CREATE_INSTANT_INVITE",
 		"CREATE_PRIVATE_THREADS",
 		"CREATE_PUBLIC_THREADS",
 		"MANAGE_CHANNELS",
@@ -827,8 +828,8 @@ func TestPlan_Boundary_ExtrasAreLeftAlone(t *testing.T) {
 
 func TestPlan_Boundary_ClosedActionList(t *testing.T) {
 	actions := Actions()
-	if len(actions) != 14 {
-		t.Fatalf("len(Actions()) = %d, want 14", len(actions))
+	if len(actions) != 15 {
+		t.Fatalf("len(Actions()) = %d, want 15", len(actions))
 	}
 	actionSet := make(map[string]struct{}, len(actions))
 	for _, a := range actions {

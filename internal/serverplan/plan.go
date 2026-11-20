@@ -124,6 +124,7 @@ func Actions() []string {
 		ActionCreateFilterRule,
 		ActionSetFilterRule,
 		ActionConvertFilterRule,
+		ActionCreateInvite,
 	}
 }
 
@@ -271,6 +272,7 @@ func (ctx *planContext) generateAndEvaluateCandidates() {
 	ctx.addAccessCandidates()
 	ctx.addConvertAndResolveCandidates()
 	ctx.addSettingsCandidates()
+	ctx.addInviteCandidates()
 }
 
 func (ctx *planContext) evaluateCandidate(c candidate) {
@@ -433,6 +435,9 @@ func (ctx *planContext) entryRoleAmbiguous(ch *serverdef.Channel) bool {
 }
 
 func (ctx *planContext) isAllowedInOwnMode(c candidate) bool {
+	if c.action == ActionCreateInvite {
+		return true
+	}
 	if isSettingsAction(c.action) {
 		return true
 	}
@@ -637,6 +642,9 @@ func checkRoleOrderAboveCaller(ctx *planContext) (string, string) {
 // checkLacksRight tests c against the rights the caller holds after the
 // steps accepted before it.
 func (ctx *planContext) checkLacksRight(c candidate) (string, string) {
+	if c.action == ActionCreateInvite {
+		return ctx.checkInviteRight(c)
+	}
 	if detail, lacks := ctx.rights.lacking(c.needs); lacks {
 		return ReasonLacksRight, detail
 	}
