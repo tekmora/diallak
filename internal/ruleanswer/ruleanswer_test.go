@@ -632,6 +632,12 @@ func TestFilterSponsorshipSentences_Boundary_NextRune(t *testing.T) {
 			t.Errorf("filterSponsorshipSentences(%q) = %q; want %q", text, got, suffix)
 		}
 	}
+	for _, punctuation := range []string{"!", "?"} {
+		text := "Sponsor https://ko-fi.com/example" + punctuation + " iOS users can ask."
+		if got := filterSponsorshipSentences(text); got != "iOS users can ask." {
+			t.Errorf("filterSponsorshipSentences(%q) = %q; want %q", text, got, "iOS users can ask.")
+		}
+	}
 	if got := filterSponsorshipSentences("Sponsor https://ko-fi.com/example."); got != "" {
 		t.Errorf("sponsorship at end = %q", got)
 	}
