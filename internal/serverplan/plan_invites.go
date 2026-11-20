@@ -38,10 +38,10 @@ func (ctx *planContext) addUnreadInviteCandidates() {
 }
 
 func (ctx *planContext) checkInviteRight(c candidate) (string, string) {
-	if ctx.rights.holds("ADMINISTRATOR") {
-		return "", ""
-	}
 	ch := ctx.defChannel(c.channelID)
+	if ctx.rights.holds("ADMINISTRATOR") {
+		return ctx.checkAdministratorInvite(ch)
+	}
 	if ch == nil {
 		return ReasonLacksRight, "CREATE_INSTANT_INVITE"
 	}
@@ -49,16 +49,24 @@ func (ctx *planContext) checkInviteRight(c candidate) (string, string) {
 		return ReasonLacksRight, "CREATE_INSTANT_INVITE"
 	}
 	projected := ctx.projectedInviteChannel(ch, ctx.observedInviteChannel(ch.Name))
-	if projected != nil && projected.MemberEntries > 0 {
+	if projected == nil {
+		if !ctx.rights.holds("CREATE_INSTANT_INVITE") {
+			return ReasonLacksRight, "CREATE_INSTANT_INVITE"
+		}
+		return ReasonChannelNotCreated, "channels[" + ch.ID + "]"
+	}
+	if projected.MemberEntries > 0 {
 		return ReasonLacksRight, "CREATE_INSTANT_INVITE: channel holds entries for single members"
 	}
-	if projected != nil {
-		return ctx.checkObservedInviteRight(projected)
+	return ctx.checkObservedInviteRight(projected)
+}
+
+// checkAdministratorInvite requires an existing or planned channel for an administrator's invite.
+func (ctx *planContext) checkAdministratorInvite(ch *serverdef.Channel) (string, string) {
+	if ch != nil && ctx.projectedInviteChannel(ch, ctx.observedInviteChannel(ch.Name)) == nil {
+		return ReasonChannelNotCreated, "channels[" + ch.ID + "]"
 	}
-	if ctx.rights.holds("CREATE_INSTANT_INVITE") {
-		return "", ""
-	}
-	return ReasonLacksRight, "CREATE_INSTANT_INVITE"
+	return "", ""
 }
 
 func (ctx *planContext) projectedInviteChannel(ch *serverdef.Channel, observed *Channel) *Channel {

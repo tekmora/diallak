@@ -373,3 +373,67 @@ func TestCheckInviteRight_Negative_NoViewRight(t *testing.T) {
 		t.Fatalf("refusal: %s %s", reason, detail)
 	}
 }
+
+func TestCheckInviteRight_Negative_ChannelNeitherObservedNorCreated(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.snap.Channels = nil
+	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != ReasonChannelNotCreated || detail != "channels[rules]" {
+		t.Fatalf("refusal: %s %s", reason, detail)
+	}
+}
+
+func TestCheckInviteRight_Boundary_ChannelAbsentWithoutRight(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.snap.Channels = nil
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != ReasonLacksRight || detail != "CREATE_INSTANT_INVITE" {
+		t.Fatalf("refusal: %s %s", reason, detail)
+	}
+}
+
+func TestCheckInviteRight_Negative_AdministratorChannelNotCreated(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.snap.Channels = nil
+	ctx.rights.apart["ADMINISTRATOR"] = struct{}{}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != ReasonChannelNotCreated || detail != "channels[rules]" {
+		t.Fatalf("refusal: %s %s", reason, detail)
+	}
+}
+
+func TestCheckInviteRight_Positive_AdministratorChannelCreated(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.snap.Channels = nil
+	ctx.rights.apart["ADMINISTRATOR"] = struct{}{}
+	ctx.changes = []Change{{Action: ActionCreateChannel, Object: "channels[rules]"}}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" || detail != "" {
+		t.Fatalf("refusal: %s %s", reason, detail)
+	}
+}
+
+func TestPlanInvites_Negative_ChannelCreateRefused(t *testing.T) {
+	def := loadDef(t)
+	s := snapshotOf(t, def)
+	s.Channels = slices.DeleteFunc(s.Channels, func(ch Channel) bool { return ch.Name == defChannelName(def, "rules") })
+	s.InvitesRead = true
+	s.Invites = nil
+	raiseBotRole(t, s, "CREATE_INSTANT_INVITE")
+	result, err := Plan(def, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Raised {
+		t.Fatal("caller is not raised")
+	}
+	channelRefused := slices.ContainsFunc(result.Refused, func(r Refusal) bool {
+		return r.Action == ActionCreateChannel && r.Object == "channels[rules]" && r.Reason == ReasonLacksRight && strings.Contains(r.Detail, "MANAGE_CHANNELS")
+	})
+	inviteRefused := slices.ContainsFunc(result.Refused, func(r Refusal) bool {
+		return r.Action == ActionCreateInvite && r.Object == "invites[hub]" && r.Reason == ReasonChannelNotCreated && r.Detail == "channels[rules]"
+	})
+	if slices.ContainsFunc(result.Changes, func(c Change) bool { return c.Action == ActionCreateInvite }) {
+		t.Fatalf("unexpected invite change: %+v", result.Changes)
+	}
+	if !channelRefused || !inviteRefused {
+		t.Fatalf("missing channel or invite refusal: %+v", result.Refused)
+	}
+}

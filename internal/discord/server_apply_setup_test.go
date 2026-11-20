@@ -402,8 +402,7 @@ func assertMissingRightRefusals(t *testing.T, refused []serverplan.Refusal, with
 			matched = true
 			continue
 		}
-		if r.Action == serverplan.ActionCreateInvite && r.Reason == serverplan.ReasonLacksRight && r.Detail == "CREATE_INSTANT_INVITE" {
-			matched = matched || without == "CREATE_INSTANT_INVITE"
+		if uncreatedChannelInviteRefusal(r, refused) {
 			continue
 		}
 		if r.Reason != serverplan.ReasonLacksRight || !slices.Contains(strings.Split(r.Detail, ", "), without) {
@@ -415,6 +414,19 @@ func assertMissingRightRefusals(t *testing.T, refused []serverplan.Refusal, with
 	if !matched {
 		t.Errorf("no refusal reflects missing %s", without)
 	}
+}
+
+// uncreatedChannelInviteRefusal matches an invite to its refused channel creation.
+func uncreatedChannelInviteRefusal(r serverplan.Refusal, refused []serverplan.Refusal) bool {
+	if r.Action != serverplan.ActionCreateInvite || r.Reason != serverplan.ReasonChannelNotCreated {
+		return false
+	}
+	for _, channel := range refused {
+		if channel.Action == serverplan.ActionCreateChannel && channel.Object == r.Detail {
+			return true
+		}
+	}
+	return false
 }
 
 func unreadSettingRefusal(r serverplan.Refusal, without string) bool {
@@ -462,7 +474,7 @@ func countChannelRefusals(t *testing.T, refused []serverplan.Refusal) int {
 	channelRefusals := 0
 	for _, r := range refused {
 		if r.Action == serverplan.ActionCreateInvite {
-			if r.Reason != serverplan.ReasonLacksRight || r.Detail != "CREATE_INSTANT_INVITE" {
+			if (r.Reason != serverplan.ReasonLacksRight || r.Detail != "CREATE_INSTANT_INVITE") && !uncreatedChannelInviteRefusal(r, refused) {
 				t.Errorf("invite refusal = %+v", r)
 			}
 			continue

@@ -242,7 +242,7 @@ The list of actions is closed (`serverplan.Actions`), and none of them deletes.
 | `set-verification-level` | A server with another verification level | `MANAGE_GUILD` |
 | `create-filter-rule` | A missing filter rule, created with its actions and exemptions | `MANAGE_GUILD`, and `MODERATE_MEMBERS` for a rule that times a member out |
 | `set-filter-rule` | A filter rule that differs. The change sends every field except the trigger | The same as `create-filter-rule` |
-| `create-invite` | An unrecorded invite needs creation; unread invites produce a refused candidate | `ADMINISTRATOR` or effective `VIEW_CHANNEL` and `CREATE_INSTANT_INVITE`: the check applies the channel entries after earlier plan steps, the everyone entry first, then all held-role entries together in Discord order (denies before allows at each stage); a deny on the definition’s everyone or bot role entry refuses, including when the plan creates the channel or sets the bot access; channel entries for single members refuse unless the caller is an administrator or the channel is created in the plan |
+| `create-invite` | An unrecorded invite needs creation; unread invites produce a refused candidate | `ADMINISTRATOR` or effective `VIEW_CHANNEL` and `CREATE_INSTANT_INVITE`: the check applies the channel entries after earlier plan steps, the everyone entry first, then all held-role entries together in Discord order (denies before allows at each stage); a deny on the definition’s everyone or bot role entry refuses, including when the plan creates the channel or sets the bot access; channel entries for single members refuse unless the caller is an administrator or the channel is created in the plan. An invite whose channel neither exists nor is created by an accepted earlier step is refused as `channel-not-created`, also for an administrator; a caller without `CREATE_INSTANT_INVITE` gets `lacks-right` first |
 | `convert-channel`, `convert-filter-rule`, `resolve-name` | A channel of another type; a filter rule with another trigger; an ambiguous name | Always refused: a person has to settle these |
 <!-- markdownlint-enable MD013 -->
 
@@ -255,7 +255,9 @@ allows, followed by all held-role denies then all held-role allows. Both
 `VIEW_CHANNEL` and `CREATE_INSTANT_INVITE` must be granted. The check refuses
 when a held role name names several observed roles, or when the snapshot names
 no held roles and the channel has an entry for a role other than everyone or
-the bot role.
+the bot role. An invite whose channel neither exists nor is created by an accepted
+earlier step is refused as `channel-not-created`, also for an administrator; a
+caller without `CREATE_INSTANT_INVITE` gets `lacks-right` first.
 
 The plan never holds a change to the caller's own role. Its rights, its name
 and its place are the operator's to change by hand.
@@ -312,6 +314,7 @@ A refused change carries the first reason that holds, in this order.
 | `above-caller` | The role stands above the caller's role, or the new order would move or pass a role that does; Discord lets a bot edit and sort only roles below its own |
 | `too-few-positions` | The order step would need more positions below the caller's role than the server has; the detail names the roles to place by hand |
 | `lacks-right` | The caller does not hold a right the change needs at its step; the detail names an earlier step that takes the right away |
+| `channel-not-created` | The invite's channel is neither on the server nor created by an accepted earlier step; the detail names the channel |
 <!-- markdownlint-enable MD013 -->
 
 A bit without a name is handled in two ways, by where it sits.

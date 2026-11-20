@@ -55,6 +55,8 @@ const (
 	ReasonMadeByHand = "made-by-hand"
 	// ReasonLacksRight indicates the caller lacks permissions required for the change.
 	ReasonLacksRight = "lacks-right"
+	// ReasonChannelNotCreated indicates the invite's channel is neither on the server nor created by an accepted earlier step.
+	ReasonChannelNotCreated = "channel-not-created"
 	// ReasonUnknownBits indicates an entry has bits set that the permission
 	// table does not name (entries only; a role-permission change clears such
 	// bits and names them).
