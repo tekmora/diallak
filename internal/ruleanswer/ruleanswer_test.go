@@ -173,6 +173,35 @@ func TestResolve_Negative_MissingHeadingDisablesTrigger(t *testing.T) {
 	}
 }
 
+func TestResolve_Positive_RemovesSponsorshipParagraph(t *testing.T) {
+	trigger := fixtureTrigger()
+	chunks := []corpus.Chunk{{Repository: trigger.Repository, Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Text: "Ask for help in Discussions.\n\n[Sponsor us](https://github.com/sponsors/example)"}}
+	resolved, issues, err := Resolve(fixtureTable(trigger), chunks, "")
+	if err != nil || len(issues) != 0 || resolved.Answers[trigger.ID].Text != "Ask for help in Discussions." {
+		t.Fatalf("Resolve = (%v, %v, %v)", resolved, issues, err)
+	}
+}
+
+func TestResolve_Negative_SponsorshipOnlyDisablesTrigger(t *testing.T) {
+	for _, url := range []string{"https://github.com/sponsors/example", "https://ko-fi.com/example", "https://opencollective.com/example", "https://liberapay.com/example", "https://patreon.com/example", "https://buymeacoffee.com/example"} {
+		trigger := fixtureTrigger()
+		chunks := []corpus.Chunk{{Repository: trigger.Repository, Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Text: "[Sponsor](" + url + ")"}}
+		resolved, issues, err := Resolve(fixtureTable(trigger), chunks, "")
+		if err != nil || len(issues) != 1 || issues[0] != (Issue{trigger.ID, "sponsorship_only"}) || resolved.DisabledCount != 1 || len(resolved.Answers) != 0 {
+			t.Errorf("Resolve(%s) = (%v, %v, %v)", url, resolved, issues, err)
+		}
+	}
+}
+
+func TestResolve_Boundary_SponsorshipListItem(t *testing.T) {
+	trigger := fixtureTrigger()
+	chunks := []corpus.Chunk{{Repository: trigger.Repository, Path: trigger.Answer.Path, Heading: trigger.Answer.Heading, Text: "- Ask for help in Discussions.\n- [Sponsor](https://ko-fi.com/example)"}}
+	resolved, issues, err := Resolve(fixtureTable(trigger), chunks, "")
+	if err != nil || len(issues) != 0 || resolved.Answers[trigger.ID].Text != "- Ask for help in Discussions." {
+		t.Fatalf("Resolve = (%v, %v, %v)", resolved, issues, err)
+	}
+}
+
 func TestResolve_Negative_MissingLinkIsDropped(t *testing.T) {
 	trigger := fixtureTrigger()
 	trigger.Links = []string{"docs/guide.md"}

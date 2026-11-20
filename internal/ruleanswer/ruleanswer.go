@@ -24,6 +24,8 @@ const MaxTriggers = 128
 const MaxFindings = MaxTriggers * 8
 
 var idPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+var sponsorshipLink = regexp.MustCompile(`(?i)https?://(?:www\.)?(?:github\.com/sponsors/|ko-fi\.com/|opencollective\.com/|liberapay\.com/|patreon\.com/|buymeacoffee\.com/)`)
+var listItem = regexp.MustCompile(`^(?:[-+*] |[0-9]+[.)] )`)
 
 // Table contains the versioned trigger collection.
 type Table struct {
@@ -125,14 +127,14 @@ func (t *Table) Match(q Query) (Trigger, bool) {
 	}
 	tokens := retrieval.Tokenize(q.Text)
 	for _, trigger := range t.Triggers {
-		if trigger.entryPoints(q) && trigger.matches(tokens) {
+		if trigger.entryPoints(q) && trigger.matches(tokens, q.Text) {
 			return trigger, true
 		}
 	}
 	return Trigger{}, false
 }
 
-func (t Trigger) matches(question []string) bool {
+func (t Trigger) matches(question []string, text string) bool {
 	for _, entry := range t.Keywords.All {
 		if !containsPhrase(question, retrieval.Tokenize(entry)) {
 			return false
@@ -141,6 +143,9 @@ func (t Trigger) matches(question []string) bool {
 	if len(t.Keywords.Any) > 0 {
 		found := false
 		for _, entry := range t.Keywords.Any {
+			if strings.HasPrefix(strings.ToLower(entry), "where is ") && !strings.Contains(strings.ToLower(text), strings.ToLower(entry)) {
+				continue
+			}
 			found = found || containsPhrase(question, retrieval.Tokenize(entry))
 		}
 		if !found {
@@ -294,7 +299,7 @@ func (v *validator) checkExamples(p string, t *Trigger) {
 	}
 	for i, text := range t.MustNotMatch {
 		for _, q := range triggerQueries(*t, text) {
-			if t.entryPoints(q) && t.matches(retrieval.Tokenize(q.Text)) {
+			if t.entryPoints(q) && t.matches(retrieval.Tokenize(q.Text), q.Text) {
 				v.add("must_not_match", fmt.Sprintf("%s.must_not_match[%d]", p, i), "example matches this trigger")
 				break
 			}
@@ -331,7 +336,7 @@ func (v *validator) replayMatch(p string, target *Trigger, i int, text string) {
 		matches := 0
 		for j := range v.table.Triggers {
 			candidate := &v.table.Triggers[j]
-			if candidate.entryPoints(q) && candidate.matches(retrieval.Tokenize(q.Text)) {
+			if candidate.entryPoints(q) && candidate.matches(retrieval.Tokenize(q.Text), q.Text) {
 				matches++
 				if candidate.ID != target.ID {
 					v.add("ambiguous_match", fmt.Sprintf("%s.must_match[%d]", p, i), "example also matches trigger "+candidate.ID)
@@ -366,7 +371,7 @@ func (r *Resolved) Match(q Query) (ResolvedAnswer, bool) {
 	}
 	tokens := retrieval.Tokenize(q.Text)
 	for _, trigger := range r.Table.Triggers {
-		if trigger.entryPoints(q) && trigger.matches(tokens) {
+		if trigger.entryPoints(q) && trigger.matches(tokens, q.Text) {
 			answer, ok := r.Answers[trigger.ID]
 			if ok {
 				return answer, true
@@ -401,6 +406,14 @@ func Resolve(t *Table, chunks []corpus.Chunk, linkTemplate string) (*Resolved, [
 			r.DisabledCount++
 			continue
 		}
+		if strings.TrimSpace(answer.Text) != "" {
+			answer.Text = filterSponsorship(answer.Text)
+			if answer.Text == "" {
+				issues = append(issues, Issue{trigger.ID, "sponsorship_only"})
+				r.DisabledCount++
+				continue
+			}
+		}
 		var missing []Issue
 		var linkSources []corpus.Chunk
 		answer.Links, linkSources, missing = resolveLinks(trigger, chunks, linkTemplate)
@@ -409,6 +422,29 @@ func Resolve(t *Table, chunks []corpus.Chunk, linkTemplate string) (*Resolved, [
 		r.Answers[trigger.ID] = answer
 	}
 	return r, issues, nil
+}
+
+func filterSponsorship(text string) string {
+	var blocks, lines []string
+	flush := func() {
+		block := strings.TrimSpace(strings.Join(lines, "\n"))
+		if block != "" && !sponsorshipLink.MatchString(block) {
+			blocks = append(blocks, block)
+		}
+		lines = nil
+	}
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) == "" {
+			flush()
+			continue
+		}
+		if listItem.MatchString(line) {
+			flush()
+		}
+		lines = append(lines, line)
+	}
+	flush()
+	return strings.Join(blocks, "\n\n")
 }
 
 func resolveAnswer(trigger Trigger, chunks []corpus.Chunk) (ResolvedAnswer, bool) {

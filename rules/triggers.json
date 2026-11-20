@@ -270,55 +270,6 @@
       ]
     },
     {
-      "id": "epitrop-support",
-      "repository": "tekmora/epitrop",
-      "keywords": {
-        "all": [],
-        "any": [
-          "Epitrop support",
-          "support Epitrop"
-        ],
-        "none": [
-          "test",
-          "tests",
-          "crash",
-          "crashes",
-          "error",
-          "fails",
-          "failing",
-          "broken",
-          "contribute",
-          "contributing",
-          "update",
-          "upgrade",
-          "bug"
-        ]
-      },
-      "commands": [
-        "ask"
-      ],
-      "aliases": [
-        "Epitrop"
-      ],
-      "forum_tags": [
-        "Epitrop"
-      ],
-      "answer": {
-        "path": "README.md",
-        "heading": "Support"
-      },
-      "links": [
-        "docs/index.md"
-      ],
-      "must_match": [
-        "Where is Epitrop support?"
-      ],
-      "must_not_match": [
-        "Why does Epitrop support show an error?",
-        "Why do Epitrop support tests fail?"
-      ]
-    },
-    {
       "id": "epitrop-contribute",
       "repository": "tekmora/epitrop",
       "keywords": {
@@ -364,61 +315,6 @@
       "must_not_match": [
         "Why do tests fail when I contribute to Epitrop?",
         "Why is the Epitrop contribution guide broken?"
-      ]
-    },
-    {
-      "id": "amussis-start",
-      "repository": "plurano/amussis",
-      "keywords": {
-        "all": [],
-        "any": [
-          "start Amussis",
-          "install Amussis",
-          "run Amussis",
-          "Amussis installation",
-          "Amussis setup",
-          "set up Amussis",
-          "Amussis set up"
-        ],
-        "none": [
-          "test",
-          "tests",
-          "crash",
-          "crashes",
-          "error",
-          "fails",
-          "failing",
-          "broken",
-          "contribute",
-          "contributing",
-          "update",
-          "upgrade",
-          "bug"
-        ]
-      },
-      "commands": [
-        "ask"
-      ],
-      "aliases": [
-        "Amussis"
-      ],
-      "forum_tags": [
-        "Amussis"
-      ],
-      "answer": {
-        "path": "README.md",
-        "heading": "Get started"
-      },
-      "links": [
-        "docs/index.md"
-      ],
-      "must_match": [
-        "How do I start Amussis?",
-        "How do I set up Amussis?"
-      ],
-      "must_not_match": [
-        "Why does Amussis crash when I run Amussis?",
-        "Why does install Amussis fail with an error?"
       ]
     },
     {
@@ -478,8 +374,12 @@
       "keywords": {
         "all": [],
         "any": [
-          "Amussis support",
-          "support Amussis"
+          "get help",
+          "help with",
+          "get support",
+          "ask for help",
+          "support channel",
+          "Where is Amussis support"
         ],
         "none": [
           "test",
@@ -517,8 +417,8 @@
         "Where is Amussis support?"
       ],
       "must_not_match": [
-        "Why does Amussis support show an error?",
-        "Why do Amussis support tests fail?"
+        "Why does getting help with Amussis show an error?",
+        "Why do Amussis support channel tests fail?"
       ]
     },
     {
@@ -1046,8 +946,12 @@
       "keywords": {
         "all": [],
         "any": [
-          "VMAFx support",
-          "support VMAFx"
+          "get help",
+          "help with",
+          "get support",
+          "ask for help",
+          "support channel",
+          "Where is VMAFx support"
         ],
         "none": [
           "test",
@@ -1075,8 +979,8 @@
         "VMAFx"
       ],
       "answer": {
-        "path": "README.md",
-        "heading": "💖 Support VMAFx"
+        "path": "SUPPORT.md",
+        "heading": "Is it about this fork specifically?"
       },
       "links": [
         "docs/index.md"
@@ -1085,8 +989,8 @@
         "Where is VMAFx support?"
       ],
       "must_not_match": [
-        "Why does VMAFx support show an error?",
-        "Why do VMAFx support tests fail?"
+        "Why does getting help with VMAFx show an error?",
+        "Why do VMAFx support channel tests fail?"
       ]
     },
     {
@@ -1244,55 +1148,6 @@
       ]
     },
     {
-      "id": "pelorus-support",
-      "repository": "VMAFx/pelorus",
-      "keywords": {
-        "all": [],
-        "any": [
-          "Pelorus support",
-          "support Pelorus"
-        ],
-        "none": [
-          "test",
-          "tests",
-          "crash",
-          "crashes",
-          "error",
-          "fails",
-          "failing",
-          "broken",
-          "contribute",
-          "contributing",
-          "update",
-          "upgrade",
-          "bug"
-        ]
-      },
-      "commands": [
-        "ask"
-      ],
-      "aliases": [
-        "Pelorus"
-      ],
-      "forum_tags": [
-        "Pelorus"
-      ],
-      "answer": {
-        "path": "README.md",
-        "heading": "Support"
-      },
-      "links": [
-        "README.md"
-      ],
-      "must_match": [
-        "Where is Pelorus support?"
-      ],
-      "must_not_match": [
-        "Why does Pelorus support show an error?",
-        "Why do Pelorus support tests fail?"
-      ]
-    },
-    {
       "id": "snatcharr-start",
       "repository": "lusoris/SnatchArr",
       "keywords": {
@@ -1404,8 +1259,12 @@
       "keywords": {
         "all": [],
         "any": [
-          "SnatchArr support",
-          "support SnatchArr"
+          "get help",
+          "help with",
+          "get support",
+          "ask for help",
+          "support channel",
+          "Where is SnatchArr support"
         ],
         "none": [
           "test",
@@ -1443,8 +1302,8 @@
         "Where is SnatchArr support?"
       ],
       "must_not_match": [
-        "Why does SnatchArr support show an error?",
-        "Why do SnatchArr support tests fail?"
+        "Why does getting help with SnatchArr show an error?",
+        "Why do SnatchArr support channel tests fail?"
       ]
     },
     {
@@ -1602,55 +1461,6 @@
       ]
     },
     {
-      "id": "rhizomorph-support",
-      "repository": "lusoris/rhizomorph",
-      "keywords": {
-        "all": [],
-        "any": [
-          "Rhizomorph support",
-          "support Rhizomorph"
-        ],
-        "none": [
-          "test",
-          "tests",
-          "crash",
-          "crashes",
-          "error",
-          "fails",
-          "failing",
-          "broken",
-          "contribute",
-          "contributing",
-          "update",
-          "upgrade",
-          "bug"
-        ]
-      },
-      "commands": [
-        "ask"
-      ],
-      "aliases": [
-        "Rhizomorph"
-      ],
-      "forum_tags": [
-        "Rhizomorph"
-      ],
-      "answer": {
-        "path": "README.md",
-        "heading": "Support"
-      },
-      "links": [
-        "docs/index.md"
-      ],
-      "must_match": [
-        "Where is Rhizomorph support?"
-      ],
-      "must_not_match": [
-        "Why does Rhizomorph support show an error?",
-        "Why do Rhizomorph support tests fail?"
-      ]
-    },
-    {
       "id": "rhizomorph-contribute",
       "repository": "lusoris/rhizomorph",
       "keywords": {
@@ -1802,55 +1612,6 @@
       "must_not_match": [
         "Why does the Embodied licence check show an error?",
         "Why do the Embodied licence tests fail?"
-      ]
-    },
-    {
-      "id": "embodied-support",
-      "repository": "lusoris/embodied",
-      "keywords": {
-        "all": [],
-        "any": [
-          "Embodied support",
-          "support Embodied"
-        ],
-        "none": [
-          "test",
-          "tests",
-          "crash",
-          "crashes",
-          "error",
-          "fails",
-          "failing",
-          "broken",
-          "contribute",
-          "contributing",
-          "update",
-          "upgrade",
-          "bug"
-        ]
-      },
-      "commands": [
-        "ask"
-      ],
-      "aliases": [
-        "Embodied"
-      ],
-      "forum_tags": [
-        "Embodied"
-      ],
-      "answer": {
-        "path": "README.md",
-        "heading": "Support"
-      },
-      "links": [
-        "docs/index.md"
-      ],
-      "must_match": [
-        "Where is Embodied support?"
-      ],
-      "must_not_match": [
-        "Why does Embodied support show an error?",
-        "Why do Embodied support tests fail?"
       ]
     },
     {
