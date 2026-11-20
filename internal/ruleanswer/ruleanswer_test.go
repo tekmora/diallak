@@ -617,7 +617,7 @@ func TestFilterSponsorship_Negative_IndentedCodeUnchanged(t *testing.T) {
 	}
 }
 
-func TestFilterSponsorship_IndentedCodeListLikeLines(t *testing.T) {
+func TestFilterSponsorship_Negative_IndentedCodeListLikeLines(t *testing.T) {
 	text := "Keep this paragraph.\n\n    keep\n    - example\n    https://ko-fi.com/example\n\n    safe code\n    - safe list-like code\n    more safe code"
 	want := "Keep this paragraph.\n\n    safe code\n    - safe list-like code\n    more safe code"
 	if got := filterSponsorship(text); got != want {

@@ -49,7 +49,9 @@ unknown entry points, path resolution, and rendering length limits.
 Support triggers use help-seeking phrases only. A sponsorship sentence is removed
 from its paragraph, sponsorship list items and their nested content are removed,
 and letter-dot abbreviations such as e.g. do not end a sentence. An indented
-code block keeps its list-like lines, so a sponsorship link removes the whole block.
+code block that starts with a non-list line keeps its list-like lines, so a
+sponsorship link removes the whole block. A block starting with a list item is
+split at its list items.
 A section containing only sponsorship disables its trigger and is logged as
 `sponsorship_only`.
 
