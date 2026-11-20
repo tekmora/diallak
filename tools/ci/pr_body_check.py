@@ -13,7 +13,6 @@ from pathlib import Path
 MAX_INPUT_BYTES = 262144
 MIN_DESCRIPTION_WORDS = 3
 DEFAULT_TEMPLATE = Path('.github/pull_request_template.md')
-CHECKLIST_HEADING = 'Pre-Merge Verification Checklist'
 COMMENTS = re.compile(r'<!--.*?-->', re.DOTALL)
 TASK_LINE = re.compile(r'^ *- \[[ xX]\]', re.MULTILINE)
 
@@ -37,7 +36,8 @@ def sections(text):
 
 
 def findings(body, template):
-    headings = [name for name, _ in sections(template)]
+    template_sections = sections(template)
+    headings = [name for name, _ in template_sections]
     if not headings:
         raise ValueError('template has no level-two headings')
     body_sections = sections(body)
@@ -51,27 +51,40 @@ def findings(body, template):
     if headings[0] in content:
         description = COMMENTS.sub(' ', content[headings[0]])
         if len(description.split()) < MIN_DESCRIPTION_WORDS:
-            found.append(('description-empty', 'description needs at least 3 words'))
-    if CHECKLIST_HEADING in content and not TASK_LINE.search(content[CHECKLIST_HEADING]):
-        found.append(('checklist-empty', 'verification checklist needs a task-list item'))
+            found.append(('description-empty', f'description needs at least {MIN_DESCRIPTION_WORDS} words'))
+    for name, lines in template_sections:
+        template_content = COMMENTS.sub(' ', '\n'.join(lines))
+        body_content = COMMENTS.sub(' ', content.get(name, ''))
+        if TASK_LINE.search(template_content) and name in content and not TASK_LINE.search(body_content):
+            found.append(('checklist-empty', f'checklist needs a task-list item: {name}'))
     return found
 
 
 def cases(template):
-    description = '## Description\n'
-    checklist = f'## {CHECKLIST_HEADING}\n- [ ] Check\n'
+    template_sections = sections(template)
+    description = f'## {template_sections[0][0]}\n'
+    checklist_names = [name for name, lines in template_sections
+                       if TASK_LINE.search(COMMENTS.sub(' ', '\n'.join(lines)))]
+    checklist = ''.join(f'## {name}\n' + ('- [ ] Check\n' if name in checklist_names else '')
+                        for name, _ in template_sections[1:])
+    empty_checklist = checklist.replace('- [ ] Check\n', '', 1)
     table = '| Package | From | To |\n| --- | --- | --- |\n| example | 1 | 2 |\n'
+    renovate = ('This PR contains the following updates:\n' + table +
+                '### Release Notes\n<details>Notes</details>\n')
+    filled = description + 'This explains the change. It provides context.\n' + checklist
+    missing = ['section-missing'] * len(template_sections)
     return [
-        ('renovate-style', 'This PR contains the following updates:\n' + table +
-         '### Release Notes\n<details>Notes</details>\n', ['section-missing', 'section-missing']),
+        ('renovate-style', renovate, missing),
         ('committed template', template, ['description-empty']),
-        ('filled template', description + 'This explains the change. It provides context.\n' + checklist, []),
+        ('filled template', filled, []),
         ('update table', description + table + checklist, []),
-        ('empty checklist', description + 'Three useful words\n' + f'## {CHECKLIST_HEADING}\n', ['checklist-empty']),
+        ('empty checklist', description + 'Three useful words\n' + empty_checklist, ['checklist-empty']),
         ('reverse order', checklist + description + 'Three useful words\n', ['section-order']),
         ('two words', description + 'Two words\n' + checklist, ['description-empty']),
         ('three words', description + 'Exactly three words\n' + checklist, []),
-        ('empty body', '', ['section-missing', 'section-missing']),
+        ('empty body', '', missing),
+        ('filled template CRLF', filled.replace('\n', '\r\n'), []),
+        ('renovate-style CRLF', renovate.replace('\n', '\r\n'), missing),
     ]
 
 
@@ -83,9 +96,19 @@ def self_test(template):
         if sorted(actual) != sorted(expected):
             print(f'PR body self-test: {name} failed: expected {expected}, got {actual}')
             failures += 1
+    two_checklists = ('## Description\nTemplate description\n'
+                      '## First checks\n- [ ] First\n'
+                      '## Second checks\n- [ ] Second\n')
+    body = ('## Description\nThree useful words\n'
+            '## First checks\n- [ ] Done\n## Second checks\n')
+    expected = [('checklist-empty', 'checklist needs a task-list item: Second checks')]
+    actual = findings(body, two_checklists)
+    if actual != expected:
+        print(f'PR body self-test: two checklists failed: expected {expected}, got {actual}')
+        failures += 1
     if failures:
         return 1
-    print(f'PR body self-test: {len(planted)} cases behaved as required')
+    print(f'PR body self-test: {len(planted) + 1} cases behaved as required')
     return 0
 
 
