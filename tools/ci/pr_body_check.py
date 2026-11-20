@@ -14,7 +14,7 @@ MAX_INPUT_BYTES = 262144
 MIN_DESCRIPTION_WORDS = 3
 DEFAULT_TEMPLATE = Path('.github/pull_request_template.md')
 COMMENTS = re.compile(r'<!--.*?-->', re.DOTALL)
-TASK_LINE = re.compile(r'^ *- \[[ xX]\]', re.MULTILINE)
+TASK_LINE = re.compile(r'^ *[-*+] \[[ xX]\][ \t]+\S', re.MULTILINE)
 
 
 def read_input(path):
@@ -36,6 +36,8 @@ def sections(text):
 
 
 def findings(body, template):
+    body = COMMENTS.sub(' ', body)
+    template = COMMENTS.sub(' ', template)
     template_sections = sections(template)
     headings = [name for name, _ in template_sections]
     if not headings:
@@ -49,22 +51,22 @@ def findings(body, template):
         found.append(('section-order', 'template headings are out of order'))
     content = {name: '\n'.join(lines) for name, lines in reversed(body_sections)}
     if headings[0] in content:
-        description = COMMENTS.sub(' ', content[headings[0]])
+        description = content[headings[0]]
         if len(description.split()) < MIN_DESCRIPTION_WORDS:
             found.append(('description-empty', f'description needs at least {MIN_DESCRIPTION_WORDS} words'))
     for name, lines in template_sections:
-        template_content = COMMENTS.sub(' ', '\n'.join(lines))
-        body_content = COMMENTS.sub(' ', content.get(name, ''))
+        template_content = '\n'.join(lines)
+        body_content = content.get(name, '')
         if TASK_LINE.search(template_content) and name in content and not TASK_LINE.search(body_content):
             found.append(('checklist-empty', f'checklist needs a task-list item: {name}'))
     return found
 
 
 def cases(template):
-    template_sections = sections(template)
+    template_sections = sections(COMMENTS.sub(' ', template))
     description = f'## {template_sections[0][0]}\n'
     checklist_names = [name for name, lines in template_sections
-                       if TASK_LINE.search(COMMENTS.sub(' ', '\n'.join(lines)))]
+                       if TASK_LINE.search('\n'.join(lines))]
     checklist = ''.join(f'## {name}\n' + ('- [ ] Check\n' if name in checklist_names else '')
                         for name, _ in template_sections[1:])
     empty_checklist = checklist.replace('- [ ] Check\n', '', 1)
@@ -77,6 +79,11 @@ def cases(template):
         ('renovate-style', renovate, missing),
         ('committed template', template, ['description-empty']),
         ('filled template', filled, []),
+        ('star task', description + 'Three useful words\n' + checklist.replace('- [ ] Check', '* [ ] Check'), []),
+        ('plus task', description + 'Three useful words\n' + checklist.replace('- [ ] Check', '+ [ ] Check'), []),
+        ('no space after box', description + 'Three useful words\n' + checklist.replace('- [ ] Check', '- [ ]not a task'), ['checklist-empty']),
+        ('bare box', description + 'Three useful words\n' + checklist.replace('- [ ] Check', '- [ ]'), ['checklist-empty']),
+        ('commented heading', description + '<!--\n## Internal notes\n-->\nThree useful words\n' + checklist, []),
         ('update table', description + table + checklist, []),
         ('empty checklist', description + 'Three useful words\n' + empty_checklist, ['checklist-empty']),
         ('reverse order', checklist + description + 'Three useful words\n', ['section-order']),
