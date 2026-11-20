@@ -182,7 +182,7 @@ func (h *ForumHandler) answerPost(ctx context.Context, post ForumPost, title str
 	if post.TagNames == nil {
 		reason = "tags_unresolved"
 	}
-	if !matched {
+	if !matched || !answer.RuleFits(ans, answer.RenderOptions{TicketsChannel: h.ticketsChannel}, true) {
 		ans, err = h.asker.Excerpts(ctx, question)
 		if err != nil {
 			h.logFailure("forum answer failed", err, start)

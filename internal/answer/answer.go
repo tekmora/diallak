@@ -155,9 +155,10 @@ const (
 	// UserPromptMaxChunkRunes bounds chunk text embedded in the model prompt.
 	UserPromptMaxChunkRunes = 1500
 	// LabelAnswer is the mandatory disclosure label for AI-generated answers.
-	LabelAnswer = "AI-generated answer. It can be wrong: check the sources below."
+	LabelAnswer         = "AI-generated answer. It can be wrong: check the sources below."
+	noAIModelDisclosure = "No AI model wrote this reply."
 	// LabelExcerpts is the disclosure label for automated documentation excerpts.
-	LabelExcerpts = "Automated excerpts from the documentation. No AI model wrote this reply."
+	LabelExcerpts = "Automated excerpts from the documentation. " + noAIModelDisclosure
 	// LabelModelUnavailable is the secondary note when model generation fails.
 	LabelModelUnavailable = "The AI model is unavailable right now, so these are excerpts only."
 	// LabelKeywordOnly is the disclosure label when retrieval ran without an embedding endpoint.
@@ -624,7 +625,7 @@ func Render(a Answer, opts RenderOptions) string {
 	case KindRule:
 		body = renderRule(a, TicketsSentence(opts.TicketsChannel), Footer(place), maxRunes)
 		if body == "" {
-			body = renderExcerptReply(a, Footer(place), opts.TicketsChannel, maxRunes)
+			body = RefusalTo(place, opts.TicketsChannel)
 		}
 	case KindAnswer:
 		body = renderAnswer(a, place, maxRunes)
@@ -633,7 +634,7 @@ func Render(a Answer, opts RenderOptions) string {
 	case KindRefusal:
 		body = RefusalTo(place, opts.TicketsChannel)
 		if a.Reason == ReasonNoSource {
-			body += "\n\nNo AI model wrote this reply."
+			body += "\n\n" + noAIModelDisclosure
 		}
 	default:
 		body = RefusalTo(place, opts.TicketsChannel)
@@ -642,7 +643,21 @@ func Render(a Answer, opts RenderOptions) string {
 }
 
 // LabelRule identifies a fixed documentation answer.
-const LabelRule = "Automated answer from the project documentation. No AI model wrote this reply."
+const LabelRule = "Automated answer from the project documentation. " + noAIModelDisclosure
+
+// RuleFits reports whether a rule can be rendered with at least one complete citation.
+// Forum selects the forum footer; zero MaxRunes uses DefaultMaxRenderRunes.
+func RuleFits(a Answer, opts RenderOptions, forum bool) bool {
+	maxRunes := opts.MaxRunes
+	if maxRunes <= 0 {
+		maxRunes = DefaultMaxRenderRunes
+	}
+	footer := Footer(opts.Place)
+	if forum {
+		footer = FooterForum
+	}
+	return renderRule(a, TicketsSentence(opts.TicketsChannel), footer, maxRunes) != ""
+}
 
 func renderRule(a Answer, tickets, footer string, maxRunes int) string {
 	bodyMax := maxRunes - utf8.RuneCountInString(footer) - 2
@@ -827,7 +842,7 @@ func RenderForum(a Answer, maxRunes int, ticketsChannels ...string) string {
 	case KindRule:
 		body := renderRule(a, TicketsSentence(tickets), FooterForum, maxRunes)
 		if body == "" {
-			body = renderExcerptReply(a, FooterForum, tickets, maxRunes)
+			return ""
 		}
 		return body + "\n\n" + FooterForum
 	default:

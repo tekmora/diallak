@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/tekmora/diallak/internal/answer"
 	"github.com/tekmora/diallak/internal/config"
@@ -89,9 +90,11 @@ func (f *fakeInteraction) Replies() []string {
 }
 
 type fakeAsker struct {
-	askFunc func(ctx context.Context, question string) (answer.Answer, error)
-	mu      sync.Mutex
-	calls   int
+	rule        answer.Answer
+	ruleMatched bool
+	askFunc     func(ctx context.Context, question string) (answer.Answer, error)
+	mu          sync.Mutex
+	calls       int
 }
 
 func (f *fakeAsker) Ask(ctx context.Context, question string) (answer.Answer, error) {
@@ -109,7 +112,7 @@ func (f *fakeAsker) Ask(ctx context.Context, question string) (answer.Answer, er
 	}, nil
 }
 
-func (f *fakeAsker) Rule(ruleanswer.Query) (answer.Answer, bool) { return answer.Answer{}, false }
+func (f *fakeAsker) Rule(ruleanswer.Query) (answer.Answer, bool) { return f.rule, f.ruleMatched }
 
 func (f *fakeAsker) Calls() int {
 	f.mu.Lock()
@@ -849,4 +852,35 @@ func TestHandler_Positive_AskTimeout(t *testing.T) {
 		question: "will timeout",
 	}
 	h.HandleAsk(context.Background(), in)
+}
+
+func TestHandleAsk_Negative_UnfitRuleUsesAsk(t *testing.T) {
+	asker := &fakeAsker{ruleMatched: true, rule: answer.Answer{Kind: answer.KindRule, Text: "rule", Sources: []answer.Source{{N: 1, Title: "T", URL: "https://example.test/" + strings.Repeat("x", 400)}}}}
+	h, err := NewHandler(HandlerConfig{Asker: asker, GuildID: 42, RenderOptions: answer.RenderOptions{MaxRunes: 500}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := &fakeInteraction{guildID: 42, question: "question"}
+	h.executeAskAndReply(context.Background(), in, "question")
+	if asker.Calls() != 1 || len(in.Replies()) != 1 || !strings.Contains(in.Replies()[0], "Answer to: question") {
+		t.Fatalf("calls %d replies %v", asker.Calls(), in.Replies())
+	}
+}
+
+func TestHandleAsk_Boundary_FittingRuleBypassesAsk(t *testing.T) {
+	for _, extra := range []int{0, 1} {
+		a := answer.Answer{Kind: answer.KindRule, Sources: []answer.Source{{N: 1, Title: "T", URL: "https://example.test/"}}}
+		length := utf8.RuneCountInString(answer.Render(a, answer.RenderOptions{MaxRunes: 500}))
+		a.Sources[0].URL += strings.Repeat("x", 500-length-extra)
+		asker := &fakeAsker{ruleMatched: true, rule: a}
+		h, err := NewHandler(HandlerConfig{Asker: asker, GuildID: 42, RenderOptions: answer.RenderOptions{MaxRunes: 500}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		in := &fakeInteraction{guildID: 42}
+		h.executeAskAndReply(context.Background(), in, "question")
+		if asker.Calls() != 0 || len(in.Replies()) != 1 || !strings.Contains(in.Replies()[0], answer.LabelRule) {
+			t.Fatalf("extra %d calls %d replies %v", extra, asker.Calls(), in.Replies())
+		}
+	}
 }

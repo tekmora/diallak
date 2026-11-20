@@ -1505,3 +1505,30 @@ func TestRender_Positive_ExcerptTickets(t *testing.T) {
 		}
 	}
 }
+
+func TestRuleFits_Boundary_CitationLimit(t *testing.T) {
+	a := Answer{Kind: KindRule, Text: "", Sources: []Source{{N: 1, Title: "T", URL: "https://example.test/"}}}
+	for _, forum := range []bool{false, true} {
+		footer := Footer("")
+		if forum {
+			footer = FooterForum
+		}
+		limit := utf8.RuneCountInString(LabelRule + "\n\n" + sourcesBlock([]string{formatSourceLine(a.Sources[0])}) + "\n\n" + TicketsSentence("") + "\n\n" + footer)
+		if !RuleFits(a, RenderOptions{MaxRunes: limit}, forum) {
+			t.Errorf("forum %t: citation should fit exactly", forum)
+		}
+		if RuleFits(a, RenderOptions{MaxRunes: limit - 1}, forum) {
+			t.Errorf("forum %t: citation one rune too long", forum)
+		}
+	}
+}
+
+func TestRender_Negative_UnfitRuleUsesRefusal(t *testing.T) {
+	a := Answer{Kind: KindRule, Text: "rule", Sources: []Source{{N: 1, URL: strings.Repeat("x", 400)}}}
+	if got := Render(a, RenderOptions{MaxRunes: 500}); got != AppendFooter(RefusalTo("", ""), "") {
+		t.Errorf("Render = %q", got)
+	}
+	if got := RenderForum(a, 500); got != "" {
+		t.Errorf("RenderForum = %q", got)
+	}
+}

@@ -59,8 +59,16 @@ func forumTagNames(e *events.ThreadCreate, parentID uint64, ids []uint64) []stri
 }
 
 func forumTagNamesFrom(channel discord.GuildChannel, ids []uint64) []string {
-	forum, ok := channel.(*discord.GuildForumChannel)
-	if !ok {
+	var forum discord.GuildForumChannel
+	switch value := channel.(type) {
+	case discord.GuildForumChannel:
+		forum = value
+	case *discord.GuildForumChannel:
+		if value == nil {
+			return nil
+		}
+		forum = *value
+	default:
 		return nil
 	}
 	names := make([]string, len(ids))

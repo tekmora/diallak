@@ -285,7 +285,7 @@ func (h *Handler) executeAskAndReply(ctx context.Context, in Interaction, q stri
 	start := time.Now()
 	ans, matched := h.asker.Rule(ruleanswer.Query{Text: q, Command: "ask"})
 	var err error
-	if !matched {
+	if !matched || !answer.RuleFits(ans, h.renderOptions, false) {
 		askCtx, cancel := context.WithTimeout(ctx, h.askTimeout)
 		ans, err = h.asker.Ask(askCtx, q)
 		cancel()

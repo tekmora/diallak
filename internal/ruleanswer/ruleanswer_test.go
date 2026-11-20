@@ -378,3 +378,46 @@ func TestResolve_Positive_IndentedCodePreserved(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestValidate_Positive_MultiProductForumReplay(t *testing.T) {
+	a := fixtureTrigger()
+	a.ID, a.Repository, a.ForumTags = "amussis-support", "tekmora/amussis", []string{"Amussis"}
+	a.Commands, a.Aliases = nil, nil
+	a.Keywords = Keywords{All: []string{"get help"}, Any: []string{"please"}}
+	a.MustMatch, a.MustNotMatch = []string{"please get help"}, []string{"get help"}
+	b := a
+	b.ID, b.Repository, b.ForumTags = "vmafx-support", "tekmora/vmafx", []string{"VMAFx"}
+	table := fixtureTable(a, b)
+	if findings := Validate(table, Known{ForumTags: []string{"Amussis", "VMAFx"}}); len(findings) != 0 {
+		t.Fatalf("findings = %+v", findings)
+	}
+	resolved := &Resolved{Table: table, Answers: map[string]ResolvedAnswer{a.ID: {Trigger: a}, b.ID: {Trigger: b}}}
+	q := Query{Text: "please get help", Forum: true, Tags: []string{"Amussis", "VMAFx"}}
+	if _, ok := table.Match(q); ok {
+		t.Error("multi-tag table match")
+	}
+	if _, ok := resolved.Match(q); ok {
+		t.Error("multi-tag resolved match")
+	}
+	for _, trigger := range []Trigger{a, b} {
+		q.Tags = trigger.ForumTags
+		if got, ok := table.Match(q); !ok || got.ID != trigger.ID {
+			t.Errorf("single-tag table = %q, %t", got.ID, ok)
+		}
+		if got, ok := resolved.Match(q); !ok || got.Trigger.ID != trigger.ID {
+			t.Errorf("single-tag resolved = %q, %t", got.Trigger.ID, ok)
+		}
+	}
+}
+
+func TestReplayMultiTag_Negative_OtherProductWins(t *testing.T) {
+	a := fixtureTrigger()
+	b := fixtureTrigger()
+	b.ID, b.Repository, b.ForumTags = "other", "tekmora/other", []string{"Other"}
+	a.Keywords = Keywords{All: []string{"different"}}
+	v := validator{table: fixtureTable(a, b)}
+	v.replayMultiTag("triggers[0]", &a, 0, Query{Text: "verify release", Forum: true, Tags: []string{"Diallak"}})
+	if !hasFinding(v.findings, "ambiguous_match") {
+		t.Fatalf("findings = %+v", v.findings)
+	}
+}

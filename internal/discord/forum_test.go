@@ -23,9 +23,11 @@ const (
 
 // fakeExcerpts answers every question with one excerpt, or with what fn returns.
 type fakeExcerpts struct {
-	mu        sync.Mutex
-	questions []string
-	fn        func(ctx context.Context, q string) (answer.Answer, error)
+	rule        answer.Answer
+	ruleMatched bool
+	mu          sync.Mutex
+	questions   []string
+	fn          func(ctx context.Context, q string) (answer.Answer, error)
 }
 
 func (f *fakeExcerpts) Excerpts(ctx context.Context, q string) (answer.Answer, error) {
@@ -41,7 +43,7 @@ func (f *fakeExcerpts) Excerpts(ctx context.Context, q string) (answer.Answer, e
 	}}, nil
 }
 
-func (f *fakeExcerpts) Rule(ruleanswer.Query) (answer.Answer, bool) { return answer.Answer{}, false }
+func (f *fakeExcerpts) Rule(ruleanswer.Query) (answer.Answer, bool) { return f.rule, f.ruleMatched }
 
 func (f *fakeExcerpts) asked() []string {
 	f.mu.Lock()
@@ -328,5 +330,30 @@ func TestNewForumHandler_Negative_RequiredSettings(t *testing.T) {
 	_, err := NewForumHandler(cases["no opt-in tag"])
 	if err == nil || !strings.Contains(err.Error(), "opt-in tag") {
 		t.Errorf("no opt-in tag: error = %v, want one that names the opt-in tag", err)
+	}
+}
+
+func TestForum_Negative_UnfitRuleUsesExcerpts(t *testing.T) {
+	asker := &fakeExcerpts{ruleMatched: true, rule: answer.Answer{Kind: answer.KindRule, Text: "rule", Sources: []answer.Source{{N: 1, Title: "T", URL: "https://example.test/" + strings.Repeat("x", 2000)}}}}
+	calls := &fakeForumCalls{message: ForumMessage{Content: "question"}}
+	handleOne(t, newTestForum(t, asker, nil, 2), optedInPost(), "title", calls)
+	_, replies := calls.counts()
+	if len(asker.asked()) != 1 || len(replies) != 1 || !strings.Contains(replies[0], "Run the installer.") {
+		t.Fatalf("questions %v replies %v", asker.asked(), replies)
+	}
+}
+
+func TestForum_Boundary_FittingRuleBypassesExcerpts(t *testing.T) {
+	for _, extra := range []int{0, 1} {
+		a := answer.Answer{Kind: answer.KindRule, Sources: []answer.Source{{N: 1, Title: "T", URL: "https://example.test/"}}}
+		length := utf8.RuneCountInString(answer.RenderForum(a, 0))
+		a.Sources[0].URL += strings.Repeat("x", answer.DefaultMaxRenderRunes-length-extra)
+		asker := &fakeExcerpts{ruleMatched: true, rule: a}
+		calls := &fakeForumCalls{message: ForumMessage{Content: "question"}}
+		handleOne(t, newTestForum(t, asker, nil, 2), optedInPost(), "title", calls)
+		_, replies := calls.counts()
+		if len(asker.asked()) != 0 || len(replies) != 1 || !strings.Contains(replies[0], answer.LabelRule) {
+			t.Fatalf("extra %d questions %v replies %v", extra, asker.asked(), replies)
+		}
 	}
 }

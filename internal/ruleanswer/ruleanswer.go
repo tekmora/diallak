@@ -387,6 +387,9 @@ func triggerQueries(t Trigger, text string) []Query {
 
 func (v *validator) replayMatch(p string, target *Trigger, i int, text string) {
 	for _, q := range triggerQueries(*target, text) {
+		if q.Forum {
+			v.replayMultiTag(p, target, i, q)
+		}
 		matches := 0
 		tokens := retrieval.Tokenize(q.Text)
 		for j := range v.table.Triggers {
@@ -401,6 +404,30 @@ func (v *validator) replayMatch(p string, target *Trigger, i int, text string) {
 		if matches != 1 {
 			v.add("must_match", fmt.Sprintf("%s.must_match[%d]", p, i), "example must match exactly this trigger through each entry point")
 		}
+	}
+}
+
+// replayMultiTag checks the runtime decision for each other product tag and their union.
+func (v *validator) replayMultiTag(p string, target *Trigger, i int, q Query) {
+	tags := append([]string(nil), q.Tags...)
+	for _, other := range v.table.Triggers {
+		if other.Repository == target.Repository {
+			continue
+		}
+		for _, tag := range other.ForumTags {
+			if !slices.Contains(tags, tag) {
+				tags = append(tags, tag)
+			}
+			v.checkMultiTag(p, target, i, q, []string{q.Tags[0], tag})
+		}
+	}
+	v.checkMultiTag(p, target, i, q, tags)
+}
+
+func (v *validator) checkMultiTag(p string, target *Trigger, i int, q Query, tags []string) {
+	q.Tags = tags
+	if got, ok := v.table.match(q, retrieval.Tokenize(q.Text), nil); ok && got.ID != target.ID {
+		v.add("ambiguous_match", fmt.Sprintf("%s.must_match[%d]", p, i), "multi-tag example resolves to trigger "+got.ID)
 	}
 }
 
