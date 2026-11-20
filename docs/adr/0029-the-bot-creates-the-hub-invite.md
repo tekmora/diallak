@@ -60,7 +60,8 @@ fields used for comparison ([snapshot](../../internal/serverplan/snapshot_invite
 Compare reports `invites-not-read`, `invite-create`, `invite-missing`,
 `invite-differs` or `invite-extra`. An unrecorded entry matches a bot invite
 by channel and limits; a recorded entry matches by code and is then checked
-for differences. Unmatched bot invites are extra
+for differences. Recorded entries match first; each entry takes at most one
+invite and each invite is taken at most once. Unmatched bot invites are extra
 ([compare](../../internal/serverplan/compare_invites.go)). The plan offers
 `create-invite` only for an unrecorded entry; unread invites produce a refused
 candidate. A missing or changed recorded invite produces no step

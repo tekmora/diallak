@@ -3,10 +3,13 @@ package serverplan
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/tekmora/diallak/internal/serverdef"
 )
 
-func TestInviteSnapshot(t *testing.T) {
+func TestInviteSnapshot_Positive_RoundTrip(t *testing.T) {
 	s := validBaseSnapshot()
 	data, err := json.Marshal(s)
 	if err != nil {
@@ -34,7 +37,16 @@ func mustJSON(t *testing.T, v any) []byte {
 	return b
 }
 
-func TestInviteSnapshotCheck(t *testing.T) {
+func TestInviteSnapshotCheck_Positive_Valid(t *testing.T) {
+	s := validBaseSnapshot()
+	s.InvitesRead = true
+	s.Invites = []Invite{{Code: "abc", Channel: "general", ByBot: true}}
+	if err := Check(&s); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestInviteSnapshotCheck_Negative_Invalid(t *testing.T) {
 	good := Invite{Code: "abc", Channel: "general", ByBot: true}
 	for _, tc := range []struct {
 		name   string
@@ -42,10 +54,9 @@ func TestInviteSnapshotCheck(t *testing.T) {
 		invite Invite
 		want   bool
 	}{
-		{"valid", true, good, false},
 		{"not read", false, good, true},
 		{"empty code", true, Invite{Channel: "general"}, true},
-		{"empty channel", true, Invite{Code: "abc"}, true},
+		{"empty channel", true, Invite{Code: "abc", ByBot: true}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := validBaseSnapshot()
@@ -58,7 +69,7 @@ func TestInviteSnapshotCheck(t *testing.T) {
 	}
 }
 
-func TestInviteCompareMissing(t *testing.T) {
+func TestInviteCompare_Negative_Missing(t *testing.T) {
 	def := loadDef(t)
 	snap := snapshotOf(t, def)
 	snap.InvitesRead = true
@@ -78,7 +89,15 @@ func TestInviteCompareMissing(t *testing.T) {
 	}
 }
 
-func TestInviteComparisonCases(t *testing.T) {
+func TestInviteComparisonCases_Positive_Match(t *testing.T) {
+	def := loadDef(t)
+	diffs := compareInvites(def, &Snapshot{InvitesRead: true, Invites: []Invite{{Code: "abc", Channel: "rules", ByBot: true}}})
+	if len(diffs) != 0 {
+		t.Fatalf("unexpected differences: %+v", diffs)
+	}
+}
+
+func TestInviteComparisonCases_Negative_Differences(t *testing.T) {
 	def := loadDef(t)
 	want := def.Invites[0]
 	good := Invite{Code: "abc", Channel: "rules", ByBot: true}
@@ -90,7 +109,6 @@ func TestInviteComparisonCases(t *testing.T) {
 		wantKind string
 	}{
 		{"unread", false, "", nil, KindInvitesNotRead},
-		{"match", true, "", []Invite{good}, ""},
 		{"other ignored", true, "", []Invite{{Code: "other", Channel: "rules"}}, KindInviteCreate},
 		{"missing recorded", true, "published", nil, KindInviteMissing},
 		{"recorded other ignored", true, "published", []Invite{{Code: "published", Channel: "rules"}}, KindInviteMissing},
@@ -113,7 +131,7 @@ func TestInviteComparisonCases(t *testing.T) {
 	}
 }
 
-func TestInvitePlan(t *testing.T) {
+func TestInvitePlan_Positive_Create(t *testing.T) {
 	def := loadDef(t)
 	s := snapshotOf(t, def)
 	s.InvitesRead = true
@@ -131,8 +149,15 @@ func TestInvitePlan(t *testing.T) {
 	if !found {
 		t.Fatalf("missing create step: %+v", res)
 	}
+}
+
+func TestInvitePlan_Negative_RecordedReplacement(t *testing.T) {
+	def := loadDef(t)
+	s := snapshotOf(t, def)
+	s.InvitesRead = true
+	s.Invites = nil
 	def.Invites[0].Code = "published"
-	res, err = Plan(def, s)
+	res, err := Plan(def, s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,4 +325,104 @@ func TestCheckInviteRight_Negative_NoGrant(t *testing.T) {
 		}
 	}
 	t.Fatalf("missing right refusal: %+v", result)
+}
+
+func TestCompareInvites_Negative_OneToOne(t *testing.T) {
+	def := loadDef(t)
+	first := def.Invites[0]
+	second := first
+	second.ID = "second"
+	good := Invite{Code: "abc", Channel: "rules", ByBot: true}
+	cases := []struct {
+		name         string
+		entries      []serverdef.Invite
+		invites      []Invite
+		kind, object string
+	}{
+		{"extra equal", []serverdef.Invite{first}, []Invite{good, {Code: "other", Channel: "rules", ByBot: true}}, KindInviteExtra, "server.invites[other]"},
+		{"only one", []serverdef.Invite{first, second}, []Invite{good}, KindInviteCreate, "invites[second]"},
+		{"recorded first", []serverdef.Invite{first, second}, []Invite{good}, KindInviteCreate, "invites[hub]"},
+	}
+	cases[2].entries[1].Code = "abc"
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			def.Invites = tc.entries
+			diffs := compareInvites(def, &Snapshot{InvitesRead: true, Invites: tc.invites})
+			if len(diffs) != 1 || diffs[0].Kind != tc.kind || diffs[0].Object != tc.object {
+				t.Fatalf("differences: %+v", diffs)
+			}
+		})
+	}
+}
+
+func TestCheckInvites_Negative_BotWithoutChannel(t *testing.T) {
+	if len(checkInvites(&Snapshot{InvitesRead: true, Invites: []Invite{{Code: "abc", ByBot: true}}})) == 0 {
+		t.Fatal("bot invite without channel accepted")
+	}
+}
+func TestCheckInvites_Positive_OtherWithoutChannel(t *testing.T) {
+	if errs := checkInvites(&Snapshot{InvitesRead: true, Invites: []Invite{{Code: "abc"}}}); len(errs) != 0 {
+		t.Fatalf("errors: %v", errs)
+	}
+}
+
+func TestCheckInviteRight_Positive_AdministratorOverridesMember(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.rights.apart["ADMINISTRATOR"] = struct{}{}
+	ctx.snap.Channels[0].MemberEntries = 1
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" {
+		t.Fatalf("refused: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Negative_MemberEntryOverridesGrant(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.snap.Channels[0].MemberEntries = 1
+	ctx.snap.Channels[0].Access = []Access{{Role: ctx.snap.Caller.Role, Allow: []string{"CREATE_INSTANT_INVITE"}}}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != ReasonLacksRight || !strings.Contains(detail, "single members") {
+		t.Fatalf("refusal: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Positive_ServerWide(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" {
+		t.Fatalf("refused: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Negative_ServerWideWithDeny(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
+	ctx.snap.Channels[0].Access = []Access{{Role: "other", Deny: []string{"CREATE_INSTANT_INVITE"}}}
+	if reason, _ := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != ReasonLacksRight {
+		t.Fatalf("reason: %s", reason)
+	}
+}
+func TestCheckInviteRight_Negative_ServerWideWithDefinitionDeny(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
+	ctx.defChannel("rules").Access = append(ctx.defChannel("rules").Access, serverdef.Access{Role: "other", Deny: []string{"CREATE_INSTANT_INVITE"}})
+	if reason, _ := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != ReasonLacksRight {
+		t.Fatalf("reason: %s", reason)
+	}
+}
+func TestCheckInviteRight_Positive_CreatedChannel(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.snap.Channels[0].MemberEntries = 1
+	ctx.changes = []Change{{Action: ActionCreateChannel, Object: "channels[rules]"}}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" {
+		t.Fatalf("refused: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Positive_PlannedAccess(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.changes = []Change{{Action: ActionSetAccess, Object: "channels[rules].access[bot]"}}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" {
+		t.Fatalf("refused: %s %s", reason, detail)
+	}
+}
+func inviteRightContext(t *testing.T) *planContext {
+	t.Helper()
+	def := loadDef(t)
+	ch := defChannelName(def, "rules")
+	return &planContext{def: def, snap: &Snapshot{Caller: Caller{Role: "bot"}, Channels: []Channel{{Name: ch}}}, botRoleID: "bot", rights: heldRights{apart: map[string]struct{}{}, everyone: map[string]struct{}{}}}
 }

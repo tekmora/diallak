@@ -136,7 +136,8 @@ failure.
   [`server_read_settings_test.go`](../internal/discord/server_read_settings_test.go)).
   The verification level comes with the server.
 - **Invites** are listed when the caller holds `MANAGE_GUILD` or
-  `ADMINISTRATOR`; otherwise they are marked as not read
+  `ADMINISTRATOR`; otherwise they are marked as not read. When a channel is
+  absent from the channel list, its name comes from the invite
   ([reader](../internal/discord/server_read_invites.go)).
 - **Numbers become names.** The level, a rule's trigger, its presets and its
   actions are read by name from Discord's developer documentation. A trigger,
@@ -170,7 +171,8 @@ group of their own in the member list, `mentionable` when members can mention
 it. A snapshot leaves out a key that is false.
 
 The snapshot holds `invites_read` and, for each invite, its code, channel,
-`max_age`, `max_uses`, `temporary` and `by_bot`
+`max_age`, `max_uses`, `temporary` and `by_bot`. A channel name is required
+only for bot invites
 ([snapshot](../internal/serverplan/snapshot_invites.go)).
 
 Objects are matched by name. The bot's role in the definition is matched to
@@ -213,7 +215,7 @@ administrator rights cannot tell a missing channel from a hidden one.
 | `filter-rule-extra` | The server has a rule the definition does not |
 | `invites-not-read` | Invites are defined but could not be listed |
 | `invite-create`, `invite-missing` | An unrecorded invite needs creation, or a recorded invite is missing |
-| `invite-differs`, `invite-extra` | A recorded bot invite differs in channel or limits, or an unmatched bot invite exists |
+| `invite-differs`, `invite-extra` | A recorded bot invite differs in channel or limits, or an unmatched bot invite exists. Each entry takes at most one invite, with recorded entries matched first |
 <!-- markdownlint-enable MD013 -->
 
 A raised bot role shows up here: while the operator has given it more rights or
@@ -237,7 +239,7 @@ The list of actions is closed (`serverplan.Actions`), and none of them deletes.
 | `set-verification-level` | A server with another verification level | `MANAGE_GUILD` |
 | `create-filter-rule` | A missing filter rule, created with its actions and exemptions | `MANAGE_GUILD`, and `MODERATE_MEMBERS` for a rule that times a member out |
 | `set-filter-rule` | A filter rule that differs. The change sends every field except the trigger | The same as `create-filter-rule` |
-| `create-invite` | An unrecorded invite needs creation; unread invites produce a refused candidate | `CREATE_INSTANT_INVITE` on the channel |
+| `create-invite` | An unrecorded invite needs creation; unread invites produce a refused candidate | `ADMINISTRATOR`, a bot role channel grant, or server-wide `CREATE_INSTANT_INVITE` without a channel deny; channel entries for single members refuse unless the caller is an administrator or the channel is created in the plan |
 | `convert-channel`, `convert-filter-rule`, `resolve-name` | A channel of another type; a filter rule with another trigger; an ambiguous name | Always refused: a person has to settle these |
 <!-- markdownlint-enable MD013 -->
 

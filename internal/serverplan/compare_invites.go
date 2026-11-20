@@ -56,8 +56,16 @@ func compareInvites(def *serverdef.Definition, snap *Snapshot) []Difference {
 	}
 	var diffs []Difference
 	matched := make([]bool, len(snap.Invites))
-	for _, want := range def.Invites {
-		if diff := compareInvite(def, want, snap.Invites, matched); diff != nil {
+	results := make([]*Difference, len(def.Invites))
+	for pass := 0; pass < 2; pass++ {
+		for i, want := range def.Invites {
+			if (want.Code != "") == (pass == 0) {
+				results[i] = compareInvite(def, want, snap.Invites, matched)
+			}
+		}
+	}
+	for _, diff := range results {
+		if diff != nil {
 			diffs = append(diffs, *diff)
 		}
 	}
@@ -72,11 +80,10 @@ func compareInvites(def *serverdef.Definition, snap *Snapshot) []Difference {
 func compareInvite(def *serverdef.Definition, want serverdef.Invite, invites []Invite, matched []bool) *Difference {
 	index := -1
 	for i, got := range invites {
-		if inviteMatches(def, want, got) {
+		if !matched[i] && inviteMatches(def, want, got) {
 			matched[i] = true
-			if index < 0 {
-				index = i
-			}
+			index = i
+			break
 		}
 	}
 	object := fmt.Sprintf("invites[%s]", want.ID)

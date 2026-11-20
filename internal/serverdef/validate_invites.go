@@ -10,12 +10,19 @@ var inviteCodeRegexp = regexp.MustCompile(`^[A-Za-z0-9-]{1,32}$`)
 
 func (v *validator) checkInvites() {
 	seen := make(map[string]bool, len(v.def.Invites))
+	codes := make(map[string]bool, len(v.def.Invites))
 	for _, invite := range v.def.Invites {
 		p := fmt.Sprintf("invites[%s]", invite.ID)
 		if !idRegexp.MatchString(invite.ID) || seen[invite.ID] {
 			v.add(CodeInvite, p+".id", "invalid or duplicate invite id")
 		}
 		seen[invite.ID] = true
+		if invite.Code != "" {
+			if codes[invite.Code] {
+				v.add(CodeInvite, p+".code", "invalid or duplicate invite code")
+			}
+			codes[invite.Code] = true
+		}
 		v.checkInviteFields(invite, p)
 	}
 }

@@ -1,6 +1,10 @@
 package serverplan
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/tekmora/diallak/internal/serverdef"
+)
 
 // ActionCreateInvite creates an unrecorded invite.
 const ActionCreateInvite = "create-invite"
@@ -33,31 +37,71 @@ func (ctx *planContext) addUnreadInviteCandidates() {
 }
 
 func (ctx *planContext) checkInviteRight(c candidate) (string, string) {
+	if ctx.rights.holds("ADMINISTRATOR") {
+		return "", ""
+	}
 	ch := ctx.defChannel(c.channelID)
 	if ch == nil {
 		return ReasonLacksRight, "CREATE_INSTANT_INVITE"
 	}
-	for _, change := range ctx.changes {
-		if change.Action == ActionCreateChannel && change.Object == "channels["+ch.ID+"]" {
-			return "", ""
-		}
-		if change.Action == ActionSetAccess && change.Object == "channels["+ch.ID+"].access["+ctx.botRoleID+"]" {
-			return "", ""
-		}
+	if ctx.hasInvitePlanChange(ActionCreateChannel, "channels["+ch.ID+"]") {
+		return "", ""
 	}
-	if ctx.hasObservedInviteRight(ch.Name) {
+	observed := ctx.observedInviteChannel(ch.Name)
+	if observed != nil && observed.MemberEntries > 0 {
+		return ReasonLacksRight, "CREATE_INSTANT_INVITE: channel holds entries for single members"
+	}
+	if ctx.hasInvitePlanChange(ActionSetAccess, "channels["+ch.ID+"].access["+ctx.botRoleID+"]") {
+		return "", ""
+	}
+	if ctx.hasObservedInviteRight(observed) {
+		return "", ""
+	}
+	if ctx.rights.holds("CREATE_INSTANT_INVITE") && !inviteDenied(ch, observed) {
 		return "", ""
 	}
 	return ReasonLacksRight, "CREATE_INSTANT_INVITE"
 }
 
-func (ctx *planContext) hasObservedInviteRight(name string) bool {
-	for _, observed := range ctx.snap.Channels {
-		if observed.Name != name {
-			continue
+func (ctx *planContext) hasInvitePlanChange(action, object string) bool {
+	for _, change := range ctx.changes {
+		if change.Action == action && change.Object == object {
+			return true
 		}
+	}
+	return false
+}
+
+func (ctx *planContext) observedInviteChannel(name string) *Channel {
+	for i := range ctx.snap.Channels {
+		if ctx.snap.Channels[i].Name == name {
+			return &ctx.snap.Channels[i]
+		}
+	}
+	return nil
+}
+
+func (ctx *planContext) hasObservedInviteRight(ch *Channel) bool {
+	if ch == nil {
+		return false
+	}
+	for _, entry := range ch.Access {
+		if entry.Role == ctx.snap.Caller.Role && slices.Contains(entry.Allow, "CREATE_INSTANT_INVITE") {
+			return true
+		}
+	}
+	return false
+}
+
+func inviteDenied(ch *serverdef.Channel, observed *Channel) bool {
+	for _, entry := range ch.Access {
+		if slices.Contains(entry.Deny, "CREATE_INSTANT_INVITE") {
+			return true
+		}
+	}
+	if observed != nil {
 		for _, entry := range observed.Access {
-			if entry.Role == ctx.snap.Caller.Role && slices.Contains(entry.Allow, "CREATE_INSTANT_INVITE") {
+			if slices.Contains(entry.Deny, "CREATE_INSTANT_INVITE") {
 				return true
 			}
 		}

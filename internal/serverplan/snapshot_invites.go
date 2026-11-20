@@ -31,7 +31,7 @@ func checkInvites(s *Snapshot) []error {
 		if strings.TrimSpace(invite.Code) == "" {
 			errs = append(errs, fmt.Errorf("empty invite code at index %d", i))
 		}
-		if strings.TrimSpace(invite.Channel) == "" {
+		if invite.ByBot && strings.TrimSpace(invite.Channel) == "" {
 			errs = append(errs, fmt.Errorf("empty invite channel at index %d", i))
 		}
 	}

@@ -8,9 +8,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/tekmora/diallak/internal/serverplan"
 )
 
-func TestReadInvitesWithManageGuild(t *testing.T) {
+func TestReadInvites_Positive_WithManageGuild(t *testing.T) {
 	snap, requests, err := readSettingsSnapshot(t, settingsGuildJSON(manageGuildPerms, 0), `[]`)
 	if err != nil {
 		t.Fatal(err)
@@ -53,5 +55,35 @@ func TestReadInvites_Positive_NoInviterInSnapshot(t *testing.T) {
 	}
 	if strings.Contains(string(data), "inviter") || strings.Contains(string(data), "private-name") || strings.Contains(string(data), "2001") {
 		t.Fatalf("inviter leaked: %s", data)
+	}
+}
+
+func TestReadInvites_Positive_UnlistedChannels(t *testing.T) {
+	const guildID, botUserID, botRoleID uint64 = 1001, 2001, 3001
+	f := buildPlatformFixture(t, guildID, botUserID, botRoleID)
+	handler := standardHandler(guildID, botUserID, f.app, f.guild, f.member, f.channels, f.rules)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == fmt.Sprintf("/guilds/%d/invites", guildID) {
+			writeTestResponse(w, http.StatusOK, `[{"code":"other","channel":{"id":"99991","name":"","type":0},"inviter":{"id":"9999"}},{"code":"bot","channel":{"id":"99992","name":"hidden","type":0},"inviter":{"id":"2001"}}]`)
+			return
+		}
+		handler(w, r)
+	}))
+	defer srv.Close()
+	snap, err := readServerWithOptions(context.Background(), makeFakeToken(botUserID), guildID, clientOptions{restURL: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Invites) != 2 || snap.Invites[0].ByBot || snap.Invites[0].Channel != "" || !snap.Invites[1].ByBot || snap.Invites[1].Channel != "hidden" {
+		t.Fatalf("invites: %+v", snap.Invites)
+	}
+	diffs, err := serverplan.Compare(mustDefinition(t), snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range diffs {
+		if d.Object == "server.invites[other]" {
+			t.Fatalf("other user's invite reported: %+v", diffs)
+		}
 	}
 }
