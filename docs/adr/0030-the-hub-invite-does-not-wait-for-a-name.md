@@ -3,6 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-11-20
 - **Authors**: Maintainers
+- **Superseded in part by**: [ADR-0031](0031-a-person-sets-the-bot-entry-on-rules.md)
 - **Supersedes in part**:
   [ADR-0029](0029-the-bot-creates-the-hub-invite.md), when the live apply runs
   and when the links are made

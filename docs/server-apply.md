@@ -562,16 +562,21 @@ Do not open the address a second time to change the rights. Discord's pages
 do not say what a second authorisation does to the role of a bot that is
 already a member, and they do not say what becomes of the role and of its
 entries on channels when the bot is removed and added again (both read
-2026-10-12; [Not built, not tried](#not-built-not-tried)). Switch the missing
-rights on by hand. The run that writes the bot entry on `rules` needs
-**Create Invite** on the bot role in `rights needed:`; switch it off after
-the run ([planner](../internal/serverplan/plan.go)).
+2026-10-12; [Not built, not tried](#not-built-not-tried)).
+
+Own mode writes the bot's entries only on area channels. A person sets its
+entries on other channels by hand as the definition gives them. For the hub
+invite, the entry on `rules` allows **Create Invite** (Einladung erstellen)
+alone and denies nothing. The plan then holds the invite in own mode; no role
+right is switched on or off for it ([ADR-0031](adr/0031-a-person-sets-the-bot-entry-on-rules.md),
+[planner](../internal/serverplan/plan.go)).
 
 1. `-server=plan` with the rights the bot's role has. A change the role's
    rights do not cover is refused as `outside-own-changes` or `lacks-right`;
    the line `rights needed:` lists every right the run needs.
 2. Give the bot's role the rights of that list which neither it nor
-   `@everyone` holds, and every right the definition gives it for good: the
+   `@everyone` holds and which a channel entry does not cover, and every right
+   the definition gives it for good: the
    plan never holds a change to the bot's own role, so `-server=compare`
    reports such a right as `role-permissions roles[bot]` after the word
    `lacks` until a person switches it on. The table below has the label each
