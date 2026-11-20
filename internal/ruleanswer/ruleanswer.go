@@ -428,7 +428,8 @@ func filterSponsorshipParagraph(lines []string, removed []bool, start, end int) 
 
 // filterSponsorshipSentences treats a line without end punctuation as part of
 // the sentence continuing on the next line, removing it with a sponsorship sentence.
-// Letter-dot abbreviations with at least two pairs do not end a sentence.
+// Inside a paragraph, letter-dot abbreviations with at least two pairs do not
+// end a sentence.
 func filterSponsorshipSentences(paragraph string) string {
 	var kept strings.Builder
 	start := 0
