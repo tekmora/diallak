@@ -313,7 +313,7 @@ func buildKeptChunks(repo, rev, filePath, firstTitle string, rawChunks []rawChun
 			parts = splitBody(body, maxBytes)
 		}
 		for _, part := range parts {
-			trimmed := strings.TrimSpace(part)
+			trimmed := trimBodyLines(strings.Split(part, "\n"))
 			if trimmed == "" {
 				continue
 			}
@@ -326,7 +326,7 @@ func buildKeptChunks(repo, rev, filePath, firstTitle string, rawChunks []rawChun
 				Path:       filePath,
 				Title:      title,
 				Heading:    rc.heading,
-				Text:       part,
+				Text:       trimmed,
 			})
 		}
 	}
@@ -336,8 +336,30 @@ func buildKeptChunks(repo, rev, filePath, firstTitle string, rawChunks []rawChun
 func trimBodyLines(lines []string) string {
 	for i, line := range lines {
 		if strings.TrimSpace(line) != "" {
-			return strings.TrimRightFunc(strings.Join(lines[i:], "\n"), unicode.IsSpace)
+			body := strings.Join(lines[i:], "\n")
+			if !isIndentedCodeLine(line) {
+				body = strings.TrimLeft(body, " \t")
+			}
+			return strings.TrimRightFunc(body, unicode.IsSpace)
 		}
 	}
 	return ""
+}
+
+func isIndentedCodeLine(line string) bool {
+	column := 0
+	for i := 0; i < len(line); i++ {
+		switch line[i] {
+		case ' ':
+			column++
+		case '\t':
+			column += 4 - column%4
+		default:
+			return false
+		}
+		if column >= 4 {
+			return true
+		}
+	}
+	return false
 }
