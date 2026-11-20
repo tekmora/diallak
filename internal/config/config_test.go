@@ -1236,20 +1236,25 @@ func modelConstantValues(t *testing.T, group *ast.GenDecl) []string {
 			continue
 		}
 		for _, value := range valueSpec.Values {
-			literal, ok := value.(*ast.BasicLit)
-			if !ok || literal.Kind != token.STRING {
-				continue
-			}
-			text, err := strconv.Unquote(literal.Value)
-			if err != nil {
-				t.Fatalf("unquote constant: %v", err)
-			}
-			if strings.HasPrefix(text, "DIALLAK_MODEL_") || strings.HasPrefix(text, "DIALLAK_EMBED_") {
+			if text, ok := modelConstantValue(t, value); ok {
 				values = append(values, text)
 			}
 		}
 	}
 	return values
+}
+
+func modelConstantValue(t *testing.T, value ast.Expr) (string, bool) {
+	t.Helper()
+	literal, ok := value.(*ast.BasicLit)
+	if !ok || literal.Kind != token.STRING {
+		return "", false
+	}
+	text, err := strconv.Unquote(literal.Value)
+	if err != nil {
+		t.Fatalf("unquote constant: %v", err)
+	}
+	return text, strings.HasPrefix(text, "DIALLAK_MODEL_") || strings.HasPrefix(text, "DIALLAK_EMBED_")
 }
 
 func TestModelVariables_Positive_MatchesConstants(t *testing.T) {
