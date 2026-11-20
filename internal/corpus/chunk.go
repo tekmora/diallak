@@ -80,11 +80,14 @@ func splitBody(body string, maxBytes int) []string {
 func cutOversized(paras []string, maxBytes int) []string {
 	var bounded []string
 	for _, p := range paras {
-		limit := len(p)/maxBytes + 2
+		limit := len(p)
 		for i := 0; i < limit && len(p) > maxBytes; i++ {
 			cut := maxBytes
 			for cut > 0 && !utf8.RuneStart(p[cut]) {
 				cut--
+			}
+			if cut == 0 {
+				_, cut = utf8.DecodeRuneInString(p)
 			}
 			bounded = append(bounded, strings.TrimRightFunc(p[:cut], unicode.IsSpace))
 			p = strings.TrimLeft(p[cut:], "\r\n")

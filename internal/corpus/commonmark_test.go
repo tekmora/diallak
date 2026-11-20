@@ -157,3 +157,23 @@ func TestParseFileChunks_Boundary_OversizedIndentedCode(t *testing.T) {
 		t.Fatalf("chunks = %+v, want multiple chunks with first code indent preserved", chunks)
 	}
 }
+
+func TestCutOversized_Boundary_MultibyteRunes(t *testing.T) {
+	input := strings.Repeat("界", 20)
+	parts := cutOversized([]string{input}, 4)
+	for _, part := range parts {
+		if len(part) > 4 {
+			t.Errorf("part %q has %d bytes, want at most 4", part, len(part))
+		}
+	}
+	if got := strings.Join(parts, ""); got != input {
+		t.Errorf("joined parts = %q, want %q", got, input)
+	}
+}
+
+func TestCutOversized_Boundary_RuneExceedsLimit(t *testing.T) {
+	parts := cutOversized([]string{"界a"}, 2)
+	if len(parts) != 2 || parts[0] != "界" || parts[1] != "a" {
+		t.Errorf("parts = %q, want [界 a]", parts)
+	}
+}
