@@ -57,6 +57,9 @@
             "context": "image (arm64)"
           },
           {
+            "context": "description (template sections)"
+          },
+          {
             "context": "REUSE lint"
           },
           {
