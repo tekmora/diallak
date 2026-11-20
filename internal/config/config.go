@@ -130,6 +130,15 @@ const (
 	MaxSupporterGrace = 90 * 24 * time.Hour
 )
 
+// ModelVariables is the one list of model-path variables.
+func ModelVariables() []string {
+	return []string{
+		EnvModelBaseURL, EnvModelAlias, EnvModelPolicy, EnvModelGuardrail,
+		EnvModelKeyFile, EnvModelTimeout, EnvEmbedBaseURL, EnvEmbedAlias,
+		EnvEmbedKeyFile, EnvEmbedTimeout, EnvEmbedMinSimilarity,
+	}
+}
+
 // Config is the validated configuration of one bot process.
 type Config struct {
 	// Token is the Discord bot token. It comes from a file, never from the environment itself,

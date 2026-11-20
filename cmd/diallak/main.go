@@ -41,6 +41,9 @@ const (
 )
 
 type dependencies struct {
+	// refuseModelPath is true in a version 1 build: run refuses every model and embedding variable
+	// (ADR-0028). Tests leave it false to drive the model path.
+	refuseModelPath     bool
 	registerCommands    func(ctx context.Context, token string, guildID uint64, maxQuestionChars int) error
 	runDiscord          func(ctx context.Context, cfg discord.BotConfig) error
 	readServer          func(ctx context.Context, token string, guildID uint64) (*serverplan.Snapshot, error)
@@ -50,12 +53,28 @@ type dependencies struct {
 
 func defaultDependencies() dependencies {
 	return dependencies{
+		refuseModelPath:     true,
 		registerCommands:    discord.RegisterCommands,
 		runDiscord:          discord.Run,
 		readServer:          discord.ReadServer,
 		applyServer:         discord.ApplyServer,
 		pushRoleConnections: discord.PushRoleConnections,
 	}
+}
+
+// refuseModelVariables returns an error naming every variable of config.ModelVariables that is set,
+// or nil when none is: a version 1 build has no model path (ADR-0028, second defence).
+func refuseModelVariables(getenv func(string) string) error {
+	var set []string
+	for _, name := range config.ModelVariables() {
+		if getenv(name) != "" {
+			set = append(set, name)
+		}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	return fmt.Errorf("version 1 has no model path (ADR-0028); unset: %s", strings.Join(set, ", "))
 }
 
 func main() {
@@ -93,6 +112,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, out io.
 
 	if err := validateCommandFlags(*serverMode, *registerCmds, *roleConnMode); err != nil {
 		return err
+	}
+	if deps.refuseModelPath {
+		if err := refuseModelVariables(getenv); err != nil {
+			return err
+		}
 	}
 
 	if *roleConnMode == "plan" {

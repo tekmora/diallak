@@ -3,9 +3,13 @@ package config
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1201,5 +1205,67 @@ func TestLoad_Boundary_TrailRetentionBounds(t *testing.T) {
 		if _, err := Load(env(base)); err != nil {
 			t.Errorf("Load with %q: %v, want accepted", raw, err)
 		}
+	}
+}
+
+func modelVariableConstants(t *testing.T) map[string]bool {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "config.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse config.go: %v", err)
+	}
+	found := make(map[string]bool)
+	for _, decl := range file.Decls {
+		group, ok := decl.(*ast.GenDecl)
+		if !ok || group.Tok != token.CONST {
+			continue
+		}
+		for _, spec := range group.Specs {
+			for _, value := range spec.(*ast.ValueSpec).Values {
+				literal, ok := value.(*ast.BasicLit)
+				if !ok || literal.Kind != token.STRING {
+					continue
+				}
+				text, err := strconv.Unquote(literal.Value)
+				if err != nil {
+					t.Fatalf("unquote constant: %v", err)
+				}
+				if strings.HasPrefix(text, "DIALLAK_MODEL_") || strings.HasPrefix(text, "DIALLAK_EMBED_") {
+					found[text] = true
+				}
+			}
+		}
+	}
+	return found
+}
+
+func TestModelVariables_Positive_MatchesConstants(t *testing.T) {
+	constants := modelVariableConstants(t)
+	seen := make(map[string]bool)
+	for _, name := range ModelVariables() {
+		if seen[name] {
+			t.Errorf("duplicate variable %s", name)
+		}
+		seen[name] = true
+		if !constants[name] {
+			t.Errorf("listed variable %s has no constant", name)
+		}
+	}
+	for name := range constants {
+		if !seen[name] {
+			t.Errorf("constant %s missing from list", name)
+		}
+	}
+}
+
+func TestModelVariables_Boundary_ReturnsFreshSlice(t *testing.T) {
+	first := ModelVariables()
+	if len(first) == 0 {
+		t.Fatal("ModelVariables returned an empty list")
+	}
+	original := first[0]
+	first[0] = "changed"
+	if next := ModelVariables(); next[0] != original {
+		t.Errorf("next call begins with %q, want %q", next[0], original)
 	}
 }
