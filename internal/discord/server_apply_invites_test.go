@@ -38,7 +38,7 @@ func TestApplyCreateInvite_Positive_BodyAndOutput(t *testing.T) {
 	if err := json.Unmarshal(call.body, &body); err != nil {
 		t.Fatal(err)
 	}
-	if len(body) != 2 || body["max_age"] != float64(0) || body["max_uses"] != float64(0) {
+	if len(body) != 3 || body["max_age"] != float64(0) || body["max_uses"] != float64(0) || body["unique"] != true {
 		t.Fatalf("body: %s", call.body)
 	}
 	if outside := callsOutsideList(fx.fake.getRecorded()); len(outside) != 0 {

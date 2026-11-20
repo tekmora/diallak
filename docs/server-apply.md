@@ -171,8 +171,9 @@ group of their own in the member list, `mentionable` when members can mention
 it. A snapshot leaves out a key that is false.
 
 The snapshot holds `invites_read` and, for each invite, its code, channel,
-`max_age`, `max_uses`, `temporary` and `by_bot`. A channel name is required
-only for bot invites
+`max_age`, `max_uses`, `temporary` and `by_bot`. `channel_unlisted` is true
+when the channel was absent from the channel list; its name is the one reported
+by the invite. A channel name is required only for bot invites
 ([snapshot](../internal/serverplan/snapshot_invites.go)).
 
 Objects are matched by name. The bot's role in the definition is matched to
@@ -239,7 +240,7 @@ The list of actions is closed (`serverplan.Actions`), and none of them deletes.
 | `set-verification-level` | A server with another verification level | `MANAGE_GUILD` |
 | `create-filter-rule` | A missing filter rule, created with its actions and exemptions | `MANAGE_GUILD`, and `MODERATE_MEMBERS` for a rule that times a member out |
 | `set-filter-rule` | A filter rule that differs. The change sends every field except the trigger | The same as `create-filter-rule` |
-| `create-invite` | An unrecorded invite needs creation; unread invites produce a refused candidate | `ADMINISTRATOR`, a bot role channel grant, or server-wide `CREATE_INSTANT_INVITE` without a channel deny; channel entries for single members refuse unless the caller is an administrator or the channel is created in the plan |
+| `create-invite` | An unrecorded invite needs creation; unread invites produce a refused candidate | `ADMINISTRATOR`, a bot role channel grant, or server-wide `CREATE_INSTANT_INVITE` without a deny on the channel’s everyone or bot role entry; channel entries for single members refuse unless the caller is an administrator or the channel is created in the plan |
 | `convert-channel`, `convert-filter-rule`, `resolve-name` | A channel of another type; a filter rule with another trigger; an ambiguous name | Always refused: a person has to settle these |
 <!-- markdownlint-enable MD013 -->
 

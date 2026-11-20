@@ -43,7 +43,7 @@ func applyCreateInvite(ctx context.Context, client *bot.Client, def *serverdef.D
 		return fmt.Errorf("resolve invite channel: %w", err)
 	}
 	maxAge, maxUses := entry.MaxAge, entry.MaxUses
-	invite, err := client.Rest.CreateInvite(channelID, discord.InviteCreate{MaxAge: &maxAge, MaxUses: &maxUses, Temporary: entry.Temporary}, rest.WithCtx(ctx), rest.WithReason(reason))
+	invite, err := client.Rest.CreateInvite(channelID, discord.InviteCreate{MaxAge: &maxAge, MaxUses: &maxUses, Temporary: entry.Temporary, Unique: true}, rest.WithCtx(ctx), rest.WithReason(reason))
 	if err != nil {
 		return callError("create invite", err, client.Token)
 	}

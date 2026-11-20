@@ -131,6 +131,23 @@ func TestInviteComparisonCases_Negative_Differences(t *testing.T) {
 	}
 }
 
+func TestCompareInvites_Negative_UnlistedChannel(t *testing.T) {
+	def := loadDef(t)
+	diffs := compareInvites(def, &Snapshot{InvitesRead: true, Invites: []Invite{{Code: "abc", Channel: "rules", ChannelUnlisted: true, ByBot: true}}})
+	if len(diffs) != 2 || diffs[0].Kind != KindInviteCreate || diffs[1].Kind != KindInviteExtra {
+		t.Fatalf("differences: %+v", diffs)
+	}
+}
+
+func TestCompareInvites_Negative_RecordedUnlistedChannel(t *testing.T) {
+	def := loadDef(t)
+	def.Invites[0].Code = "abc"
+	diffs := compareInvites(def, &Snapshot{InvitesRead: true, Invites: []Invite{{Code: "abc", Channel: "rules", ChannelUnlisted: true, ByBot: true}}})
+	if len(diffs) != 1 || diffs[0].Kind != KindInviteDiffers || diffs[0].Detail != "channel" {
+		t.Fatalf("differences: %+v", diffs)
+	}
+}
+
 func TestInvitePlan_Positive_Create(t *testing.T) {
 	def := loadDef(t)
 	s := snapshotOf(t, def)
@@ -392,7 +409,7 @@ func TestCheckInviteRight_Positive_ServerWide(t *testing.T) {
 func TestCheckInviteRight_Negative_ServerWideWithDeny(t *testing.T) {
 	ctx := inviteRightContext(t)
 	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
-	ctx.snap.Channels[0].Access = []Access{{Role: "other", Deny: []string{"CREATE_INSTANT_INVITE"}}}
+	ctx.snap.Channels[0].Access = []Access{{Role: "@everyone", Deny: []string{"CREATE_INSTANT_INVITE"}}}
 	if reason, _ := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != ReasonLacksRight {
 		t.Fatalf("reason: %s", reason)
 	}
@@ -400,11 +417,38 @@ func TestCheckInviteRight_Negative_ServerWideWithDeny(t *testing.T) {
 func TestCheckInviteRight_Negative_ServerWideWithDefinitionDeny(t *testing.T) {
 	ctx := inviteRightContext(t)
 	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
-	ctx.defChannel("rules").Access = append(ctx.defChannel("rules").Access, serverdef.Access{Role: "other", Deny: []string{"CREATE_INSTANT_INVITE"}})
+	ctx.defChannel("rules").Access = append(ctx.defChannel("rules").Access, serverdef.Access{Role: everyoneID(ctx.def), Deny: []string{"CREATE_INSTANT_INVITE"}})
 	if reason, _ := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != ReasonLacksRight {
 		t.Fatalf("reason: %s", reason)
 	}
 }
+func TestCheckInviteRight_Positive_ServerWideOtherRoleDeny(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
+	ctx.snap.Channels[0].Access = []Access{{Role: "other", Deny: []string{"CREATE_INSTANT_INVITE"}}}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" {
+		t.Fatalf("refused: %s %s", reason, detail)
+	}
+}
+
+func TestCheckInviteRight_Positive_ServerWideOtherRoleDefinitionDeny(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
+	ctx.defChannel("rules").Access = append(ctx.defChannel("rules").Access, serverdef.Access{Role: "other", Deny: []string{"CREATE_INSTANT_INVITE"}})
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" {
+		t.Fatalf("refused: %s %s", reason, detail)
+	}
+}
+
+func TestCheckInviteRight_Negative_ServerWideWithBotRoleDeny(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
+	ctx.snap.Channels[0].Access = []Access{{Role: ctx.snap.Caller.Role, Deny: []string{"CREATE_INSTANT_INVITE"}}}
+	if reason, _ := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != ReasonLacksRight {
+		t.Fatalf("reason: %s", reason)
+	}
+}
+
 func TestCheckInviteRight_Positive_CreatedChannel(t *testing.T) {
 	ctx := inviteRightContext(t)
 	ctx.snap.Channels[0].MemberEntries = 1
@@ -437,5 +481,5 @@ func inviteRightContext(t *testing.T) *planContext {
 	t.Helper()
 	def := loadDef(t)
 	ch := defChannelName(def, "rules")
-	return &planContext{def: def, snap: &Snapshot{Caller: Caller{Role: "bot"}, Channels: []Channel{{Name: ch}}}, botRoleID: "bot", rights: heldRights{apart: map[string]struct{}{}, everyone: map[string]struct{}{}}}
+	return &planContext{def: def, snap: &Snapshot{Caller: Caller{Role: "bot"}, Roles: []Role{{Name: "@everyone", Everyone: true}}, Channels: []Channel{{Name: ch}}}, botRoleID: "bot", rights: heldRights{apart: map[string]struct{}{}, everyone: map[string]struct{}{}}}
 }

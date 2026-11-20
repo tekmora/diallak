@@ -12,6 +12,8 @@ type Invite struct {
 	Code string `json:"code"`
 	// Channel is the channel name.
 	Channel string `json:"channel"`
+	// ChannelUnlisted is true when the channel was not listed; Channel holds the reported name.
+	ChannelUnlisted bool `json:"channel_unlisted,omitempty"`
 	// MaxAge is the lifetime in seconds.
 	MaxAge int `json:"max_age"`
 	// MaxUses is the use limit.

@@ -32,13 +32,15 @@ func readInvites(snap *serverplan.Snapshot, data *serverData) {
 	}
 	for _, invite := range data.invites {
 		var name string
+		unlisted := false
 		if invite.Channel != nil {
 			var ok bool
 			name, ok = names[invite.Channel.ID]
 			if !ok {
 				name = invite.Channel.Name
+				unlisted = true
 			}
 		}
-		snap.Invites = append(snap.Invites, serverplan.Invite{Code: invite.Code, Channel: name, MaxAge: invite.MaxAge, MaxUses: invite.MaxUses, Temporary: invite.Temporary, ByBot: invite.Inviter != nil && invite.Inviter.ID == data.app.Bot.ID})
+		snap.Invites = append(snap.Invites, serverplan.Invite{Code: invite.Code, Channel: name, ChannelUnlisted: unlisted, MaxAge: invite.MaxAge, MaxUses: invite.MaxUses, Temporary: invite.Temporary, ByBot: invite.Inviter != nil && invite.Inviter.ID == data.app.Bot.ID})
 	}
 }

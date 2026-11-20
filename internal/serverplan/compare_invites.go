@@ -22,7 +22,7 @@ const (
 
 func inviteFields(def *serverdef.Definition, want serverdef.Invite, got Invite) []string {
 	var fields []string
-	if defChannelName(def, want.Channel) != got.Channel {
+	if got.ChannelUnlisted || defChannelName(def, want.Channel) != got.Channel {
 		fields = append(fields, "channel")
 	}
 	if want.MaxAge != got.MaxAge {

@@ -57,7 +57,7 @@ func (ctx *planContext) checkInviteRight(c candidate) (string, string) {
 	if ctx.hasObservedInviteRight(observed) {
 		return "", ""
 	}
-	if ctx.rights.holds("CREATE_INSTANT_INVITE") && !inviteDenied(ch, observed) {
+	if ctx.rights.holds("CREATE_INSTANT_INVITE") && !ctx.inviteDenied(ch, observed) {
 		return "", ""
 	}
 	return ReasonLacksRight, "CREATE_INSTANT_INVITE"
@@ -93,18 +93,28 @@ func (ctx *planContext) hasObservedInviteRight(ch *Channel) bool {
 	return false
 }
 
-func inviteDenied(ch *serverdef.Channel, observed *Channel) bool {
+func (ctx *planContext) inviteDenied(ch *serverdef.Channel, observed *Channel) bool {
 	for _, entry := range ch.Access {
-		if slices.Contains(entry.Deny, "CREATE_INSTANT_INVITE") {
+		if (entry.Role == ctx.botRoleID || entry.Role == everyoneID(ctx.def)) && slices.Contains(entry.Deny, "CREATE_INSTANT_INVITE") {
 			return true
 		}
 	}
+	everyone := ctx.observedEveryoneName()
 	if observed != nil {
 		for _, entry := range observed.Access {
-			if slices.Contains(entry.Deny, "CREATE_INSTANT_INVITE") {
+			if (entry.Role == ctx.snap.Caller.Role || entry.Role == everyone) && slices.Contains(entry.Deny, "CREATE_INSTANT_INVITE") {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+func (ctx *planContext) observedEveryoneName() string {
+	for _, role := range ctx.snap.Roles {
+		if role.Everyone {
+			return role.Name
+		}
+	}
+	return ""
 }

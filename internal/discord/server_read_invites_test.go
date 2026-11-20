@@ -46,7 +46,7 @@ func TestReadInvites_Positive_NoInviterInSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(snap.Invites) != 1 || !snap.Invites[0].ByBot || snap.Invites[0].Channel != "rules" {
+	if len(snap.Invites) != 1 || !snap.Invites[0].ByBot || snap.Invites[0].Channel != "rules" || snap.Invites[0].ChannelUnlisted {
 		t.Fatalf("invites: %+v", snap.Invites)
 	}
 	data, err := json.Marshal(snap.Invites)
@@ -74,9 +74,7 @@ func TestReadInvites_Positive_UnlistedChannels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(snap.Invites) != 2 || snap.Invites[0].ByBot || snap.Invites[0].Channel != "" || !snap.Invites[1].ByBot || snap.Invites[1].Channel != "hidden" {
-		t.Fatalf("invites: %+v", snap.Invites)
-	}
+	assertUnlistedInvites(t, snap.Invites)
 	diffs, err := serverplan.Compare(mustDefinition(t), snap)
 	if err != nil {
 		t.Fatal(err)
@@ -85,5 +83,18 @@ func TestReadInvites_Positive_UnlistedChannels(t *testing.T) {
 		if d.Object == "server.invites[other]" {
 			t.Fatalf("other user's invite reported: %+v", diffs)
 		}
+	}
+}
+
+func assertUnlistedInvites(t *testing.T, invites []serverplan.Invite) {
+	t.Helper()
+	if len(invites) != 2 {
+		t.Fatalf("invites: %+v", invites)
+	}
+	if invites[0].ByBot || invites[0].Channel != "" || !invites[0].ChannelUnlisted {
+		t.Fatalf("invites: %+v", invites)
+	}
+	if !invites[1].ByBot || invites[1].Channel != "hidden" || !invites[1].ChannelUnlisted {
+		t.Fatalf("invites: %+v", invites)
 	}
 }
