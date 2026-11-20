@@ -177,8 +177,12 @@ Each step is a pull request or a run, and each can be undone by the next.
    join messages would land in a channel nobody sees. The apply path has no
    action for it.
 2. **Definition change.** One pull request adds the category Archive and the
-   channel `general` under it with the access entry above. The validator and
-   its tests cover both.
+   channel `general` under it with the access entry above. The same pull request
+   extends `botChannelCeiling` in `internal/serverdef/validate_bot.go` to allow
+   the bot's role entry `VIEW_CHANNEL` and nothing else in a channel under
+   Archive. Its tests show that this view entry passes there, that a second
+   right such as `READ_MESSAGE_HISTORY` is refused in that entry, and that the
+   same view entry is refused on a plain text channel outside Archive.
 3. **Plan.** The plan run of the cluster's run templates reads the hub and
    prints the plan and its digest: `create-category` for Archive,
    `move-channel` for `general`, `set-access` for its entry, and the
