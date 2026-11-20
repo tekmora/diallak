@@ -37,4 +37,5 @@ record that supersedes it.
 | [0026](0026-member-to-forge-account-link.md) | 2026-10-18 | The link between a member and a forge account | Accepted |
 | [0027](0027-members-intent-for-supporter-roles.md) | 2026-10-18 | The members intent for the supporter function | Accepted |
 | [0028](0028-version-1-answers-without-a-model.md) | 2026-11-19 | Version 1 answers without a model | Accepted |
+| [0029](0029-the-bot-creates-the-hub-invite.md) | 2026-11-20 | The bot creates the hub invite | Accepted |
 <!-- markdownlint-enable MD013 -->

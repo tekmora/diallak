@@ -96,6 +96,7 @@ func TestServerDefinitionDoc_Negative_NamesEveryCodeAndCount(t *testing.T) {
 		{"automation", strconv.Itoa(len(def.Automation))},
 		{"settings", strconv.Itoa(len(def.Settings.FilterRules)) + " filter rules and the verification level"},
 		{"news", newsCount(def.News)},
+		{"invites", strconv.Itoa(len(def.Invites))},
 	}
 	for _, row := range counts {
 		pattern := "(?m)^\\| `" + row.part + "` \\| [^|]+ \\| " + regexp.QuoteMeta(row.count) + " \\|$"
