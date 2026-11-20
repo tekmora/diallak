@@ -378,8 +378,7 @@
           "help with",
           "get support",
           "ask for help",
-          "support channel",
-          "Where is Amussis support"
+          "support channel"
         ],
         "none": [
           "test",
@@ -414,7 +413,7 @@
         "docs/index.md"
       ],
       "must_match": [
-        "Where is Amussis support?"
+        "Where is the Amussis support channel?"
       ],
       "must_not_match": [
         "Why does getting help with Amussis show an error?",
@@ -950,8 +949,7 @@
           "help with",
           "get support",
           "ask for help",
-          "support channel",
-          "Where is VMAFx support"
+          "support channel"
         ],
         "none": [
           "test",
@@ -986,7 +984,7 @@
         "docs/index.md"
       ],
       "must_match": [
-        "Where is VMAFx support?"
+        "Where is the VMAFx support channel?"
       ],
       "must_not_match": [
         "Why does getting help with VMAFx show an error?",
@@ -1263,8 +1261,7 @@
           "help with",
           "get support",
           "ask for help",
-          "support channel",
-          "Where is SnatchArr support"
+          "support channel"
         ],
         "none": [
           "test",
@@ -1299,7 +1296,7 @@
         "docs/index.md"
       ],
       "must_match": [
-        "Where is SnatchArr support?"
+        "Where is the SnatchArr support channel?"
       ],
       "must_not_match": [
         "Why does getting help with SnatchArr show an error?",

@@ -25,8 +25,6 @@ wins. Validation replays every positive example through each command and forum
 tag and rejects ambiguity. It also replays every negative example. Each trigger must include a negative
 example containing a keyword phrase and, for command triggers, an alias phrase.
 The same tokenizer and phrase matching rules apply to this near-miss check.
-A keyword beginning with `where is` must also appear in the question with those
-words intact (case insensitive), so it cannot match a bare capability question.
 
 To add an answer, find a project documentation section with a stable heading,
 add one trigger to the JSON table, and include a positive and negative question

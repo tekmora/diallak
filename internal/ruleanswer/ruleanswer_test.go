@@ -141,6 +141,58 @@ func TestValidate_Boundary_DuplicateIDAndMaximumCount(t *testing.T) {
 	}
 }
 
+func TestValidate_Positive_SupportHelpKeyword(t *testing.T) {
+	trigger := fixtureTrigger()
+	trigger.ID = "diallak-support"
+	trigger.Keywords.Any = []string{"get help"}
+	if hasFinding(Validate(fixtureTable(trigger), knownNames()), "bare_support_keyword") {
+		t.Fatal("help-seeking keyword should be allowed")
+	}
+}
+
+func TestValidate_Negative_BareSupportKeyword(t *testing.T) {
+	for _, tc := range []struct {
+		name, keyword, group string
+	}{
+		{"alias then support", "Where is Diallak support", "any"},
+		{"support then alias", "support for Diallak", "all"},
+		{"multi-token alias", "support for Diallak Tools", "any"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			trigger := fixtureTrigger()
+			trigger.ID = "diallak-support"
+			if tc.name == "multi-token alias" {
+				trigger.Aliases = append(trigger.Aliases, "Diallak Tools")
+			}
+			if tc.group == "all" {
+				trigger.Keywords.All = []string{tc.keyword}
+			} else {
+				trigger.Keywords.Any = []string{tc.keyword}
+			}
+			count := 0
+			for _, finding := range Validate(fixtureTable(trigger), knownNames()) {
+				if finding.Code == "bare_support_keyword" {
+					count++
+					if want := "triggers[0].keywords." + tc.group + "[0]"; finding.Path != want {
+						t.Errorf("finding path = %q, want %q", finding.Path, want)
+					}
+				}
+			}
+			if count != 1 {
+				t.Errorf("bare_support_keyword findings = %d, want 1", count)
+			}
+		})
+	}
+}
+
+func TestValidate_Boundary_NonSupportTriggerAllowsBareSupport(t *testing.T) {
+	trigger := fixtureTrigger()
+	trigger.Keywords.Any = []string{"Diallak support"}
+	if hasFinding(Validate(fixtureTable(trigger), knownNames()), "bare_support_keyword") {
+		t.Fatal("non-support trigger should allow bare support keyword")
+	}
+}
+
 func TestResolve_Positive_ConcatenatesCorpusOrderAndLinks(t *testing.T) {
 	trigger := fixtureTrigger()
 	trigger.Links = []string{"docs/guide.md"}

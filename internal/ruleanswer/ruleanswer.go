@@ -127,14 +127,14 @@ func (t *Table) Match(q Query) (Trigger, bool) {
 	}
 	tokens := retrieval.Tokenize(q.Text)
 	for _, trigger := range t.Triggers {
-		if trigger.entryPoints(q) && trigger.matches(tokens, q.Text) {
+		if trigger.entryPoints(q) && trigger.matches(tokens) {
 			return trigger, true
 		}
 	}
 	return Trigger{}, false
 }
 
-func (t Trigger) matches(question []string, text string) bool {
+func (t Trigger) matches(question []string) bool {
 	for _, entry := range t.Keywords.All {
 		if !containsPhrase(question, retrieval.Tokenize(entry)) {
 			return false
@@ -143,9 +143,6 @@ func (t Trigger) matches(question []string, text string) bool {
 	if len(t.Keywords.Any) > 0 {
 		found := false
 		for _, entry := range t.Keywords.Any {
-			if strings.HasPrefix(strings.ToLower(entry), "where is ") && !strings.Contains(strings.ToLower(text), strings.ToLower(entry)) {
-				continue
-			}
 			found = found || containsPhrase(question, retrieval.Tokenize(entry))
 		}
 		if !found {
@@ -212,6 +209,7 @@ func (v *validator) checkTrigger(i int, t *Trigger) {
 	p := fmt.Sprintf("triggers[%d]", i)
 	v.checkIdentity(p, t)
 	v.checkKeywords(p, t.Keywords)
+	v.checkBareSupportKeywords(p, t)
 	v.checkEntryPoints(p, t)
 	v.checkLocations(p, t)
 	v.checkExamples(p, t)
@@ -244,6 +242,36 @@ func (v *validator) checkKeywords(p string, k Keywords) {
 			}
 		}
 	}
+}
+
+func (v *validator) checkBareSupportKeywords(p string, t *Trigger) {
+	if !strings.HasSuffix(t.ID, "-support") {
+		return
+	}
+	for _, group := range []struct {
+		name    string
+		entries []string
+	}{{"all", t.Keywords.All}, {"any", t.Keywords.Any}} {
+		for i, entry := range group.entries {
+			if bareSupportKeyword(retrieval.Tokenize(entry), t.Aliases) {
+				v.add("bare_support_keyword", fmt.Sprintf("%s.keywords.%s[%d]", p, group.name, i), "must include more than an alias and support")
+			}
+		}
+	}
+}
+
+func bareSupportKeyword(tokens, aliases []string) bool {
+	for _, alias := range aliases {
+		aliasTokens := retrieval.Tokenize(alias)
+		if len(aliasTokens) == 0 || len(tokens) != len(aliasTokens)+1 {
+			continue
+		}
+		if tokens[0] == "support" && slices.Equal(tokens[1:], aliasTokens) ||
+			tokens[len(tokens)-1] == "support" && slices.Equal(tokens[:len(tokens)-1], aliasTokens) {
+			return true
+		}
+	}
+	return false
 }
 
 func (v *validator) checkEntryPoints(p string, t *Trigger) {
@@ -299,7 +327,7 @@ func (v *validator) checkExamples(p string, t *Trigger) {
 	}
 	for i, text := range t.MustNotMatch {
 		for _, q := range triggerQueries(*t, text) {
-			if t.entryPoints(q) && t.matches(retrieval.Tokenize(q.Text), q.Text) {
+			if t.entryPoints(q) && t.matches(retrieval.Tokenize(q.Text)) {
 				v.add("must_not_match", fmt.Sprintf("%s.must_not_match[%d]", p, i), "example matches this trigger")
 				break
 			}
@@ -336,7 +364,7 @@ func (v *validator) replayMatch(p string, target *Trigger, i int, text string) {
 		matches := 0
 		for j := range v.table.Triggers {
 			candidate := &v.table.Triggers[j]
-			if candidate.entryPoints(q) && candidate.matches(retrieval.Tokenize(q.Text), q.Text) {
+			if candidate.entryPoints(q) && candidate.matches(retrieval.Tokenize(q.Text)) {
 				matches++
 				if candidate.ID != target.ID {
 					v.add("ambiguous_match", fmt.Sprintf("%s.must_match[%d]", p, i), "example also matches trigger "+candidate.ID)
@@ -371,7 +399,7 @@ func (r *Resolved) Match(q Query) (ResolvedAnswer, bool) {
 	}
 	tokens := retrieval.Tokenize(q.Text)
 	for _, trigger := range r.Table.Triggers {
-		if trigger.entryPoints(q) && trigger.matches(tokens, q.Text) {
+		if trigger.entryPoints(q) && trigger.matches(tokens) {
 			answer, ok := r.Answers[trigger.ID]
 			if ok {
 				return answer, true
