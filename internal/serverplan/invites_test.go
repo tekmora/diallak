@@ -424,6 +424,7 @@ func TestCheckInviteRight_Negative_ServerWideWithDefinitionDeny(t *testing.T) {
 }
 func TestCheckInviteRight_Positive_ServerWideOtherRoleDeny(t *testing.T) {
 	ctx := inviteRightContext(t)
+	ctx.snap.Caller.Roles = []string{"bot"}
 	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
 	ctx.snap.Channels[0].Access = []Access{{Role: "other", Deny: []string{"CREATE_INSTANT_INVITE"}}}
 	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" {
@@ -481,7 +482,7 @@ func inviteRightContext(t *testing.T) *planContext {
 	t.Helper()
 	def := loadDef(t)
 	ch := defChannelName(def, "rules")
-	return &planContext{def: def, snap: &Snapshot{Caller: Caller{Role: "bot"}, Roles: []Role{{Name: "@everyone", Everyone: true}}, Channels: []Channel{{Name: ch}}}, botRoleID: "bot", rights: heldRights{apart: map[string]struct{}{}, everyone: map[string]struct{}{}}}
+	return &planContext{def: def, snap: &Snapshot{Caller: Caller{Role: "bot"}, Roles: []Role{{Name: "@everyone", Everyone: true}}, Channels: []Channel{{Name: ch}}}, botRoleID: "bot", rights: heldRights{apart: map[string]struct{}{}, everyone: map[string]struct{}{"VIEW_CHANNEL": {}}}}
 }
 
 func TestCheckInviteRight_Negative_ServerWideOtherHeldRoleDeny(t *testing.T) {
@@ -523,5 +524,95 @@ func TestCheckInviteRight_Negative_UnobservedDefinitionDeny(t *testing.T) {
 	ctx.defChannel("rules").Access = append(ctx.defChannel("rules").Access, serverdef.Access{Role: everyoneID(ctx.def), Deny: []string{"CREATE_INSTANT_INVITE"}})
 	if reason, _ := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != ReasonLacksRight {
 		t.Fatalf("reason: %s", reason)
+	}
+}
+
+func TestCheckInviteRight_Negative_HeldRoleNameShared(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.rights.apart["VIEW_CHANNEL"] = struct{}{}
+	ctx.snap.Roles = append(ctx.snap.Roles, Role{Name: "other"}, Role{Name: "other"})
+	ctx.snap.Caller.Roles = []string{"bot", "other"}
+	ctx.snap.Channels[0].Access = []Access{{Role: "other", Allow: []string{"CREATE_INSTANT_INVITE"}}}
+	reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"})
+	if reason != ReasonLacksRight || detail != "CREATE_INSTANT_INVITE: role name other names several roles" {
+		t.Fatalf("refusal: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Negative_NoHeldRolesWithOtherEntry(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.snap.Channels[0].Access = []Access{{Role: "other", Allow: []string{"CREATE_INSTANT_INVITE"}}}
+	reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"})
+	if reason != ReasonLacksRight || detail != "CREATE_INSTANT_INVITE: the snapshot names no held roles" {
+		t.Fatalf("refusal: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Positive_NoHeldRolesBotEntryOnly(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.rights.apart["VIEW_CHANNEL"] = struct{}{}
+	ctx.snap.Channels[0].Access = []Access{{Role: "bot", Allow: []string{"CREATE_INSTANT_INVITE"}}}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" {
+		t.Fatalf("refused: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Negative_HeldRoleDeniesView(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.rights.apart["VIEW_CHANNEL"] = struct{}{}
+	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
+	ctx.snap.Caller.Roles = []string{"bot", "other"}
+	ctx.snap.Channels[0].Access = []Access{{Role: "other", Deny: []string{"VIEW_CHANNEL"}}}
+	reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"})
+	if reason != ReasonLacksRight || detail != "CREATE_INSTANT_INVITE: the bot cannot view the channel" {
+		t.Fatalf("refusal: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Boundary_ViewDeniedByEveryoneAllowedByHeldRole(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
+	ctx.snap.Caller.Roles = []string{"bot", "other"}
+	ctx.snap.Channels[0].Access = []Access{{Role: "@everyone", Deny: []string{"VIEW_CHANNEL"}}, {Role: "other", Allow: []string{"VIEW_CHANNEL"}}}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" {
+		t.Fatalf("refused: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Negative_NewChannelWithDefinitionDeny(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.changes = []Change{{Action: ActionCreateChannel, Object: "channels[rules]"}}
+	ctx.defChannel("rules").Access = append(ctx.defChannel("rules").Access, serverdef.Access{Role: everyoneID(ctx.def), Deny: []string{"CREATE_INSTANT_INVITE"}})
+	reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"})
+	if reason != ReasonLacksRight || detail != "CREATE_INSTANT_INVITE" {
+		t.Fatalf("refusal: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Negative_SetAccessWithDefinitionDeny(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.changes = []Change{{Action: ActionSetAccess, Object: "channels[rules].access[bot]"}}
+	ctx.defChannel("rules").Access = append(ctx.defChannel("rules").Access, serverdef.Access{Role: everyoneID(ctx.def), Deny: []string{"CREATE_INSTANT_INVITE"}})
+	reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"})
+	if reason != ReasonLacksRight || detail != "CREATE_INSTANT_INVITE" {
+		t.Fatalf("refusal: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Negative_NoViewRight(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.rights.everyone = map[string]struct{}{}
+	ctx.snap.Channels[0].Access = []Access{{Role: "@everyone", Allow: []string{"CREATE_INSTANT_INVITE"}}}
+	reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"})
+	if reason != ReasonLacksRight || detail != "CREATE_INSTANT_INVITE: the bot cannot view the channel" {
+		t.Fatalf("refusal: %s %s", reason, detail)
+	}
+}
+func TestCompareInvites_Negative_NoEntriesBotInviteExtra(t *testing.T) {
+	def := loadDef(t)
+	def.Invites = nil
+	diffs := compareInvites(def, &Snapshot{InvitesRead: true, Invites: []Invite{{Code: "abc", ByBot: true}, {Code: "other"}}})
+	if len(diffs) != 1 || diffs[0].Kind != KindInviteExtra || diffs[0].Object != "server.invites[abc]" {
+		t.Fatalf("differences: %+v", diffs)
+	}
+}
+func TestCompareInvites_Boundary_NoEntriesNotRead(t *testing.T) {
+	def := loadDef(t)
+	def.Invites = nil
+	if diffs := compareInvites(def, &Snapshot{}); diffs != nil {
+		t.Fatalf("differences: %+v", diffs)
 	}
 }

@@ -218,7 +218,7 @@ administrator rights cannot tell a missing channel from a hidden one.
 | `filter-rule-extra` | The server has a rule the definition does not |
 | `invites-not-read` | Invites are defined but could not be listed |
 | `invite-create`, `invite-missing` | An unrecorded invite needs creation, or a recorded invite is missing |
-| `invite-differs`, `invite-extra` | A recorded bot invite differs in channel or limits, or an unmatched bot invite exists. Each entry takes at most one invite, with recorded entries matched first |
+| `invite-differs`, `invite-extra` | A recorded bot invite differs in channel or limits, or an unmatched bot invite exists. Each entry takes at most one invite, with recorded entries matched first; unmatched bot invites are reported even when the definition holds no invites, if invites were read |
 <!-- markdownlint-enable MD013 -->
 
 A raised bot role shows up here: while the operator has given it more rights or
@@ -242,13 +242,17 @@ The list of actions is closed (`serverplan.Actions`), and none of them deletes.
 | `set-verification-level` | A server with another verification level | `MANAGE_GUILD` |
 | `create-filter-rule` | A missing filter rule, created with its actions and exemptions | `MANAGE_GUILD`, and `MODERATE_MEMBERS` for a rule that times a member out |
 | `set-filter-rule` | A filter rule that differs. The change sends every field except the trigger | The same as `create-filter-rule` |
-| `create-invite` | An unrecorded invite needs creation; unread invites produce a refused candidate | `ADMINISTRATOR` or effective `CREATE_INSTANT_INVITE`: the observed channel check applies the everyone entry, then all held-role entries together in Discord order (denies before allows at each stage), and a deny on the definition’s everyone or bot role entry refuses; channel entries for single members refuse unless the caller is an administrator or the channel is created in the plan |
+| `create-invite` | An unrecorded invite needs creation; unread invites produce a refused candidate | `ADMINISTRATOR` or effective `VIEW_CHANNEL` and `CREATE_INSTANT_INVITE`: the observed channel check applies the everyone entry, then all held-role entries together in Discord order (denies before allows at each stage); a deny on the definition’s everyone or bot role entry refuses, including when the plan creates the channel or sets the bot access; channel entries for single members refuse unless the caller is an administrator or the channel is created in the plan |
 | `convert-channel`, `convert-filter-rule`, `resolve-name` | A channel of another type; a filter rule with another trigger; an ambiguous name | Always refused: a person has to settle these |
 <!-- markdownlint-enable MD013 -->
 
 For invite creation, the observed channel check reads the everyone entry and
 the entries of every role the bot holds in Discord order: everyone denies then
-allows, followed by all held-role denies then all held-role allows.
+allows, followed by all held-role denies then all held-role allows. Both
+`VIEW_CHANNEL` and `CREATE_INSTANT_INVITE` must be granted. The check refuses
+when a held role name names several observed roles, or when the snapshot names
+no held roles and the channel has an entry for a role other than everyone or
+the bot role.
 
 The plan never holds a change to the caller's own role. Its rights, its name
 and its place are the operator's to change by hand.
@@ -503,7 +507,10 @@ by hand.
 4. `-server=plan`. The plan holds changes and, when all is well, no refusal.
    A person reads it and keeps the digest. A right the bot lacks shows by its
    programming name on a change refused as `lacks-right`.
-5. `-server=apply=<digest>`.
+5. `-server=apply=<digest>`. Keep the invite code printed by apply, write it
+   into the entry’s `code` field in `server/definition.json` (see
+   [Invites](server-definition.md#invites)), and commit it. Until then, a
+   missing invite is treated as unrecorded and can be offered for creation again.
 6. **Tidy up.** On the bot's role switch off **Manage Channels**, **Connect**,
    **Create Private Threads** and **Create Invite**, so that Manage Roles,
    Manage Messages, Time Out Members and Manage Server stay, and drag the role

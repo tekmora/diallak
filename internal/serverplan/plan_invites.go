@@ -1,6 +1,7 @@
 package serverplan
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/tekmora/diallak/internal/serverdef"
@@ -45,6 +46,9 @@ func (ctx *planContext) checkInviteRight(c candidate) (string, string) {
 		return ReasonLacksRight, "CREATE_INSTANT_INVITE"
 	}
 	if ctx.hasInvitePlanChange(ActionCreateChannel, "channels["+ch.ID+"]") {
+		if ctx.inviteDenied(ch) {
+			return ReasonLacksRight, "CREATE_INSTANT_INVITE"
+		}
 		return "", ""
 	}
 	observed := ctx.observedInviteChannel(ch.Name)
@@ -52,16 +56,34 @@ func (ctx *planContext) checkInviteRight(c candidate) (string, string) {
 		return ReasonLacksRight, "CREATE_INSTANT_INVITE: channel holds entries for single members"
 	}
 	if ctx.hasInvitePlanChange(ActionSetAccess, "channels["+ch.ID+"].access["+ctx.botRoleID+"]") {
+		if ctx.inviteDenied(ch) {
+			return ReasonLacksRight, "CREATE_INSTANT_INVITE"
+		}
 		return "", ""
 	}
-	granted := ctx.rights.holds("CREATE_INSTANT_INVITE")
-	if observed != nil {
-		granted = ctx.observedInviteRight(observed)
+	if ctx.inviteDenied(ch) {
+		return ReasonLacksRight, "CREATE_INSTANT_INVITE"
 	}
-	if granted && !ctx.inviteDenied(ch) {
+	if observed != nil {
+		return ctx.checkObservedInviteRight(observed)
+	}
+	if ctx.rights.holds("CREATE_INSTANT_INVITE") {
 		return "", ""
 	}
 	return ReasonLacksRight, "CREATE_INSTANT_INVITE"
+}
+
+func (ctx *planContext) checkObservedInviteRight(observed *Channel) (string, string) {
+	if detail := ctx.inviteRoleAmbiguity(observed); detail != "" {
+		return ReasonLacksRight, detail
+	}
+	if !ctx.observedInviteRight(observed, "VIEW_CHANNEL") {
+		return ReasonLacksRight, "CREATE_INSTANT_INVITE: the bot cannot view the channel"
+	}
+	if !ctx.observedInviteRight(observed, "CREATE_INSTANT_INVITE") {
+		return ReasonLacksRight, "CREATE_INSTANT_INVITE"
+	}
+	return "", ""
 }
 
 func (ctx *planContext) hasInvitePlanChange(action, object string) bool {
@@ -82,8 +104,31 @@ func (ctx *planContext) observedInviteChannel(name string) *Channel {
 	return nil
 }
 
-func (ctx *planContext) observedInviteRight(ch *Channel) bool {
-	const right = "CREATE_INSTANT_INVITE"
+func (ctx *planContext) inviteRoleAmbiguity(ch *Channel) string {
+	roles := ctx.snap.Caller.Roles
+	if len(roles) == 0 {
+		for _, entry := range ch.Access {
+			if entry.Role != ctx.observedEveryoneName() && entry.Role != ctx.snap.Caller.Role {
+				return "CREATE_INSTANT_INVITE: the snapshot names no held roles"
+			}
+		}
+		roles = []string{ctx.snap.Caller.Role}
+	}
+	for _, name := range roles {
+		count := 0
+		for _, role := range ctx.snap.Roles {
+			if role.Name == name {
+				count++
+			}
+		}
+		if count > 1 {
+			return fmt.Sprintf("CREATE_INSTANT_INVITE: role name %s names several roles", name)
+		}
+	}
+	return ""
+}
+
+func (ctx *planContext) observedInviteRight(ch *Channel, right string) bool {
 	allowed := ctx.rights.holds(right)
 	everyone := ctx.observedEveryoneName()
 	roles := ctx.snap.Caller.Roles
