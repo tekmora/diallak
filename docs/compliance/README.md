@@ -29,6 +29,10 @@ translations.
 
 ## Gates for model-written answers
 
+Version 1 carries no model, whichever gates are passed
+([ADR-0028](../adr/0028-version-1-answers-without-a-model.md)). The gates below
+apply again only when a later record switches model mode on.
+
 Model-written answers stay off in the live server until the gates of
 [ADR-0013](../adr/0013-guardrail-policy-and-receipt.md), "What may go live,
 and when", are passed. They replace the four gates of
