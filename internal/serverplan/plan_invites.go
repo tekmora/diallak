@@ -45,32 +45,65 @@ func (ctx *planContext) checkInviteRight(c candidate) (string, string) {
 	if ch == nil {
 		return ReasonLacksRight, "CREATE_INSTANT_INVITE"
 	}
-	if ctx.hasInvitePlanChange(ActionCreateChannel, "channels["+ch.ID+"]") {
-		if ctx.inviteDenied(ch) {
-			return ReasonLacksRight, "CREATE_INSTANT_INVITE"
-		}
-		return "", ""
-	}
-	observed := ctx.observedInviteChannel(ch.Name)
-	if observed != nil && observed.MemberEntries > 0 {
-		return ReasonLacksRight, "CREATE_INSTANT_INVITE: channel holds entries for single members"
-	}
-	if ctx.hasInvitePlanChange(ActionSetAccess, "channels["+ch.ID+"].access["+ctx.botRoleID+"]") {
-		if ctx.inviteDenied(ch) {
-			return ReasonLacksRight, "CREATE_INSTANT_INVITE"
-		}
-		return "", ""
-	}
 	if ctx.inviteDenied(ch) {
 		return ReasonLacksRight, "CREATE_INSTANT_INVITE"
 	}
-	if observed != nil {
-		return ctx.checkObservedInviteRight(observed)
+	projected := ctx.projectedInviteChannel(ch, ctx.observedInviteChannel(ch.Name))
+	if projected != nil && projected.MemberEntries > 0 {
+		return ReasonLacksRight, "CREATE_INSTANT_INVITE: channel holds entries for single members"
+	}
+	if projected != nil {
+		return ctx.checkObservedInviteRight(projected)
 	}
 	if ctx.rights.holds("CREATE_INSTANT_INVITE") {
 		return "", ""
 	}
 	return ReasonLacksRight, "CREATE_INSTANT_INVITE"
+}
+
+func (ctx *planContext) projectedInviteChannel(ch *serverdef.Channel, observed *Channel) *Channel {
+	created := ctx.hasInvitePlanChange(ActionCreateChannel, "channels["+ch.ID+"]")
+	if !created && observed == nil {
+		return nil
+	}
+	projected := &Channel{Name: ch.Name}
+	if !created {
+		projected.Access = slices.Clone(observed.Access)
+		projected.MemberEntries = observed.MemberEntries
+	}
+	for _, entry := range ch.Access {
+		if !created && !ctx.hasInvitePlanChange(ActionSetAccess, "channels["+ch.ID+"].access["+entry.Role+"]") {
+			continue
+		}
+		converted, ok := ctx.inviteAccessSnapshot(entry)
+		if !ok {
+			continue
+		}
+		index := slices.IndexFunc(projected.Access, func(access Access) bool { return access.Role == converted.Role })
+		if index < 0 {
+			projected.Access = append(projected.Access, converted)
+		} else {
+			projected.Access[index] = converted
+		}
+	}
+	return projected
+}
+
+func (ctx *planContext) inviteAccessSnapshot(entry serverdef.Access) (Access, bool) {
+	var name string
+	switch entry.Role {
+	case everyoneID(ctx.def):
+		name = ctx.observedEveryoneName()
+	case ctx.botRoleID:
+		name = ctx.snap.Caller.Role
+	default:
+		role := ctx.defRole(entry.Role)
+		if role == nil {
+			return Access{}, false
+		}
+		name = role.Name
+	}
+	return Access{Role: name, Allow: slices.Clone(entry.Allow), Deny: slices.Clone(entry.Deny)}, true
 }
 
 func (ctx *planContext) checkObservedInviteRight(observed *Channel) (string, string) {

@@ -242,11 +242,14 @@ The list of actions is closed (`serverplan.Actions`), and none of them deletes.
 | `set-verification-level` | A server with another verification level | `MANAGE_GUILD` |
 | `create-filter-rule` | A missing filter rule, created with its actions and exemptions | `MANAGE_GUILD`, and `MODERATE_MEMBERS` for a rule that times a member out |
 | `set-filter-rule` | A filter rule that differs. The change sends every field except the trigger | The same as `create-filter-rule` |
-| `create-invite` | An unrecorded invite needs creation; unread invites produce a refused candidate | `ADMINISTRATOR` or effective `VIEW_CHANNEL` and `CREATE_INSTANT_INVITE`: the observed channel check applies the everyone entry, then all held-role entries together in Discord order (denies before allows at each stage); a deny on the definition’s everyone or bot role entry refuses, including when the plan creates the channel or sets the bot access; channel entries for single members refuse unless the caller is an administrator or the channel is created in the plan |
+| `create-invite` | An unrecorded invite needs creation; unread invites produce a refused candidate | `ADMINISTRATOR` or effective `VIEW_CHANNEL` and `CREATE_INSTANT_INVITE`: the check applies the channel entries after earlier plan steps, the everyone entry first, then all held-role entries together in Discord order (denies before allows at each stage); a deny on the definition’s everyone or bot role entry refuses, including when the plan creates the channel or sets the bot access; channel entries for single members refuse unless the caller is an administrator or the channel is created in the plan |
 | `convert-channel`, `convert-filter-rule`, `resolve-name` | A channel of another type; a filter rule with another trigger; an ambiguous name | Always refused: a person has to settle these |
 <!-- markdownlint-enable MD013 -->
 
-For invite creation, the observed channel check reads the everyone entry and
+For invite creation, the check reads the channel's entries after the plan's earlier
+steps. A channel created by the plan uses the definition's entries; a planned
+entry replaces the server's entry. The base is the server-wide rights after the
+plan's @everyone step. The check reads the everyone entry and
 the entries of every role the bot holds in Discord order: everyone denies then
 allows, followed by all held-role denies then all held-role allows. Both
 `VIEW_CHANNEL` and `CREATE_INSTANT_INVITE` must be granted. The check refuses

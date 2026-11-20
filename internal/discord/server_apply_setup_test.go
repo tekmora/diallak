@@ -398,7 +398,7 @@ func assertMissingRightRefusals(t *testing.T, refused []serverplan.Refusal, with
 	t.Helper()
 	matched := false
 	for _, r := range refused {
-		if unreadSettingRefusal(r, without) {
+		if unreadSettingRefusal(r, without) || unviewedInviteRefusal(r, without) {
 			matched = true
 			continue
 		}
@@ -419,6 +419,13 @@ func assertMissingRightRefusals(t *testing.T, refused []serverplan.Refusal, with
 
 func unreadSettingRefusal(r serverplan.Refusal, without string) bool {
 	return without == "MANAGE_GUILD" && r.Reason == serverplan.ReasonNotVisible && (slices.Contains(settingsActions, r.Action) || r.Action == serverplan.ActionCreateInvite)
+}
+
+// unviewedInviteRefusal reports the invite refusal for a bot without VIEW_CHANNEL: Discord
+// denies every channel right, invites included, to a member who cannot view the channel.
+func unviewedInviteRefusal(r serverplan.Refusal, without string) bool {
+	return without == "VIEW_CHANNEL" && r.Action == serverplan.ActionCreateInvite &&
+		r.Reason == serverplan.ReasonLacksRight && r.Detail == "CREATE_INSTANT_INVITE: the bot cannot view the channel"
 }
 
 func TestApplyServer_Boundary_EveryNamedRightIsNeeded(t *testing.T) {
