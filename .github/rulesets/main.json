@@ -57,6 +57,9 @@
             "context": "image (arm64)"
           },
           {
+            "context": "verify-all (make verify-all)"
+          },
+          {
             "context": "description (template sections)"
           },
           {
