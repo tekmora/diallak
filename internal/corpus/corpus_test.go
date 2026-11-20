@@ -62,6 +62,21 @@ func TestLoad_Positive_LoadsAndChunksFiles(t *testing.T) {
 	}
 }
 
+func TestLoad_Boundary_IndentedFirstLineAndBlankLines(t *testing.T) {
+	fsys := fstest.MapFS{"test.md": &fstest.MapFile{Data: []byte("# Code\n\n  \n    first line\n    second line  \n\t\n")}}
+	src := Source{Repository: "owner/repo", Revision: "main", Patterns: []string{"test.md"}}
+	chunks, err := Load(context.Background(), fsys, src, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chunks) != 1 {
+		t.Fatalf("got %d chunks, want 1", len(chunks))
+	}
+	if got, want := chunks[0].Text, "    first line\n    second line"; got != want {
+		t.Errorf("text = %q, want %q", got, want)
+	}
+}
+
 func TestLoad_Positive_HTMLCommentsAndFences(t *testing.T) {
 	fsys := fstest.MapFS{
 		"test.md": &fstest.MapFile{

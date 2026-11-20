@@ -342,27 +342,59 @@ func Resolve(t *Table, chunks []corpus.Chunk, linkTemplate string) (*Resolved, [
 }
 
 func filterSponsorship(text string) string {
-	var blocks, lines []string
-	flush := func() {
-		block := strings.Join(lines, "\n")
-		trimmed := strings.TrimSpace(block)
-		if trimmed != "" && !sponsorshipLink.MatchString(trimmed) {
-			blocks = append(blocks, block)
-		}
-		lines = nil
+	if !sponsorshipLink.MatchString(text) {
+		return text
 	}
-	for _, line := range strings.Split(text, "\n") {
-		if strings.TrimSpace(line) == "" {
-			flush()
+	lines := strings.Split(text, "\n")
+	return joinWithoutSponsorship(lines, sponsorshipLines(lines))
+}
+
+func sponsorshipLines(lines []string) []bool {
+	removed := make([]bool, len(lines))
+	start := 0
+	flush := func(end int) {
+		if sponsorshipLink.MatchString(strings.Join(lines[start:end], "\n")) {
+			for i := start; i < end; i++ {
+				removed[i] = true
+			}
+		}
+	}
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" || listItem.MatchString(line) {
+			flush(i)
+			start = i
+			if strings.TrimSpace(line) == "" {
+				start = i + 1
+			}
+		}
+	}
+	flush(len(lines))
+	return removed
+}
+
+func joinWithoutSponsorship(lines []string, removed []bool) string {
+	var kept, blanks []string
+	removedBlock := false
+	for i, line := range lines {
+		if removed[i] {
+			removedBlock = true
 			continue
 		}
-		if listItem.MatchString(line) {
-			flush()
+		if strings.TrimSpace(line) == "" {
+			blanks = append(blanks, line)
+			continue
 		}
-		lines = append(lines, line)
+		if len(kept) > 0 {
+			if removedBlock && len(blanks) > 1 {
+				blanks = blanks[:1]
+			}
+			kept = append(kept, blanks...)
+		}
+		kept = append(kept, line)
+		blanks = nil
+		removedBlock = false
 	}
-	flush()
-	return strings.Join(blocks, "\n\n")
+	return strings.Join(kept, "\n")
 }
 
 func resolveAnswer(trigger Trigger, chunks []corpus.Chunk) (ResolvedAnswer, bool) {

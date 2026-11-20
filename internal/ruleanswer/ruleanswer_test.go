@@ -1,8 +1,10 @@
 package ruleanswer
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/tekmora/diallak/internal/corpus"
 )
@@ -377,6 +379,38 @@ func TestResolve_Positive_IndentedCodePreserved(t *testing.T) {
 	input := "    code line\n    second line"
 	if got := filterSponsorship(input); got != input {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestFilterSponsorship_Positive_ListUnchanged(t *testing.T) {
+	input := "\n- first\n- second\n\n"
+	if got := filterSponsorship(input); got != input {
+		t.Errorf("got %q, want %q", got, input)
+	}
+}
+
+func TestFilterSponsorship_Positive_RemoveMiddleItem(t *testing.T) {
+	input := "- first\n- [Sponsor](https://ko-fi.com/example)\n- last"
+	want := "- first\n- last"
+	if got := filterSponsorship(input); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestResolve_Boundary_LoadedIndentedCode(t *testing.T) {
+	trigger := fixtureTrigger()
+	fsys := fstest.MapFS{"README.md": &fstest.MapFile{Data: []byte("# Release\n\n    first line\n    second line\n")}}
+	src := corpus.Source{Repository: trigger.Repository, Revision: "main", Patterns: []string{"README.md"}}
+	chunks, err := corpus.Load(context.Background(), fsys, src, corpus.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, issues, err := Resolve(fixtureTable(trigger), chunks, "")
+	if err != nil || len(issues) != 0 {
+		t.Fatalf("Resolve = (%v, %v, %v)", resolved, issues, err)
+	}
+	if got, want := resolved.Answers[trigger.ID].Text, "    first line\n    second line"; got != want {
+		t.Errorf("answer = %q, want %q", got, want)
 	}
 }
 

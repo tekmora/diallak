@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/yuin/goldmark/v2/ast"
@@ -303,7 +304,7 @@ func buildKeptChunks(repo, rev, filePath, firstTitle string, rawChunks []rawChun
 	var chunks []Chunk
 	n := 0
 	for _, rc := range rawChunks {
-		body := strings.TrimSpace(strings.Join(rc.lines, "\n"))
+		body := trimBodyLines(rc.lines)
 		if body == "" {
 			continue
 		}
@@ -325,9 +326,18 @@ func buildKeptChunks(repo, rev, filePath, firstTitle string, rawChunks []rawChun
 				Path:       filePath,
 				Title:      title,
 				Heading:    rc.heading,
-				Text:       trimmed,
+				Text:       part,
 			})
 		}
 	}
 	return chunks
+}
+
+func trimBodyLines(lines []string) string {
+	for i, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			return strings.TrimRightFunc(strings.Join(lines[i:], "\n"), unicode.IsSpace)
+		}
+	}
+	return ""
 }
