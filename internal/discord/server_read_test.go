@@ -621,7 +621,7 @@ func TestReadServer_Positive_CallerPermissionsUnion(t *testing.T) {
 			{"id": "5002", "name": "ExtraRole", "position": 3, "permissions": "16384"}
 		]
 	}`, guildID, guildID, botUserID)
-	memberJSON := fmt.Sprintf(`{"user":{"id":"%d"},"roles":["5001","5002"]}`, botUserID)
+	memberJSON := fmt.Sprintf(`{"user":{"id":"%d"},"roles":["5001","%d","5002"]}`, botUserID, guildID)
 	channelsJSON := `[]`
 
 	srv := newStandardServer(guildID, botUserID, appJSON, guildJSON, memberJSON, channelsJSON)
@@ -637,6 +637,9 @@ func TestReadServer_Positive_CallerPermissionsUnion(t *testing.T) {
 		t.Fatalf("readServerWithOptions: %v", err)
 	}
 
+	if want := []string{"BotRole", "ExtraRole"}; !reflect.DeepEqual(snap.Caller.Roles, want) {
+		t.Errorf("Caller.Roles = %v, want %v", snap.Caller.Roles, want)
+	}
 	wantPerms := []string{"VIEW_CHANNEL", "SEND_MESSAGES", "EMBED_LINKS"}
 	if len(snap.Caller.Permissions) != len(wantPerms) {
 		t.Fatalf("Caller.Permissions = %v, want %v", snap.Caller.Permissions, wantPerms)

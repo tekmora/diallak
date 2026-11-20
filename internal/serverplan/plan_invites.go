@@ -54,10 +54,11 @@ func (ctx *planContext) checkInviteRight(c candidate) (string, string) {
 	if ctx.hasInvitePlanChange(ActionSetAccess, "channels["+ch.ID+"].access["+ctx.botRoleID+"]") {
 		return "", ""
 	}
-	if ctx.hasObservedInviteRight(observed) {
-		return "", ""
+	granted := ctx.rights.holds("CREATE_INSTANT_INVITE")
+	if observed != nil {
+		granted = ctx.observedInviteRight(observed)
 	}
-	if ctx.rights.holds("CREATE_INSTANT_INVITE") && !ctx.inviteDenied(ch, observed) {
+	if granted && !ctx.inviteDenied(ch) {
 		return "", ""
 	}
 	return ReasonLacksRight, "CREATE_INSTANT_INVITE"
@@ -81,30 +82,41 @@ func (ctx *planContext) observedInviteChannel(name string) *Channel {
 	return nil
 }
 
-func (ctx *planContext) hasObservedInviteRight(ch *Channel) bool {
-	if ch == nil {
-		return false
+func (ctx *planContext) observedInviteRight(ch *Channel) bool {
+	const right = "CREATE_INSTANT_INVITE"
+	allowed := ctx.rights.holds(right)
+	everyone := ctx.observedEveryoneName()
+	roles := ctx.snap.Caller.Roles
+	if len(roles) == 0 {
+		roles = []string{ctx.snap.Caller.Role}
 	}
+	roleAllow, roleDeny := false, false
 	for _, entry := range ch.Access {
-		if entry.Role == ctx.snap.Caller.Role && slices.Contains(entry.Allow, "CREATE_INSTANT_INVITE") {
-			return true
+		if entry.Role == everyone {
+			if slices.Contains(entry.Deny, right) {
+				allowed = false
+			}
+			if slices.Contains(entry.Allow, right) {
+				allowed = true
+			}
+		} else if slices.Contains(roles, entry.Role) {
+			roleAllow = roleAllow || slices.Contains(entry.Allow, right)
+			roleDeny = roleDeny || slices.Contains(entry.Deny, right)
 		}
 	}
-	return false
+	if roleAllow {
+		return true
+	}
+	if roleDeny {
+		return false
+	}
+	return allowed
 }
 
-func (ctx *planContext) inviteDenied(ch *serverdef.Channel, observed *Channel) bool {
+func (ctx *planContext) inviteDenied(ch *serverdef.Channel) bool {
 	for _, entry := range ch.Access {
 		if (entry.Role == ctx.botRoleID || entry.Role == everyoneID(ctx.def)) && slices.Contains(entry.Deny, "CREATE_INSTANT_INVITE") {
 			return true
-		}
-	}
-	everyone := ctx.observedEveryoneName()
-	if observed != nil {
-		for _, entry := range observed.Access {
-			if (entry.Role == ctx.snap.Caller.Role || entry.Role == everyone) && slices.Contains(entry.Deny, "CREATE_INSTANT_INVITE") {
-				return true
-			}
 		}
 	}
 	return false

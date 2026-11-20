@@ -109,7 +109,9 @@ of channels, the filter rules and invites, in that order, and stops at the first
 failure.
 
 - **The caller** is the role Discord manages for this bot, and its rights are
-  the union of the rights of every role the bot holds.
+  the union of the rights of every role the bot holds. The caller snapshot
+  records `role`, `roles`, `position` and `permissions`; `roles` names every
+  held role except everyone, in the order returned for the member.
 - **Roles** are sorted from the highest to the lowest; two roles on the same
   position are sorted as Discord ranks them, the lower id first.
 - **Channels** of a type the definition does not know are kept with the type
@@ -240,9 +242,13 @@ The list of actions is closed (`serverplan.Actions`), and none of them deletes.
 | `set-verification-level` | A server with another verification level | `MANAGE_GUILD` |
 | `create-filter-rule` | A missing filter rule, created with its actions and exemptions | `MANAGE_GUILD`, and `MODERATE_MEMBERS` for a rule that times a member out |
 | `set-filter-rule` | A filter rule that differs. The change sends every field except the trigger | The same as `create-filter-rule` |
-| `create-invite` | An unrecorded invite needs creation; unread invites produce a refused candidate | `ADMINISTRATOR`, a bot role channel grant, or server-wide `CREATE_INSTANT_INVITE` without a deny on the channel’s everyone or bot role entry; channel entries for single members refuse unless the caller is an administrator or the channel is created in the plan |
+| `create-invite` | An unrecorded invite needs creation; unread invites produce a refused candidate | `ADMINISTRATOR` or effective `CREATE_INSTANT_INVITE`: the observed channel check applies the everyone entry, then all held-role entries together in Discord order (denies before allows at each stage), and a deny on the definition’s everyone or bot role entry refuses; channel entries for single members refuse unless the caller is an administrator or the channel is created in the plan |
 | `convert-channel`, `convert-filter-rule`, `resolve-name` | A channel of another type; a filter rule with another trigger; an ambiguous name | Always refused: a person has to settle these |
 <!-- markdownlint-enable MD013 -->
+
+For invite creation, the observed channel check reads the everyone entry and
+the entries of every role the bot holds in Discord order: everyone denies then
+allows, followed by all held-role denies then all held-role allows.
 
 The plan never holds a change to the caller's own role. Its rights, its name
 and its place are the operator's to change by hand.

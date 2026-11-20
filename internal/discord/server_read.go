@@ -261,12 +261,16 @@ func resolveCaller(
 	}
 
 	callerMask := permissionsToMask(everyoneRole.Permissions)
+	var callerRoles []string
 	for _, rID := range memberRoleIDs {
 		r, ok := roleByID[rID]
 		if !ok {
 			return serverplan.Caller{}, 0, errors.New("the bot holds a role that the server's role list does not have; the server changed during the read")
 		}
 		callerMask |= permissionsToMask(r.Permissions)
+		if rID != everyoneRole.ID {
+			callerRoles = append(callerRoles, r.Name)
+		}
 	}
 	// A bit the table does not name gives the caller no right the plan knows;
 	// the snapshot reports such bits per role.
@@ -274,6 +278,7 @@ func resolveCaller(
 
 	return serverplan.Caller{
 		Role:        botRole.Name,
+		Roles:       callerRoles,
 		Position:    botRole.Position,
 		Permissions: callerPerms,
 	}, botRole.ID, nil

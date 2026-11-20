@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/tekmora/diallak/internal/serverdef"
@@ -62,7 +63,10 @@ type FilterAction struct {
 // the roles below the caller's role from 1 without gaps, so it needs fewer
 // roles there than this number.
 type Caller struct {
-	Role        string   `json:"role"`
+	Role string `json:"role"`
+	// Roles names every role the caller holds except everyone, including its own,
+	// in the order the server lists the caller's roles.
+	Roles       []string `json:"roles,omitempty"`
 	Position    int      `json:"position"`
 	Permissions []string `json:"permissions"`
 }
@@ -137,6 +141,9 @@ func Check(s *Snapshot) error {
 	if err := checkCallerRole(s.Roles, s.Caller.Role); err != nil {
 		errs = append(errs, err)
 	}
+	if err := checkCallerRoles(s.Roles, s.Caller); err != nil {
+		errs = append(errs, fmt.Errorf("caller roles: %w", err))
+	}
 	if s.Caller.Position < 1 {
 		errs = append(errs, fmt.Errorf("caller position %d is below 1; only the everyone role stands on 0", s.Caller.Position))
 	}
@@ -186,6 +193,21 @@ func checkCallerRole(roles []Role, callerRole string) error {
 	}
 	if isEveryone {
 		return fmt.Errorf("caller role %q must not be the everyone role", callerRole)
+	}
+	return nil
+}
+
+func checkCallerRoles(roles []Role, caller Caller) error {
+	if len(caller.Roles) == 0 {
+		return nil
+	}
+	for _, name := range caller.Roles {
+		if !slices.ContainsFunc(roles, func(role Role) bool { return role.Name == name }) {
+			return fmt.Errorf("role %q names no role in snapshot", name)
+		}
+	}
+	if !slices.Contains(caller.Roles, caller.Role) {
+		return fmt.Errorf("does not contain caller role %q", caller.Role)
 	}
 	return nil
 }

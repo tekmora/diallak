@@ -483,3 +483,45 @@ func inviteRightContext(t *testing.T) *planContext {
 	ch := defChannelName(def, "rules")
 	return &planContext{def: def, snap: &Snapshot{Caller: Caller{Role: "bot"}, Roles: []Role{{Name: "@everyone", Everyone: true}}, Channels: []Channel{{Name: ch}}}, botRoleID: "bot", rights: heldRights{apart: map[string]struct{}{}, everyone: map[string]struct{}{}}}
 }
+
+func TestCheckInviteRight_Negative_ServerWideOtherHeldRoleDeny(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
+	ctx.snap.Caller.Roles = []string{"bot", "other"}
+	ctx.snap.Channels[0].Access = []Access{{Role: "other", Deny: []string{"CREATE_INSTANT_INVITE"}}}
+	if reason, _ := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != ReasonLacksRight {
+		t.Fatalf("reason: %s", reason)
+	}
+}
+func TestCheckInviteRight_Positive_HeldRoleAllowOverEveryoneDeny(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.snap.Caller.Roles = []string{"bot", "other"}
+	ctx.snap.Channels[0].Access = []Access{{Role: "@everyone", Deny: []string{"CREATE_INSTANT_INVITE"}}, {Role: "other", Allow: []string{"CREATE_INSTANT_INVITE"}}}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" {
+		t.Fatalf("refused: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Boundary_HeldRoleAllowOverHeldRoleDeny(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.snap.Caller.Roles = []string{"bot", "other"}
+	ctx.snap.Channels[0].Access = []Access{{Role: "bot", Deny: []string{"CREATE_INSTANT_INVITE"}}, {Role: "other", Allow: []string{"CREATE_INSTANT_INVITE"}}}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" {
+		t.Fatalf("refused: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Positive_EveryoneAllowWithoutServerWide(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.snap.Channels[0].Access = []Access{{Role: "@everyone", Allow: []string{"CREATE_INSTANT_INVITE"}}}
+	if reason, detail := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != "" {
+		t.Fatalf("refused: %s %s", reason, detail)
+	}
+}
+func TestCheckInviteRight_Negative_UnobservedDefinitionDeny(t *testing.T) {
+	ctx := inviteRightContext(t)
+	ctx.snap.Channels = nil
+	ctx.rights.apart["CREATE_INSTANT_INVITE"] = struct{}{}
+	ctx.defChannel("rules").Access = append(ctx.defChannel("rules").Access, serverdef.Access{Role: everyoneID(ctx.def), Deny: []string{"CREATE_INSTANT_INVITE"}})
+	if reason, _ := ctx.checkInviteRight(candidate{channelID: "rules"}); reason != ReasonLacksRight {
+		t.Fatalf("reason: %s", reason)
+	}
+}

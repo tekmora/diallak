@@ -326,3 +326,16 @@ func TestCheck_Boundary_SameNameTwiceIsNoError(t *testing.T) {
 		t.Errorf("Check failed for duplicate names: %v, want nil", err)
 	}
 }
+
+func TestCheckCallerRoles_Negative_UnknownRole(t *testing.T) {
+	assertCheckFails(t, func(s *Snapshot) { s.Caller.Roles = []string{"Bot", "missing"} }, "caller roles")
+}
+func TestCheckCallerRoles_Negative_MissingCallerRole(t *testing.T) {
+	assertCheckFails(t, func(s *Snapshot) { s.Caller.Roles = []string{"@everyone"} }, "caller roles")
+}
+func TestCheckCallerRoles_Positive_Empty(t *testing.T) {
+	s := validBaseSnapshot()
+	if err := Check(&s); err != nil {
+		t.Fatal(err)
+	}
+}
