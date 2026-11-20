@@ -19,9 +19,8 @@ invite object identifies its inviter as a user object
 
 The live apply, recording the code, and adding the profile and README links go
 ahead without step 4. The cluster session builds the bot from source at a main
-commit and follows the
-[existing-server path](../server-apply.md#a-server-the-bot-is-already-on) for
-a server the bot is already on.
+commit and follows
+[A server the bot is already on](../server-apply.md#a-server-the-bot-is-already-on).
 A person switches on by hand the rights the plan lists under `rights needed:`
 and switches Create Invite off after the run, as described in that section.
 The links are made in one batch per organisation
@@ -39,8 +38,8 @@ This record replaces two statements in ADR-0029. The record stands otherwise.
 ## Consequences
 
 The invite and links can be published while the naming step remains set aside.
-The recorded code and subsequent comparison follow the existing
-[existing-server path](../server-apply.md#a-server-the-bot-is-already-on)
+The recorded code and subsequent comparison follow
+[A server the bot is already on](../server-apply.md#a-server-the-bot-is-already-on)
 and the
 [invite definition](../server-definition.md#invites).
 
@@ -64,6 +63,6 @@ the naming step.
 - [Discord invite API](https://github.com/discord/discord-api-docs/blob/main/developers/resources/invite.mdx),
   as referenced by ADR-0029.
 - [Product plan](../product.md),
-  [existing-server path](../server-apply.md#a-server-the-bot-is-already-on),
+  [A server the bot is already on](../server-apply.md#a-server-the-bot-is-already-on),
   [invite definition](../server-definition.md#invites), and
   [#254](https://github.com/tekmora/diallak/issues/254).
