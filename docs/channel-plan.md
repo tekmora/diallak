@@ -64,9 +64,16 @@ No channel carries a topic. The forum tags were not part of the read.
 
 ### Differences besides `general`
 
-The read shows two more differences from the definition. A plan run will list
+The read shows three more differences from the definition. A plan run will list
 them next to the steps below, and each is judged with them:
 
+- **`tickets` is hidden.** Compare reports `channel-not-visible` for
+  `channels[tickets]` with the detail `hidden from the bot by the definition`.
+  This is expected because the definition denies the bot the view. The plan
+  holds no step for it: only the detail `missing or hidden` leads to a create
+  step. Accept the line only when the detail is exactly
+  `hidden from the bot by the definition`. A `missing or hidden` detail for
+  `tickets` is outside the lists and stops the unit.
 - **`announcements` lacks the bot's entry.** The definition lets the bot's
   role view and write there, for releases and advisories; the hub has only the
   entry that keeps members from writing. A plan run holds a `set-access` step
@@ -170,7 +177,7 @@ left. The validator refuses a 21st (`MaxForumTags` in
 
 ## Order of application
 
-Each step is a pull request or a run, and each can be undone by the next.
+The undo steps below name what a person restores and what stays.
 
 1. **System messages to `lounge`.** The operator sets the server's system
    messages channel by hand, once, before `general` is hidden; otherwise
@@ -195,13 +202,23 @@ Each step is a pull request or a run, and each can be undone by the next.
    `general`, because the read returns both: `general` through the bot's view
    entry and Archive through `@everyone`'s base view. The bot
    role's `role-name` difference under [The read](#differences-besides-general)
-   remains until a person settles it.
+   remains until a person settles it. The expected `tickets` line remains too.
 7. **By hand.** Channel topics and the forum's project tags, because apply
    does not write them ([Applying the server definition](server-apply.md),
    "How a plan is applied"). A later apply action can take this over.
 
-Undoing: moving `general` back into no category and removing its access
-entry restores the hub as it was read.
+Undoing:
+
+- The operator sets the system messages channel back by hand.
+- Revert the definition pull request. A later apply run takes back none of
+  the server changes listed below: the reverted definition does not describe
+  the old state of `general` or the absent `announcements` entry.
+- Move `general` back into no category and remove its new access entry by
+  hand. Remove the bot's `announcements` entry by hand.
+- Undo the funding integration mappings by hand. The empty category Archive
+  and the two created roles stay unless a separate decision deletes them;
+  apply deletes nothing.
+- Restore channel topics and forum tags by hand.
 
 ## Open points
 
