@@ -380,7 +380,7 @@ func removeSponsorshipSubtrees(lines []string, removed []bool) {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		column := indentationColumn(line)
+		column := corpus.IndentColumn(line)
 		if active && column > indent {
 			removed[i] = true
 			continue
@@ -390,21 +390,6 @@ func removeSponsorshipSubtrees(lines []string, removed []bool) {
 			indent = column
 		}
 	}
-}
-
-func indentationColumn(line string) int {
-	column := 0
-	for i := 0; i < len(line); i++ {
-		switch line[i] {
-		case ' ':
-			column++
-		case '\t':
-			column += 4 - column%4
-		default:
-			return column
-		}
-	}
-	return column
 }
 
 func joinWithoutSponsorship(lines []string, removed []bool) string {

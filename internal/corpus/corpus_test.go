@@ -219,3 +219,33 @@ func TestLoad_Boundary_MaxChunkBytesHoldsOneRune(t *testing.T) {
 		t.Fatalf("Load with MaxChunkBytes 4 err = %v, want nil", err)
 	}
 }
+
+func TestIndentColumn_Positive_SpacesAndTabs(t *testing.T) {
+	for _, line := range []string{"    code", "\tcode"} {
+		if got := IndentColumn(line); got != 4 {
+			t.Errorf("IndentColumn(%q) = %d, want 4", line, got)
+		}
+	}
+}
+
+func TestIndentColumn_Negative_NoIndent(t *testing.T) {
+	if got := IndentColumn("code"); got != 0 {
+		t.Errorf("IndentColumn(code) = %d, want 0", got)
+	}
+}
+
+func TestIndentColumn_Boundary_TabStopsAndWhitespace(t *testing.T) {
+	for _, tc := range []struct {
+		line string
+		want int
+	}{
+		{"  \tx", 4},
+		{" \t \tx", 8},
+		{"", 0},
+		{"   ", 3},
+	} {
+		if got := IndentColumn(tc.line); got != tc.want {
+			t.Errorf("IndentColumn(%q) = %d, want %d", tc.line, got, tc.want)
+		}
+	}
+}

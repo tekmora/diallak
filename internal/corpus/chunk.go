@@ -350,6 +350,13 @@ func trimBodyLines(lines []string) string {
 }
 
 func isIndentedCodeLine(line string) bool {
+	return IndentColumn(line) >= 4
+}
+
+// IndentColumn returns the column of the first character that is neither a
+// space nor a tab, counting tabs to the next multiple of 4. For a line of only
+// spaces and tabs, it returns the column after them.
+func IndentColumn(line string) int {
 	column := 0
 	for i := 0; i < len(line); i++ {
 		switch line[i] {
@@ -358,11 +365,8 @@ func isIndentedCodeLine(line string) bool {
 		case '\t':
 			column += 4 - column%4
 		default:
-			return false
-		}
-		if column >= 4 {
-			return true
+			return column
 		}
 	}
-	return false
+	return column
 }
