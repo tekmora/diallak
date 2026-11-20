@@ -2,6 +2,7 @@ package discord
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -35,7 +36,20 @@ type moderationFake struct {
 	// refuse answers 403 to every act, as Discord does for the owner or an Administrator.
 	refuse bool
 	// sweepSignals signals the deletion of a trail line as an answer.
-	sweepSignals bool
+	sweepSignals    bool
+	client          *bot.Client
+	pendingCustomID string
+	onForm          func(*bot.Client, string)
+}
+
+func (f *moderationFake) observe(client *bot.Client) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.client = client
+	if f.onForm != nil && f.pendingCustomID != "" {
+		go f.onForm(client, f.pendingCustomID)
+		f.pendingCustomID = ""
+	}
 }
 
 func newModerationFake(t *testing.T, frames int) *moderationFake {
@@ -67,7 +81,7 @@ func (f *moderationFake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.respondRead(w, r)
 		return
 	}
-	f.respondWrite(w, r)
+	f.respondWrite(w, r, raw)
 }
 
 func (f *moderationFake) respondRead(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +149,23 @@ func (f *moderationFake) respondTrail(w http.ResponseWriter, r *http.Request) er
 	}
 }
 
-func (f *moderationFake) respondWrite(w http.ResponseWriter, r *http.Request) {
+func (f *moderationFake) respondInteraction(w http.ResponseWriter, raw []byte) {
+	w.WriteHeader(http.StatusNoContent)
+	f.answers <- struct{}{}
+	if !strings.Contains(string(raw), `"type":9`) {
+		return
+	}
+	customID := extractCustomID(string(raw))
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.client != nil && f.onForm != nil {
+		go f.onForm(f.client, customID)
+	} else {
+		f.pendingCustomID = customID
+	}
+}
+
+func (f *moderationFake) respondWrite(w http.ResponseWriter, r *http.Request, raw []byte) {
 	path := r.URL.Path
 	isAct := (r.Method == http.MethodDelete && path == fmt.Sprintf("/channels/%d/messages/%d", modChannelID, modGatewayMessageID)) ||
 		(r.Method == http.MethodPatch && path == fmt.Sprintf("/guilds/%d/members/%d", areasGuildID, modMemberID))
@@ -146,8 +176,7 @@ func (f *moderationFake) respondWrite(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(path, fmt.Sprintf("/channels/%d/messages", modTrailID)):
 		err = f.respondTrail(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(path, "/interactions/"):
-		w.WriteHeader(http.StatusNoContent)
-		f.answers <- struct{}{}
+		f.respondInteraction(w, raw)
 	case r.Method == http.MethodPatch && strings.HasSuffix(path, "/messages/@original"):
 		err = writeFakeMessage(w)
 		f.answers <- struct{}{}
@@ -203,8 +232,16 @@ func timeoutFrame(t *testing.T, seq int, id uint64, minutes int, roles ...uint64
 	return areasFrame(t, seq, id, 2, roles, data, nil)
 }
 
-func gatewayRemoveCustomID() string {
-	return fmt.Sprintf("moderation-remove:%d:%d:%d", modChannelID, modGatewayMessageID, modMemberID)
+func extractCustomID(raw string) string {
+	var resp struct {
+		Data struct {
+			CustomID string `json:"custom_id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		return ""
+	}
+	return resp.Data.CustomID
 }
 
 // answersTo returns only the requests made with one interaction's token, in order.
@@ -234,15 +271,20 @@ func callsTo(calls []areasCall, id uint64) []areasCall {
 
 func TestModerationGateway_Positive_RemoveMessageAsksForAReasonThenActs(t *testing.T) {
 	fake := newModerationFake(t, 2)
+	fake.onForm = func(client *bot.Client, customID string) {
+		frame := removeFormFrame(t, 2, 900000000000000002, customID, "Spam link", modRoleID)
+		if err := deliverFrames(client, [][]byte{frame}); err != nil {
+			t.Errorf("deliver form frame: %v", err)
+		}
+	}
 	calls := runModerationOverGateway(t, fake, 3,
-		removeMessageFrame(t, 1, 900000000000000001, modRoleID),
-		removeFormFrame(t, 2, 900000000000000002, gatewayRemoveCustomID(), "Spam link", modRoleID))
+		removeMessageFrame(t, 1, 900000000000000001, modRoleID))
 
 	// Only the interaction's own requests: the gateway may run the second
 	// interaction's delete and line before the first one's form answer.
 	form := answersTo(calls, 900000000000000001)
 	if len(form) == 0 || !strings.Contains(form[0].raw, `"type":9`) ||
-		!strings.Contains(form[0].raw, gatewayRemoveCustomID()) || !strings.Contains(form[0].raw, `"max_length":512`) {
+		!strings.Contains(form[0].raw, removeCustomIDPrefix) || !strings.Contains(form[0].raw, `"max_length":512`) {
 		t.Fatalf("first answer = %+v, want the reason form of the message", form)
 	}
 	checkRemoveRequests(t, callsTo(calls, 900000000000000002))

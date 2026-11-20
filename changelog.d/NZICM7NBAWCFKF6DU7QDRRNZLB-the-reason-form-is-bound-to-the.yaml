@@ -1,0 +1,2 @@
+type: security
+title: The reason form of /remove carries a one-time key; the target stays on the server, so a submitted form can no longer name another message
