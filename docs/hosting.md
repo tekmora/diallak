@@ -57,9 +57,8 @@ is missing or out of range stops the start with a message that names it.
 - **Model mode is off unless the model variables are set.**
   `DIALLAK_MODEL_BASE_URL`, `DIALLAK_MODEL_ALIAS` and `DIALLAK_MODEL_POLICY`
   (for example `example-policy`) configure the endpoint, the routing alias and
-  the gateway policy. In the live server they stay unset until the gates of
-  [ADR-0013](adr/0013-guardrail-policy-and-receipt.md) are passed
-  ([compliance](compliance/README.md), "Gates for model-written answers").
+  the gateway policy. Version 1 sets none of them
+  ([ADR-0028](adr/0028-version-1-answers-without-a-model.md)).
 - **The bot's own masking is off unless `DIALLAK_MODEL_GUARDRAIL` is set.** It
   names a guardrail of the gateway, for example `presidio-pii`. The bot then
   calls the gateway's route `/guardrails/apply_guardrail` at the root of the
@@ -70,6 +69,8 @@ is missing or out of range stops the start with a message that names it.
 - **Embedding mode is off unless the embedding variables are set.**
   `DIALLAK_EMBED_BASE_URL` and `DIALLAK_EMBED_ALIAS` configure the endpoint
   and the routing alias ([ADR-0022](adr/0022-embeddings-for-paraphrased-questions.md)).
+  Version 1 sets neither
+  ([ADR-0028](adr/0028-version-1-answers-without-a-model.md)).
   The start verifies that the base URL points to an on-premises destination
   (loopback or RFC 1918 / fc00::/7 private IP literal, `localhost`, a single-label
   host name, or a host ending in `.svc`, `.cluster.local`, `.internal`,
