@@ -27,8 +27,8 @@ The path creates, moves and sets access, and it deletes nothing
      Each automated answer offers the `tickets` channel.
   3. Every channel gets its topic from the purpose the definition gives it;
      today no channel has a topic.
-  4. Archive holds what is retired: read-only, visible to moderators, never
-     deleted by this plan.
+  4. Archive holds what is retired: read-only, visible to moderators and to
+     the bot with view only, never deleted by this plan.
 - **Order:** create, then move, then archive. A deletion needs its own
   decision and is not part of this plan.
 
@@ -72,11 +72,12 @@ them next to the steps below, and each is judged with them:
   entry that keeps members from writing. A plan run holds a `set-access` step
   for it.
 - **Three roles have other names or are missing.** The hub's bot role is
-  called "Bots"; the definition calls it "Diallak". The hidden roles
-  "Ko-fi supporter" and "Patreon supporter", which the funding integrations
-  give ([ADR-0024](adr/0024-supporter-roles-from-funding-platforms.md)), are
-  not on the hub. The plan never creates or changes a role another party
-  manages; compare reports them for a person to settle.
+  called "Bots"; the definition calls it "Diallak". Compare reports a
+  `role-name` difference for a person to settle. "Ko-fi supporter" and
+  "Patreon supporter" are missing, so a plan run holds a `create-role` step
+  for each. Apply creates them hidden, with no rights and nothing attached,
+  as [ADR-0024](adr/0024-supporter-roles-from-funding-platforms.md) decides;
+  the operator then maps the Ko-fi and Patreon integrations to them.
 
 ## The target layout
 
@@ -108,9 +109,11 @@ people.
 ### Archive
 
 The new category holds what the hub no longer uses, so that nothing has to be
-deleted to tidy up. Its single access entry: `@everyone` may not view;
-moderators may view and read the history, and may not write. A channel moved
-here keeps its messages.
+deleted to tidy up. The access entry of `general`: `@everyone` may not view;
+moderators may view and read the history, and may not write; the bot's role
+may view only, with no history or writing. The read then returns `general`
+and Archive, so compare checks the move and entry and no later plan proposes
+a second Archive. A channel moved here keeps its messages.
 
 ### Channels this plan does not touch
 
@@ -182,8 +185,10 @@ Each step is a pull request or a run, and each can be undone by the next.
 4. **Judgement.** The plan and its digest are judged before the run that
    applies it, and the server owner confirms the digest.
 5. **Apply.** The apply run takes that digest and nothing else.
-6. **Compare.** A compare run afterwards shows no difference for these
-   channels.
+6. **Compare.** A compare run afterward shows no difference for Archive and
+   `general`, because the bot's view entry lets the read return both. The bot
+   role's `role-name` difference under [The read](#differences-besides-general)
+   remains until a person settles it.
 7. **By hand.** Channel topics and the forum's project tags, because apply
    does not write them ([Applying the server definition](server-apply.md),
    "How a plan is applied"). A later apply action can take this over.
