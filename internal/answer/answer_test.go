@@ -1565,6 +1565,25 @@ func TestRuleFits_Boundary_CitationLimit(t *testing.T) {
 	}
 }
 
+func TestRuleFits_Boundary_AnswerText(t *testing.T) {
+	a := Answer{Kind: KindRule, Text: "answer", Sources: []Source{{N: 1, Title: "T", URL: "https://example.test/"}}}
+	for _, forum := range []bool{false, true} {
+		footer := Footer("")
+		if forum {
+			footer = FooterForum
+		}
+		fixed := utf8.RuneCountInString(LabelRule + "\n\n" + sourcesBlock([]string{formatSourceLine(a.Sources[0])}) + "\n\n" + TicketsSentence("") + "\n\n" + footer)
+		if RuleFits(a, RenderOptions{MaxRunes: fixed}, forum) || renderRule(a, TicketsSentence(""), footer, fixed) != "" {
+			t.Errorf("forum %t: text must not disappear", forum)
+		}
+		limit := fixed + utf8.RuneCountInString(a.Text) + 1
+		got := renderRule(a, TicketsSentence(""), footer, limit)
+		if !RuleFits(a, RenderOptions{MaxRunes: limit}, forum) || !strings.Contains(got, a.Text) {
+			t.Errorf("forum %t: full text should fit: %q", forum, got)
+		}
+	}
+}
+
 func TestRender_Negative_UnfitRuleUsesRefusal(t *testing.T) {
 	a := Answer{Kind: KindRule, Text: "rule", Sources: []Source{{N: 1, URL: strings.Repeat("x", 400)}}}
 	if got := Render(a, RenderOptions{MaxRunes: 500}); got != AppendFooter(RefusalTo("", ""), "") {

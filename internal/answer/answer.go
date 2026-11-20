@@ -677,7 +677,11 @@ func renderRule(a Answer, tickets, footer string, maxRunes int) string {
 		return ""
 	}
 	budget := bodyMax - utf8.RuneCountInString(prefix) - utf8.RuneCountInString(suffix) - utf8.RuneCountInString(sourcesBlock(lines))
-	body := prefix + cutToRunes(a.Text, budget) + sourcesBlock(lines) + suffix
+	text := cutToRunes(a.Text, budget)
+	if strings.TrimSpace(a.Text) != "" && strings.TrimSpace(text) == "" {
+		return ""
+	}
+	body := prefix + text + sourcesBlock(lines) + suffix
 	return hardCutTo(body, bodyMax)
 }
 
