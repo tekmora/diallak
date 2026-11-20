@@ -87,6 +87,35 @@ func mainPackageDir(root, path string) (string, bool, error) {
 	return "./" + filepath.ToSlash(rel), true, nil
 }
 
+func mainPackageDefault(dockerfile []byte) (string, bool) {
+	arg := regexp.MustCompile(`(?m)^ARG MAIN_PACKAGE=(\S*)\r?$`).FindSubmatch(dockerfile)
+	if arg == nil {
+		return "", false
+	}
+	return string(arg[1]), true
+}
+
+func TestMainPackageDefault(t *testing.T) {
+	tests := []struct {
+		name, dockerfile, want string
+		found                  bool
+	}{
+		{"LF", "ARG MAIN_PACKAGE=./cmd/diallak\n", "./cmd/diallak", true},
+		{"CRLF", "ARG MAIN_PACKAGE=./cmd/diallak\r\n", "./cmd/diallak", true},
+		{"empty LF", "ARG MAIN_PACKAGE=\n", "", true},
+		{"empty CRLF", "ARG MAIN_PACKAGE=\r\n", "", true},
+		{"missing", "FROM scratch\n", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, found := mainPackageDefault([]byte(tt.dockerfile))
+			if got != tt.want || found != tt.found {
+				t.Fatalf("mainPackageDefault() = %q, %t; want %q, %t", got, found, tt.want, tt.found)
+			}
+		})
+	}
+}
+
 // An empty image build default becomes ambiguous when the module gains another main package.
 // Check the actual Dockerfile default against the module before image jobs run.
 func TestDockerfile_Positive_MainPackageDefaultIsAMainPackage(t *testing.T) {
@@ -94,15 +123,15 @@ func TestDockerfile_Positive_MainPackageDefaultIsAMainPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read Dockerfile: %v", err)
 	}
-	arg := regexp.MustCompile(`(?m)^ARG MAIN_PACKAGE=(\S*)$`).FindSubmatch(dockerfile)
-	if arg == nil {
+	arg, found := mainPackageDefault(dockerfile)
+	if !found {
 		t.Fatalf("Dockerfile has no MAIN_PACKAGE default")
 	}
 	mains, err := moduleMainDirs("../..")
 	if err != nil {
 		t.Fatalf("find main packages: %v", err)
 	}
-	main, err := imageMainPackage(string(arg[1]), mains)
+	main, err := imageMainPackage(arg, mains)
 	if err != nil {
 		t.Fatalf("select image main package: %v", err)
 	}
