@@ -77,7 +77,9 @@ A question is answered in this order:
    matches a trigger gets that trigger's fixed answer.
 2. **Excerpts.** A question that matches no trigger gets the cited excerpts of
    [ADR-0003](0003-answer-pipeline.md), as today.
-3. **The refusal.** A question with neither gets the refusal of ADR-0003.
+3. **The refusal.** A question with neither gets the refusal of ADR-0003. In
+   the support forum the bot posts nothing instead, as
+   [ADR-0009](0009-support-forum-first-answer.md) decides.
 
 Every rule-based answer keeps these properties:
 
@@ -98,13 +100,16 @@ Every rule-based answer keeps these properties:
 - **It is tested both ways.** Every trigger carries at least one question that
   must match it and one that must not, and a test replays both.
 
+Excerpt answers also name the `tickets` channel.
+
 The shape of the table, its validator and the matcher come with the change
 that builds them. This record fixes the properties above.
 
 ### What stays as it is
 
 - The corpus, the lexical retrieval and the excerpt answers of
-  [ADR-0003](0003-answer-pipeline.md): they use no model.
+  [ADR-0003](0003-answer-pipeline.md): they use no model, and excerpt answers
+  gain the tickets sentence.
 - The label and footer rules of [ADR-0002](0002-data-and-compliance.md),
   [ADR-0009](0009-support-forum-first-answer.md) and
   [ADR-0020](0020-forum-answers-only-opted-in-posts.md).
