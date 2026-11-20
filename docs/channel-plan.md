@@ -238,5 +238,5 @@ Undoing:
 - **Topics and tags as data.** Whether the apply path learns to set channel
   topics, forum tags and the system channel, or these stay a hand step.
 - **The bot role's name.** The server calls the bot's role "Bots"; the
-  definition calls it "Diallak". The rename of replan step 4 settles the name
-  once for both.
+  definition calls it "Diallak". The naming step, set aside for now, settles
+  the name once for both.
