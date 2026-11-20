@@ -10,7 +10,8 @@
 ## Context
 
 [ADR-0029](0029-the-bot-creates-the-hub-invite.md) and the
-[product plan](../product.md) tie the invite in step 5 to the naming step 4.
+[product plan](../product.md) as it stood tied the invite in step 5 to the
+naming step 4. This record and the product plan change that.
 The naming step is set aside for now. An invite code holds no bot name; the
 invite object identifies its inviter as a user object
 ([Discord invite API](https://github.com/discord/discord-api-docs/blob/main/developers/resources/invite.mdx)).
