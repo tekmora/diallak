@@ -205,20 +205,25 @@ The undo steps below name what a person restores and what stays.
    remains until a person settles it. The expected `tickets` line remains too.
 7. **By hand.** Channel topics and the forum's project tags, because apply
    does not write them ([Applying the server definition](server-apply.md),
-   "How a plan is applied"). A later apply action can take this over.
+   "How a plan is applied"). Before changing the tags, the operator writes
+   down the forum's live tag list, with names and order. A later apply action
+   can take this over.
 
 Undoing:
 
 - The operator sets the system messages channel back by hand.
 - Revert the definition pull request. A later apply run takes back none of
   the server changes listed below: the reverted definition does not describe
-  the old state of `general` or the absent `announcements` entry.
+  the old state of `general`. The bot's `announcements` entry stays: the
+  definition required it before this change and still requires it after the
+  revert.
 - Move `general` back into no category and remove its new access entry by
-  hand. Remove the bot's `announcements` entry by hand.
+  hand.
 - Undo the funding integration mappings by hand. The empty category Archive
   and the two created roles stay unless a separate decision deletes them;
   apply deletes nothing.
-- Restore channel topics and forum tags by hand.
+- Clear the channel topics set by hand, since the read found none, and restore
+  the forum tags by hand from the saved list.
 
 ## Open points
 
