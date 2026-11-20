@@ -106,6 +106,25 @@ func newTestForum(t *testing.T, asker ExcerptAsker, logger *slog.Logger, maxConc
 	return h
 }
 
+func newTestForumWithTickets(t *testing.T, asker ExcerptAsker, channel string) *ForumHandler {
+	t.Helper()
+	h, err := NewForumHandler(ForumConfig{
+		Asker: asker, ChannelID: forumChannelID, OptInTagID: forumTagID,
+		MaxConcurrent: 2, Timeout: 5 * time.Second, TicketsChannel: channel,
+	})
+	if err != nil {
+		t.Fatalf("NewForumHandler: %v", err)
+	}
+	return h
+}
+
+func forumRuleAtLength(channel string, length int) answer.Answer {
+	a := answer.Answer{Kind: answer.KindRule, Sources: []answer.Source{{N: 1, Title: "T", URL: "https://example.test/"}}}
+	base := utf8.RuneCountInString(answer.RenderForum(a, 0, channel))
+	a.Sources[0].URL += strings.Repeat("x", length-base)
+	return a
+}
+
 // optedInPost is a new public post in the forum that carries the opt-in tag.
 func optedInPost() ForumPost {
 	return ForumPost{
@@ -342,6 +361,39 @@ func TestForum_Negative_UnfitRuleUsesExcerpts(t *testing.T) {
 	_, replies := calls.counts()
 	if len(asker.asked()) != 1 || len(replies) != 1 || !strings.Contains(replies[0], "Run the installer.") {
 		t.Fatalf("questions %v replies %v", asker.asked(), replies)
+	}
+}
+
+func TestForum_Negative_DroppedTicketsChannelWouldFit(t *testing.T) {
+	const channel = "#tickets-for-a-person-to-answer"
+	a := forumRuleAtLength("", answer.DefaultMaxRenderRunes)
+	if !answer.RuleFits(a, answer.RenderOptions{}, true) || answer.RuleFits(a, answer.RenderOptions{TicketsChannel: channel}, true) {
+		t.Fatal("rule must fit without the channel and exceed the limit with it")
+	}
+	asker := &fakeExcerpts{ruleMatched: true, rule: a}
+	calls := &fakeForumCalls{message: ForumMessage{Content: "question"}}
+	handleOne(t, newTestForumWithTickets(t, asker, channel), optedInPost(), "title", calls)
+	_, replies := calls.counts()
+	if len(asker.asked()) != 1 || len(replies) != 1 || !strings.Contains(replies[0], "Run the installer.") {
+		t.Fatalf("questions %v replies %v", asker.asked(), replies)
+	}
+}
+
+func TestForum_Boundary_TicketsChannelRuleAtLimit(t *testing.T) {
+	const channel = "#tickets-for-a-person-to-answer"
+	for _, extra := range []int{0, 1} {
+		a := forumRuleAtLength(channel, answer.DefaultMaxRenderRunes+extra)
+		asker := &fakeExcerpts{ruleMatched: true, rule: a}
+		calls := &fakeForumCalls{message: ForumMessage{Content: "question"}}
+		handleOne(t, newTestForumWithTickets(t, asker, channel), optedInPost(), "title", calls)
+		_, replies := calls.counts()
+		if extra == 0 {
+			if len(asker.asked()) != 0 || len(replies) != 1 || !strings.Contains(replies[0], answer.LabelRule) || !strings.Contains(replies[0], channel) {
+				t.Fatalf("extra %d questions %v replies %v", extra, asker.asked(), replies)
+			}
+		} else if len(asker.asked()) != 1 || len(replies) != 1 || !strings.Contains(replies[0], "Run the installer.") {
+			t.Fatalf("extra %d questions %v replies %v", extra, asker.asked(), replies)
+		}
 	}
 }
 

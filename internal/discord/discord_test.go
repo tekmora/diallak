@@ -870,7 +870,7 @@ func TestHandleAsk_Negative_UnfitRuleUsesAsk(t *testing.T) {
 }
 
 func TestHandleAsk_Boundary_FittingRuleBypassesAsk(t *testing.T) {
-	for _, extra := range []int{0, 1} {
+	for _, extra := range []int{0, 1, -1} {
 		a := answer.Answer{Kind: answer.KindRule, Sources: []answer.Source{{N: 1, Title: "T", URL: "https://example.test/"}}}
 		length := utf8.RuneCountInString(answer.Render(a, answer.RenderOptions{MaxRunes: 500}))
 		a.Sources[0].URL += strings.Repeat("x", 500-length-extra)
@@ -881,7 +881,11 @@ func TestHandleAsk_Boundary_FittingRuleBypassesAsk(t *testing.T) {
 		}
 		in := &fakeInteraction{guildID: 42}
 		h.executeAskAndReply(context.Background(), in, "question")
-		if asker.Calls() != 0 || len(in.Replies()) != 1 || !strings.Contains(in.Replies()[0], answer.LabelRule) {
+		wantCalls, wantReply := 0, answer.LabelRule
+		if extra == -1 {
+			wantCalls, wantReply = 1, "Answer to: question"
+		}
+		if asker.Calls() != wantCalls || len(in.Replies()) != 1 || !strings.Contains(in.Replies()[0], wantReply) {
 			t.Fatalf("extra %d calls %d replies %v", extra, asker.Calls(), in.Replies())
 		}
 	}
