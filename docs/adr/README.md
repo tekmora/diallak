@@ -39,4 +39,5 @@ record that supersedes it.
 | [0028](0028-version-1-answers-without-a-model.md) | 2026-11-19 | Version 1 answers without a model | Accepted |
 | [0029](0029-the-bot-creates-the-hub-invite.md) | 2026-11-20 | The bot creates the hub invite | Accepted |
 | [0030](0030-the-hub-invite-does-not-wait-for-a-name.md) | 2026-11-20 | The hub invite does not wait for a name | Accepted |
+| [0031](0031-a-person-sets-the-bot-entry-on-rules.md) | 2026-11-21 | A person sets the bot entry on rules | Accepted |
 <!-- markdownlint-enable MD013 -->
