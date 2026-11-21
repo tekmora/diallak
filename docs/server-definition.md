@@ -27,8 +27,8 @@ and applying one plan. None of it was run against Discord
   [Tornus](https://github.com/plurano/tornus),
   [Cistula](https://github.com/plurano/cistula),
   [Peritia](https://github.com/plurano/peritia),
-  [VMAFx](https://github.com/VMAFx/vmafx),
-  [Pelorus](https://github.com/VMAFx/pelorus),
+  [VMAFx](https://github.com/vidiko/vmafx),
+  [Pelorus](https://github.com/vidiko/pelorus),
   [SnatchArr](https://github.com/lusoris/SnatchArr),
   [Rhizomorph](https://github.com/lusoris/rhizomorph) and
   [Embodied](https://github.com/lusoris/embodied). Each repository explains

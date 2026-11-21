@@ -154,20 +154,25 @@ it has no `docs/` folder.
 | Tornus | [plurano/tornus](https://github.com/plurano/tornus) | `main` | `docs/` (decision records only) |
 | Cistula | [plurano/cistula](https://github.com/plurano/cistula) | `main` | `docs/` (decision records only) |
 | Peritia | [plurano/peritia](https://github.com/plurano/peritia) | `main` | `docs/` (decision records and research only) |
-| VMAFx | [VMAFx/vmafx](https://github.com/VMAFx/vmafx) | `master` | `docs/` |
-| Pelorus | [VMAFx/pelorus](https://github.com/VMAFx/pelorus) | `master` | `docs/` |
+| VMAFx | [vidiko/vmafx](https://github.com/vidiko/vmafx) | `master` | `docs/` |
+| Pelorus | [vidiko/pelorus](https://github.com/vidiko/pelorus) | `master` | `docs/` |
 | SnatchArr | [lusoris/SnatchArr](https://github.com/lusoris/SnatchArr) | `main` | `docs/` |
 | Rhizomorph | [lusoris/rhizomorph](https://github.com/lusoris/rhizomorph) | `main` | `docs/` |
 | Embodied | [lusoris/embodied](https://github.com/lusoris/embodied) | `main` | `docs/` |
 <!-- markdownlint-enable MD013 -->
 
-The forge was read on 2026-11-19: all 13 are public and none is archived.
-Forks and supporting repositories give no tag of their own; they fold into
-the tag of the product they serve (the VMAFx organisation's patch and
-contribution repositories into VMAFx). A private or parked repository gets no
-tag. The definition carries the 13 tags, and
-`TestDefinition_Positive_SupportForumHasAProductTagPerRepository` fails when
-one is missing.
+The forge was read on 2026-11-19: all 13 are public and none is archived. The
+two VMAFx repositories moved to the vidiko organisation; their old addresses
+redirect (forge read 2026-11-20). Forks and supporting repositories give no tag
+of their own; they fold into the tag of the product they serve (the vidiko
+organisation's patch, contribution and Homebrew tap repositories into VMAFx). A
+private or parked repository gets no tag. A product without a release gets its
+row and its tag with its first release; `vidiko/alveus` and `vidiko/torcul` have
+none yet (forge read 2026-11-21). The definition carries the 13 tags, and
+`TestDefinition_Positive_SupportForumHasAProductTagPerRepository` fails when one
+is missing. Every trigger repository in `rules/triggers.json` is one of these
+13, and `TestRuleTable_Positive_TriggerRepositoriesInChannelPlan` fails when one
+is not.
 
 A forum holds at most 20 tags (Discord API documentation, channel resource,
 `available_tags`, read at commit `9b737ec51ee8`). The definition gives the
