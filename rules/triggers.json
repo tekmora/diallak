@@ -836,7 +836,7 @@
     },
     {
       "id": "vmafx-start",
-      "repository": "VMAFx/vmafx",
+      "repository": "vidiko/vmafx",
       "keywords": {
         "all": [],
         "any": [
@@ -891,7 +891,7 @@
     },
     {
       "id": "vmafx-licence",
-      "repository": "VMAFx/vmafx",
+      "repository": "vidiko/vmafx",
       "keywords": {
         "all": [],
         "any": [
@@ -942,7 +942,7 @@
     },
     {
       "id": "vmafx-support",
-      "repository": "VMAFx/vmafx",
+      "repository": "vidiko/vmafx",
       "keywords": {
         "all": [],
         "any": [
@@ -994,7 +994,7 @@
     },
     {
       "id": "vmafx-contribute",
-      "repository": "VMAFx/vmafx",
+      "repository": "vidiko/vmafx",
       "keywords": {
         "all": [],
         "any": [
@@ -1042,7 +1042,7 @@
     },
     {
       "id": "pelorus-start",
-      "repository": "VMAFx/pelorus",
+      "repository": "vidiko/pelorus",
       "keywords": {
         "all": [],
         "any": [
@@ -1097,7 +1097,7 @@
     },
     {
       "id": "pelorus-licence",
-      "repository": "VMAFx/pelorus",
+      "repository": "vidiko/pelorus",
       "keywords": {
         "all": [],
         "any": [

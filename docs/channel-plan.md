@@ -168,7 +168,9 @@ give no tag of their own; they fold into the tag of the product they serve
 (the vidiko organisation's patch and contribution repositories into VMAFx).
 A private or parked repository gets no tag. The definition carries the 13
 tags, and `TestDefinition_Positive_SupportForumHasAProductTagPerRepository`
-fails when one is missing.
+fails when one is missing. Every trigger repository in `rules/triggers.json` is
+one of these 13, and `TestRuleTable_Positive_TriggerRepositoriesInChannelPlan`
+fails when one is not.
 
 A forum holds at most 20 tags (Discord API documentation, channel resource,
 `available_tags`, read at commit `9b737ec51ee8`). The definition gives the
