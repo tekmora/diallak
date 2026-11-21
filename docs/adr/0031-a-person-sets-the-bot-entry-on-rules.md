@@ -3,8 +3,9 @@
 - **Status**: Accepted
 - **Date**: 2026-11-21
 - **Authors**: Maintainers
-- **Supersedes in part**: [ADR-0029](0029-the-bot-creates-the-hub-invite.md)
-- **Supersedes in part**: [ADR-0030](0030-the-hub-invite-does-not-wait-for-a-name.md)
+- **Supersedes in part**:
+  [ADR-0029](0029-the-bot-creates-the-hub-invite.md),
+  [ADR-0030](0030-the-hub-invite-does-not-wait-for-a-name.md)
 
 ## Context
 
