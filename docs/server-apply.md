@@ -564,36 +564,37 @@ already a member, and they do not say what becomes of the role and of its
 entries on channels when the bot is removed and added again (both read
 2026-10-12; [Not built, not tried](#not-built-not-tried)).
 
-Own mode writes channel entries only on area channels, and there only the
-entry of the area's role, so it writes none of the bot's entries. A person
-sets the bot's entries by hand as the definition gives them. For the hub
-invite, the entry on `rules` allows **Create Invite** (Einladung erstellen)
-alone and denies nothing. That entry needs the `rules` channel: own mode
-creates no channel, so on a server without `rules` the channel has to exist
-first, and until then the plan refuses the invite as `lacks-right`
-(`TestCheckInviteRight_Boundary_ChannelAbsentWithoutRight`). The plan reads
-that entry when it checks the invite
-(`TestCheckInviteRight_Positive_ObservedBotRoleAllow`) and then holds the
-invite in own mode; no role right is switched on or off for it
+Own mode writes channel entries only on area channels, and there only the entry
+of the area's role, so it writes none of the bot's entries. A person sets the
+bot's entries by hand as the definition gives them. For the hub invite, the
+entry on `rules` allows **Create Invite** (Einladung erstellen) alone and denies
+nothing. That entry needs the `rules` channel: own mode creates no channel, so
+on a server without `rules` the channel has to exist first, and until then the
+plan refuses the invite as `lacks-right`
+(`TestCheckInviteRight_Boundary_ChannelAbsentWithoutRight`). The plan reads that
+entry when it checks the invite
+(`TestCheckInviteRight_Positive_ObservedBotRoleAllow`) and then holds the invite
+in own mode; no role right is switched on or off for it
 ([ADR-0031](adr/0031-a-person-sets-the-bot-entry-on-rules.md),
 [planner](../internal/serverplan/plan.go)).
 
 1. `-server=plan` with the rights the bot's role has. A change the role's
    rights do not cover is refused as `outside-own-changes` or `lacks-right`;
    the line `rights needed:` lists every right the run needs.
-2. Give the bot's role every right of that list that the role does not hold
-   and that `@everyone` does not keep after the plan's change to `@everyone`
-   (a refusal then names the step as `step N takes RIGHT from @everyone`,
-   `TestPlan_Negative_RightHeldOnlyThroughEveryoneIsGoneAfterItsStep`), except
-   Create Invite, which the entry on `rules` covers; the invite check is the
-   only one that reads a channel entry, and every right the definition gives
-   it for good: the plan never holds a change to
-   the bot's own role, so `-server=compare` reports such a right as
-   `role-permissions roles[bot]` after the word `lacks` until a person
-   switches it on. The table below has the label each one carries in the
-   role's settings. The role has to stand above every role the plan creates,
-   changes or sorts; a change that reaches a role above it is refused as
-   `above-caller` (`TestPlan_Boundary_NeighboursOfTheCaller`).
+2. Give the bot's role every right of that list that the role does not hold and
+   that `@everyone` does not keep after the plan's change to `@everyone`, and
+   every right the definition gives it for good. A right that the plan's change
+   takes from `@everyone` shows in a refusal as
+   `step N takes RIGHT from @everyone`
+   (`TestPlan_Negative_RightHeldOnlyThroughEveryoneIsGoneAfterItsStep`). Create
+   Invite is the one exception: the entry on `rules` covers it, and the invite
+   check is the only one that reads a channel entry. The plan never holds a
+   change to the bot's own role, so `-server=compare` reports a right the
+   definition gives it for good as `role-permissions roles[bot]` after the word
+   `lacks` until a person switches it on. The table below has the label each one
+   carries in the role's settings. The role has to stand above every role the
+   plan creates, changes or sorts; a change that reaches a role above it is
+   refused as `above-caller` (`TestPlan_Boundary_NeighboursOfTheCaller`).
 3. Go on with step 2 of [A new server](#a-new-server).
 
 ### The Operator role
