@@ -109,10 +109,14 @@ func TestRuleTable_Positive_LicenceSpellings(t *testing.T) {
 	}
 }
 
+// channelPlanProductRow matches one product-table row in channel-plan.md and captures
+// the linked repository name and URL from the second column.
 var channelPlanProductRow = regexp.MustCompile(
 	`^\|\s*[^|]+\s*\|\s*\[([^\]]+)\]\(([^)]+)\)\s*\|`,
 )
 
+// channelPlanRepositories collects each GitHub repository named in the channel plan product
+// table when the link address is the forge address of its link text.
 func channelPlanRepositories(doc []byte) map[string]bool {
 	plan := make(map[string]bool)
 	for _, line := range strings.Split(string(doc), "\n") {
@@ -129,6 +133,8 @@ func channelPlanRepositories(doc []byte) map[string]bool {
 	return plan
 }
 
+// triggerRepositoryFindings reports each trigger whose repository is missing from the
+// channel plan product table.
 func triggerRepositoryFindings(table *ruleanswer.Table, plan map[string]bool) []string {
 	var findings []string
 	for _, trigger := range table.Triggers {
@@ -144,12 +150,51 @@ func triggerRepositoryFindings(table *ruleanswer.Table, plan map[string]bool) []
 	return findings
 }
 
-func TestRuleTable_Positive_TriggerRepositoriesInChannelPlan(t *testing.T) {
+// readChannelPlanRepositories loads docs/channel-plan.md and returns the product-table
+// repositories it names.
+func readChannelPlanRepositories(t *testing.T) map[string]bool {
+	t.Helper()
 	doc, err := os.ReadFile("../../docs/channel-plan.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan := channelPlanRepositories(doc)
+	return channelPlanRepositories(doc)
+}
+
+// checkPlantedTrigger moves one trigger's repository from from to to and wants exactly one
+// finding from triggerRepositoryFindings that names that trigger's ID.
+func checkPlantedTrigger(t *testing.T, from, to string) {
+	t.Helper()
+	table, err := rules.Table()
+	if err != nil {
+		t.Fatal(err)
+	}
+	triggers := slices.Clone(table.Triggers)
+	var plantedID string
+	for i := range triggers {
+		if triggers[i].Repository != from {
+			continue
+		}
+		plantedID = triggers[i].ID
+		triggers[i].Repository = to
+		break
+	}
+	if plantedID == "" {
+		t.Fatalf("no trigger with repository %q", from)
+	}
+	cloned := &ruleanswer.Table{Version: table.Version, Triggers: triggers}
+	plan := readChannelPlanRepositories(t)
+	findings := triggerRepositoryFindings(cloned, plan)
+	if len(findings) != 1 {
+		t.Fatalf("findings = %+v, want 1", findings)
+	}
+	if !strings.Contains(findings[0], plantedID) {
+		t.Fatalf("finding %q does not name trigger %q", findings[0], plantedID)
+	}
+}
+
+func TestRuleTable_Positive_TriggerRepositoriesInChannelPlan(t *testing.T) {
+	plan := readChannelPlanRepositories(t)
 	if len(plan) != 13 {
 		t.Fatalf("channel plan product repositories = %d, want 13", len(plan))
 	}
@@ -163,67 +208,9 @@ func TestRuleTable_Positive_TriggerRepositoriesInChannelPlan(t *testing.T) {
 }
 
 func TestRuleTable_Negative_PlantedTriggerOutsideChannelPlan(t *testing.T) {
-	table, err := rules.Table()
-	if err != nil {
-		t.Fatal(err)
-	}
-	triggers := slices.Clone(table.Triggers)
-	var plantedID string
-	for i := range triggers {
-		if triggers[i].Repository != "vidiko/vmafx" {
-			continue
-		}
-		plantedID = triggers[i].ID
-		triggers[i].Repository = "VMAFx/vmafx"
-		break
-	}
-	if plantedID == "" {
-		t.Fatal("no trigger with repository vidiko/vmafx")
-	}
-	cloned := &ruleanswer.Table{Version: table.Version, Triggers: triggers}
-	doc, err := os.ReadFile("../../docs/channel-plan.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	plan := channelPlanRepositories(doc)
-	findings := triggerRepositoryFindings(cloned, plan)
-	if len(findings) != 1 {
-		t.Fatalf("findings = %+v, want 1", findings)
-	}
-	if !strings.Contains(findings[0], plantedID) {
-		t.Fatalf("finding %q does not name trigger %q", findings[0], plantedID)
-	}
+	checkPlantedTrigger(t, "vidiko/vmafx", "VMAFx/vmafx")
 }
 
 func TestRuleTable_Boundary_TriggerRepositoryCaseMatters(t *testing.T) {
-	table, err := rules.Table()
-	if err != nil {
-		t.Fatal(err)
-	}
-	triggers := slices.Clone(table.Triggers)
-	var plantedID string
-	for i := range triggers {
-		if triggers[i].Repository != "lusoris/SnatchArr" {
-			continue
-		}
-		plantedID = triggers[i].ID
-		triggers[i].Repository = "lusoris/snatcharr"
-		break
-	}
-	if plantedID == "" {
-		t.Fatal("no trigger with repository lusoris/SnatchArr")
-	}
-	cloned := &ruleanswer.Table{Version: table.Version, Triggers: triggers}
-	doc, err := os.ReadFile("../../docs/channel-plan.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	plan := channelPlanRepositories(doc)
-	findings := triggerRepositoryFindings(cloned, plan)
-	if len(findings) != 1 {
-		t.Fatalf("findings = %+v, want 1", findings)
-	}
-	if !strings.Contains(findings[0], plantedID) {
-		t.Fatalf("finding %q does not name trigger %q", findings[0], plantedID)
-	}
+	checkPlantedTrigger(t, "lusoris/SnatchArr", "lusoris/snatcharr")
 }
