@@ -45,13 +45,19 @@ var toolsModFloorRE = regexp.MustCompile(
 )
 
 var toolsModSelectedRE = regexp.MustCompile(
-	`(?m)^\s*(?:require\s+)?golang\.org/x/tools (v[0-9]+\.[0-9]+\.[0-9]+)`,
+	`(?m)^\s*(?:require\s+)?golang\.org/x/tools (v[0-9]+(?:\.[0-9]+)*(?:[-+.0-9A-Za-z]*)?)`,
 )
 
 type semverTriple struct {
 	major int
 	minor int
 	patch int
+}
+
+type toolsModVersion struct {
+	semverTriple
+	prerelease bool
+	token      string
 }
 
 func parseSemverTriple(v string) (semverTriple, error) {
@@ -75,32 +81,57 @@ func parseSemverTriple(v string) (semverTriple, error) {
 	return semverTriple{major: major, minor: minor, patch: patch}, nil
 }
 
-func semverAtLeast(selected, floor semverTriple) bool {
+func parseToolsModVersion(token string) (toolsModVersion, error) {
+	ver := strings.TrimPrefix(token, "v")
+	if plus := strings.Index(ver, "+"); plus >= 0 {
+		ver = ver[:plus]
+	}
+	triplePart := ver
+	prerelease := false
+	if dash := strings.Index(ver, "-"); dash >= 0 {
+		triplePart = ver[:dash]
+		prerelease = len(ver[dash+1:]) > 0
+	}
+	triple, err := parseSemverTriple("v" + triplePart)
+	if err != nil {
+		return toolsModVersion{}, fmt.Errorf("version %q: %w", token, err)
+	}
+	return toolsModVersion{
+		semverTriple: triple,
+		prerelease:   prerelease,
+		token:        token,
+	}, nil
+}
+
+func semverAtLeast(selected toolsModVersion, floor semverTriple) bool {
 	if selected.major != floor.major {
 		return selected.major > floor.major
 	}
 	if selected.minor != floor.minor {
 		return selected.minor > floor.minor
 	}
-	return selected.patch >= floor.patch
+	if selected.patch != floor.patch {
+		return selected.patch > floor.patch
+	}
+	return !selected.prerelease
 }
 
-func toolsModToolsFloorAndSelected(goModText string) (floor, selected semverTriple, err error) {
+func toolsModToolsFloorAndSelected(goModText string) (floor semverTriple, selected toolsModVersion, err error) {
 	floorMatch := toolsModFloorRE.FindStringSubmatch(goModText)
 	if floorMatch == nil {
-		return semverTriple{}, semverTriple{}, fmt.Errorf("tools go.mod header has no x/tools floor sentence")
+		return semverTriple{}, toolsModVersion{}, fmt.Errorf("tools go.mod header has no x/tools floor sentence")
 	}
 	floor, err = parseSemverTriple(floorMatch[1])
 	if err != nil {
-		return semverTriple{}, semverTriple{}, err
+		return semverTriple{}, toolsModVersion{}, err
 	}
 	selectedMatch := toolsModSelectedRE.FindStringSubmatch(goModText)
 	if selectedMatch == nil {
-		return semverTriple{}, semverTriple{}, fmt.Errorf("tools go.mod has no golang.org/x/tools require line")
+		return semverTriple{}, toolsModVersion{}, fmt.Errorf("tools go.mod has no golang.org/x/tools require line")
 	}
-	selected, err = parseSemverTriple(selectedMatch[1])
+	selected, err = parseToolsModVersion(selectedMatch[1])
 	if err != nil {
-		return semverTriple{}, semverTriple{}, err
+		return semverTriple{}, toolsModVersion{}, err
 	}
 	return floor, selected, nil
 }
@@ -145,8 +176,8 @@ func TestToolsGoMod_Positive_SelectedToolsAtOrAboveFloor(t *testing.T) {
 		t.Fatalf("parse tools/go/go.mod: %v", err)
 	}
 	if !semverAtLeast(selected, floor) {
-		t.Fatalf("selected %d.%d.%d is below floor %d.%d.%d",
-			selected.major, selected.minor, selected.patch,
+		t.Fatalf("selected %s is below floor v%d.%d.%d",
+			selected.token,
 			floor.major, floor.minor, floor.patch)
 	}
 }
@@ -173,8 +204,8 @@ func assertToolsModFloorSelected(t *testing.T, goMod string, wantErr, wantPass b
 	}
 	pass := semverAtLeast(selected, floor)
 	if pass != wantPass {
-		t.Fatalf("selected %d.%d.%d vs floor %d.%d.%d: pass=%v want %v",
-			selected.major, selected.minor, selected.patch,
+		t.Fatalf("selected %s vs floor v%d.%d.%d: pass=%v want %v",
+			selected.token,
 			floor.major, floor.minor, floor.patch, pass, wantPass)
 	}
 }
@@ -198,14 +229,16 @@ func TestWorkflowVersionFindings_Table(t *testing.T) {
 	})
 }
 
-func TestToolsModFloorSelected_Table(t *testing.T) {
+type toolsModFloorCase struct {
+	name     string
+	goMod    string
+	wantErr  bool
+	wantPass bool
+}
+
+func toolsModFloorSelectedCases() []toolsModFloorCase {
 	const header = "// golang.org/x/tools must stay at v0.50.0 or newer: reason.\n"
-	cases := []struct {
-		name     string
-		goMod    string
-		wantErr  bool
-		wantPass bool
-	}{
+	return []toolsModFloorCase{
 		{
 			name:     "floor_boundary_equal",
 			goMod:    header + "require (\n\tgolang.org/x/tools v0.50.0 // indirect\n)\n",
@@ -222,6 +255,31 @@ func TestToolsModFloorSelected_Table(t *testing.T) {
 			wantPass: true,
 		},
 		{
+			name:     "floor_boundary_prerelease_fail",
+			goMod:    header + "require (\n\tgolang.org/x/tools v0.50.0-rc.1 // indirect\n)\n",
+			wantPass: false,
+		},
+		{
+			name:     "above_floor_prerelease_pass",
+			goMod:    header + "require (\n\tgolang.org/x/tools v0.51.0-rc.1 // indirect\n)\n",
+			wantPass: true,
+		},
+		{
+			name:     "pseudo_version_above_floor_pass",
+			goMod:    header + "require (\n\tgolang.org/x/tools v0.50.1-0.20260101000000-abcdef123456 // indirect\n)\n",
+			wantPass: true,
+		},
+		{
+			name:     "build_metadata_equal_floor_pass",
+			goMod:    header + "require (\n\tgolang.org/x/tools v0.50.0+incompatible // indirect\n)\n",
+			wantPass: true,
+		},
+		{
+			name:    "selected_two_part_version",
+			goMod:   header + "require (\n\tgolang.org/x/tools v0.50 // indirect\n)\n",
+			wantErr: true,
+		},
+		{
 			name:    "header_missing_floor",
 			goMod:   "module tools\nrequire golang.org/x/tools v0.53.0 // indirect\n",
 			wantErr: true,
@@ -232,6 +290,10 @@ func TestToolsModFloorSelected_Table(t *testing.T) {
 			wantErr: true,
 		},
 	}
+}
+
+func TestToolsModFloorSelected_Table(t *testing.T) {
+	cases := toolsModFloorSelectedCases()
 	for i := 0; i < len(cases); i++ {
 		tc := cases[i]
 		t.Run(tc.name, func(t *testing.T) {
