@@ -72,9 +72,8 @@ jobs:
       # yamllint enable rule:line-length
 
       # The scanners come from the pinned tools module, not from `@latest`:
-      # gosec v2.29.0 built with its own golang.org/x/tools v0.49.0 cannot read
-      # the export data the Go 1.27.2 compiler writes and fails on every
-      # package. tools/go/go.mod selects x/tools v0.50.0 for both scanners.
+      # tools/go/go.mod selects the golang.org/x/tools version both use, and
+      # its header documents which floor that version keeps and why.
       - name: Install Tools
         if: github.event.pull_request.draft != true
         run: >-

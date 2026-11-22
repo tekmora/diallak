@@ -2,9 +2,9 @@
 // dependency graph stays free of scanner dependencies.
 //
 // golang.org/x/tools must stay at v0.50.0 or newer: older versions cannot read
-// the export data the Go 1.27.2 compiler writes (version 5), and gosec then
-// fails on every package without reporting a finding. gosec v2.29.0 alone
-// requires v0.49.0; govulncheck v1.8.0 raises the selected version.
+// the export data the Go 1.27 compiler writes (version 5), and gosec then
+// fails on every package without reporting a finding. Each scanner's own
+// require can sit below that floor; check `go mod graph` before lowering it.
 module github.com/tekmora/diallak/tools/go
 
 go 1.27
