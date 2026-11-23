@@ -7,11 +7,13 @@ import (
 	"encoding/pem"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/tekmora/diallak/internal/config"
 	"github.com/tekmora/diallak/internal/news"
 	"github.com/tekmora/diallak/internal/serverdef"
+	"github.com/tekmora/diallak/server"
 )
 
 func newsEnv(t *testing.T, state string) func(string) string {
@@ -61,8 +63,8 @@ func TestRun_Positive_NewsOnWithTheStateFile(t *testing.T) {
 	if cfg.News == nil || cfg.News.Runner == nil || cfg.News.Runner.Store == nil || cfg.News.Runner.Reader == nil {
 		t.Fatalf("BotConfig.News = %+v, want a runner with store and reader", cfg.News)
 	}
-	want := news.OwnSources([]string{"tekmora/diallak", "tekmora/epitrop"})
-	if len(cfg.News.Runner.Sources) != len(want) || cfg.News.Runner.Sources[0] != want[0] {
+	want := committedOwnSources(t)
+	if !slices.Equal(cfg.News.Runner.Sources, want) {
 		t.Errorf("sources = %+v, want %+v", cfg.News.Runner.Sources, want)
 	}
 	if cfg.News.Names.Announcement != "announcements" || cfg.News.Names.Role != "Notify: releases" {
@@ -74,6 +76,16 @@ func TestRun_Positive_NewsOnWithTheStateFile(t *testing.T) {
 	if _, err := os.Stat(state); err != nil {
 		t.Errorf("state file not written: %v", err)
 	}
+}
+
+// committedOwnSources is the sources of the own repositories in the shipped server definition.
+func committedOwnSources(t *testing.T) []news.Source {
+	t.Helper()
+	def, err := server.Definition()
+	if err != nil {
+		t.Fatalf("server.Definition() error = %v, want nil", err)
+	}
+	return news.OwnSources(def.News.Repositories)
 }
 
 // A damaged state file stops the start: an empty state would post everything again.

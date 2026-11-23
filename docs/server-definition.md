@@ -106,7 +106,7 @@ after the definition and a file over one mebibyte are refused
 | `choices` | The questions the bot's areas command offers and the role each option gives | 3 questions |
 | `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 17 |
 | `settings` | The platform's filter rules and the server's verification level; absent, nothing of it is compared or changed | 3 filter rules and the verification level |
-| `news` | Own repositories, whose releases and advisories go to the announcement channel, the other feeds, each with the area it serves, and the text channel of the Discussions bridge; read by the bot, not applied to the server | 2 repositories and 0 feeds |
+| `news` | Own repositories, whose releases and advisories go to the announcement channel, the other feeds, each with the area it serves, and the text channel of the Discussions bridge; read by the bot, not applied to the server | 10 repositories and 0 feeds |
 | `invites` | Invites to create and compare, with their channel, purpose, limits and recorded code | 1 |
 <!-- markdownlint-enable MD013 -->
 
@@ -301,7 +301,11 @@ The part `news` says where the news function posts
   [`internal/news`](../internal/news)).
 
 A feed or a repository is added by a pull request to this file. The own
-repositories are `tekmora/diallak` and `tekmora/epitrop`; the list of feeds
+repositories are `tekmora/diallak`, `tekmora/epitrop`, `tekmora/praetor`,
+`vidiko/vmafx`, `vidiko/pelorus`, `plurano/golusoris`, `lusoris/SnatchArr`
+and the Jellyfin plugins `jellysin/plugin-lastfm`,
+`jellysin/plugin-snatcharr` and `jellysin/plugin-trakt` (the 10 ADR-0019
+allows); the list of feeds
 stays empty until the operator names the sources for AI and video news.
 
 ## Invites

@@ -63,7 +63,14 @@ func TestValidate_Positive_CommittedNewsBlock(t *testing.T) {
 	if got := newsFindings(Validate(def)); len(got) != 0 {
 		t.Errorf("the committed news block has findings %+v", got)
 	}
-	want := []string{"tekmora/diallak", "tekmora/epitrop"}
+	want := []string{
+		"tekmora/diallak", "tekmora/epitrop", "tekmora/praetor",
+		"vidiko/vmafx", "vidiko/pelorus", "plurano/golusoris", "lusoris/SnatchArr",
+		"jellysin/plugin-lastfm", "jellysin/plugin-snatcharr", "jellysin/plugin-trakt",
+	}
+	if len(want) > MaxNewsRepositories {
+		t.Fatalf("the pinned list holds %d repositories, above the cap %d", len(want), MaxNewsRepositories)
+	}
 	if !slices.Equal(def.News.Repositories, want) {
 		t.Errorf("own repositories = %v, want %v", def.News.Repositories, want)
 	}
