@@ -3,6 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-10-17
 - **Authors**: Maintainers
+- **Superseded in part by**: [ADR-0032](0032-every-product-in-release-news.md), point 1
 
 ## Context
 

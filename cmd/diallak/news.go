@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/tekmora/diallak/internal/config"
 	"github.com/tekmora/diallak/internal/discord"
@@ -20,6 +21,9 @@ func newNews(cfg config.Config, def *serverdef.Definition) (*discord.NewsConfig,
 	}
 	if def.News == nil {
 		return nil, errors.New("news: the definition has no news block")
+	}
+	if err := checkAdvisoryBudget(cfg, len(def.News.Repositories)); err != nil {
+		return nil, err
 	}
 	names, ok := def.NewsNames()
 	if !ok {
@@ -55,6 +59,20 @@ func newNews(cfg config.Config, def *serverdef.Definition) (*discord.NewsConfig,
 		},
 		Names: names,
 	}, nil
+}
+
+// checkAdvisoryBudget stops the start when count own repositories need more unauthenticated
+// advisory reads than fit GitHub's budget per address and no read-only token is set (ADR-0032).
+func checkAdvisoryBudget(cfg config.Config, count int) error {
+	if cfg.NewsGitHubToken != "" || count <= news.MaxRepositoriesWithoutToken {
+		return nil
+	}
+	reads := count * int(time.Hour/news.AdvisoryInterval)
+	return fmt.Errorf("news: %d own repositories need %d advisory reads an hour, and without a token "+
+		"at most %d repositories fit GitHub's %d unauthenticated requests an hour per address; "+
+		"set %s to the file of the read-only GitHub token",
+		count, reads, news.MaxRepositoriesWithoutToken, news.UnauthenticatedHourlyRequests,
+		config.EnvNewsGitHubTokenFile)
 }
 
 // buildDiscussions wires the GitHub Discussions reader and source when configured (issue #99).

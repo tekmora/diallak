@@ -106,7 +106,7 @@ after the definition and a file over one mebibyte are refused
 | `choices` | The questions the bot's areas command offers and the role each option gives | 3 questions |
 | `automation` | Who does what: the bot, the platform or the operator, and whether it is built | 17 |
 | `settings` | The platform's filter rules and the server's verification level; absent, nothing of it is compared or changed | 3 filter rules and the verification level |
-| `news` | Own repositories, whose releases and advisories go to the announcement channel, the other feeds, each with the area it serves, and the text channel of the Discussions bridge; read by the bot, not applied to the server | 10 repositories and 0 feeds |
+| `news` | Own repositories, whose releases and advisories go to the announcement channel, the other feeds, each with the area it serves, and the text channel of the Discussions bridge; read by the bot, not applied to the server. More than 10 own repositories require the read-only GitHub token ([ADR-0032](adr/0032-every-product-in-release-news.md)) | 20 repositories and 0 feeds |
 | `invites` | Invites to create and compare, with their channel, purpose, limits and recorded code | 1 |
 <!-- markdownlint-enable MD013 -->
 
@@ -162,7 +162,7 @@ Each finding has a code, a path into the file and a message.
 | `role-grant` | A role assigned by the wrong party, such as a member's choice handing out the moderator role, or a managed role not assigned by the platform or an integration; an interest, language or notification role that is not the option of exactly one question; an option that gives a role of another kind; a notification role that does not state `mentionable: true`; `mentionable` on a managed role; `shown_apart` or `mentionable` on the bot's role or on the role every member holds |
 | `choice-limit` | A question with more than 25 options, or an option title longer than 100 characters |
 | `filter-rule` | More rules of one trigger than a server may hold; a field the rule's trigger or the action's type does not read; a keyword rule without keywords or patterns, a preset rule without presets; a list or an entry over the platform's limit; a mention limit outside 1 to 50; a rule without an action or with one action twice; an alert without a channel or into a channel that is not a staff channel; a timeout on a trigger other than keyword or mention spam, or outside one second to four weeks; a block message over 150 characters; more than 20 exempt roles or 50 exempt channels, or one listed twice; two rules with one name |
-| `news` | A feed address that is not an absolute `https` address; a feed without an area or for an area the file does not hold; more than 20 feeds; more than 10 own repositories, one not written `owner/name` or listed twice; own repositories without exactly one announcement channel, or with one where the bot cannot see or send; a `discussions_channel` that is no channel of the file or not of type `text` |
+| `news` | A feed address that is not an absolute `https` address; a feed without an area or for an area the file does not hold; more than 20 feeds; more than 50 own repositories, one not written `owner/name` or listed twice; own repositories without exactly one announcement channel, or with one where the bot cannot see or send; a `discussions_channel` that is no channel of the file or not of type `text` |
 | `invite` | An invalid or duplicate id; a channel other than a defined text or announcement channel; a blank purpose; `max_age` outside 0 to 604800 or `max_uses` outside 0 to 100; a duplicate nonempty code or one outside 1 to 32 letters, digits or hyphens |
 | `bug-reports` | A bug reports repository that is not written `owner/name` |
 | `automation-record` | Something the bot or the platform does without a decision record, a planned bot feature not marked as needing one, or the state `observed` on anything but the platform or together with a record |
@@ -290,6 +290,9 @@ The part `news` says where the news function posts
 
 - Own releases and security advisories of the repositories in
   `news.repositories` go to the channel of type `announcement`.
+  With more than 10 own repositories, the bot needs a read-only GitHub token
+  mounted through `DIALLAK_NEWS_GITHUB_TOKEN_FILE` to start with news enabled
+  ([ADR-0032](adr/0032-every-product-in-release-news.md)).
 - Every other feed in `news.feeds` names the area it serves, and its daily
   digest goes to that area's channel. News follows the areas: AI news to
   `ai-news-tools`, video news to `media-video`. A topic without an area, such
@@ -300,13 +303,11 @@ The part `news` says where the news function posts
   with the next day's news (`HoldForPlace` in
   [`internal/news`](../internal/news)).
 
-A feed or a repository is added by a pull request to this file. The own
-repositories are `tekmora/diallak`, `tekmora/epitrop`, `tekmora/praetor`,
-`vidiko/vmafx`, `vidiko/pelorus`, `plurano/golusoris`, `lusoris/SnatchArr`
-and the Jellyfin plugins `jellysin/plugin-lastfm`,
-`jellysin/plugin-snatcharr` and `jellysin/plugin-trakt` (the 10 ADR-0019
-allows); the list of feeds
-stays empty until the operator names the sources for AI and video news.
+A feed or a repository is added by a pull request to the
+[definition](../server/definition.json). The list holds 20 repositories, and
+a test in [`server/definition_test.go`](../server/definition_test.go) checks
+that every product of the hub is among them. The list of feeds stays empty
+until the operator names the sources for AI and video news.
 
 ## Invites
 

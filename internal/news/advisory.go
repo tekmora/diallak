@@ -16,6 +16,14 @@ const (
 	// AdvisoryInterval is how often an own repository's security advisories are read (ADR-0019,
 	// point 1).
 	AdvisoryInterval = 15 * time.Minute
+	// UnauthenticatedHourlyRequests is GitHub's REST budget an hour per address without a token:
+	// the x-ratelimit-limit header read on 2026-11-23 (ADR-0032).
+	UnauthenticatedHourlyRequests = 60
+	// MaxRepositoriesWithoutToken keeps unauthenticated advisory reads within that budget
+	// (ADR-0032). Four reads an hour per repository use 40 at this cap, leaving 20 for retries
+	// and other clients behind the same address. Atom reads used none of the REST core budget
+	// in the same measurement.
+	MaxRepositoriesWithoutToken = 10
 	// advisoryAccept is the media type of GitHub's REST answers.
 	advisoryAccept = "application/vnd.github+json"
 	// apiVersion pins GitHub's REST API version; the fields read here are unchanged in it

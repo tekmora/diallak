@@ -3,9 +3,9 @@ package serverdef
 const (
 	// MaxNewsFeeds caps the feeds of the news function (ADR-0019, point 2).
 	MaxNewsFeeds = 20
-	// MaxNewsRepositories caps the own repositories: four unauthenticated requests an hour each
-	// within GitHub's 60 (ADR-0019, point 1).
-	MaxNewsRepositories = 10
+	// MaxNewsRepositories bounds the list of own repositories. The chosen cap schedules 200
+	// advisory reads an hour out of GitHub's 5,000 with the read-only token (ADR-0032).
+	MaxNewsRepositories = 50
 )
 
 // News lists what the news function reads (ADR-0019, point 2). Own releases and security

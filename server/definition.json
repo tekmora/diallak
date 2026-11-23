@@ -1082,7 +1082,17 @@
       "lusoris/SnatchArr",
       "jellysin/plugin-lastfm",
       "jellysin/plugin-snatcharr",
-      "jellysin/plugin-trakt"
+      "jellysin/plugin-trakt",
+      "plurano/goenvoy",
+      "plurano/sveltesentio",
+      "plurano/amussis",
+      "plurano/horistes",
+      "plurano/saeptum",
+      "plurano/tornus",
+      "plurano/cistula",
+      "plurano/peritia",
+      "lusoris/rhizomorph",
+      "lusoris/embodied"
     ],
     "feeds": [],
     "discussions_channel": "lounge"

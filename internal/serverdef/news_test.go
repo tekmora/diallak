@@ -67,6 +67,9 @@ func TestValidate_Positive_CommittedNewsBlock(t *testing.T) {
 		"tekmora/diallak", "tekmora/epitrop", "tekmora/praetor",
 		"vidiko/vmafx", "vidiko/pelorus", "plurano/golusoris", "lusoris/SnatchArr",
 		"jellysin/plugin-lastfm", "jellysin/plugin-snatcharr", "jellysin/plugin-trakt",
+		"plurano/goenvoy", "plurano/sveltesentio", "plurano/amussis", "plurano/horistes",
+		"plurano/saeptum", "plurano/tornus", "plurano/cistula", "plurano/peritia",
+		"lusoris/rhizomorph", "lusoris/embodied",
 	}
 	if len(want) > MaxNewsRepositories {
 		t.Fatalf("the pinned list holds %d repositories, above the cap %d", len(want), MaxNewsRepositories)
@@ -143,7 +146,7 @@ func TestValidate_Negative_NewsFeeds(t *testing.T) {
 		}, CodeNews, "news.feeds", "20"},
 		{"too many repositories", func(t *testing.T, def *Definition) {
 			def.News.Repositories = newsRepositories(MaxNewsRepositories + 1)
-		}, CodeNews, "news.repositories", "10"},
+		}, CodeNews, "news.repositories", "at most 50"},
 		{"repository not owner/name", func(t *testing.T, def *Definition) {
 			def.News.Repositories = []string{"diallak"}
 		}, CodeNews, "news.repositories[diallak]", "owner/name"},

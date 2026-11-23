@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/tekmora/diallak/internal/config"
@@ -23,6 +24,9 @@ func newsEnv(t *testing.T, state string) func(string) string {
 		config.EnvGuildID:       "42",
 		config.EnvCorpusDir:     setupTestCorpus(t),
 		config.EnvNewsStateFile: state,
+	}
+	if state != "" {
+		values[config.EnvNewsGitHubTokenFile] = writeSecret(t, "news-github", "test-news-token")
 	}
 	return func(key string) string { return values[key] }
 }
@@ -63,7 +67,7 @@ func TestRun_Positive_NewsOnWithTheStateFile(t *testing.T) {
 	if cfg.News == nil || cfg.News.Runner == nil || cfg.News.Runner.Store == nil || cfg.News.Runner.Reader == nil {
 		t.Fatalf("BotConfig.News = %+v, want a runner with store and reader", cfg.News)
 	}
-	want := committedOwnSources(t)
+	want := news.OwnSources(committedNewsDefinition(t).News.Repositories)
 	if !slices.Equal(cfg.News.Runner.Sources, want) {
 		t.Errorf("sources = %+v, want %+v", cfg.News.Runner.Sources, want)
 	}
@@ -78,14 +82,63 @@ func TestRun_Positive_NewsOnWithTheStateFile(t *testing.T) {
 	}
 }
 
-// committedOwnSources is the sources of the own repositories in the shipped server definition.
-func committedOwnSources(t *testing.T) []news.Source {
+// committedNewsDefinition is the shipped server definition, loaded fresh for each caller.
+func committedNewsDefinition(t *testing.T) *serverdef.Definition {
 	t.Helper()
 	def, err := server.Definition()
 	if err != nil {
 		t.Fatalf("server.Definition() error = %v, want nil", err)
 	}
-	return news.OwnSources(def.News.Repositories)
+	if def.News == nil {
+		t.Fatal("the committed definition has no news block")
+	}
+	return def
+}
+
+func TestNewNews_Boundary_TenRepositoriesWithoutToken(t *testing.T) {
+	cfg := config.Config{NewsStateFile: filepath.Join(t.TempDir(), "news.json")}
+	def := committedNewsDefinition(t)
+	def.News.Repositories = def.News.Repositories[:10]
+	built, err := newNews(cfg, def)
+	if err != nil {
+		t.Fatalf("newNews with 10 repositories and no token: %v", err)
+	}
+	if built == nil || built.Runner == nil || len(built.Runner.Sources) != 20 {
+		t.Fatal("want a news runner with one release source and one advisory source for each of 10 repositories")
+	}
+}
+
+func TestNewNews_Negative_ElevenRepositoriesWithoutToken(t *testing.T) {
+	cfg := config.Config{NewsStateFile: filepath.Join(t.TempDir(), "news.json")}
+	def := committedNewsDefinition(t)
+	def.News.Repositories = append(def.News.Repositories[:10:10], "tekmora/test-repository")
+	built, err := newNews(cfg, def)
+	if err == nil || built != nil {
+		t.Fatal("want an error and no news runner with 11 repositories and no token")
+	}
+	for _, want := range []string{
+		"11 own repositories", "44 advisory reads an hour",
+		"60 unauthenticated requests an hour", config.EnvNewsGitHubTokenFile,
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("newNews error = %q, want it to contain %q", err, want)
+		}
+	}
+}
+
+func TestNewNews_Positive_TwentyRepositoriesWithTokenFile(t *testing.T) {
+	state := filepath.Join(t.TempDir(), "news.json")
+	cfg, err := config.Load(newsEnv(t, state))
+	if err != nil {
+		t.Fatalf("load news configuration: %v", err)
+	}
+	built, err := newNews(cfg, committedNewsDefinition(t))
+	if err != nil {
+		t.Fatalf("newNews with the committed definition and a token file: %v", err)
+	}
+	if built == nil || built.Runner == nil || len(built.Runner.Sources) != 40 {
+		t.Fatal("want a news runner with one release source and one advisory source for each of 20 repositories")
+	}
 }
 
 // A damaged state file stops the start: an empty state would post everything again.
@@ -94,8 +147,8 @@ func TestRun_Boundary_NewsDamagedStateStopsStart(t *testing.T) {
 	if err := os.WriteFile(state, []byte("{"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := captureBotConfig(t, newsEnv(t, state)); err == nil {
-		t.Fatal("run with a damaged state file succeeded")
+	if _, err := captureBotConfig(t, newsEnv(t, state)); err == nil || !strings.Contains(err.Error(), "news: open state") {
+		t.Fatalf("run with a damaged state file = %v, want a news state error", err)
 	}
 }
 
@@ -173,23 +226,16 @@ func TestNewNews_Negative_DiscussionsWithoutChannel(t *testing.T) {
 // lounge (ledger diallak-99-channel).
 func TestRun_Positive_DiscussionsWiredIntoLounge(t *testing.T) {
 	state := filepath.Join(t.TempDir(), "news.json")
+	baseEnv := newsEnv(t, state)
 	keyPath := writeSecret(t, "ghapp.pem", testDiscussionsKeyPEM(t))
 	env := func(key string) string {
 		switch key {
-		case config.EnvTokenFile:
-			return writeSecret(t, "token", "distinctive-token-xyz")
-		case config.EnvGuildID:
-			return "42"
-		case config.EnvCorpusDir:
-			return setupTestCorpus(t)
-		case config.EnvNewsStateFile:
-			return state
 		case config.EnvDiscussionsAppClientID:
 			return "Iv23test123"
 		case config.EnvDiscussionsAppKeyFile:
 			return keyPath
 		default:
-			return ""
+			return baseEnv(key)
 		}
 	}
 	cfg, err := captureBotConfig(t, env)
