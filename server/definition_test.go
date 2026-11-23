@@ -611,6 +611,50 @@ var productRepositories = map[string]string{
 	"Embodied":   "lusoris/embodied",
 }
 
+func missingProductNewsRepositories(repositories []string) []string {
+	var missing []string
+	for _, repo := range productRepositories {
+		if !slices.Contains(repositories, repo) {
+			missing = append(missing, repo)
+		}
+	}
+	slices.Sort(missing)
+	return missing
+}
+
+func TestDefinition_Positive_NewsIncludesEveryProductRepository(t *testing.T) {
+	def, err := Definition()
+	if err != nil {
+		t.Fatalf("Definition() error = %v, want nil", err)
+	}
+	if def.News == nil {
+		t.Fatal("the committed definition has no news block")
+	}
+	if missing := missingProductNewsRepositories(def.News.Repositories); len(missing) != 0 {
+		t.Errorf("news.repositories lacks product repositories %q", missing)
+	}
+}
+
+func TestDefinition_Negative_NewsMissingProductRepositoryReported(t *testing.T) {
+	def, err := Definition()
+	if err != nil {
+		t.Fatalf("Definition() error = %v, want nil", err)
+	}
+	if def.News == nil {
+		t.Fatal("the committed definition has no news block")
+	}
+	repo := productRepositories["Diallak"]
+	repositories := slices.Clone(def.News.Repositories)
+	index := slices.Index(repositories, repo)
+	if index < 0 {
+		t.Fatalf("news.repositories already lacks %q", repo)
+	}
+	repositories = slices.Delete(repositories, index, index+1)
+	if missing := missingProductNewsRepositories(repositories); !slices.Equal(missing, []string{repo}) {
+		t.Errorf("missing product repositories = %q, want only %q", missing, repo)
+	}
+}
+
 // productTagFindings reports each product of productRepositories without a tag in the support
 // forum ch, a product tag only moderators or the opt-in can carry, and a channel named after a
 // product in channels.

@@ -95,7 +95,10 @@ is missing or out of range stops the start with a message that names it.
   empty state would post every release again. The bot finds the announcement
   channel, the release role and the feed channels by their names in the server
   definition before every read, so a renamed channel needs no restart.
-- **The GitHub token is optional and read-only.**
+- **The read-only GitHub token is required above 10 own repositories.**
+  With news enabled, the token is optional up to 10 own repositories and the
+  bot refuses to start above that without it. The committed definition lists
+  20 repositories ([ADR-0032](adr/0032-every-product-in-release-news.md)).
   `DIALLAK_NEWS_GITHUB_TOKEN_FILE` names a file of at most 4096 bytes with a
   fine-grained token that can only read public repositories. The bot sends it
   only to `api.github.com`, for the advisory reads, and never logs it. Without
