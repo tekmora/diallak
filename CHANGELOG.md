@@ -5,10 +5,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Changed
-
-- News: releases and security advisories of eight more product repositories go to the announcement channel: praetor, VMAFx, Pelorus, golusoris, SnatchArr and the Last.fm, SnatchArr and Trakt Jellyfin plugins
-
 
 ## [0.4.2] - 2026-10-12
 

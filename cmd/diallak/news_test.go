@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/tekmora/diallak/internal/config"
@@ -63,7 +64,7 @@ func TestRun_Positive_NewsOnWithTheStateFile(t *testing.T) {
 		t.Fatalf("BotConfig.News = %+v, want a runner with store and reader", cfg.News)
 	}
 	want := committedOwnSources(t)
-	if len(cfg.News.Runner.Sources) != len(want) || cfg.News.Runner.Sources[0] != want[0] {
+	if !slices.Equal(cfg.News.Runner.Sources, want) {
 		t.Errorf("sources = %+v, want %+v", cfg.News.Runner.Sources, want)
 	}
 	if cfg.News.Names.Announcement != "announcements" || cfg.News.Names.Role != "Notify: releases" {
