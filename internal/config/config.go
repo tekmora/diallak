@@ -2,6 +2,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -107,6 +108,8 @@ const (
 	MaxTokenBytes = 4096
 	// MaxKeyFileBytes bounds secret files for GitHub App RSA private keys.
 	MaxKeyFileBytes = 16384
+	// secretReadTimeout bounds caller wait even if a regular file's mount stalls.
+	secretReadTimeout = 5 * time.Second
 	// MaxSupportChannelRunes is the maximum allowed length of the support channel name in runes.
 	MaxSupportChannelRunes = 64
 
@@ -507,7 +510,9 @@ func parseNews(getenv func(string) string) (string, string, error) {
 	if tokenFile == "" {
 		return state, "", nil
 	}
-	if _, err := ReadNewsGitHubToken(tokenFile); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), secretReadTimeout)
+	defer cancel()
+	if _, err := ReadNewsGitHubToken(ctx, tokenFile); err != nil {
 		return "", "", err
 	}
 	return state, tokenFile, nil
@@ -539,7 +544,7 @@ func parseDiscussions(getenv func(string) string, hasNews bool) (string, string,
 }
 
 func readKeyFile(path string) (string, error) {
-	secret, err := readSecretFileLimit(path, EnvDiscussionsAppKeyFile, "discussions key", MaxKeyFileBytes)
+	secret, err := readSecretFileBounded(path, EnvDiscussionsAppKeyFile, "discussions key", MaxKeyFileBytes)
 	if err != nil {
 		return "", err
 	}
@@ -757,13 +762,85 @@ func parseSnowflake(raw, envVar string) (uint64, error) {
 	return id, nil
 }
 
-func readSecretFile(path, envVar, description string) (string, error) {
-	return readSecretFileLimit(path, envVar, description, MaxTokenBytes)
+type secretReader struct {
+	slot    chan struct{}
+	timeout time.Duration
 }
 
-// ReadNewsGitHubToken reads and validates the current advisory token at path.
-func ReadNewsGitHubToken(path string) (string, error) {
-	token, err := readSecretFile(path, EnvNewsGitHubTokenFile, "GitHub token")
+type secretReadResult struct {
+	value string
+	err   error
+}
+
+func newSecretReader(timeout time.Duration) *secretReader {
+	return &secretReader{slot: make(chan struct{}, 1), timeout: timeout}
+}
+
+var defaultSecretReader = newSecretReader(secretReadTimeout)
+
+func (r *secretReader) read(ctx context.Context, description string, readRaw func() (string, error)) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("read %s file: %w", description, err)
+	}
+	select {
+	case r.slot <- struct{}{}:
+	default:
+		// The context can end after the entry check while the slot is busy.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", fmt.Errorf("read %s file: %w", description, ctxErr)
+		}
+		return "", fmt.Errorf("read %s file: a previous secret file read has not returned", description)
+	}
+
+	readCtx, cancel := context.WithTimeout(ctx, r.timeout)
+	defer cancel()
+	result := make(chan secretReadResult, 1)
+	go func(workerCtx context.Context) {
+		var outcome secretReadResult
+		// The waiter reports the error if the context has already ended.
+		if workerCtx.Err() == nil {
+			outcome.value, outcome.err = readRaw()
+		}
+		// Release before reporting completion so the next read can start immediately.
+		<-r.slot
+		result <- outcome
+	}(readCtx)
+	return waitSecretReadResult(readCtx, description, result)
+}
+
+func waitSecretReadResult(ctx context.Context, description string, result <-chan secretReadResult) (string, error) {
+	select {
+	case done := <-result:
+		// Both channels can be ready, so check the context before returning a value.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", fmt.Errorf("read %s file: %w", description, ctxErr)
+		}
+		return done.value, done.err
+	case <-ctx.Done():
+		return "", fmt.Errorf("read %s file: %w", description, ctx.Err())
+	}
+}
+
+func readSecretFile(path, envVar, description string) (string, error) {
+	return readSecretFileBounded(path, envVar, description, MaxTokenBytes)
+}
+
+// readSecretFileBounded gives callers without a context the secret file deadline.
+func readSecretFileBounded(path, envVar, description string, limit int64) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), secretReadTimeout)
+	defer cancel()
+	return readSecretFileWithTimeout(ctx, path, envVar, description, limit)
+}
+
+func readSecretFileWithTimeout(ctx context.Context, path, envVar, description string, limit int64) (string, error) {
+	return defaultSecretReader.read(ctx, description, func() (string, error) {
+		return readSecretFileLimit(path, envVar, description, limit)
+	})
+}
+
+// ReadNewsGitHubToken reads and validates the advisory token at path with ctx and the secret file timeout.
+func ReadNewsGitHubToken(ctx context.Context, path string) (string, error) {
+	token, err := readSecretFileWithTimeout(ctx, path, EnvNewsGitHubTokenFile, "GitHub token", MaxTokenBytes)
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", EnvNewsGitHubTokenFile, err)
 	}

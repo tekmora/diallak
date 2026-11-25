@@ -163,7 +163,9 @@ func TestRunner_Negative_MissingAdvisoryTokenRetriesAfterInterval(t *testing.T) 
 	src := Source{ID: "advisories:" + testRepo, Address: srv.URL + "/a",
 		Kind: SourceAdvisories, Interval: AdvisoryInterval, Repo: testRepo}
 	tr := newTestRun(t, srv, src)
-	tr.r.Reader = tokenReader(srv, func() (string, error) { return config.ReadNewsGitHubToken(path) })
+	tr.r.Reader = tokenReader(srv, func(ctx context.Context) (string, error) {
+		return config.ReadNewsGitHubToken(ctx, path)
+	})
 	if err := os.Remove(path); err != nil {
 		t.Fatalf("remove fixture token file: %v", err)
 	}
