@@ -1,0 +1,2 @@
+type: security
+title: Move gorilla/websocket to upstream commit e064f32, whose frame mask keys come from crypto/rand, to fix GO-2026-6278
