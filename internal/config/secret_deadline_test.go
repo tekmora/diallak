@@ -101,6 +101,31 @@ func TestSecretReader_Boundary_CancelledContextSkipsRead(t *testing.T) {
 	}
 }
 
+func TestSecretReader_Boundary_CancellationWinsOverBusySlot(t *testing.T) {
+	synctest.Test(t, func(test *testing.T) {
+		reader := newSecretReader(secretReadTimeout)
+		reader.slot <- struct{}{}
+		done := make(chan struct{})
+		close(done)
+		ctx := &cancelAfterEntryContext{Context: test.Context(), done: done}
+		var calls int
+		_, err := reader.read(ctx, fixtureDescription, func() (string, error) {
+			calls++
+			return readFixtureValue()
+		})
+		if !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), fixtureDescription) {
+			test.Errorf("read returned %v, want a cancellation error naming the file description", err)
+		}
+		synctest.Wait()
+		if calls != 0 {
+			test.Errorf("raw read called %d times, want zero", calls)
+		}
+		if got := len(reader.slot); got != 1 {
+			test.Errorf("read slot holds %d tokens, want one", got)
+		}
+	})
+}
+
 func TestSecretReader_Boundary_CancellationWinsOverResult(t *testing.T) {
 	synctest.Test(t, func(test *testing.T) {
 		reader := newSecretReader(secretReadTimeout)

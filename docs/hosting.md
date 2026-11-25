@@ -61,8 +61,9 @@ is missing or out of range stops the start with a message that names it.
   the bot refuses FIFOs, directories and device paths.
   A secret file read fails if it is still running at the 5-second deadline, and
   later reads fail immediately while an earlier read is pending. If the advisory
-  token read fails or is canceled, the round skips the GitHub request and retries
-  at the next interval.
+  token read fails, the round skips the GitHub request and retries at the next
+  interval. If bot shutdown cancels the read, the round skips the request and
+  no retry follows.
 - **The guild id is configuration.** It never appears in this repository.
 - **A version 1 build has no model mode.** It refuses every
   `DIALLAK_MODEL_*` and `DIALLAK_EMBED_*` variable: the start stops with a

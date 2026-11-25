@@ -785,6 +785,10 @@ func (r *secretReader) read(ctx context.Context, description string, readRaw fun
 	select {
 	case r.slot <- struct{}{}:
 	default:
+		// The context can end after the entry check while the slot is busy.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", fmt.Errorf("read %s file: %w", description, ctxErr)
+		}
 		return "", fmt.Errorf("read %s file: a previous secret file read has not returned", description)
 	}
 
