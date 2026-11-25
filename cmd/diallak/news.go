@@ -34,7 +34,9 @@ func newNews(cfg config.Config, def *serverdef.Definition) (*discord.NewsConfig,
 		return nil, fmt.Errorf("news: open state: %w", err)
 	}
 	reader := news.NewReader(nil)
-	reader.UseAPIToken(cfg.NewsGitHubToken)
+	if path := cfg.NewsGitHubTokenFile; path != "" {
+		reader.UseAPITokenSource(func() (string, error) { return config.ReadNewsGitHubToken(path) })
+	}
 	sources := news.OwnSources(def.News.Repositories)
 	for _, f := range def.News.Feeds {
 		ch, _ := def.FeedChannel(f.ID)
@@ -62,15 +64,15 @@ func newNews(cfg config.Config, def *serverdef.Definition) (*discord.NewsConfig,
 }
 
 // checkAdvisoryBudget stops the start when count own repositories need more unauthenticated
-// advisory reads than fit GitHub's budget per address and no read-only token is set (ADR-0032).
+// advisory reads than fit GitHub's budget per address and no token file is set (ADR-0032).
 func checkAdvisoryBudget(cfg config.Config, count int) error {
-	if cfg.NewsGitHubToken != "" || count <= news.MaxRepositoriesWithoutToken {
+	if cfg.NewsGitHubTokenFile != "" || count <= news.MaxRepositoriesWithoutToken {
 		return nil
 	}
 	reads := count * int(time.Hour/news.AdvisoryInterval)
 	return fmt.Errorf("news: %d own repositories need %d advisory reads an hour, and without a token "+
 		"at most %d repositories fit GitHub's %d unauthenticated requests an hour per address; "+
-		"set %s to the file of the read-only GitHub token",
+		"set %s to the file of the GitHub App installation token",
 		count, reads, news.MaxRepositoriesWithoutToken, news.UnauthenticatedHourlyRequests,
 		config.EnvNewsGitHubTokenFile)
 }

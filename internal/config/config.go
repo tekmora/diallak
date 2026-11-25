@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -102,7 +103,7 @@ const (
 	// holding neither platform role. It needs EnvSupporterRoles.
 	EnvSupporterGrace = "DIALLAK_SUPPORTER_GRACE"
 
-	// MaxTokenBytes bounds secret files (both bot token and model key).
+	// MaxTokenBytes bounds token and model key files.
 	MaxTokenBytes = 4096
 	// MaxKeyFileBytes bounds secret files for GitHub App RSA private keys.
 	MaxKeyFileBytes = 16384
@@ -220,9 +221,8 @@ type Config struct {
 	// NewsStateFile is the absolute path of the news state file. It is empty when the variable is
 	// not set; the news function is then off.
 	NewsStateFile string
-	// NewsGitHubToken is the optional read-only GitHub token of the advisory reads. It is never
-	// logged and is left out of JSON encodings.
-	NewsGitHubToken string `json:"-"`
+	// NewsGitHubTokenFile is the optional path of the GitHub token file for advisory reads.
+	NewsGitHubTokenFile string
 	// DiscussionsAppClientID is the GitHub App client ID for reading repository discussions.
 	DiscussionsAppClientID string
 	// DiscussionsAppKey is the private key PEM text of the GitHub App. It is never logged
@@ -265,16 +265,15 @@ func (c Config) HasSupporterRoles() bool {
 	return c.SupporterRoles
 }
 
-// String returns a redacted representation of Config. Token, ModelKey, EmbedKey and NewsGitHubToken are
-// never printed.
+// String returns a redacted representation of Config with secret values omitted.
 func (c Config) String() string {
-	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelGuardrail:%q, ModelKey:%q, EmbedBaseURL:%q, EmbedAlias:%q, EmbedKey:%q, EmbedTimeout:%v, EmbedMinSimilarity:%g, CorpusDir:%q, SupportChannel:%q, TicketsChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d, NewsStateFile:%q, NewsGitHubToken:%q, DiscussionsAppClientID:%q, DiscussionsAppKey:%q, SupporterRoles:%t, SupporterGrace:%v}",
+	return fmt.Sprintf("Config{Token:%q, GuildID:%d, ModelBaseURL:%q, ModelAlias:%q, ModelPolicy:%q, ModelGuardrail:%q, ModelKey:%q, EmbedBaseURL:%q, EmbedAlias:%q, EmbedKey:%q, EmbedTimeout:%v, EmbedMinSimilarity:%g, CorpusDir:%q, SupportChannel:%q, TicketsChannel:%q, TopPassages:%d, MinScore:%g, QuestionMaxChars:%d, ExcerptChars:%d, ReplyMaxChars:%d, MaxConcurrentAsks:%d, AskTimeout:%v, ModelTimeout:%v, SourceLinkTemplate:%q, HealthAddr:%q, TrailRetention:%v, ForumChannelID:%d, ForumOptInTagID:%d, NewsStateFile:%q, NewsGitHubTokenFile:%q, DiscussionsAppClientID:%q, DiscussionsAppKey:%q, SupporterRoles:%t, SupporterGrace:%v}",
 		redactSecret(c.Token), c.GuildID, c.ModelBaseURL, c.ModelAlias, c.ModelPolicy, c.ModelGuardrail, redactSecret(c.ModelKey),
 		c.EmbedBaseURL, c.EmbedAlias, redactSecret(c.EmbedKey), c.EmbedTimeout, c.EmbedMinSimilarity,
 		c.CorpusDir, c.SupportChannel, c.TicketsChannel,
 		c.TopPassages, c.MinScore, c.QuestionMaxChars, c.ExcerptChars, c.ReplyMaxChars, c.MaxConcurrentAsks,
 		c.AskTimeout, c.ModelTimeout, c.SourceLinkTemplate, c.HealthAddr, c.TrailRetention,
-		c.ForumChannelID, c.ForumOptInTagID, c.NewsStateFile, redactSecret(c.NewsGitHubToken),
+		c.ForumChannelID, c.ForumOptInTagID, c.NewsStateFile, c.NewsGitHubTokenFile,
 		c.DiscussionsAppClientID, redactSecret(c.DiscussionsAppKey), c.SupporterRoles, c.SupporterGrace)
 }
 
@@ -315,7 +314,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Uint64("ForumChannelID", c.ForumChannelID),
 		slog.Uint64("ForumOptInTagID", c.ForumOptInTagID),
 		slog.String("NewsStateFile", c.NewsStateFile),
-		slog.String("NewsGitHubToken", redactSecret(c.NewsGitHubToken)),
+		slog.String("NewsGitHubTokenFile", c.NewsGitHubTokenFile),
 		slog.String("DiscussionsAppClientID", c.DiscussionsAppClientID),
 		slog.String("DiscussionsAppKey", redactSecret(c.DiscussionsAppKey)),
 		slog.Bool("SupporterRoles", c.SupporterRoles),
@@ -417,17 +416,17 @@ func parseHealthAndRetention(rawHealthAddr string, opt optionals) (string, time.
 
 // features are the settings of the functions that are off unless configured.
 type features struct {
-	forumChannel, forumTag uint64
-	newsState, newsToken   string
-	discClientID, discKey  string
-	supporter              bool
-	supporterGrace         time.Duration
+	forumChannel, forumTag   uint64
+	newsState, newsTokenFile string
+	discClientID, discKey    string
+	supporter                bool
+	supporterGrace           time.Duration
 }
 
 // set copies the features' settings into c.
 func (f features) set(c *Config) {
 	c.ForumChannelID, c.ForumOptInTagID = f.forumChannel, f.forumTag
-	c.NewsStateFile, c.NewsGitHubToken = f.newsState, f.newsToken
+	c.NewsStateFile, c.NewsGitHubTokenFile = f.newsState, f.newsTokenFile
 	c.DiscussionsAppClientID, c.DiscussionsAppKey = f.discClientID, f.discKey
 	c.SupporterRoles, c.SupporterGrace = f.supporter, f.supporterGrace
 }
@@ -440,7 +439,7 @@ func parseFeatures(getenv func(string) string, opt optionals) (features, error) 
 	if f.forumChannel, f.forumTag, err = parseForum(getenv); err != nil {
 		return features{}, err
 	}
-	if f.newsState, f.newsToken, err = parseNews(getenv); err != nil {
+	if f.newsState, f.newsTokenFile, err = parseNews(getenv); err != nil {
 		return features{}, err
 	}
 	if f.discClientID, f.discKey, err = parseDiscussions(getenv, f.newsState != ""); err != nil {
@@ -508,11 +507,10 @@ func parseNews(getenv func(string) string) (string, string, error) {
 	if tokenFile == "" {
 		return state, "", nil
 	}
-	token, err := readSecretFile(tokenFile, EnvNewsGitHubTokenFile, "GitHub token")
-	if err != nil {
-		return "", "", fmt.Errorf("%s: %w", EnvNewsGitHubTokenFile, err)
+	if _, err := ReadNewsGitHubToken(tokenFile); err != nil {
+		return "", "", err
 	}
-	return state, token, nil
+	return state, tokenFile, nil
 }
 
 func parseDiscussions(getenv func(string) string, hasNews bool) (string, string, error) {
@@ -763,12 +761,22 @@ func readSecretFile(path, envVar, description string) (string, error) {
 	return readSecretFileLimit(path, envVar, description, MaxTokenBytes)
 }
 
-// readSecretFileLimit reads a secret file of at most limit bytes.
+// ReadNewsGitHubToken reads and validates the current advisory token at path.
+func ReadNewsGitHubToken(path string) (string, error) {
+	token, err := readSecretFile(path, EnvNewsGitHubTokenFile, "GitHub token")
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", EnvNewsGitHubTokenFile, err)
+	}
+	return token, nil
+}
+
+// readSecretFileLimit reads a regular secret file of at most limit bytes.
 func readSecretFileLimit(path, envVar, description string, limit int64) (secret string, err error) {
 	if path == "" {
 		return "", fmt.Errorf("%s is not set", envVar)
 	}
-	file, err := os.Open(path) // #nosec G304 -- the operator names the secret file.
+	// Open without waiting for a FIFO writer so we can reject it by mode.
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0) // #nosec G304 -- the operator names the secret file.
 	if err != nil {
 		return "", fmt.Errorf("open %s file: %w", description, err)
 	}
@@ -777,6 +785,17 @@ func readSecretFileLimit(path, envVar, description string, limit int64) (secret 
 			err = errors.Join(err, fmt.Errorf("close %s file: %w", description, closeErr))
 		}
 	}()
+	info, err := file.Stat()
+	if err != nil {
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) {
+			err = pathErr.Err
+		}
+		return "", fmt.Errorf("stat %s file: %w", description, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%s file is not a regular file", description)
+	}
 	data, err := io.ReadAll(io.LimitReader(file, limit+1))
 	if err != nil {
 		return "", fmt.Errorf("read %s file: %w", description, err)

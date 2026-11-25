@@ -5,6 +5,8 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -138,6 +140,28 @@ func TestNewNews_Positive_TwentyRepositoriesWithTokenFile(t *testing.T) {
 	}
 	if built == nil || built.Runner == nil || len(built.Runner.Sources) != 40 {
 		t.Fatal("want a news runner with one release source and one advisory source for each of 20 repositories")
+	}
+
+	const rotated = "rotated-fixture-token"
+	if err := os.WriteFile(cfg.NewsGitHubTokenFile, []byte(rotated), 0o600); err != nil {
+		t.Fatalf("rotate fixture token file: %v", err)
+	}
+	requests := 0
+	original := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = original })
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests++
+		if req.URL.Host != "api.github.com" || req.Header.Get("Authorization") != "Bearer "+rotated {
+			t.Error("expected an advisory request to the API host with the rotated token")
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("[]"))}, nil
+	})
+	src := built.Runner.Sources[1]
+	if _, err := built.Runner.Reader.FetchAdvisories(t.Context(), src.Address, news.Validators{}); err != nil {
+		t.Fatalf("read advisories with the rotated token: %v", err)
+	}
+	if requests != 1 {
+		t.Errorf("advisory requests = %d, want 1", requests)
 	}
 }
 

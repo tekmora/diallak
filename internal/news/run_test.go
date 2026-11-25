@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/tekmora/diallak/internal/config"
 )
 
 // runNow is the start of the runner tests: 09:00 UTC, an hour past the day's digest time.
@@ -149,6 +153,36 @@ func TestRunner_Negative_RateLimitedReadWaitsForReset(t *testing.T) {
 	tr.round(t)
 	if got := tr.r.Store.Feed(src.ID).NextRead; !got.Equal(tr.now.Add(30 * time.Minute)) {
 		t.Fatalf("next read = %v, want the reset %v", got, tr.now.Add(30*time.Minute))
+	}
+}
+
+func TestRunner_Negative_MissingAdvisoryTokenRetriesAfterInterval(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "token")
+	writeAdvisoryToken(t, path, "initial-fixture-token")
+	srv, headers := authServer(t)
+	src := Source{ID: "advisories:" + testRepo, Address: srv.URL + "/a",
+		Kind: SourceAdvisories, Interval: AdvisoryInterval, Repo: testRepo}
+	tr := newTestRun(t, srv, src)
+	tr.r.Reader = tokenReader(srv, func() (string, error) { return config.ReadNewsGitHubToken(path) })
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove fixture token file: %v", err)
+	}
+
+	tr.round(t)
+	retry := runNow.Add(AdvisoryInterval)
+	if got := tr.r.Store.Feed(src.ID).NextRead; !got.Equal(retry) {
+		t.Fatalf("next read = %v, want %v", got, retry)
+	}
+	writeAdvisoryToken(t, path, "restored-fixture-token")
+	tr.now = retry.Add(-time.Second)
+	tr.round(t)
+	if got := len(headers()); got != 0 {
+		t.Errorf("requests before retry = %d, want 0", got)
+	}
+	tr.now = retry
+	tr.round(t)
+	if got := headers(); len(got) != 1 || got[0] != "Bearer restored-fixture-token" {
+		t.Error("expected a single request with the restored token at the retry time")
 	}
 }
 

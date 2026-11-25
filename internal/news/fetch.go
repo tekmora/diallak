@@ -67,16 +67,16 @@ type Result struct {
 
 // Reader reads feeds over HTTPS.
 type Reader struct {
-	client *http.Client
-	now    func() time.Time
-	// apiToken is sent with advisory reads to apiHost only; empty sends none.
-	apiToken string
-	apiHost  string
+	client         *http.Client
+	now            func() time.Time
+	apiTokenSource func() (string, error)
+	apiHost        string
 }
 
 // NewReader returns a Reader. If hc is nil, the Reader makes its own client: it follows at most
-// MaxRedirects redirects, each to an https address, and gives up after ReadTimeout. A caller that
-// passes hc decides that client's redirect policy; Fetch still sets its own deadline.
+// MaxRedirects redirects, each to an https address, drops Authorization on redirects to another
+// host or port, and gives up after ReadTimeout. A caller that passes hc decides that client's
+// redirect policy; Fetch still sets its own deadline.
 func NewReader(hc *http.Client) *Reader {
 	if hc == nil {
 		hc = &http.Client{CheckRedirect: checkRedirect, Timeout: ReadTimeout}
@@ -90,6 +90,10 @@ func checkRedirect(req *http.Request, via []*http.Request) error {
 	}
 	if req.URL.Scheme != "https" {
 		return fmt.Errorf("redirect to scheme %q, want https", req.URL.Scheme)
+	}
+	// net/http forwards Authorization to subdomains and ignores port changes.
+	if req.URL.Host != via[0].URL.Host {
+		req.Header.Del("Authorization")
 	}
 	return nil
 }

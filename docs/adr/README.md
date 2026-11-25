@@ -41,4 +41,5 @@ record that supersedes it.
 | [0030](0030-the-hub-invite-does-not-wait-for-a-name.md) | 2026-11-20 | The hub invite does not wait for a name | Accepted |
 | [0031](0031-a-person-sets-the-bot-entry-on-rules.md) | 2026-11-21 | A person sets the bot entry on rules | Accepted |
 | [0032](0032-every-product-in-release-news.md) | 2026-11-23 | Every product in release news | Accepted |
+| [0033](0033-reload-the-advisory-token.md) | 2026-11-25 | Reload the GitHub advisory token before each read | Accepted |
 <!-- markdownlint-enable MD013 -->

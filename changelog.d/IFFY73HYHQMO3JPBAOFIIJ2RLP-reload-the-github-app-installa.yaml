@@ -1,0 +1,2 @@
+type: changed
+title: Reload the GitHub App installation token from its file before each advisory read
