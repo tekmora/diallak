@@ -767,6 +767,11 @@ type secretReader struct {
 	timeout time.Duration
 }
 
+type secretReadResult struct {
+	value string
+	err   error
+}
+
 func newSecretReader(timeout time.Duration) *secretReader {
 	return &secretReader{slot: make(chan struct{}, 1), timeout: timeout}
 }
@@ -783,22 +788,31 @@ func (r *secretReader) read(ctx context.Context, description string, readRaw fun
 		return "", fmt.Errorf("read %s file: a previous secret file read has not returned", description)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, r.timeout)
+	readCtx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
-	type readResult struct {
-		value string
-		err   error
-	}
-	result := make(chan readResult, 1)
-	go func() {
-		value, err := readRaw()
+	result := make(chan secretReadResult, 1)
+	go func(workerCtx context.Context) {
+		var outcome secretReadResult
+		// The context can end before the worker gets a chance to open the file.
+		if ctxErr := workerCtx.Err(); ctxErr != nil {
+			outcome.err = fmt.Errorf("read %s file: %w", description, ctxErr)
+		} else {
+			outcome.value, outcome.err = readRaw()
+		}
 		// Release before reporting completion so the next read can start immediately.
 		<-r.slot
-		result <- readResult{value: value, err: err}
-	}()
+		result <- outcome
+	}(readCtx)
+	return waitSecretReadResult(readCtx, description, result)
+}
 
+func waitSecretReadResult(ctx context.Context, description string, result <-chan secretReadResult) (string, error) {
 	select {
 	case done := <-result:
+		// Both channels can be ready, so check the context before returning a value.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", fmt.Errorf("read %s file: %w", description, ctxErr)
+		}
 		return done.value, done.err
 	case <-ctx.Done():
 		return "", fmt.Errorf("read %s file: %w", description, ctx.Err())

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -20,51 +21,71 @@ const (
 )
 
 func TestSecretReader_Positive_ReturnsValue(t *testing.T) {
-	reader := newSecretReader(fixtureReadTimeout)
-	value, err := reader.read(t.Context(), fixtureDescription, readFixtureValue)
-	if err != nil || value != fixtureValue {
-		t.Fatalf("read did not return the fixture value: %v", err)
-	}
+	synctest.Test(t, func(test *testing.T) {
+		reader := newSecretReader(secretReadTimeout)
+		value, err := reader.read(test.Context(), fixtureDescription, readFixtureValue)
+		if err != nil || value != fixtureValue {
+			test.Fatalf("read did not return the fixture value: %v", err)
+		}
+	})
 }
 
 func TestSecretReader_Negative_BlockedReadTimesOut(t *testing.T) {
-	reader := newSecretReader(fixtureReadTimeout)
-	_, result := startBlockedSecretRead(t, reader)
-	err := waitSecretReadError(t, result)
-	if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), fixtureDescription) {
-		t.Fatalf("read returned %v, want a deadline error naming the file description", err)
-	}
+	synctest.Test(t, func(test *testing.T) {
+		reader := newSecretReader(fixtureReadTimeout)
+		_, result := startBlockedSecretRead(test, test.Context(), reader)
+		err := waitSecretReadError(test, result)
+		if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), fixtureDescription) {
+			test.Fatalf("read returned %v, want a deadline error naming the file description", err)
+		}
+	})
+}
+
+func TestSecretReader_Negative_BlockedReadIsCanceled(t *testing.T) {
+	synctest.Test(t, func(test *testing.T) {
+		reader := newSecretReader(secretReadTimeout)
+		ctx, cancel := context.WithCancel(test.Context())
+		defer cancel()
+		_, result := startBlockedSecretRead(test, ctx, reader)
+		cancel()
+		err := waitSecretReadError(test, result)
+		if !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), fixtureDescription) {
+			test.Fatalf("read returned %v, want a cancellation error naming the file description", err)
+		}
+	})
 }
 
 func TestSecretReader_Negative_RejectsReadWhilePreviousIsStalled(t *testing.T) {
-	reader := newSecretReader(fixtureReadTimeout)
-	_, first := startBlockedSecretRead(t, reader)
-	if err := waitSecretReadError(t, first); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("first read returned %v, want a deadline error", err)
-	}
+	synctest.Test(t, func(test *testing.T) {
+		reader := newSecretReader(fixtureReadTimeout)
+		ctx := test.Context()
+		_, first := startBlockedSecretRead(test, ctx, reader)
+		if firstErr := waitSecretReadError(test, first); !errors.Is(firstErr, context.DeadlineExceeded) {
+			test.Fatalf("first read returned %v, want a deadline error", firstErr)
+		}
 
-	const nextDescription = "next fixture"
-	var calls atomic.Int32
-	result := make(chan error, 1)
-	ctx := t.Context()
-	go func() {
-		_, err := reader.read(ctx, nextDescription, func() (string, error) {
-			calls.Add(1)
-			return readFixtureValue()
-		})
-		result <- err
-	}()
-	if err := waitSecretReadError(t, result); err == nil || !strings.Contains(err.Error(), nextDescription) ||
-		!strings.Contains(err.Error(), "previous secret file read has not returned") {
-		t.Errorf("second read returned %v, want a pending-read error naming the file description", err)
-	}
-	if got := calls.Load(); got != 0 {
-		t.Errorf("second raw read called %d times, want zero", got)
-	}
+		const nextDescription = "next fixture"
+		var calls atomic.Int32
+		result := make(chan error, 1)
+		go func() {
+			_, readErr := reader.read(ctx, nextDescription, func() (string, error) {
+				calls.Add(1)
+				return readFixtureValue()
+			})
+			result <- readErr
+		}()
+		if err := waitSecretReadError(test, result); err == nil || !strings.Contains(err.Error(), nextDescription) ||
+			!strings.Contains(err.Error(), "previous secret file read has not returned") {
+			test.Errorf("second read returned %v, want a pending-read error naming the file description", err)
+		}
+		if got := calls.Load(); got != 0 {
+			test.Errorf("second raw read called %d times, want zero", got)
+		}
+	})
 }
 
 func TestSecretReader_Boundary_CancelledContextSkipsRead(t *testing.T) {
-	reader := newSecretReader(fixtureReadTimeout)
+	reader := newSecretReader(secretReadTimeout)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	var calls atomic.Int32
@@ -80,31 +101,100 @@ func TestSecretReader_Boundary_CancelledContextSkipsRead(t *testing.T) {
 	}
 }
 
-func TestSecretReader_Boundary_RecoversAfterStalledReadReturns(t *testing.T) {
-	reader := newSecretReader(fixtureReadTimeout)
-	release, result := startBlockedSecretRead(t, reader)
-	if err := waitSecretReadError(t, result); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("blocked read returned %v, want a deadline error", err)
-	}
-	release()
-	for range 100 {
-		value, err := reader.read(t.Context(), fixtureDescription, readFixtureValue)
-		if err == nil {
-			if value != fixtureValue {
-				t.Fatal("read after release did not return the fixture value")
-			}
-			return
+func TestSecretReader_Boundary_CancellationWinsOverResult(t *testing.T) {
+	synctest.Test(t, func(test *testing.T) {
+		reader := newSecretReader(secretReadTimeout)
+		ctx, cancel := context.WithCancel(test.Context())
+		defer cancel()
+		value, err := reader.read(ctx, fixtureDescription, func() (string, error) {
+			cancel()
+			return readFixtureValue()
+		})
+		if value != "" || !errors.Is(err, context.Canceled) {
+			test.Errorf("read returned %v, want a cancellation error and an empty value", err)
 		}
-		time.Sleep(10 * time.Millisecond)
+
+		// Exercise the reader's selection with both channels ready before it starts.
+		result := make(chan secretReadResult, 1)
+		result <- secretReadResult{value: fixtureValue}
+		readyValue, readyErr := waitSecretReadResult(ctx, fixtureDescription, result)
+		if readyValue != "" || !errors.Is(readyErr, context.Canceled) {
+			test.Errorf("read with both channels ready returned %v, want a cancellation error and an empty value", readyErr)
+		}
+	})
+}
+
+func TestSecretReader_Boundary_CancelledWorkerSkipsRead(t *testing.T) {
+	synctest.Test(t, func(test *testing.T) {
+		reader := newSecretReader(secretReadTimeout)
+		done := make(chan struct{})
+		close(done)
+		ctx := &cancelAfterEntryContext{Context: test.Context(), done: done}
+		var calls int
+		_, err := reader.read(ctx, fixtureDescription, func() (string, error) {
+			calls++
+			return readFixtureValue()
+		})
+		if !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), fixtureDescription) {
+			test.Errorf("read returned %v, want a cancellation error naming the file description", err)
+		}
+		synctest.Wait()
+		if calls != 0 {
+			test.Errorf("raw read called %d times, want zero", calls)
+		}
+		if len(reader.slot) != 0 {
+			test.Error("cancelled worker did not release the read slot")
+		}
+	})
+}
+
+// cancelAfterEntryContext makes the entry check succeed and cancels the derived context synchronously.
+type cancelAfterEntryContext struct {
+	context.Context
+	done    <-chan struct{}
+	checked atomic.Bool
+}
+
+func (c *cancelAfterEntryContext) Done() <-chan struct{} {
+	return c.done
+}
+
+func (c *cancelAfterEntryContext) Err() error {
+	if !c.checked.Swap(true) {
+		return nil
 	}
-	t.Fatal("read did not recover after 100 attempts following release")
+	return context.Canceled
+}
+
+func TestSecretReader_Boundary_RecoversAfterStalledReadReturns(t *testing.T) {
+	synctest.Test(t, func(test *testing.T) {
+		reader := newSecretReader(fixtureReadTimeout)
+		ctx := test.Context()
+		release, result := startBlockedSecretRead(test, ctx, reader)
+		if blockedErr := waitSecretReadError(test, result); !errors.Is(blockedErr, context.DeadlineExceeded) {
+			test.Fatalf("blocked read returned %v, want a deadline error", blockedErr)
+		}
+		release()
+		recoveryReader := &secretReader{slot: reader.slot, timeout: secretReadTimeout}
+		for range 100 {
+			value, err := recoveryReader.read(ctx, fixtureDescription, readFixtureValue)
+			if err == nil {
+				if value != fixtureValue {
+					test.Fatal("read after release did not return the fixture value")
+				}
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		test.Fatal("read did not recover after 100 attempts following release")
+	})
 }
 
 func readFixtureValue() (string, error) {
 	return fixtureValue, nil
 }
 
-func startBlockedSecretRead(t *testing.T, reader *secretReader) (func(), <-chan error) {
+func startBlockedSecretRead(t *testing.T, ctx context.Context, reader *secretReader) (func(), <-chan error) {
 	t.Helper()
 	started := make(chan struct{})
 	blocked := make(chan struct{})
@@ -112,7 +202,6 @@ func startBlockedSecretRead(t *testing.T, reader *secretReader) (func(), <-chan 
 	t.Cleanup(release)
 
 	result := make(chan error, 1)
-	ctx := t.Context()
 	go func() {
 		_, err := reader.read(ctx, fixtureDescription, func() (string, error) {
 			close(started)
