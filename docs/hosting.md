@@ -59,6 +59,9 @@ is missing or out of range stops the start with a message that names it.
   version 1 build refuses `DIALLAK_MODEL_KEY_FILE`.
   Each secret file must be a regular file (a symlink to one is accepted), so
   the bot refuses FIFOs, directories and device paths.
+  Each secret file read must finish within 5 seconds, and later reads fail
+  immediately while an earlier read is still pending. If the advisory token
+  read fails, the round skips the GitHub request and retries at the next interval.
 - **The guild id is configuration.** It never appears in this repository.
 - **A version 1 build has no model mode.** It refuses every
   `DIALLAK_MODEL_*` and `DIALLAK_EMBED_*` variable: the start stops with a
