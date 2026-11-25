@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -769,12 +770,13 @@ func ReadNewsGitHubToken(path string) (string, error) {
 	return token, nil
 }
 
-// readSecretFileLimit reads a secret file of at most limit bytes.
+// readSecretFileLimit reads a regular secret file of at most limit bytes.
 func readSecretFileLimit(path, envVar, description string, limit int64) (secret string, err error) {
 	if path == "" {
 		return "", fmt.Errorf("%s is not set", envVar)
 	}
-	file, err := os.Open(path) // #nosec G304 -- the operator names the secret file.
+	// Open without waiting for a FIFO writer so we can reject it by mode.
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0) // #nosec G304 -- the operator names the secret file.
 	if err != nil {
 		return "", fmt.Errorf("open %s file: %w", description, err)
 	}
@@ -783,6 +785,17 @@ func readSecretFileLimit(path, envVar, description string, limit int64) (secret 
 			err = errors.Join(err, fmt.Errorf("close %s file: %w", description, closeErr))
 		}
 	}()
+	info, err := file.Stat()
+	if err != nil {
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) {
+			err = pathErr.Err
+		}
+		return "", fmt.Errorf("stat %s file: %w", description, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%s file is not a regular file", description)
+	}
 	data, err := io.ReadAll(io.LimitReader(file, limit+1))
 	if err != nil {
 		return "", fmt.Errorf("read %s file: %w", description, err)
