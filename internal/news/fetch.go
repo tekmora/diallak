@@ -74,8 +74,9 @@ type Reader struct {
 }
 
 // NewReader returns a Reader. If hc is nil, the Reader makes its own client: it follows at most
-// MaxRedirects redirects, each to an https address, and gives up after ReadTimeout. A caller that
-// passes hc decides that client's redirect policy; Fetch still sets its own deadline.
+// MaxRedirects redirects, each to an https address, drops Authorization on redirects to another
+// host or port, and gives up after ReadTimeout. A caller that passes hc decides that client's
+// redirect policy; Fetch still sets its own deadline.
 func NewReader(hc *http.Client) *Reader {
 	if hc == nil {
 		hc = &http.Client{CheckRedirect: checkRedirect, Timeout: ReadTimeout}
@@ -89,6 +90,10 @@ func checkRedirect(req *http.Request, via []*http.Request) error {
 	}
 	if req.URL.Scheme != "https" {
 		return fmt.Errorf("redirect to scheme %q, want https", req.URL.Scheme)
+	}
+	// net/http forwards Authorization to subdomains and ignores port changes.
+	if req.URL.Host != via[0].URL.Host {
+		req.Header.Del("Authorization")
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -188,6 +189,66 @@ func tokenReader(srv *httptest.Server, source func() (string, error)) *Reader {
 	r.apiHost = srv.Listener.Addr().String()
 	r.UseAPITokenSource(source)
 	return r
+}
+
+const redirectAdvisoryTokenFixture = "redirect-fixture-token"
+
+func TestFetchAdvisories_Negative_RedirectToAnotherPortDropsAuthorization(t *testing.T) {
+	target, headers := authServer(t)
+	api := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+redirectAdvisoryTokenFixture {
+			t.Error("initial request did not carry the fixture token")
+		}
+		http.Redirect(w, r, target.URL+"/advisories", http.StatusFound)
+	}))
+	t.Cleanup(api.Close)
+
+	r := tokenReader(api, func() (string, error) { return redirectAdvisoryTokenFixture, nil })
+	res, err := r.FetchAdvisories(testContext(t), api.URL+"/start", Validators{})
+	if err != nil || len(res.Items) != 0 {
+		t.Fatalf("FetchAdvisories() = %d items, %v; want an empty list and no error", len(res.Items), err)
+	}
+	if !slices.Equal(headers(), []string{""}) {
+		t.Error("expected one request without Authorization at the other port")
+	}
+}
+
+func TestFetchAdvisories_Positive_RedirectToSameHostKeepsAuthorization(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.Handle("/start", http.RedirectHandler("/advisories", http.StatusFound))
+	mux.HandleFunc("/advisories", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+redirectAdvisoryTokenFixture {
+			t.Error("redirected request did not carry the fixture token")
+		}
+		if _, err := w.Write([]byte("[]")); err != nil {
+			t.Errorf("write body: %v", err)
+		}
+	})
+	api := httptest.NewTLSServer(mux)
+	t.Cleanup(api.Close)
+
+	r := tokenReader(api, func() (string, error) { return redirectAdvisoryTokenFixture, nil })
+	res, err := r.FetchAdvisories(testContext(t), api.URL+"/start", Validators{})
+	if err != nil || len(res.Items) != 0 {
+		t.Fatalf("FetchAdvisories() = %d items, %v; want an empty list and no error", len(res.Items), err)
+	}
+}
+
+func TestCheckRedirect_Boundary_SubdomainDropsAuthorization(t *testing.T) {
+	initial := &http.Request{
+		URL:    &url.URL{Scheme: "https", Host: "api.github.com", Path: "/start"},
+		Header: http.Header{"Authorization": {"Bearer " + redirectAdvisoryTokenFixture}},
+	}
+	redirect := &http.Request{
+		URL:    &url.URL{Scheme: "https", Host: "x.api.github.com", Path: "/advisories"},
+		Header: initial.Header.Clone(),
+	}
+	if err := checkRedirect(redirect, []*http.Request{initial}); err != nil {
+		t.Fatalf("checkRedirect() error = %v, want nil", err)
+	}
+	if _, present := redirect.Header["Authorization"]; present {
+		t.Error("redirect to a subdomain retained Authorization")
+	}
 }
 
 func writeAdvisoryToken(t *testing.T, path, value string) {

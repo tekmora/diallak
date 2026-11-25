@@ -290,7 +290,7 @@ platform's probes; a deployment does not publish the port.
 | Out | The host of `DIALLAK_EMBED_BASE_URL` | Hybrid retrieval mode only | [`internal/embed`](../internal/embed/embed.go); the client follows no redirect |
 | Out | DNS | Always | |
 | Out | `github.com`, port 443 | News on: the releases feed of each own repository, every 10 minutes | [`internal/news`](../internal/news/advisory.go), `ReleasesAddress`; redirects only to https, at most a fixed number |
-| Out | `api.github.com`, port 443 | News on: the published advisories of each own repository, every 15 minutes | `AdvisoriesAddress` in the same file; the token goes to this host only and is reread before each read |
+| Out | `api.github.com`, port 443 | News on: the published advisories of each own repository, every 15 minutes | `AdvisoriesAddress` in the same file; the token goes to this host only and is reread before each read; a redirect to another host or port drops it |
 | Out | `api.github.com`, port 443 | Bridge on: `GET /app/installations` once per run, `POST /app/installations/{id}/access_tokens` about once an hour, `GET /installation/repositories` and one `POST /graphql` per repository every 15 minutes | [`internal/ghapp`](../internal/ghapp/ghapp.go) refuses redirects and every other host |
 | Out | The hosts of the definition's feeds, port 443 | News on and feeds listed: each feed once an hour | `news.feeds` in [`server/definition.json`](../server/definition.json); none listed today |
 | In | The health listener | Only when `DIALLAK_HEALTH_ADDR` is set | See "Health checks" |
