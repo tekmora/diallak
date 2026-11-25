@@ -1937,3 +1937,8 @@ func TestRun_Positive_ServerApplyCommandIsolation(t *testing.T) {
 		t.Errorf("registerCalled = %d, want 0", registerCalled)
 	}
 }
+
+// roundTripFunc lives in an untagged file because race builds also need it (news_test.go).
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

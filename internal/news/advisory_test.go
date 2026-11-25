@@ -117,6 +117,25 @@ func TestFetchAdvisories_Negative_AddressNotHTTPS(t *testing.T) {
 	}
 }
 
+func TestAdvisoryRequestHeaders_Negative_UnparseableAddress(t *testing.T) {
+	calls := 0
+	r := NewReader(nil)
+	r.UseAPITokenSource(func() (string, error) {
+		calls++
+		return "fixture-token", nil
+	})
+	headers, err := r.advisoryRequestHeaders("http://[::1")
+	if err == nil {
+		t.Error("advisoryRequestHeaders() error = nil, want a parse error")
+	}
+	if headers != nil {
+		t.Error("advisoryRequestHeaders() returned headers, want nil")
+	}
+	if calls != 0 {
+		t.Errorf("token source calls = %d, want none", calls)
+	}
+}
+
 func TestAddresses_Positive_ReleasesAndAdvisories(t *testing.T) {
 	if got, want := ReleasesAddress("tekmora/diallak"), "https://github.com/tekmora/diallak/releases.atom"; got != want {
 		t.Errorf("ReleasesAddress() = %q, want %q", got, want)
@@ -256,6 +275,14 @@ func testInvalidAdvisoryTokenFile(t *testing.T, remove bool, contents, detail st
 	}
 
 	_, err := r.FetchAdvisories(ctx, srv.URL+"/a", Validators{})
+	assertInvalidAdvisoryTokenError(t, err, remove, detail, initial)
+	if got := len(headers()); got != 1 {
+		t.Errorf("request count = %d, want only the first read", got)
+	}
+}
+
+func assertInvalidAdvisoryTokenError(t *testing.T, err error, remove bool, detail, initial string) {
+	t.Helper()
 	if err == nil || !strings.Contains(err.Error(), config.EnvNewsGitHubTokenFile) ||
 		!strings.Contains(err.Error(), detail) {
 		t.Error("expected a read error naming the token file variable and the file failure")
@@ -265,9 +292,6 @@ func testInvalidAdvisoryTokenFile(t *testing.T, remove bool, contents, detail st
 	}
 	if err != nil && (strings.Contains(err.Error(), initial) || strings.Contains(err.Error(), oversizedAdvisoryTokenFixture)) {
 		t.Error("advisory read error exposed token contents")
-	}
-	if got := len(headers()); got != 1 {
-		t.Errorf("request count = %d, want only the first read", got)
 	}
 }
 

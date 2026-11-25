@@ -43,10 +43,6 @@ func makeFakeToken(id uint64) string {
 	return seg + ".synthetic-test-token.not-a-real-credential"
 }
 
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
-
 func redirectDiscord(t *testing.T, fakeURL string) {
 	t.Helper()
 	target, err := url.Parse(fakeURL)

@@ -48,8 +48,14 @@ func (r *Reader) UseAPITokenSource(source func() (string, error)) {
 // advisoryRequestHeaders returns the headers of an advisory read of address, with the token when
 // address is on the API host.
 func (r *Reader) advisoryRequestHeaders(address string) (http.Header, error) {
+	if r.apiTokenSource == nil {
+		return advisoryHeaders, nil
+	}
 	u, err := url.Parse(address)
-	if r.apiTokenSource == nil || err != nil || u.Host != r.apiHost {
+	if err != nil {
+		return nil, fmt.Errorf("parse advisory address: %w", err)
+	}
+	if u.Host != r.apiHost {
 		return advisoryHeaders, nil
 	}
 	token, err := r.apiTokenSource()
