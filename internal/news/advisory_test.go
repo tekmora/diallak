@@ -1,6 +1,7 @@
 package news
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -121,11 +122,11 @@ func TestFetchAdvisories_Negative_AddressNotHTTPS(t *testing.T) {
 func TestAdvisoryRequestHeaders_Negative_UnparseableAddress(t *testing.T) {
 	calls := 0
 	r := NewReader(nil)
-	r.UseAPITokenSource(func() (string, error) {
+	r.UseAPITokenSource(func(context.Context) (string, error) {
 		calls++
 		return "fixture-token", nil
 	})
-	headers, err := r.advisoryRequestHeaders("http://[::1")
+	headers, err := r.advisoryRequestHeaders(testContext(t), "http://[::1")
 	if err == nil {
 		t.Error("advisoryRequestHeaders() error = nil, want a parse error")
 	}
@@ -184,7 +185,7 @@ func authServer(t *testing.T) (*httptest.Server, func() []string) {
 }
 
 // tokenReader returns a Reader that takes srv for the API host.
-func tokenReader(srv *httptest.Server, source func() (string, error)) *Reader {
+func tokenReader(srv *httptest.Server, source func(context.Context) (string, error)) *Reader {
 	r := testReader(srv)
 	r.apiHost = srv.Listener.Addr().String()
 	r.UseAPITokenSource(source)
@@ -192,6 +193,44 @@ func tokenReader(srv *httptest.Server, source func() (string, error)) *Reader {
 }
 
 const redirectAdvisoryTokenFixture = "redirect-fixture-token"
+
+func TestFetchAdvisories_Positive_PassesCallerContextToTokenSource(t *testing.T) {
+	type contextKey struct{}
+	const value = "advisory-read"
+	ctx := context.WithValue(testContext(t), contextKey{}, value)
+	srv, _ := authServer(t)
+	var received context.Context
+	r := tokenReader(srv, func(sourceCtx context.Context) (string, error) {
+		received = sourceCtx
+		return redirectAdvisoryTokenFixture, nil
+	})
+	if _, err := r.FetchAdvisories(ctx, srv.URL+"/a", Validators{}); err != nil {
+		t.Fatalf("FetchAdvisories() error = %v", err)
+	}
+	if received == nil || received.Value(contextKey{}) != value {
+		t.Error("token source did not receive the caller's context value")
+	}
+}
+
+func TestFetchAdvisories_Negative_CancelledTokenReadSkipsRequest(t *testing.T) {
+	ctx, cancel := context.WithCancel(testContext(t))
+	cancel()
+	path := filepath.Join(t.TempDir(), "missing")
+	srv, headers := authServer(t)
+	var readErr error
+	r := tokenReader(srv, func(sourceCtx context.Context) (string, error) {
+		value, err := config.ReadNewsGitHubToken(sourceCtx, path)
+		readErr = err
+		return value, err
+	})
+	_, err := r.FetchAdvisories(ctx, srv.URL+"/a", Validators{})
+	if !errors.Is(readErr, context.Canceled) || !errors.Is(err, context.Canceled) {
+		t.Errorf("token read error = %v, FetchAdvisories() error = %v; want cancellation from the token read", readErr, err)
+	}
+	if got := len(headers()); got != 0 {
+		t.Errorf("request count = %d, want zero", got)
+	}
+}
 
 func TestFetchAdvisories_Negative_RedirectToAnotherPortDropsAuthorization(t *testing.T) {
 	target, headers := authServer(t)
@@ -203,7 +242,7 @@ func TestFetchAdvisories_Negative_RedirectToAnotherPortDropsAuthorization(t *tes
 	}))
 	t.Cleanup(api.Close)
 
-	r := tokenReader(api, func() (string, error) { return redirectAdvisoryTokenFixture, nil })
+	r := tokenReader(api, func(context.Context) (string, error) { return redirectAdvisoryTokenFixture, nil })
 	res, err := r.FetchAdvisories(testContext(t), api.URL+"/start", Validators{})
 	if err != nil || len(res.Items) != 0 {
 		t.Fatalf("FetchAdvisories() = %d items, %v; want an empty list and no error", len(res.Items), err)
@@ -227,7 +266,7 @@ func TestFetchAdvisories_Positive_RedirectToSameHostKeepsAuthorization(t *testin
 	api := httptest.NewTLSServer(mux)
 	t.Cleanup(api.Close)
 
-	r := tokenReader(api, func() (string, error) { return redirectAdvisoryTokenFixture, nil })
+	r := tokenReader(api, func(context.Context) (string, error) { return redirectAdvisoryTokenFixture, nil })
 	res, err := r.FetchAdvisories(testContext(t), api.URL+"/start", Validators{})
 	if err != nil || len(res.Items) != 0 {
 		t.Fatalf("FetchAdvisories() = %d items, %v; want an empty list and no error", len(res.Items), err)
@@ -271,9 +310,9 @@ func testRotatedAdvisoryToken(t *testing.T, replace bool) {
 	writeAdvisoryToken(t, path, initial+"\n")
 	srv, headers := authServer(t)
 	calls := 0
-	r := tokenReader(srv, func() (string, error) {
+	r := tokenReader(srv, func(ctx context.Context) (string, error) {
 		calls++
-		return config.ReadNewsGitHubToken(path)
+		return config.ReadNewsGitHubToken(ctx, path)
 	})
 	ctx := testContext(t)
 	if _, err := r.FetchAdvisories(ctx, srv.URL+"/a", Validators{}); err != nil {
@@ -322,7 +361,9 @@ func testInvalidAdvisoryTokenFile(t *testing.T, remove bool, contents, detail st
 	path := filepath.Join(t.TempDir(), "token")
 	writeAdvisoryToken(t, path, initial)
 	srv, headers := authServer(t)
-	r := tokenReader(srv, func() (string, error) { return config.ReadNewsGitHubToken(path) })
+	r := tokenReader(srv, func(ctx context.Context) (string, error) {
+		return config.ReadNewsGitHubToken(ctx, path)
+	})
 	ctx := testContext(t)
 	if _, err := r.FetchAdvisories(ctx, srv.URL+"/a", Validators{}); err != nil {
 		t.Fatalf("first advisory read: %v", err)
@@ -360,7 +401,7 @@ func assertInvalidAdvisoryTokenError(t *testing.T, err error, remove bool, detai
 func TestFetchAdvisories_Negative_TokenKeptFromOtherReads(t *testing.T) {
 	srv, headers := authServer(t)
 	calls := 0
-	source := func() (string, error) {
+	source := func(context.Context) (string, error) {
 		calls++
 		return "tok-1", nil
 	}
@@ -387,7 +428,7 @@ func TestFetchAdvisories_Negative_TokenKeptFromOtherReads(t *testing.T) {
 // The token does not change the shared advisory headers of later reads.
 func TestFetchAdvisories_Boundary_TokenLeavesSharedHeaders(t *testing.T) {
 	srv, _ := authServer(t)
-	r := tokenReader(srv, func() (string, error) { return "tok-1", nil })
+	r := tokenReader(srv, func(context.Context) (string, error) { return "tok-1", nil })
 	if _, err := r.FetchAdvisories(testContext(t), srv.URL+"/a", Validators{}); err != nil {
 		t.Fatalf("FetchAdvisories() error = %v", err)
 	}

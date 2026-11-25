@@ -38,16 +38,15 @@ const apiHost = "api.github.com"
 // 1).
 var advisoryHeaders = http.Header{"Accept": {advisoryAccept}, "X-Github-Api-Version": {apiVersion}}
 
-// UseAPITokenSource sets the source of the current token for advisory reads to the API host.
+// UseAPITokenSource sets the source called with the context of each advisory read to the API host.
 // A nil source allows unauthenticated reads. A configured source returns a non-empty token or
 // an error safe to log. Set the source before using the Reader.
-func (r *Reader) UseAPITokenSource(source func() (string, error)) {
+func (r *Reader) UseAPITokenSource(source func(context.Context) (string, error)) {
 	r.apiTokenSource = source
 }
 
-// advisoryRequestHeaders returns the headers of an advisory read of address, with the token when
-// address is on the API host.
-func (r *Reader) advisoryRequestHeaders(address string) (http.Header, error) {
+// advisoryRequestHeaders returns the headers, reading the token with ctx for addresses on the API host.
+func (r *Reader) advisoryRequestHeaders(ctx context.Context, address string) (http.Header, error) {
 	if r.apiTokenSource == nil {
 		return advisoryHeaders, nil
 	}
@@ -58,7 +57,7 @@ func (r *Reader) advisoryRequestHeaders(address string) (http.Header, error) {
 	if u.Host != r.apiHost {
 		return advisoryHeaders, nil
 	}
-	token, err := r.apiTokenSource()
+	token, err := r.apiTokenSource(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +84,7 @@ func (r *Reader) FetchAdvisories(ctx context.Context, address string, prev Valid
 	if err := ValidFeedAddress(address); err != nil {
 		return Result{}, err
 	}
-	headers, err := r.advisoryRequestHeaders(address)
+	headers, err := r.advisoryRequestHeaders(ctx, address)
 	if err != nil {
 		return Result{}, fmt.Errorf("load advisory API token: %w", err)
 	}

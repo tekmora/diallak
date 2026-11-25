@@ -69,7 +69,7 @@ type Result struct {
 type Reader struct {
 	client         *http.Client
 	now            func() time.Time
-	apiTokenSource func() (string, error)
+	apiTokenSource func(context.Context) (string, error)
 	apiHost        string
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -35,7 +36,9 @@ func newNews(cfg config.Config, def *serverdef.Definition) (*discord.NewsConfig,
 	}
 	reader := news.NewReader(nil)
 	if path := cfg.NewsGitHubTokenFile; path != "" {
-		reader.UseAPITokenSource(func() (string, error) { return config.ReadNewsGitHubToken(path) })
+		reader.UseAPITokenSource(func(ctx context.Context) (string, error) {
+			return config.ReadNewsGitHubToken(ctx, path)
+		})
 	}
 	sources := news.OwnSources(def.News.Repositories)
 	for _, f := range def.News.Feeds {

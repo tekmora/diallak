@@ -510,7 +510,9 @@ func parseNews(getenv func(string) string) (string, string, error) {
 	if tokenFile == "" {
 		return state, "", nil
 	}
-	if _, err := ReadNewsGitHubToken(tokenFile); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), secretReadTimeout)
+	defer cancel()
+	if _, err := ReadNewsGitHubToken(ctx, tokenFile); err != nil {
 		return "", "", err
 	}
 	return state, tokenFile, nil
@@ -820,10 +822,9 @@ func readSecretFileWithTimeout(ctx context.Context, path, envVar, description st
 	})
 }
 
-// ReadNewsGitHubToken reads and validates the current advisory token at path within the secret
-// file timeout.
-func ReadNewsGitHubToken(path string) (string, error) {
-	token, err := readSecretFile(path, EnvNewsGitHubTokenFile, "GitHub token")
+// ReadNewsGitHubToken reads and validates the advisory token at path with ctx and the secret file timeout.
+func ReadNewsGitHubToken(ctx context.Context, path string) (string, error) {
+	token, err := readSecretFileWithTimeout(ctx, path, EnvNewsGitHubTokenFile, "GitHub token", MaxTokenBytes)
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", EnvNewsGitHubTokenFile, err)
 	}
