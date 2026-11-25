@@ -57,6 +57,8 @@ is missing or out of range stops the start with a message that names it.
   user `65532` can read ([`internal/config`](../internal/config/config.go)).
   They are read once at start. The model key describes later model mode; a
   version 1 build refuses `DIALLAK_MODEL_KEY_FILE`.
+  Each secret file must be a regular file (a symlink to one is accepted), so
+  the bot refuses FIFOs, directories and device paths.
 - **The guild id is configuration.** It never appears in this repository.
 - **A version 1 build has no model mode.** It refuses every
   `DIALLAK_MODEL_*` and `DIALLAK_EMBED_*` variable: the start stops with a
@@ -99,7 +101,7 @@ is missing or out of range stops the start with a message that names it.
   With news enabled, the token is optional up to 10 own repositories and the
   bot refuses to start above that without it. The committed definition lists
   20 repositories ([ADR-0032](adr/0032-every-product-in-release-news.md)).
-  `DIALLAK_NEWS_GITHUB_TOKEN_FILE` names a file of at most 4096 bytes. The
+  `DIALLAK_NEWS_GITHUB_TOKEN_FILE` names a regular file up to 4096 bytes. The
   deployment writes a read-only GitHub App installation token there and
   refreshes it at the same path before its one-hour expiry. The bot validates
   the file at startup and rereads it for each advisory request to

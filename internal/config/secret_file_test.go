@@ -50,6 +50,13 @@ func TestReadSecretFile_Negative_RejectsDirectory(t *testing.T) {
 	}
 }
 
+func TestReadSecretFile_Negative_RejectsCharDevice(t *testing.T) {
+	_, err := readSecretFile("/dev/null", EnvTokenFile, "fixture")
+	if err == nil || err.Error() != "fixture file is not a regular file" {
+		t.Fatalf("readSecretFile returned %v, want a non-regular file error", err)
+	}
+}
+
 func TestReadSecretFile_Boundary_FollowsSymlinkToRegularFile(t *testing.T) {
 	target := writeSecret(t, "regular", "example-value")
 	link := filepath.Join(t.TempDir(), "link")

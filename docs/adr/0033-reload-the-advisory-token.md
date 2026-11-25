@@ -25,7 +25,8 @@ The bot checks the file at startup, as before: a missing, empty or oversized
 file stops the start. Before each advisory read to `api.github.com` the bot
 reads the file again and sends the token it finds. A rewrite in place and a
 replacement of the file both take effect on the next read. Reads to other
-hosts never open the file.
+hosts never open the file. The file must be a regular file at startup and on
+each reread so a FIFO cannot stall the advisory round.
 
 If the file cannot be read or fails the checks at read time, the bot skips
 that request and tries again at the next advisory interval of 15 minutes. It
