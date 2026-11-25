@@ -797,10 +797,8 @@ func (r *secretReader) read(ctx context.Context, description string, readRaw fun
 	result := make(chan secretReadResult, 1)
 	go func(workerCtx context.Context) {
 		var outcome secretReadResult
-		// The context can end before the worker gets a chance to open the file.
-		if ctxErr := workerCtx.Err(); ctxErr != nil {
-			outcome.err = fmt.Errorf("read %s file: %w", description, ctxErr)
-		} else {
+		// The waiter reports the error if the context has already ended.
+		if workerCtx.Err() == nil {
 			outcome.value, outcome.err = readRaw()
 		}
 		// Release before reporting completion so the next read can start immediately.

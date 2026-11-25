@@ -30,6 +30,34 @@ func TestSecretReader_Positive_ReturnsValue(t *testing.T) {
 	})
 }
 
+func TestSecretReader_Positive_BackToBackReads(t *testing.T) {
+	synctest.Test(t, func(test *testing.T) {
+		reader := newSecretReader(secretReadTimeout)
+		ctx := test.Context()
+		for attempt := range 3 {
+			slotReleaseAllowed := make(chan struct{})
+			value, err := reader.read(ctx, fixtureDescription, func() (string, error) {
+				// Hold the slot token until the worker and caller are both blocked.
+				<-reader.slot
+				go func() {
+					synctest.Wait()
+					close(slotReleaseAllowed)
+					reader.slot <- struct{}{}
+				}()
+				return readFixtureValue()
+			})
+			if err != nil || value != fixtureValue {
+				test.Fatalf("read %d did not return the fixture value: %v", attempt+1, err)
+			}
+			select {
+			case <-slotReleaseAllowed:
+			default:
+				test.Fatalf("read %d returned before the worker could release the slot", attempt+1)
+			}
+		}
+	})
+}
+
 func TestSecretReader_Negative_BlockedReadTimesOut(t *testing.T) {
 	synctest.Test(t, func(test *testing.T) {
 		reader := newSecretReader(fixtureReadTimeout)
