@@ -95,15 +95,19 @@ is missing or out of range stops the start with a message that names it.
   empty state would post every release again. The bot finds the announcement
   channel, the release role and the feed channels by their names in the server
   definition before every read, so a renamed channel needs no restart.
-- **The read-only GitHub token is required above 10 own repositories.**
+- **A GitHub App installation token is required above 10 own repositories.**
   With news enabled, the token is optional up to 10 own repositories and the
   bot refuses to start above that without it. The committed definition lists
   20 repositories ([ADR-0032](adr/0032-every-product-in-release-news.md)).
-  `DIALLAK_NEWS_GITHUB_TOKEN_FILE` names a file of at most 4096 bytes with a
-  fine-grained token that can only read public repositories. The bot sends it
-  only to `api.github.com`, for the advisory reads, and never logs it. Without
-  it those reads are unauthenticated and may be refused; the bot then waits for
-  the reset the reply names.
+  `DIALLAK_NEWS_GITHUB_TOKEN_FILE` names a file of at most 4096 bytes. The
+  deployment writes a read-only GitHub App installation token there and
+  refreshes it at the same path before its one-hour expiry. The bot validates
+  the file at startup and rereads it for each advisory request to
+  `api.github.com`. If the configured file cannot be read or validated, the
+  bot skips the request and retries after 15 minutes. The token stays out of
+  logs ([ADR-0033](adr/0033-reload-the-advisory-token.md)). When the variable
+  is unset, advisory reads use GitHub's unauthenticated budget and honor its
+  rate-limit backoff.
 - **The Discussions bridge is off unless its GitHub App is set**
   ([ADR-0004](adr/0004-community-questions.md), issue #99).
   `DIALLAK_DISCUSSIONS_APP_CLIENT_ID` and `DIALLAK_DISCUSSIONS_APP_KEY_FILE`
@@ -154,7 +158,7 @@ this contract synchronized with the codebase
 | `DIALLAK_MODEL_KEY_FILE` | secret file | model mode with endpoint authentication |
 | `DIALLAK_MODEL_POLICY` | environment | model mode |
 | `DIALLAK_MODEL_TIMEOUT` | environment | optional: tuning model timeout |
-| `DIALLAK_NEWS_GITHUB_TOKEN_FILE` | secret file | news function with GitHub authentication |
+| `DIALLAK_NEWS_GITHUB_TOKEN_FILE` | secret file | rotating GitHub App installation token for news, required above 10 own repositories |
 | `DIALLAK_NEWS_STATE_FILE` | writable volume | news function |
 | `DIALLAK_QUESTION_MAX_CHARS` | environment | optional: tuning question length limit |
 | `DIALLAK_REPLY_MAX_CHARS` | environment | optional: tuning reply length limit |
@@ -284,7 +288,7 @@ platform's probes; a deployment does not publish the port.
 | Out | The host of `DIALLAK_EMBED_BASE_URL` | Hybrid retrieval mode only | [`internal/embed`](../internal/embed/embed.go); the client follows no redirect |
 | Out | DNS | Always | |
 | Out | `github.com`, port 443 | News on: the releases feed of each own repository, every 10 minutes | [`internal/news`](../internal/news/advisory.go), `ReleasesAddress`; redirects only to https, at most a fixed number |
-| Out | `api.github.com`, port 443 | News on: the published advisories of each own repository, every 15 minutes | `AdvisoriesAddress` in the same file; the token goes to this host only |
+| Out | `api.github.com`, port 443 | News on: the published advisories of each own repository, every 15 minutes | `AdvisoriesAddress` in the same file; the token goes to this host only and is reread before each read |
 | Out | `api.github.com`, port 443 | Bridge on: `GET /app/installations` once per run, `POST /app/installations/{id}/access_tokens` about once an hour, `GET /installation/repositories` and one `POST /graphql` per repository every 15 minutes | [`internal/ghapp`](../internal/ghapp/ghapp.go) refuses redirects and every other host |
 | Out | The hosts of the definition's feeds, port 443 | News on and feeds listed: each feed once an hour | `news.feeds` in [`server/definition.json`](../server/definition.json); none listed today |
 | In | The health listener | Only when `DIALLAK_HEALTH_ADDR` is set | See "Health checks" |

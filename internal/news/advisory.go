@@ -38,23 +38,27 @@ const apiHost = "api.github.com"
 // 1).
 var advisoryHeaders = http.Header{"Accept": {advisoryAccept}, "X-Github-Api-Version": {apiVersion}}
 
-// UseAPIToken makes advisory reads to GitHub's API host send token, a read-only token that lifts
-// the shared budget of 60 unauthenticated requests an hour (issue #180). No other read sends it,
-// and Go's client drops it on a redirect to another host. An empty token sends none.
-func (r *Reader) UseAPIToken(token string) {
-	r.apiToken = token
+// UseAPITokenSource sets the source of the current token for advisory reads to the API host.
+// A nil source allows unauthenticated reads. A configured source returns a non-empty token or
+// an error safe to log. Set the source before using the Reader.
+func (r *Reader) UseAPITokenSource(source func() (string, error)) {
+	r.apiTokenSource = source
 }
 
 // advisoryRequestHeaders returns the headers of an advisory read of address, with the token when
 // address is on the API host.
-func (r *Reader) advisoryRequestHeaders(address string) http.Header {
+func (r *Reader) advisoryRequestHeaders(address string) (http.Header, error) {
 	u, err := url.Parse(address)
-	if r.apiToken == "" || err != nil || u.Host != r.apiHost {
-		return advisoryHeaders
+	if r.apiTokenSource == nil || err != nil || u.Host != r.apiHost {
+		return advisoryHeaders, nil
+	}
+	token, err := r.apiTokenSource()
+	if err != nil {
+		return nil, err
 	}
 	h := advisoryHeaders.Clone()
-	h.Set("Authorization", "Bearer "+r.apiToken)
-	return h
+	h.Set("Authorization", "Bearer "+token)
+	return h, nil
 }
 
 // ReleasesAddress returns the Atom feed of repo's releases; repo is "owner/name".
@@ -75,7 +79,11 @@ func (r *Reader) FetchAdvisories(ctx context.Context, address string, prev Valid
 	if err := ValidFeedAddress(address); err != nil {
 		return Result{}, err
 	}
-	data, res, err := r.get(ctx, address, prev, r.advisoryRequestHeaders(address))
+	headers, err := r.advisoryRequestHeaders(address)
+	if err != nil {
+		return Result{}, fmt.Errorf("load advisory API token: %w", err)
+	}
+	data, res, err := r.get(ctx, address, prev, headers)
 	if err != nil || res.NotModified {
 		return res, err
 	}

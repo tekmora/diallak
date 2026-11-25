@@ -5,6 +5,7 @@
 - **Authors**: Maintainers
 - **Supersedes in part**:
   [ADR-0019](0019-news-posts.md), point 1 and its consequence for the repository cap
+- **Superseded in part by**: [ADR-0033](0033-reload-the-advisory-token.md), the token paragraph in Decision
 
 ## Context
 

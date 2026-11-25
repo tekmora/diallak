@@ -67,11 +67,10 @@ type Result struct {
 
 // Reader reads feeds over HTTPS.
 type Reader struct {
-	client *http.Client
-	now    func() time.Time
-	// apiToken is sent with advisory reads to apiHost only; empty sends none.
-	apiToken string
-	apiHost  string
+	client         *http.Client
+	now            func() time.Time
+	apiTokenSource func() (string, error)
+	apiHost        string
 }
 
 // NewReader returns a Reader. If hc is nil, the Reader makes its own client: it follows at most

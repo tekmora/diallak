@@ -4,11 +4,17 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/tekmora/diallak/internal/config"
 )
 
 // A published advisory becomes an item with its GHSA id, its summary as plain text and its page;
@@ -137,62 +143,167 @@ func limitedServer(t *testing.T) (*Reader, *httptest.Server) {
 }
 
 // authServer records the Authorization header of every request and answers an empty advisory list.
-func authServer(t *testing.T) (*httptest.Server, *[]string) {
+func authServer(t *testing.T) (*httptest.Server, func() []string) {
 	t.Helper()
+	var mu sync.Mutex
 	var got []string
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		got = append(got, r.Header.Get("Authorization"))
+		mu.Unlock()
 		if _, err := w.Write([]byte("[]")); err != nil {
 			t.Errorf("write body: %v", err)
 		}
 	}))
 	t.Cleanup(srv.Close)
-	return srv, &got
+	return srv, func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(got)
+	}
 }
 
-// tokenReader returns a Reader of srv that holds token and takes srv for the API host.
-func tokenReader(srv *httptest.Server, token string) *Reader {
+// tokenReader returns a Reader that takes srv for the API host.
+func tokenReader(srv *httptest.Server, source func() (string, error)) *Reader {
 	r := testReader(srv)
 	r.apiHost = srv.Listener.Addr().String()
-	r.UseAPIToken(token)
+	r.UseAPITokenSource(source)
 	return r
 }
 
-// The token goes with an advisory read to the API host.
-func TestFetchAdvisories_Positive_TokenSentToAPIHost(t *testing.T) {
-	srv, got := authServer(t)
-	if _, err := tokenReader(srv, "tok-1").FetchAdvisories(testContext(t), srv.URL+"/a", Validators{}); err != nil {
-		t.Fatalf("FetchAdvisories() error = %v", err)
-	}
-	if len(*got) != 1 || (*got)[0] != "Bearer tok-1" {
-		t.Fatalf("Authorization = %q, want the token", *got)
+func writeAdvisoryToken(t *testing.T, path, value string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(value), 0o600); err != nil {
+		t.Fatalf("write fixture token file: %v", err)
 	}
 }
 
-// The token never goes to another host, nor with a feed read, and an empty token sends none.
+func TestFetchAdvisories_Positive_RotatedTokenSentOnNextRead(t *testing.T) {
+	t.Run("rewrite", func(t *testing.T) { testRotatedAdvisoryToken(t, false) })
+	t.Run("replace", func(t *testing.T) { testRotatedAdvisoryToken(t, true) })
+}
+
+func testRotatedAdvisoryToken(t *testing.T, replace bool) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "token")
+	const initial = "initial-fixture-token"
+	rotated := strings.Repeat("b", config.MaxTokenBytes)
+	writeAdvisoryToken(t, path, initial+"\n")
+	srv, headers := authServer(t)
+	calls := 0
+	r := tokenReader(srv, func() (string, error) {
+		calls++
+		return config.ReadNewsGitHubToken(path)
+	})
+	ctx := testContext(t)
+	if _, err := r.FetchAdvisories(ctx, srv.URL+"/a", Validators{}); err != nil {
+		t.Fatalf("first advisory read: %v", err)
+	}
+	if replace {
+		replacement := filepath.Join(dir, "replacement")
+		writeAdvisoryToken(t, replacement, rotated)
+		if err := os.Rename(replacement, path); err != nil {
+			t.Fatalf("replace fixture token file: %v", err)
+		}
+	} else {
+		writeAdvisoryToken(t, path, rotated)
+	}
+	if _, err := r.FetchAdvisories(ctx, srv.URL+"/a", Validators{}); err != nil {
+		t.Fatalf("advisory read after rotation: %v", err)
+	}
+	if !slices.Equal(headers(), []string{"Bearer " + initial, "Bearer " + rotated}) {
+		t.Error("expected the original token and then the rotated token")
+	}
+	if calls != 2 {
+		t.Errorf("token source calls = %d, want one per advisory read", calls)
+	}
+}
+
+const oversizedAdvisoryTokenFixture = "oversized-fixture-token"
+
+func TestFetchAdvisories_Negative_InvalidRotatedTokenFileSkipsRequest(t *testing.T) {
+	oversized := oversizedAdvisoryTokenFixture +
+		strings.Repeat("x", config.MaxTokenBytes+1-len(oversizedAdvisoryTokenFixture))
+	for _, tc := range []struct {
+		name, contents, detail string
+	}{
+		{"missing", "", "open GitHub token file"},
+		{"empty", "", "GitHub token file is empty"},
+		{"oversized", oversized, "larger than 4096 bytes"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			testInvalidAdvisoryTokenFile(t, tc.name == "missing", tc.contents, tc.detail)
+		})
+	}
+}
+
+func testInvalidAdvisoryTokenFile(t *testing.T, remove bool, contents, detail string) {
+	const initial = "initial-fixture-token"
+	path := filepath.Join(t.TempDir(), "token")
+	writeAdvisoryToken(t, path, initial)
+	srv, headers := authServer(t)
+	r := tokenReader(srv, func() (string, error) { return config.ReadNewsGitHubToken(path) })
+	ctx := testContext(t)
+	if _, err := r.FetchAdvisories(ctx, srv.URL+"/a", Validators{}); err != nil {
+		t.Fatalf("first advisory read: %v", err)
+	}
+	if remove {
+		if err := os.Remove(path); err != nil {
+			t.Fatalf("remove fixture token file: %v", err)
+		}
+	} else {
+		writeAdvisoryToken(t, path, contents)
+	}
+
+	_, err := r.FetchAdvisories(ctx, srv.URL+"/a", Validators{})
+	if err == nil || !strings.Contains(err.Error(), config.EnvNewsGitHubTokenFile) ||
+		!strings.Contains(err.Error(), detail) {
+		t.Error("expected a read error naming the token file variable and the file failure")
+	}
+	if remove && !errors.Is(err, os.ErrNotExist) {
+		t.Error("expected the missing-file error to preserve os.ErrNotExist")
+	}
+	if err != nil && (strings.Contains(err.Error(), initial) || strings.Contains(err.Error(), oversizedAdvisoryTokenFixture)) {
+		t.Error("advisory read error exposed token contents")
+	}
+	if got := len(headers()); got != 1 {
+		t.Errorf("request count = %d, want only the first read", got)
+	}
+}
+
+// Another host and ordinary feed reads do not consult the token source.
 func TestFetchAdvisories_Negative_TokenKeptFromOtherReads(t *testing.T) {
-	srv, got := authServer(t)
+	srv, headers := authServer(t)
+	calls := 0
+	source := func() (string, error) {
+		calls++
+		return "tok-1", nil
+	}
 	other := testReader(srv)
-	other.UseAPIToken("tok-1")
+	other.UseAPITokenSource(source)
 	if _, err := other.FetchAdvisories(testContext(t), srv.URL+"/a", Validators{}); err != nil {
 		t.Fatalf("FetchAdvisories() other host error = %v", err)
 	}
 	// The feed read fails to parse the advisory list; only its request headers matter here.
-	if _, err := tokenReader(srv, "tok-1").Fetch(testContext(t), srv.URL+"/feed", Validators{}); err == nil {
+	if _, err := tokenReader(srv, source).Fetch(testContext(t), srv.URL+"/feed", Validators{}); err == nil {
 		t.Fatal("Fetch() of the advisory list parsed as a feed")
 	}
-	if _, err := tokenReader(srv, "").FetchAdvisories(testContext(t), srv.URL+"/a", Validators{}); err != nil {
-		t.Fatalf("FetchAdvisories() empty token error = %v", err)
+	if _, err := tokenReader(srv, nil).FetchAdvisories(testContext(t), srv.URL+"/a", Validators{}); err != nil {
+		t.Fatalf("FetchAdvisories() without a source: %v", err)
 	}
-	if len(*got) != 3 || (*got)[0] != "" || (*got)[1] != "" || (*got)[2] != "" {
-		t.Fatalf("Authorization = %q, want none", *got)
+	if calls != 0 {
+		t.Errorf("token source calls = %d, want none", calls)
+	}
+	if !slices.Equal(headers(), []string{"", "", ""}) {
+		t.Error("expected three requests without Authorization")
 	}
 }
 
 // The token does not change the shared advisory headers of later reads.
 func TestFetchAdvisories_Boundary_TokenLeavesSharedHeaders(t *testing.T) {
 	srv, _ := authServer(t)
-	if _, err := tokenReader(srv, "tok-1").FetchAdvisories(testContext(t), srv.URL+"/a", Validators{}); err != nil {
+	r := tokenReader(srv, func() (string, error) { return "tok-1", nil })
+	if _, err := r.FetchAdvisories(testContext(t), srv.URL+"/a", Validators{}); err != nil {
 		t.Fatalf("FetchAdvisories() error = %v", err)
 	}
 	if _, ok := advisoryHeaders["Authorization"]; ok {
