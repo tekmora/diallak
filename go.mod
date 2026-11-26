@@ -10,7 +10,7 @@ require (
 	github.com/disgoorg/omit v1.0.0
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
-	github.com/klauspost/compress v1.20.4
+	github.com/klauspost/compress v1.20.5
 	github.com/yuin/goldmark/v2 v2.1.16
 )
 
